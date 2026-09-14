@@ -1,0 +1,58 @@
+{%- macro cursor_pagination(next_cursor, prev_cursor, has_next, has_prev, query_time_ms=0, total_estimated=0, table='', limit=50) -%}
+<!-- Cursor-based pagination component -->
+<div class="cursor-pagination-container mt-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <!-- Pagination Info -->
+        <div class="pagination-info">
+            {% if total_estimated and total_estimated > 0 %}
+                <span class="text-muted small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Estimated {{ "{:,}".format(total_estimated|int) }} total records
+                </span>
+            {% endif %}
+            {% if query_time_ms and query_time_ms > 0 %}
+                <span class="text-muted small ms-2">
+                    • Loaded in {{ "%.0f"|format(query_time_ms|float) }}ms
+                </span>
+            {% endif %}
+        </div>
+        
+        <!-- Pagination Controls -->
+        <div class="pagination-controls d-flex gap-2">
+            <button 
+                class="btn btn-outline-secondary btn-sm" 
+                {% if not has_prev %}disabled{% endif %}
+                onclick="loadCursorPage({{ prev_cursor if prev_cursor else 'null' }})"
+                title="Previous Page"
+                aria-label="Previous Page">
+                <i class="bi bi-chevron-left"></i> {{ _('Previous') }}
+            </button>
+            
+            <button 
+                class="btn btn-outline-secondary btn-sm" 
+                {% if not has_next %}disabled{% endif %}
+                onclick="loadCursorPage({{ next_cursor if next_cursor else 'null' }})"
+                title="Next Page"
+                aria-label="Next Page">
+                {{ _('Next') }} <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Cursor pagination helper function
+function loadCursorPage(cursor) {
+    const url = new URL(window.location);
+    if (cursor) {
+        url.searchParams.set('cursor', cursor);
+    } else {
+        url.searchParams.delete('cursor');
+    }
+    // Remove old page parameter if exists
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
+</script>
+{%- endmacro -%}
+

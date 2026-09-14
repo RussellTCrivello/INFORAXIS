@@ -1,0 +1,41 @@
+<!-- Page Tips/Documentation Component -->
+{% macro page_tips(enabled=None) %}
+{# Check if page_tips interface is enabled #}
+{# Try multiple approaches: parameter first, then global function, then user_settings #}
+{% set page_tips_enabled = false %}
+{% if enabled is not none %}
+    {# Use passed parameter #}
+    {% set page_tips_enabled = enabled %}
+{% elif is_interface_enabled is defined %}
+    {# Use global function (same pattern as base.html) #}
+    {% set page_tips_enabled = is_interface_enabled('page_tips') %}
+{% elif user_settings is defined and user_settings %}
+    {# Fallback to user_settings method #}
+    {% set page_tips_enabled = user_settings.is_interface_enabled('page_tips') %}
+{% endif %}
+
+{% if page_tips_enabled %}
+<!-- Page Tips: ENABLED -->
+<div class="page-tips-container" id="pageTipsContainer" data-page-tips-enabled="true">
+    <div class="page-tips-card">
+        <div class="page-tips-header">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-lightbulb-fill text-warning"></i>
+                <h5 class="mb-0">{{ _('Page Tips & Instructions') }}</h5>
+            </div>
+            <button type="button" class="btn btn-sm btn-link text-muted p-0" 
+                    id="toggleTipsBtn" 
+                    title="{{ _('Toggle Tips Visibility') }}"
+                    aria-label="{{ _('Toggle Tips Visibility') }}">
+                <i class="bi bi-chevron-up rotated" id="tipsToggleIcon"></i>
+            </button>
+        </div>
+        <div class="page-tips-content collapsed" id="pageTipsContent">
+            {{ caller() }}
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Page Tips: DISABLED - is_interface_enabled('page_tips') returned False -->
+{% endif %}
+{% endmacro %}

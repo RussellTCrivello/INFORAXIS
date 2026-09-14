@@ -1,0 +1,1888 @@
+"""
+Files Blueprint - File Management Routes and Helpers
+Handles file upload, browsing, viewing, and processing
+"""
+
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, current_app
+from werkzeug.utils import secure_filename
+import os
+import sys
+from pathlib import Path
+import re
+from datetime import datetime, date
+import hashlib
+import logging
+import uuid
+import shutil
+import time
+
+project_root = str(Path(__file__).parent.parent.parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+
+logger = logging.getLogger(__name__)
+
+# Create blueprint
+files_bp = Blueprint("files", __name__)
+
+
+from core.serialization import pack_int_list, unpack_int_list
+from core.errors import client_error, client_safe_message
+from core.security.rate_limit import limiter
+from Api.utils import (
+    execute_query, select_info_sources, select_info_sides, select_info_file_types,
+    load_text_content, select_classification, compute_percentage, get_content_stats,
+    get_word_frequencies, get_file, get_query
+)
+
+
+def get_keyword_frequencies(file_id, limit=50):
+    """Get keyword frequencies for a file with BYTEA decoding"""
+    try:
+        # Import the database-level function with a different name
+        from Api.utils import get_keyword_frequencies_db
+        results = get_keyword_frequencies_db(file_id, limit)
+        # Decode keyword BYTEA to text
+        decoded_results = []
+        for keyword_bytes, count in results:
+            try:
+                # Keywords are stored as pickled word IDs
+                word_ids = unpack_int_list(keyword_bytes) if keyword_bytes else []
+                # Convert word IDs to text
+                if word_ids:
+                    # Use IN clause with placeholders (same approach as load_text_keyword)
+                    placeholders = ','.join(['%s'] * len(word_ids))
+                    words_query = f"""
+                        SELECT word 
+                        FROM words 
+                        WHERE id IN ({placeholders})
+                        ORDER BY ARRAY_POSITION(ARRAY[{placeholders}]::INTEGER[], id)
+                    """
+                    words_result = execute_query(words_query, word_ids + word_ids)
+                    keyword_text = ' '.join([w[0] for w in words_result]) if words_result else ''
+                    decoded_results.append((keyword_text, count))
+            except Exception as e:
+                logger.warning(f"Error decoding keyword: {e}")
+                continue
+        return decoded_results
+    except Exception as e:
+        logger.error(f"Error getting keyword frequencies: {e}")
+        return []
+
+
+def get_repeated_elements(file_id, limit=50):
+    """Get words that appear in multiple categories (duplicate/repeated words)"""
+    try:
+        query = """
+            SELECT 
+                w.word,
+                wp.word_count,
+                COUNT(DISTINCT wc.category_id) as category_count,
+                STRING_AGG(DISTINCT w_cat.word, ', ' ORDER BY w_cat.word) as categories
+            FROM words_paths wp
+            JOIN words w ON wp.word_id = w.id
+            JOIN words_categorys wc ON w.id = wc.word_id
+            JOIN categorys c ON wc.category_id = c.id
+            JOIN words w_cat ON c.word_id = w_cat.id
+            WHERE wp.path_id = %s
+            GROUP BY w.id, w.word, wp.word_count
+            HAVING COUNT(DISTINCT wc.category_id) > 1
+            ORDER BY category_count DESC, wp.word_count DESC
+            LIMIT %s
+        """
+        results = execute_query(query, (file_id, limit))
+        repeated_elements = []
+        for word, word_count, category_count, categories in results:
+            repeated_elements.append({
+                'word': word,
+                'count': word_count,
+                'category_count': category_count,
+                'categories': categories.split(', ') if categories else []
+            })
+        return repeated_elements
+    except Exception as e:
+        logger.error(f"Error getting repeated elements: {e}")
+        return []
+
+
+def get_enhanced_content_stats(file_id):
+    """Get enhanced content statistics for charts"""
+    try:
+        # Get basic content stats
+        basic_stats = get_content_stats(file_id)
+        
+        # Get word count from words_paths table
+        word_count_result = execute_query("""
+            SELECT COUNT(DISTINCT wp.word_id) as unique_words,
+                   SUM(wp.word_count) as total_word_occurrences
+            FROM words_paths wp
+            WHERE wp.path_id = %s
+        """, (file_id,), fetch="one")
+        
+        # Handle tuple result from multi-column query
+        if isinstance(word_count_result, tuple) and len(word_count_result) >= 2:
+            unique_words = word_count_result[0] or 0
+            total_word_occurrences = word_count_result[1] or 0
+        else:
+            unique_words = 0
+            total_word_occurrences = 0
+        
+        # Get sentence and paragraph count from content.
+        # STAT-01: ``contents.content_data`` stores *zlib-compressed, pickled*
+        # symbol pairs, not plain text. Reading it directly produced garbage
+        # (psycopg2 returns a ``memoryview``; the old code fell back to
+        # ``str(content_data)`` which is ``"<memory at 0x...>"`` — exactly the
+        # bogus 26 characters Quick Stats reported). Use the same reconstruction
+        # path as the full-content reader so both views agree by construction.
+        words = 0
+        sentences = 0
+        paragraphs = 0
+        characters = 0
+        
+        try:
+            content_text = load_text_content(file_id)
+            if content_text and content_text.strip():
+                characters = len(content_text)
+                words = len(content_text.split())
+                sentences = content_text.count('.') + content_text.count('!') + content_text.count('?')
+                paragraphs = content_text.count('\n\n') + 1
+        except Exception as e:
+            logger.error(f"Error processing content data: {e}")
+            # Continue with default values
+        
+        # Get classification percentages
+        percentages = {}
+        top_categories = []
+        
+        try:
+            classification_data = select_classification(file_id)
+            percentages = compute_percentage(classification_data)
+            
+            # Get top categories for chart
+            if percentages:
+                sorted_categories = sorted(percentages.items(), key=lambda x: x[1].get('percentage', 0), reverse=True)
+                top_categories = sorted_categories[:5]  # Top 5 categories
+        except Exception as e:
+            logger.error(f"Error getting classification data: {e}")
+            # Continue with empty percentages
+        
+        return {
+            'words': words if words else unique_words,
+            'unique_words': unique_words,
+            'sentences': sentences,
+            'paragraphs': paragraphs,
+            'characters': characters,
+            'total_word_occurrences': total_word_occurrences,
+            'chunks': basic_stats.get('chunks', 0),
+            'total_size': basic_stats.get('total_size', 0),
+            'estimated_words': basic_stats.get('estimated_words', 0),
+            'top_categories': top_categories,
+            'classification_percentages': percentages
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting enhanced content stats: {e}")
+        return {
+            'words': 0,
+            'sentences': 0,
+            'paragraphs': 0,
+            'characters': 0,
+            'total_word_occurrences': 0,
+            'chunks': 0,
+            'total_size': 0,
+            'estimated_words': 0,
+            'top_categories': [],
+            'classification_percentages': {}
+        }
+
+
+def get_monitor():
+    """Get performance monitor from app config"""
+    return current_app.config.get('PERFORMANCE_MONITOR', None)
+
+
+# ==================== ROUTES ====================
+
+@files_bp.route('/upload')
+def upload_page():
+    """Upload Interface"""
+    try:
+        sources = select_info_sources() or {}
+        sides = select_info_sides() or {}
+        return render_template('file/upload.html', sources=sources, sides=sides)
+    except Exception as e:
+        logger.error(f"Error loading upload page: {e}", exc_info=True)
+        # Return empty dicts to prevent template errors
+        return render_template('file/upload.html', sources={}, sides={})
+
+
+@files_bp.route('/upload/process-path', methods=['POST'])
+def upload_process_path():
+    """
+    Start background file processing task.
+    Returns immediately with task ID for progress tracking.
+    """
+    try:
+        data = request.get_json()
+        file_path = data.get('file_path', '').strip()
+        source_id = data.get('source_id')
+        side_id = data.get('side_id')
+        
+        if not file_path:
+            return jsonify({'error': 'File path is required'}), 400
+        
+        if not source_id or not side_id:
+            return jsonify({'error': 'Source and Side are required'}), 400
+
+        # SECURITY (SEC-06): server-path ingestion must be contained to the
+        # configured INGESTION_ROOTS (plus the app's own upload staging
+        # directory). Without this check any analyst/admin could point the
+        # reader at an arbitrary file the server can read (e.g. /etc/passwd,
+        # .env, .flask_secret_key) and have its contents stored in the
+        # database, where any authenticated user can search and read them.
+        # ``validate_ingestion_path`` fails closed when no roots are
+        # configured, which is the documented behaviour of this feature.
+        from core.path_safety import validate_ingestion_path, PathSafetyError
+
+        try:
+            resolved_path = validate_ingestion_path(file_path)
+        except PathSafetyError as exc:
+            logger.warning("Rejected server path ingestion for %r: %s", file_path, exc)
+            return jsonify({'error': str(exc)}), 403
+        except Exception as exc:
+            logger.warning("Could not validate server path %r: %s", file_path, exc)
+            return jsonify({'error': 'Path could not be validated'}), 400
+
+        if not resolved_path.exists():
+            return jsonify({'error': f'Path does not exist: {file_path}'}), 400
+
+        file_path = str(resolved_path)
+
+        # Import task manager
+        from Api.task_manager import get_task_manager
+        
+        # Create and start background processing task
+        task_manager = get_task_manager()
+        try:
+            task_id = task_manager.create_task(
+                file_path=file_path,
+                source_id=source_id,
+                side_id=side_id,
+                task_name=f"Process: {os.path.basename(file_path)}"
+            )
+            
+            return jsonify({
+                'success': True,
+                'task_id': task_id,
+                'message': 'Processing started in background'
+            }), 202  # 202 Accepted - processing started
+        
+        except RuntimeError as e:
+            # Too many concurrent tasks
+            return client_error(e, subsystem='Api.blueprints.files', status=503)  # 503 Service Unavailable
+        
+    except Exception as e:
+        logger.error(f"Upload process-path error: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/upload/progress/<task_id>', methods=['GET'])
+def upload_progress(task_id):
+    """
+    Get progress for a processing task.
+    Returns current progress, status, and logs.
+    """
+    try:
+        from Api.task_manager import get_task_manager
+        
+        task_manager = get_task_manager()
+        progress = task_manager.get_task_progress(task_id)
+        
+        if not progress:
+            return jsonify({'error': 'Task not found'}), 404
+        
+        return jsonify(progress.to_dict()), 200
+        
+    except Exception as e:
+        logger.error(f"Get progress error: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/upload/active-tasks', methods=['GET'])
+@limiter.exempt
+def get_active_tasks():
+    """
+    Get all active (running/pending/paused) processing tasks.
+    Returns list of tasks with their progress.
+    """
+    try:
+        from Api.task_manager import get_task_manager, TaskStatus
+        
+        task_manager = get_task_manager()
+        all_tasks = task_manager.get_all_tasks()
+        
+        # Filter for active tasks (running, pending, or paused)
+        active_tasks = [
+            task.to_dict() for task in all_tasks
+            if task.status in (TaskStatus.RUNNING, TaskStatus.PENDING, TaskStatus.PAUSED)
+        ]
+        
+        return jsonify({
+            'success': True,
+            'tasks': active_tasks,
+            'count': len(active_tasks)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Get active tasks error: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/upload/pause/<task_id>', methods=['POST'])
+def pause_task(task_id):
+    """
+    Pause a running processing task.
+    """
+    try:
+        from Api.task_manager import get_task_manager
+        
+        task_manager = get_task_manager()
+        success = task_manager.pause_task(task_id)
+        
+        if not success:
+            return jsonify({'error': 'Task not found or cannot be paused'}), 404
+        
+        return jsonify({
+            'success': True,
+            'message': 'Task paused successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Pause task error: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/upload/resume/<task_id>', methods=['POST'])
+def resume_task(task_id):
+    """
+    Resume a paused processing task.
+    """
+    try:
+        from Api.task_manager import get_task_manager
+        
+        task_manager = get_task_manager()
+        success = task_manager.resume_task(task_id)
+        
+        if not success:
+            return jsonify({'error': 'Task not found or cannot be resumed'}), 404
+        
+        return jsonify({
+            'success': True,
+            'message': 'Task resumed successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Resume task error: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/upload/cancel/<task_id>', methods=['POST'])
+def api_cancel_task(task_id):
+    """
+    API endpoint to cancel a running or paused processing task.
+    
+    This endpoint wraps FileProcessingTaskManager.cancel_task() for API access.
+    
+    Args:
+        task_id: ID of the task to cancel
+        
+    Returns:
+        JSON response with success status (200) or error (404/500)
+    """
+    try:
+        from Api.task_manager import get_task_manager
+        
+        task_manager = get_task_manager()
+        success = task_manager.cancel_task(task_id)
+        
+        if not success:
+            return jsonify({'error': 'Task not found or cannot be cancelled'}), 404
+        
+        return jsonify({
+            'success': True,
+            'message': 'Task cancelled successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Cancel task error: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+# ==================== CHUNKED UPLOAD ROUTES ====================
+
+# Store active upload sessions
+_upload_sessions = {}
+
+@files_bp.route('/upload/chunked/start', methods=['POST'])
+def chunked_upload_start():
+    """Start a chunked upload session"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'JSON data is required'}), 400
+        
+        filename = data.get('filename', '').strip()
+        total_size = data.get('total_size', 0)
+        file_hash = data.get('file_hash', '').strip()
+        source_id = data.get('source_id')
+        side_id = data.get('side_id')
+        chunk_size = data.get('chunk_size', 5 * 1024 * 1024)  # Default 5MB
+        auto_analyze = data.get('auto_analyze', False)
+        
+        # Validate inputs
+        if not filename:
+            return jsonify({'success': False, 'error': 'Filename is required'}), 400
+        if not file_hash:
+            return jsonify({'success': False, 'error': 'File hash is required'}), 400
+        if not source_id or not side_id:
+            return jsonify({'success': False, 'error': 'Source ID and Side ID are required'}), 400
+        if total_size <= 0:
+            return jsonify({'success': False, 'error': 'Invalid file size'}), 400
+        
+        # Generate upload ID
+        upload_id = str(uuid.uuid4())
+        
+        # Create upload directory
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        session_dir = os.path.join(upload_folder, 'chunked_uploads', upload_id)
+        os.makedirs(session_dir, exist_ok=True)
+        
+        # Calculate total chunks
+        total_chunks = (total_size + chunk_size - 1) // chunk_size
+        
+        # Store session info
+        _upload_sessions[upload_id] = {
+            'upload_id': upload_id,
+            'filename': filename,
+            'total_size': total_size,
+            'file_hash': file_hash,
+            'source_id': source_id,
+            'side_id': side_id,
+            'chunk_size': chunk_size,
+            'total_chunks': total_chunks,
+            'uploaded_chunks': set(),
+            'session_dir': session_dir,
+            'auto_analyze': auto_analyze,
+            'created_at': datetime.now()
+        }
+        
+        logger.info(f"Started chunked upload session: {upload_id} for file: {filename}")
+        
+        return jsonify({
+            'success': True,
+            'upload_id': upload_id,
+            'total_chunks': total_chunks,
+            'chunk_size': chunk_size
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error starting chunked upload: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+@files_bp.route('/upload/chunked/<upload_id>/chunk/<int:chunk_index>', methods=['POST'])
+def chunked_upload_chunk(upload_id, chunk_index):
+    """Upload a single chunk"""
+    try:
+        # Get session
+        session = _upload_sessions.get(upload_id)
+        if not session:
+            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
+        
+        # Validate chunk index
+        if chunk_index < 0 or chunk_index >= session['total_chunks']:
+            return jsonify({'success': False, 'error': 'Invalid chunk index'}), 400
+        
+        # Get chunk file
+        if 'chunk' not in request.files:
+            return jsonify({'success': False, 'error': 'No chunk file provided'}), 400
+        
+        chunk_file = request.files['chunk']
+        if not chunk_file:
+            return jsonify({'success': False, 'error': 'Empty chunk file'}), 400
+        
+        # Save chunk with error handling
+        chunk_path = os.path.join(session['session_dir'], f'chunk_{chunk_index}')
+        try:
+            chunk_file.save(chunk_path)
+        except PermissionError as e:
+            logger.error(f"Permission denied saving chunk {chunk_index}: {e}")
+            return jsonify({'success': False, 'error': f'Cannot save chunk: Permission denied'}), 403
+        except OSError as e:
+            logger.error(f"OS error saving chunk {chunk_index}: {e}")
+            return client_error(e, subsystem='Api.blueprints.files', success_key='success', public_message='Cannot save chunk', status=500)
+        except Exception as e:
+            logger.error(f"Unexpected error saving chunk {chunk_index}: {e}")
+            return client_error(e, subsystem='Api.blueprints.files', success_key='success', public_message='Failed to save chunk', status=500)
+        
+        # Mark chunk as uploaded
+        session['uploaded_chunks'].add(chunk_index)
+        
+        logger.debug(f"Uploaded chunk {chunk_index}/{session['total_chunks']} for session {upload_id}")
+        
+        return jsonify({
+            'success': True,
+            'chunk_index': chunk_index,
+            'uploaded_chunks': len(session['uploaded_chunks']),
+            'total_chunks': session['total_chunks']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error uploading chunk: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+@files_bp.route('/upload/chunked/<upload_id>/cancel', methods=['POST'])
+def chunked_upload_cancel(upload_id):
+    """Cancel a chunked upload session"""
+    try:
+        session = _upload_sessions.get(upload_id)
+        if not session:
+            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
+        
+        # Cleanup session directory
+        try:
+            if os.path.exists(session['session_dir']):
+                shutil.rmtree(session['session_dir'])
+        except Exception as e:
+            logger.warning(f"Failed to cleanup cancelled session directory: {e}")
+        
+        # Remove session
+        del _upload_sessions[upload_id]
+        
+        logger.info(f"Cancelled chunked upload session: {upload_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Upload cancelled successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error cancelling chunked upload: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+@files_bp.route('/upload/chunked/<upload_id>/status', methods=['GET'])
+def chunked_upload_status(upload_id):
+    """Get status of a chunked upload session"""
+    try:
+        session = _upload_sessions.get(upload_id)
+        if not session:
+            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'upload_id': upload_id,
+            'filename': session['filename'],
+            'uploaded_chunks': len(session['uploaded_chunks']),
+            'total_chunks': session['total_chunks'],
+            'progress': (len(session['uploaded_chunks']) / session['total_chunks']) * 100 if session['total_chunks'] > 0 else 0
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting chunked upload status: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+# ==================== FILE BROWSER ====================
+
+@files_bp.route('/files')
+def files_list():
+    """Enhanced File Library - OFFSET-BASED PAGINATION (like keywords page)"""
+    from settings import get_settings
+    settings = get_settings()
+    display_config = settings.get_display_config()
+    
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)  # Page number
+    # Use settings default if limit not provided
+    default_limit = display_config.get('results_per_page', 10)
+    limit = request.args.get('limit', default_limit, type=int)  # Records per page
+    limit = max(1, min(1000, limit))  # Clamp between 1 and 1000
+    
+    # Validate page number
+    if page < 1:
+        page = 1
+    
+    # Calculate offset
+    offset = (page - 1) * limit
+    
+    # Get filters
+    search = request.args.get('search', '')
+    source_filter = request.args.get('source', '')
+    side_filter = request.args.get('side', '')
+    status_filter = request.args.get('status', '')
+    file_type_filter = request.args.get('file_type', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    size_min = request.args.get('size_min', '')
+    size_max = request.args.get('size_max', '')
+    
+    # Build filters for cursor pagination
+    filters = {}
+    joins = [
+        'LEFT JOIN hashs h ON p.hash_id = h.id',
+        'LEFT JOIN sources s ON h.source_id = s.id',
+        'LEFT JOIN sides si ON h.side_id = si.id'
+    ]
+    
+    if search:
+        # Use ILIKE for case-insensitive search
+        # Sanitize search to prevent SQL injection
+        search = search.strip()
+        if search:
+            filters['p.file_name'] = {'op': 'ILIKE', 'value': f'%{search}%'}
+        # Note: OR conditions need special handling - we'll use a combined filter
+        # For now, search on file_name only (can be extended)
+    
+    if source_filter:
+        try:
+            filters['h.source_id'] = int(source_filter)
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid source_filter: {source_filter}")
+    
+    if side_filter:
+        try:
+            filters['h.side_id'] = int(side_filter)
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid side_filter: {side_filter}")
+    
+    if status_filter:
+        # Validate status filter - handle both 'Read'/'Unread' and 'Analyzed'/'Pending'
+        if status_filter in ['Read', 'Unread', 'Analyzed', 'Pending']:
+            # Map 'Analyzed' to 'Read' and 'Pending' to 'Unread' for database
+            status_mapping = {'Analyzed': 'Read', 'Pending': 'Unread'}
+            db_status = status_mapping.get(status_filter, status_filter)
+            filters['p.file_status'] = db_status
+        else:
+            logger.warning(f"Invalid status_filter: {status_filter}")
+    
+    if file_type_filter:
+        # Sanitize file type filter
+        file_type_filter = file_type_filter.strip()
+        if file_type_filter:
+            filters['p.file_type'] = file_type_filter
+    
+    # Date range filters - use BETWEEN when both are provided, otherwise use >= or <=
+    if date_from or date_to:
+        try:
+            from datetime import datetime
+            if date_from and date_to:
+                # Both dates provided - use BETWEEN
+                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+                # Ensure date_from <= date_to
+                if date_from_obj <= date_to_obj:
+                    filters['p.file_date'] = {'op': 'BETWEEN', 'value': [date_from_obj, date_to_obj]}
+                else:
+                    # Invalid range - use date_from only
+                    logger.warning(f"Invalid date range: date_from ({date_from}) > date_to ({date_to})")
+                    filters['p.file_date'] = {'op': '>=', 'value': date_from_obj}
+            elif date_from:
+                # Only date_from provided
+                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+                filters['p.file_date'] = {'op': '>=', 'value': date_from_obj}
+            elif date_to:
+                # Only date_to provided
+                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+                filters['p.file_date'] = {'op': '<=', 'value': date_to_obj}
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Invalid date filter: date_from={date_from}, date_to={date_to}, error: {e}")
+    
+    # Size range filters - use BETWEEN when both are provided, otherwise use >= or <=
+    if size_min or size_max:
+        try:
+            if size_min and size_max:
+                # Both sizes provided - use BETWEEN
+                size_min_bytes = int(float(size_min) * 1024 * 1024)  # Convert MB to bytes
+                size_max_bytes = int(float(size_max) * 1024 * 1024)  # Convert MB to bytes
+                # Ensure size_min <= size_max
+                if size_min_bytes <= size_max_bytes:
+                    filters['p.file_size'] = {'op': 'BETWEEN', 'value': [size_min_bytes, size_max_bytes]}
+                else:
+                    # Invalid range - use size_min only
+                    logger.warning(f"Invalid size range: size_min ({size_min}MB) > size_max ({size_max}MB)")
+                    filters['p.file_size'] = {'op': '>=', 'value': size_min_bytes}
+            elif size_min:
+                # Only size_min provided
+                size_min_bytes = int(float(size_min) * 1024 * 1024)  # Convert MB to bytes
+                filters['p.file_size'] = {'op': '>=', 'value': size_min_bytes}
+            elif size_max:
+                # Only size_max provided
+                size_max_bytes = int(float(size_max) * 1024 * 1024)  # Convert MB to bytes
+                filters['p.file_size'] = {'op': '<=', 'value': size_max_bytes}
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Invalid size filter: size_min={size_min}, size_max={size_max}, error: {e}")
+    
+    # Build WHERE clause from filters
+    where_parts = []
+    where_params = []
+    
+    if filters:
+        for col, val in filters.items():
+            if isinstance(val, dict):
+                op = val.get('op', '=')
+                filter_value = val.get('value')
+                if op in ('=', '!=', '>', '<', '>=', '<=', 'LIKE', 'ILIKE'):
+                    where_parts.append(f"{col} {op} %s")
+                    where_params.append(filter_value)
+                elif op == 'BETWEEN':
+                    where_parts.append(f"{col} BETWEEN %s AND %s")
+                    where_params.extend([filter_value[0], filter_value[1]])
+            else:
+                where_parts.append(f"{col} = %s")
+                where_params.append(val)
+    
+    where_clause = ''
+    if where_parts:
+        where_clause = 'WHERE ' + ' AND '.join(where_parts)
+    
+    # Build base query
+    base_query = f"""
+        SELECT 
+            p.id, p.file_name, p.file_path, p.file_size, p.file_type,
+            p.file_status, p.file_date, p.date_creation,
+            COALESCE(s.name, 'Unknown') as source_name,
+            COALESCE(si.name, 'Unknown') as side_name
+        FROM paths p
+        {' '.join(joins) if joins else ''}
+        {where_clause}
+        ORDER BY p.date_creation DESC
+    """
+    
+    try:
+        # Get total count
+        count_query = f"""
+            SELECT COUNT(*) 
+            FROM paths p
+            {' '.join(joins) if joins else ''}
+            {where_clause}
+        """
+        total_result = execute_query(count_query, tuple(where_params) if where_params else None, fetch="one")
+        total_files_count = total_result[0] if isinstance(total_result, tuple) else (total_result if isinstance(total_result, int) else 0)
+        total_pages = ((total_files_count - 1) // limit) + 1 if total_files_count > 0 else 1
+        
+        # Get paginated results
+        files_query = f"{base_query} LIMIT %s OFFSET %s"
+        files_params = list(where_params) + [limit, offset]
+        files_rows = execute_query(files_query, tuple(files_params))
+        
+        # Convert to tuple format for template
+        files = []
+        for row in files_rows:
+            files.append((
+                row[0],  # id
+                row[1],  # file_name
+                row[2],  # file_path
+                row[3],  # file_size
+                row[4],  # file_type
+                row[5],  # file_status
+                row[6],  # file_date
+                row[7],  # date_creation
+                row[8],  # source_name
+                row[9]   # side_name
+            ))
+        
+        # Calculate start position for row numbering
+        start_position = offset + 1
+        
+        # Log for debugging
+        logger.info(f"Files list: {len(files)} files returned, total: {total_files_count}, page: {page}, start_position: {start_position}")
+        
+        # Calculate total analyzed and pending files from database with same filters
+        total_analyzed = 0
+        total_pending = 0
+        
+        try:
+            # Build WHERE clause with same filters as main query (but exclude status filter)
+            stats_where = []
+            stats_params = []
+            
+            if search:
+                stats_where.append("p.file_name ILIKE %s")
+                stats_params.append(f'%{search}%')
+            
+            if source_filter:
+                try:
+                    stats_where.append("h.source_id = %s")
+                    stats_params.append(int(source_filter))
+                except (ValueError, TypeError):
+                    pass
+            
+            if side_filter:
+                try:
+                    stats_where.append("h.side_id = %s")
+                    stats_params.append(int(side_filter))
+                except (ValueError, TypeError):
+                    pass
+            
+            if file_type_filter:
+                stats_where.append("p.file_type = %s")
+                stats_params.append(file_type_filter)
+            
+            # Apply date filters
+            if date_from or date_to:
+                try:
+                    from datetime import datetime
+                    if date_from and date_to:
+                        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+                        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+                        if date_from_obj <= date_to_obj:
+                            stats_where.append("p.file_date BETWEEN %s AND %s")
+                            stats_params.extend([date_from_obj, date_to_obj])
+                    elif date_from:
+                        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+                        stats_where.append("p.file_date >= %s")
+                        stats_params.append(date_from_obj)
+                    elif date_to:
+                        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+                        stats_where.append("p.file_date <= %s")
+                        stats_params.append(date_to_obj)
+                except (ValueError, TypeError):
+                    pass
+            
+            # Apply size filters
+            if size_min or size_max:
+                try:
+                    if size_min and size_max:
+                        size_min_bytes = int(float(size_min) * 1024 * 1024)
+                        size_max_bytes = int(float(size_max) * 1024 * 1024)
+                        if size_min_bytes <= size_max_bytes:
+                            stats_where.append("p.file_size BETWEEN %s AND %s")
+                            stats_params.extend([size_min_bytes, size_max_bytes])
+                    elif size_min:
+                        size_min_bytes = int(float(size_min) * 1024 * 1024)
+                        stats_where.append("p.file_size >= %s")
+                        stats_params.append(size_min_bytes)
+                    elif size_max:
+                        size_max_bytes = int(float(size_max) * 1024 * 1024)
+                        stats_where.append("p.file_size <= %s")
+                        stats_params.append(size_max_bytes)
+                except (ValueError, TypeError):
+                    pass
+            
+            # Build queries with joins
+            stats_query_base = """
+                SELECT COUNT(*) 
+                FROM paths p
+                LEFT JOIN hashs h ON p.hash_id = h.id
+                LEFT JOIN sources s ON h.source_id = s.id
+                LEFT JOIN sides si ON h.side_id = si.id
+            """
+            
+            # Get analyzed count (Read status)
+            analyzed_where = stats_where + ["p.file_status = 'Read'"]
+            analyzed_query = stats_query_base
+            if analyzed_where:
+                analyzed_query += " WHERE " + " AND ".join(analyzed_where)
+            
+            analyzed_result = execute_query(analyzed_query, tuple(stats_params) if stats_params else None, fetch="one")
+            total_analyzed = analyzed_result[0] if analyzed_result and isinstance(analyzed_result, tuple) else (analyzed_result if isinstance(analyzed_result, int) else 0)
+            
+            # Get pending count (Unread status)
+            pending_where = stats_where + ["p.file_status = 'Unread'"]
+            pending_query = stats_query_base
+            if pending_where:
+                pending_query += " WHERE " + " AND ".join(pending_where)
+            
+            pending_result = execute_query(pending_query, tuple(stats_params) if stats_params else None, fetch="one")
+            total_pending = pending_result[0] if pending_result and isinstance(pending_result, tuple) else (pending_result if isinstance(pending_result, int) else 0)
+            
+        except Exception as e:
+            logger.error(f"Error calculating statistics: {e}", exc_info=True)
+            # Fallback: count from current page
+            total_analyzed = sum(1 for f in files if f[5] == 'Read')
+            total_pending = sum(1 for f in files if f[5] != 'Read')
+        
+        # Cache sources, sides, and file types (they rarely change)
+        # Use try-except for each to prevent one failure from breaking the page
+        try:
+            sources = select_info_sources()
+        except Exception as e:
+            logger.error(f"Error loading sources: {e}")
+            sources = {}
+        
+        try:
+            sides = select_info_sides()
+        except Exception as e:
+            logger.error(f"Error loading sides: {e}")
+            sides = {}
+        
+        try:
+            file_types = select_info_file_types()
+        except Exception as e:
+            logger.error(f"Error loading file types: {e}")
+            file_types = {}
+        
+        return render_template('file/files_list.html',
+                             files=files,
+                             page=page,
+                             total_pages=total_pages,
+                             total_files=total_files_count,
+                             total_analyzed=total_analyzed,
+                             total_pending=total_pending,
+                             sources=sources or {},
+                             sides=sides or {},
+                             file_types=file_types or {},
+                             search=search or '',
+                             source_filter=source_filter or '',
+                             side_filter=side_filter or '',
+                             status_filter=status_filter or '',
+                             file_type_filter=file_type_filter or '',
+                             date_from=date_from or '',
+                             date_to=date_to or '',
+                             size_min=size_min or '',
+                             size_max=size_max or '',
+                             limit=limit,
+                             start_position=start_position)
+    
+    except Exception as e:
+        logger.error(f"Error in files_list: {e}", exc_info=True)
+        # Fallback to empty results with safe defaults
+        try:
+            sources = select_info_sources()
+        except Exception:
+            sources = {}
+        
+        try:
+            sides = select_info_sides()
+        except Exception:
+            sides = {}
+        
+        try:
+            file_types = select_info_file_types()
+        except Exception:
+            file_types = {}
+        
+        return render_template('file/files_list.html',
+                             files=[],
+                             page=1,
+                             total_pages=1,
+                             total_files=0,
+                             sources=sources or {},
+                             sides=sides or {},
+                             file_types=file_types or {},
+                             search=search or '',
+                             source_filter=source_filter or '',
+                             side_filter=side_filter or '',
+                             status_filter=status_filter or '',
+                             file_type_filter=request.args.get('file_type', '') or '',
+                             cursor_pagination=True,
+                             error=str(e))
+
+
+# ==================== FILE DETAIL ====================
+
+@files_bp.route('/file/<int:file_id>')
+def file_detail(file_id):
+    """Document Detail View with Pagination Support - OPTIMIZED with lazy loading"""
+    # 🚀 OPTIMIZED: Single query for file info with proper NULL handling
+    file_info = execute_query("""
+        SELECT p.id, p.file_name, p.file_path, p.file_size, p.file_type,
+               p.file_status, p.file_date, p.date_creation, p.hash_id,
+               COALESCE(s.name, 'Unknown') as source_name, 
+               COALESCE(si.name, 'Unknown') as side_name, 
+               COALESCE(h.hash, '') as hash
+        FROM paths p
+        LEFT JOIN hashs h ON p.hash_id = h.id
+        LEFT JOIN sources s ON h.source_id = s.id
+        LEFT JOIN sides si ON h.side_id = si.id
+        WHERE p.id = %s
+    """, (file_id,), fetch="one")
+    
+    if not file_info:
+        flash("File not found", "error")
+        return redirect(url_for('files.files_list'))
+    
+    # Convert file_info tuple to list for easier manipulation and ensure dates are datetime objects
+    from datetime import datetime, date
+    file_info_list = list(file_info) if isinstance(file_info, tuple) else file_info
+    
+    # Ensure date fields are datetime/date objects, not strings
+    # file_info structure: (id, file_name, file_path, file_size, file_type, file_status, file_date, date_creation, hash_id, source_name, side_name, hash)
+    if len(file_info_list) > 6 and file_info_list[6] and isinstance(file_info_list[6], str):
+        try:
+            file_info_list[6] = datetime.strptime(file_info_list[6], '%Y-%m-%d').date() if len(file_info_list[6]) == 10 else datetime.fromisoformat(file_info_list[6].replace('Z', '+00:00')).date()
+        except (ValueError, AttributeError):
+            pass  # Keep as string if parsing fails
+    
+    if len(file_info_list) > 7 and file_info_list[7] and isinstance(file_info_list[7], str):
+        try:
+            file_info_list[7] = datetime.fromisoformat(file_info_list[7].replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            pass  # Keep as string if parsing fails
+    
+    file_info = tuple(file_info_list) if isinstance(file_info, tuple) else file_info_list
+    
+    # 🚀 OPTIMIZED: Get basic stats only (defer heavy computation)
+    content_stats = get_content_stats(file_id)
+
+    # Analyst (manual) categories for this file - read exclusively from the
+    # analyst tables; the smart taxonomy is untouched (FR-1.4). Displayed in
+    # its own card on the file detail page.
+    analyst_categories = None
+    try:
+        from Api.services.analyst_categories import AnalystCategoryService
+        analyst_categories = AnalystCategoryService.categories_for_files([file_id]).get(file_id, [])
+    except Exception as analyst_err:  # never break the detail page
+        logger.warning(f"Could not load analyst categories for file {file_id}: {analyst_err}")
+
+    # Get pagination parameters - allow larger pages for better readability
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50000, type=int)  # Increased default for better readability
+    per_page = min(per_page, 100000)  # Increased max for better content display
+    
+    # Get search parameters. "?q=" is accepted as an alias for "?search="
+    # so links from the search results can carry the originating query and
+    # the term is located precisely the moment the detail page opens.
+    search_query = request.args.get('search', '') or request.args.get('q', '')
+    case_sensitive = request.args.get('case_sensitive', 'false').lower() == 'true'
+    whole_word = request.args.get('whole_word', 'false').lower() == 'true'
+    
+    # Initialize content variables (IMPORTANT: always initialize)
+    content = ''
+    total_chars = 0
+    total_pages = 0
+    
+    # 🚀 OPTIMIZED: Load content with better error handling and diagnostics
+    try:
+        # Check if content exists first
+        content_check = execute_query(
+            "SELECT COUNT(*) FROM contents WHERE path_id = %s",
+            (file_id,),
+            fetch="one"
+        )
+        
+        # execute_query with fetch="one" returns the value directly for COUNT queries (int)
+        # or a tuple for multi-column queries
+        content_count = content_check[0] if isinstance(content_check, (tuple, list)) else content_check
+        
+        if content_count and content_count > 0:
+            logger.info(f"Found {content_count} content chunks for file_id={file_id}")
+            full_content = load_text_content(file_id)
+            
+            logger.info(f"Content loaded for file_id={file_id}: length={len(full_content) if full_content else 0}, type={type(full_content)}")
+            
+            # Check if content is empty or only whitespace
+            if not full_content:
+                logger.warning(f"Content loaded but is None/empty for file_id={file_id}. Content check returned {content_count} chunks.")
+                flash("Content found but could not be decoded. File may need reprocessing.", "warning")
+                content = ''
+                total_pages = 0
+                total_chars = 0
+            elif not full_content.strip():
+                logger.warning(f"Content loaded but is whitespace-only for file_id={file_id}. Content check returned {content_count} chunks.")
+                flash("Content found but appears to be empty or whitespace-only. File may need reprocessing.", "warning")
+                content = ''
+                total_pages = 0
+                total_chars = 0
+            else:
+                # Ensure content is a string (not bytes)
+                if isinstance(full_content, bytes):
+                    try:
+                        full_content = full_content.decode('utf-8', errors='replace')
+                    except Exception as decode_error:
+                        logger.error(f"Failed to decode content bytes for file_id={file_id}: {decode_error}")
+                        flash("Content found but could not be decoded properly. File may need reprocessing.", "warning")
+                        content = ''
+                        total_pages = 0
+                        total_chars = 0
+                    else:
+                        total_chars = len(full_content)
+                        total_pages = (total_chars + per_page - 1) // per_page if total_chars > 0 else 1
+                        if page == 1:
+                            content = full_content[:per_page]
+                            logger.info(f"✅ Loaded {total_chars} characters for file_id={file_id}, showing page 1 of {total_pages}")
+                        else:
+                            start_idx = (page - 1) * per_page
+                            end_idx = min(start_idx + per_page, total_chars)
+                            content = full_content[start_idx:end_idx]
+                            logger.info(f"✅ Loaded page {page} of {total_pages} for file_id={file_id}, showing chars {start_idx}-{end_idx}")
+                else:
+                    total_chars = len(full_content)
+                    total_pages = (total_chars + per_page - 1) // per_page if total_chars > 0 else 1
+                    if page == 1:
+                        content = full_content[:per_page]
+                        logger.info(f"✅ Loaded {total_chars} characters for file_id={file_id}, showing page 1 of {total_pages}")
+                    else:
+                        start_idx = (page - 1) * per_page
+                        end_idx = min(start_idx + per_page, total_chars)
+                        content = full_content[start_idx:end_idx]
+                        logger.info(f"✅ Loaded page {page} of {total_pages} for file_id={file_id}, showing chars {start_idx}-{end_idx}")
+        else:
+            logger.warning(f"No content chunks found in database for file_id={file_id}")
+            flash("No content found. File may need reprocessing.", "warning")
+            content = ''
+            total_pages = 0
+            total_chars = 0
+    except Exception as e:
+        logger.error(f"Error loading content for file_id={file_id}: {e}", exc_info=True)
+        flash(f"Error loading content: {str(e)}", "error")
+        content = ''
+        total_pages = 0
+        total_chars = 0
+    
+    # 🚀 OPTIMIZED: Load essential chart data for Analysis tab
+    enhanced_stats = get_enhanced_content_stats(file_id) if page == 1 else {}
+    
+    # Load classification percentages for pie chart
+    percentages = {}
+    try:
+        classification_data = select_classification(file_id)
+        logger.info(f"Classification data for file {file_id}: {classification_data}")
+        if classification_data:
+            percentages = compute_percentage(classification_data)
+            logger.info(f"Computed percentages for file {file_id}: {percentages}")
+        else:
+            logger.warning(f"No classification data returned for file {file_id}")
+    except Exception as e:
+        logger.error(f"Error loading classification data for file {file_id}: {e}", exc_info=True)
+        percentages = {}
+    
+    # Load word frequencies for bar chart (top 15)
+    word_frequencies = []
+    try:
+        word_frequencies = get_word_frequencies(file_id, limit=15)
+    except Exception as e:
+        logger.error(f"Error loading word frequencies for file {file_id}: {e}")
+        word_frequencies = []
+    
+    # Ensure all variables are properly defined (never None) - final safety check
+    if content is None:
+        content = ''
+    if total_chars is None:
+        total_chars = 0
+    if total_pages is None:
+        total_pages = 0
+    
+    # Debug: Log content status with detailed information
+    logger.info(f"Rendering template for file_id={file_id}: content_length={len(content)}, total_chars={total_chars}, total_pages={total_pages}, content_type={type(content)}")
+    logger.info(f"Content preview (first 100 chars): {repr(content[:100]) if content else 'EMPTY'}")
+    
+    return render_template('file/file_detail.html',
+                         file=file_info,
+                         content=content,  # Already ensured to be string
+                         content_stats=content_stats,
+                         enhanced_stats=enhanced_stats,
+                         percentages=percentages,
+                         word_frequencies=word_frequencies,
+                         current_page=page,
+                         total_pages=total_pages,
+                         per_page=per_page,
+                         total_chars=total_chars,
+                         search_query=search_query,
+                         case_sensitive=case_sensitive,
+                         whole_word=whole_word,
+                         # Analyst (manual) categories - separate namespace from
+                         # the smart classification data above (FR-1.4)
+                         analyst_categories=analyst_categories or [])
+
+
+@files_bp.route('/file/<int:file_id>/content')
+def file_content_lazy(file_id):
+    """Lazy load content in chunks"""
+    offset = request.args.get('offset', 0, type=int)
+    limit = request.args.get('limit', 50000, type=int)  # Increased default limit
+    
+    try:
+        full_content = load_text_content(file_id)
+        chunk = full_content[offset:offset + limit]
+        
+        return jsonify({
+            'content': chunk,
+            'offset': offset,
+            'has_more': len(full_content) > offset + limit,
+            'total_length': len(full_content)
+        })
+    except Exception as e:
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/api/files/<int:file_id>/export')
+def file_export(file_id):
+    """Export file content as downloadable text file"""
+    try:
+        # Get file info
+        file_info = execute_query("""
+            SELECT file_name, file_path, file_type FROM paths WHERE id = %s
+        """, (file_id,), fetch="one")
+        
+        if not file_info:
+            return jsonify({'success': False, 'error': 'File not found'}), 404
+        
+        file_name = file_info[0] or f'file_{file_id}'
+        file_type = file_info[2] or 'txt'
+        
+        # Get file content
+        content = load_text_content(file_id)
+        if content is None:
+            content = ''
+        
+        # Create response with file download
+        from flask import Response
+        response = Response(
+            content,
+            mimetype='text/plain',
+            headers={
+                'Content-Disposition': f'attachment; filename="{secure_filename(file_name)}.txt"'
+            }
+        )
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error exporting file {file_id}: {e}")
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+@files_bp.route('/file/<int:file_id>/content/page')
+def file_content_page(file_id):
+    """Get specific content page with pagination info"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 5000, type=int)
+    per_page = min(per_page, 10000)  # Max 10000 characters per page
+    
+    try:
+        full_content = load_text_content(file_id)
+        if not full_content:
+            return jsonify({'error': 'No content found'}), 404
+        
+        # Calculate pagination
+        total_chars = len(full_content)
+        total_pages = (total_chars + per_page - 1) // per_page
+        
+        # Get content for requested page
+        start_idx = (page - 1) * per_page
+        end_idx = min(start_idx + per_page, total_chars)
+        content = full_content[start_idx:end_idx]
+        
+        return jsonify({
+            'content': content,
+            'page': page,
+            'total_pages': total_pages,
+            'per_page': per_page,
+            'total_chars': total_chars,
+            'start_char': start_idx + 1,
+            'end_char': end_idx,
+            'has_previous': page > 1,
+            'has_next': page < total_pages
+        })
+    except Exception as e:
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/file/<int:file_id>/chart-data')
+def file_chart_data(file_id):
+    """Get chart data for a specific file"""
+    try:
+        # Get enhanced statistics
+        enhanced_stats = get_enhanced_content_stats(file_id)
+        
+        # Get word frequencies
+        word_frequencies = get_word_frequencies(file_id, limit=50)
+        
+        # Get keyword frequencies
+        keyword_frequencies = get_keyword_frequencies(file_id, limit=50)
+        
+        # Get repeated elements (words in multiple categories)
+        repeated_elements = get_repeated_elements(file_id, limit=50)
+        
+        # Get classification data (categories)
+        classification_data = select_classification(file_id)
+        percentages = compute_percentage(classification_data)
+        
+        # Format categories data for charts
+        categories_data = []
+        if percentages:
+            for category_name, data in percentages.items():
+                categories_data.append({
+                    'name': category_name,
+                    'count': data.get('count', 0),
+                    'percentage': data.get('percentage', 0)
+                })
+            # Sort by count descending
+            categories_data.sort(key=lambda x: x['count'], reverse=True)
+        
+        # Format words data for charts
+        words_data = []
+        for word, count in word_frequencies:
+            words_data.append({
+                'name': word,
+                'count': count
+            })
+        
+        # Format keywords data for charts
+        keywords_data = []
+        for keyword, count in keyword_frequencies:
+            keywords_data.append({
+                'name': keyword,
+                'count': count
+            })
+        
+        # Get file name (optimized - single query)
+        file_name_result = execute_query("SELECT file_name FROM paths WHERE id = %s", (file_id,), fetch="one")
+        file_name = file_name_result[0] if file_name_result and file_name_result[0] else 'Unknown'
+        
+        # Format data for charts
+        chart_data = {
+            'content_stats': {
+                'words': enhanced_stats.get('words', 0),
+                'sentences': enhanced_stats.get('sentences', 0),
+                'paragraphs': enhanced_stats.get('paragraphs', 0),
+                'characters': enhanced_stats.get('characters', 0)
+            },
+            'categories': categories_data,
+            'words': words_data,
+            'keywords': keywords_data,
+            'repeated_elements': repeated_elements,
+            'classification_percentages': percentages,
+            'top_categories': enhanced_stats.get('top_categories', []),
+            'file_info': {
+                'id': file_id,
+                'name': file_name
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': chart_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting chart data: {e}")
+        return jsonify({
+            'success': False,
+            'error': client_safe_message(e, subsystem='Api.routes.files')
+        }), 500
+
+
+@files_bp.route('/file/<int:file_id>/search')
+def file_search_all_pages(file_id):
+    """Search across all pages of a file.
+
+    The query is matched LITERALLY (regex metacharacters are escaped), which
+    is what the UI promises and what "precise location" means: a query like
+    "C++ (2026)" must find exactly that text - never throw a 500 on invalid
+    regex, never act as an unexpected wildcard. Whole-word optionally wraps
+    the escaped pattern in word boundaries.
+
+    Every match carries absolute character offsets plus a 1-based line
+    number, so any content display surface can jump straight to the exact
+    position (consistent precise location across interfaces).
+    """
+    query = request.args.get('q', '').strip()
+    case_sensitive = request.args.get('case_sensitive', 'false').lower() == 'true'
+    whole_word = request.args.get('whole_word', 'false').lower() == 'true'
+
+    if not query:
+        return jsonify({
+            'query': '',
+            'total_matches': 0,
+            'total_pages': 0,
+            'matches_by_page': {},
+            'matches': [],
+            'search_options': {
+                'case_sensitive': case_sensitive,
+                'whole_word': whole_word
+            }
+        }), 200
+
+    try:
+        full_content = load_text_content(file_id)
+        if not full_content:
+            return jsonify({'error': 'No content found'}), 404
+
+        # Literal pattern: escape everything, optionally wrap in boundaries.
+        escaped = re.escape(query)
+        if whole_word:
+            escaped = r'\b' + escaped + r'\b'
+
+        flags = re.IGNORECASE if not case_sensitive else 0
+        regex = re.compile(escaped, flags)
+
+        # Precompute line-start offsets so each match can report its line.
+        line_starts = [0]
+        for i, ch in enumerate(full_content):
+            if ch == '\n':
+                line_starts.append(i + 1)
+
+        import bisect
+
+        def line_of(pos):
+            return bisect.bisect_right(line_starts, pos)
+
+        # Find all matches
+        matches = []
+        for match in regex.finditer(full_content):
+            matches.append({
+                'text': match.group(),
+                'start': match.start(),
+                'end': match.end(),
+                'length': match.end() - match.start(),
+                'line': line_of(match.start())
+            })
+
+        # Group matches by page. The page size mirrors the viewer's slicing
+        # so a match's page number maps 1:1 onto the detail view's pages
+        # (the client passes its per_page; default matches the server default).
+        try:
+            per_page = min(max(int(request.args.get('per_page', 5000)), 1000), 100000)
+        except (TypeError, ValueError):
+            per_page = 5000
+        total_chars = len(full_content)
+        total_pages = (total_chars + per_page - 1) // per_page
+
+        page_matches = {}
+        for match in matches:
+            page_num = (match['start'] // per_page) + 1
+            if page_num not in page_matches:
+                page_matches[page_num] = []
+
+            # Adjust match position relative to page start
+            page_start = (page_num - 1) * per_page
+            page_matches[page_num].append({
+                'text': match['text'],
+                'start': match['start'] - page_start,
+                'end': match['end'] - page_start,
+                'length': match['length'],
+                'global_start': match['start'],
+                'global_end': match['end'],
+                'line': match['line']
+            })
+
+        return jsonify({
+            'query': query,
+            'total_matches': len(matches),
+            'total_pages': total_pages,
+            'matches_by_page': page_matches,
+            'matches': matches[:1000],  # absolute positions (capped for payload safety)
+            'total_chars': total_chars,
+            'search_options': {
+                'case_sensitive': case_sensitive,
+                'whole_word': whole_word
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"File search error: {e}")
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/file/<int:file_id>/full-content')
+def file_full_content(file_id):
+    """Display full content in a dedicated page with pagination"""
+    try:
+        # Get file information
+        file_info = get_file(file_id)
+        if not file_info:
+            flash("File not found", "error")
+            return redirect(url_for('files.files_list'))
+        
+        # Get pagination parameters - allow larger pages for better readability
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50000, type=int)  # Increased default for better readability
+        per_page = min(per_page, 100000)  # Increased max for better content display
+        
+        # Get search parameters ("?q=" alias, same as the detail page)
+        search_query = request.args.get('search', '') or request.args.get('q', '')
+        case_sensitive = request.args.get('case_sensitive', 'false').lower() == 'true'
+        whole_word = request.args.get('whole_word', 'false').lower() == 'true'
+        
+        # Load full content
+        full_content = load_text_content(file_id)
+        if not full_content:
+            flash("No content found", "error")
+            return redirect(url_for('files.files_list'))
+        
+        # Ensure content is a string
+        if isinstance(full_content, bytes):
+            try:
+                full_content = full_content.decode('utf-8', errors='replace')
+            except Exception as decode_error:
+                logger.error(f"Failed to decode content bytes for file_id={file_id}: {decode_error}")
+                flash("Content found but could not be decoded properly. File may need reprocessing.", "warning")
+                full_content = ''
+        
+        # Calculate pagination
+        total_chars = len(full_content)
+        total_pages = (total_chars + per_page - 1) // per_page if total_chars > 0 else 1
+        
+        # Get content for current page (or full content if page size is large enough)
+        if total_chars <= per_page:
+            # Display full content if it fits in one page
+            content = full_content
+            start_idx = 0
+            end_idx = total_chars
+        else:
+            start_idx = (page - 1) * per_page
+            end_idx = min(start_idx + per_page, total_chars)
+            content = full_content[start_idx:end_idx]
+        
+        content_stats = get_content_stats(file_id)
+        
+        # Ensure all variables are properly defined (never None) for JSON serialization
+        if content is None:
+            content = ''
+        if total_chars is None:
+            total_chars = 0
+        if total_pages is None:
+            total_pages = 0
+        if search_query is None:
+            search_query = ''
+        if start_idx is None:
+            start_idx = 0
+        if end_idx is None:
+            end_idx = 0
+        
+        # Convert file_info dict to tuple-like structure for template compatibility
+        # get_file() returns a dict, but template expects tuple-like access (file[0], file[1], etc.)
+        from datetime import datetime, date
+        if isinstance(file_info, dict):
+            # Get date values and convert strings to datetime/date objects if needed
+            file_date = file_info.get('file_date', None)
+            date_creation = file_info.get('date_creation', None)
+            
+            # Convert string dates to datetime/date objects
+            if file_date and isinstance(file_date, str):
+                try:
+                    if len(file_date) == 10:  # YYYY-MM-DD format
+                        file_date = datetime.strptime(file_date, '%Y-%m-%d').date()
+                    else:
+                        file_date = datetime.fromisoformat(file_date.replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    pass  # Keep as string if parsing fails
+            
+            if date_creation and isinstance(date_creation, str):
+                try:
+                    date_creation = datetime.fromisoformat(date_creation.replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    pass  # Keep as string if parsing fails
+            
+            # Convert dict to tuple in the same order as file_detail route
+            file_info = (
+                file_info.get('id', 0),
+                file_info.get('file_name', ''),
+                file_info.get('file_path', ''),
+                file_info.get('file_size', 0),
+                file_info.get('file_type', ''),
+                file_info.get('file_status', ''),
+                file_date,
+                date_creation,
+                file_info.get('hash_id', None),
+                file_info.get('source_id', None),
+                file_info.get('side_id', None),
+                file_info.get('source_name', 'Unknown'),
+                file_info.get('side_name', 'Unknown')
+            )
+        elif not isinstance(file_info, (tuple, list)):
+            logger.error(f"file_info is not a tuple/list/dict: {type(file_info)}")
+            flash("Invalid file data", "error")
+            return redirect(url_for('files.files_list'))
+        
+        # Analyst (manual) categories for this file - same read source as the
+        # detail page so both content surfaces show identical state
+        # (FR-1.4: analyst namespace only, smart taxonomy untouched).
+        analyst_categories = []
+        try:
+            from Api.services.analyst_categories import AnalystCategoryService
+            analyst_categories = AnalystCategoryService.categories_for_files([file_id]).get(file_id, [])
+        except Exception as analyst_err:  # never break the reader page
+            logger.warning(f"Could not load analyst categories for file {file_id}: {analyst_err}")
+
+        return render_template('file/full_content.html', 
+                             file=file_info, 
+                             content=content,
+                             content_stats=content_stats,
+                             current_page=page,
+                             total_pages=total_pages,
+                             per_page=per_page,
+                             total_chars=total_chars,
+                             start_char=start_idx + 1,
+                             end_char=end_idx,
+                             search_query=search_query,
+                             case_sensitive=case_sensitive,
+                             whole_word=whole_word,
+                             analyst_categories=analyst_categories)
+    except Exception as e:
+        logger.error(f"Error loading full content: {e}", exc_info=True)
+        flash(f"Error loading content: {str(e)}", "error")
+        return redirect(url_for('files.files_list'))
+
+
+@files_bp.route('/api/file/serve', methods=['GET'])
+def serve_file():
+    """
+    Serve file content (especially images) by file path
+    Security: Only serves files that exist in the database
+    """
+    from flask import send_file, abort
+    import mimetypes
+    
+    file_path = request.args.get('path')
+    if not file_path:
+        return jsonify({'error': 'File path not provided'}), 400
+    
+    try:
+        # Security check: Verify file exists in database
+        file_check = execute_query("""
+            SELECT id, file_path, file_type FROM paths WHERE file_path = %s
+        """, (file_path,), fetch="one")
+        
+        if not file_check:
+            logger.warning(f"File not found in database: {file_path}")
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Check if file exists on filesystem
+        path_obj = Path(file_path)
+        if not path_obj.exists():
+            logger.warning(f"File does not exist on filesystem: {file_path}")
+            return jsonify({'error': 'File not found on server'}), 404
+        
+        # Security: Basic validation - ensure it's an absolute path
+        # Note: We trust the database to have valid paths
+        # Additional security could be added here if needed
+        if not path_obj.is_absolute():
+            logger.warning(f"Relative path provided: {file_path}")
+            return jsonify({'error': 'Invalid file path'}), 403
+        
+        # Determine MIME type
+        mime_type, _ = mimetypes.guess_type(str(path_obj))
+        if not mime_type:
+            # Default to image if extension suggests it
+            if path_obj.suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg']:
+                mime_type = 'image/jpeg'
+            else:
+                mime_type = 'application/octet-stream'
+        
+        # Send file with appropriate headers
+        return send_file(
+            str(path_obj),
+            mimetype=mime_type,
+            as_attachment=False,
+            download_name=path_obj.name
+        )
+        
+    except Exception as e:
+        logger.error(f"Error serving file {file_path}: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/api/file/<int:file_id>/serve', methods=['GET'])
+def serve_file_by_id(file_id):
+    """
+    Serve file content by file ID (especially images)
+    """
+    from flask import send_file
+    import mimetypes
+    
+    try:
+        # Get file info from database
+        file_info = execute_query("""
+            SELECT file_path, file_type FROM paths WHERE id = %s
+        """, (file_id,), fetch="one")
+        
+        if not file_info:
+            return jsonify({'error': 'File not found'}), 404
+        
+        file_path, file_type = file_info
+        
+        # Check if file exists on filesystem
+        path_obj = Path(file_path)
+        if not path_obj.exists():
+            logger.warning(f"File does not exist on filesystem: {file_path}")
+            return jsonify({'error': 'File not found on server'}), 404
+        
+        # Security: Basic validation - ensure it's an absolute path
+        # Note: We trust the database to have valid paths
+        if not path_obj.is_absolute():
+            logger.warning(f"Relative path provided: {file_path}")
+            return jsonify({'error': 'Invalid file path'}), 403
+        
+        # Determine MIME type
+        mime_type, _ = mimetypes.guess_type(str(path_obj))
+        if not mime_type:
+            if path_obj.suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg']:
+                mime_type = 'image/jpeg'
+            else:
+                mime_type = 'application/octet-stream'
+        
+        # Send file
+        return send_file(
+            str(path_obj),
+            mimetype=mime_type,
+            as_attachment=False,
+            download_name=path_obj.name
+        )
+        
+    except Exception as e:
+        logger.error(f"Error serving file {file_id}: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
+@files_bp.route('/file/<int:file_id>/delete', methods=['POST', 'DELETE'])
+def delete_file(file_id):
+    """Delete a single file and all its related data"""
+    try:
+        
+        # First check if file exists
+        file_check = execute_query("""
+            SELECT id, file_name, hash_id FROM paths WHERE id = %s
+        """, (file_id,), fetch="one")
+        
+        if not file_check:
+            return jsonify({'success': False, 'error': 'File not found'}), 404
+        
+        file_id_db, file_name, hash_id = file_check
+        
+        # Delete related data in order (respecting foreign key constraints)
+        # 1. Delete from contents table
+        execute_query("DELETE FROM contents WHERE path_id = %s", (file_id,), fetch=None)
+        
+        # 2. Delete from words_paths table
+        execute_query("DELETE FROM words_paths WHERE path_id = %s", (file_id,), fetch=None)
+        
+        # 3. Delete from keywords_paths table
+        execute_query("DELETE FROM keywords_paths WHERE path_id = %s", (file_id,), fetch=None)
+        
+        # 4. Delete from titles_content table
+        execute_query("DELETE FROM titles_content WHERE path_id = %s", (file_id,), fetch=None)
+        
+        # 5. Delete the file record from paths table
+        execute_query("DELETE FROM paths WHERE id = %s", (file_id,), fetch=None)
+        
+        # 6. Check if hash is still being used by other files
+        hash_usage = execute_query("""
+            SELECT COUNT(*) FROM paths WHERE hash_id = %s
+        """, (hash_id,), fetch="one")
+
+        # DB-05 FIX: hash_usage is a row tuple like (0,). The old check
+        # `if hash_usage and hash_usage == 0` compared a tuple to an int and
+        # never fired, leaving orphaned hash rows that made deleted files
+        # permanently non-reingestable. Extract the count properly.
+        hash_refcount = hash_usage[0] if hash_usage else 0
+
+        # If hash is not used by any other files, delete it
+        if hash_refcount == 0:
+            execute_query("DELETE FROM hashs WHERE id = %s", (hash_id,), fetch=None)
+        
+        try:
+            cache = get_query()
+            cache.clear()
+            logger.debug("Cleared query cache after deleting file")
+        except Exception as e:
+            logger.warning(f"Could not clear cache after deleting file: {e}")
+        
+        logger.info(f"Successfully deleted file: {file_id} ({file_name})")
+        return jsonify({'success': True, 'message': f'File deleted successfully'})
+        
+    except Exception as e:
+        logger.error(f"Error deleting file {file_id}: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+@files_bp.route('/files/bulk-delete', methods=['POST'])
+def bulk_delete_files():
+    """Delete multiple files and all their related data"""
+    try:
+        
+        data = request.get_json(silent=True)
+        if not data or 'file_ids' not in data:
+            return jsonify({'success': False, 'error': 'No file IDs provided'}), 400
+        
+        file_ids = data['file_ids']
+        
+        # Validate file_ids is a list
+        if not isinstance(file_ids, list):
+            return jsonify({'success': False, 'error': 'file_ids must be a list'}), 400
+        
+        # Validate file_ids are integers
+        try:
+            file_ids = [int(fid) for fid in file_ids]
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid file ID format'}), 400
+        
+        if not file_ids:
+            return jsonify({'success': False, 'error': 'No file IDs provided'}), 400
+        
+        # Limit batch size for safety
+        if len(file_ids) > 1000:
+            return jsonify({'success': False, 'error': 'Maximum 1000 files can be deleted at once'}), 400
+        
+        deleted_count = 0
+        errors = []
+        
+        for file_id in file_ids:
+            try:
+                # Check if file exists
+                file_check = execute_query("""
+                    SELECT id, file_name, hash_id FROM paths WHERE id = %s
+                """, (file_id,), fetch="one")
+                
+                if not file_check:
+                    errors.append(f"File {file_id} not found")
+                    continue
+                
+                file_id_db, file_name, hash_id = file_check
+                
+                # Delete related data in order (respecting foreign key constraints)
+                execute_query("DELETE FROM contents WHERE path_id = %s", (file_id,), fetch=None)
+                execute_query("DELETE FROM words_paths WHERE path_id = %s", (file_id,), fetch=None)
+                execute_query("DELETE FROM keywords_paths WHERE path_id = %s", (file_id,), fetch=None)
+                execute_query("DELETE FROM titles_content WHERE path_id = %s", (file_id,), fetch=None)
+                execute_query("DELETE FROM paths WHERE id = %s", (file_id,), fetch=None)
+                
+                # Check if hash is still being used
+                hash_usage = execute_query("""
+                    SELECT COUNT(*) FROM paths WHERE hash_id = %s
+                """, (hash_id,), fetch="one")
+
+                # DB-05 (same defect already fixed in delete_file above):
+                # ``hash_usage`` is a 1-tuple like (0,); comparing the tuple to
+                # an int never fired, so bulk deletes left orphaned ``hashs``
+                # rows behind. Extract the count properly.
+                hash_refcount = hash_usage[0] if hash_usage else 0
+
+                if hash_refcount == 0:
+                    execute_query("DELETE FROM hashs WHERE id = %s", (hash_id,), fetch=None)
+                
+                deleted_count += 1
+                logger.info(f"Deleted file: {file_id} ({file_name})")
+                
+            except Exception as e:
+                error_msg = f"Error deleting file {file_id}: {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+        
+        try:
+            cache = get_query()
+            cache.clear()
+            logger.debug("Cleared query cache after bulk delete")
+        except Exception as e:
+            logger.warning(f"Could not clear cache after bulk delete: {e}")
+        
+        response_message = f'Successfully deleted {deleted_count} file(s)'
+        if errors:
+            response_message += f'. {len(errors)} error(s) occurred.'
+        
+        logger.info(f"Bulk delete completed: {deleted_count} files deleted, {len(errors)} errors")
+        
+        return jsonify({
+            'success': True,
+            'message': response_message,
+            'deleted_count': deleted_count,
+            'errors': errors if errors else []
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in bulk delete: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+

@@ -1,0 +1,510 @@
+.cli-container {
+    background: var(--bg-dark, #1e1e1e);
+    color: var(--text-white, #d4d4d4);
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    border-radius: 8px;
+    padding: 20px;
+    min-height: 600px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.cli-header {
+    background: var(--sidebar-hover, #252526);
+    padding: 10px 15px;
+    border-radius: 4px 4px 0 0;
+    margin: -20px -20px 20px -20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cli-header .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.cli-header .dot.red {
+    background: var(--danger-color, #ff5f56);
+}
+
+.cli-header .dot.yellow {
+    background: var(--warning-color, #ffbd2e);
+}
+
+.cli-header .dot.green {
+    background: var(--success-color, #27c93f);
+}
+
+.cli-input-group {
+    margin-bottom: 15px;
+}
+
+.cli-label {
+    color: var(--success-color, #4ec9b0);
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.cli-input {
+    background: var(--sidebar-hover, #252526);
+    border: 1px solid var(--sidebar-border, #3e3e42);
+    color: var(--text-white, #d4d4d4);
+    padding: 10px;
+    border-radius: 4px;
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.cli-input:focus {
+    outline: none;
+    border-color: var(--info-color, #007acc);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.cli-select {
+    background: var(--sidebar-hover, #252526);
+    border: 1px solid var(--sidebar-border, #3e3e42);
+    color: var(--text-dark, #1e293b);
+    padding: 10px;
+    border-radius: 4px;
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.cli-button {
+    background: var(--info-color, #007acc);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.cli-button:hover {
+    background: var(--btn-info-hover, #005a9e);
+}
+
+.cli-button:disabled {
+    background: var(--sidebar-border, #3e3e42);
+    cursor: not-allowed;
+}
+
+.cli-button-secondary {
+    background: var(--sidebar-border, #3e3e42);
+}
+
+.cli-button-secondary:hover {
+    background: var(--sidebar-hover, #505052);
+}
+
+.cli-log-container {
+    background: var(--sidebar-hover, #252526);
+    border: 1px solid var(--sidebar-border, #3e3e42);
+    border-radius: 4px;
+    padding: 15px;
+    height: 400px;
+    overflow-y: auto;
+    margin-top: 20px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.cli-log-line {
+    margin-bottom: 4px;
+    word-wrap: break-word;
+}
+
+.cli-log-line.info {
+    color: var(--text-white, #d4d4d4);
+}
+
+.cli-log-line.success {
+    color: var(--success-color, #4ec9b0);
+}
+
+.cli-log-line.error {
+    color: var(--danger-color, #f48771);
+}
+
+.cli-log-line.warning {
+    color: var(--warning-color, #dcdcaa);
+}
+
+.cli-log-line.prompt {
+    color: var(--info-color, #569cd6);
+}
+
+.cli-log-line.prompt::before {
+    content: "$ ";
+    color: var(--success-color, #4ec9b0);
+}
+
+.cli-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.cli-status.processing {
+    background: var(--info-color, #007acc);
+    color: white;
+}
+
+.cli-status.success {
+    background: var(--success-color, #27c93f);
+    color: white;
+}
+
+.cli-status.error {
+    background: var(--danger-color, #f48771);
+    color: white;
+}
+
+.cli-status.idle {
+    background: var(--sidebar-border, #3e3e42);
+    color: var(--text-white, #d4d4d4);
+}
+
+.cli-status.warning {
+    background: var(--warning-color, #ffbd2e);
+    color: var(--text-dark, #1e1e1e);
+}
+
+.actions-bar {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.cli-input-with-button {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.cli-input-with-button .cli-input {
+    flex: 1;
+}
+
+.cli-button-file-picker {
+    background: var(--sidebar-border, #3e3e42);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+.cli-button-file-picker:hover {
+    background: var(--sidebar-hover, #505052);
+}
+
+.cli-button-file-picker:disabled {
+    background: var(--sidebar-border, #2d2d30);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.processing-task-item {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: var(--bg-white, #f8f9fa);
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 0.375rem;
+    border-left: 4px solid var(--info-color, #007acc);
+}
+
+.processing-task-item.running {
+    border-left-color: var(--info-color, #007acc);
+    background: var(--alert-info-bg, #f0f7ff);
+}
+
+.processing-task-item.paused {
+    border-left-color: var(--warning-color, #ffc107);
+    background: var(--alert-warning-bg, #fffbf0);
+}
+
+.task-info i {
+    font-size: 1.1rem;
+    color: var(--info-color, #007acc);
+}
+
+.task-label {
+    font-weight: 600;
+    color: var(--text-dark, #212529);
+}
+
+.task-percent {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--info-color, #007acc);
+}
+
+.task-message {
+    font-size: 0.875rem;
+    color: var(--text-light, #6c757d);
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar-wrapper {
+    background: var(--border-color, #e9ecef);
+    border-radius: 0.25rem;
+    padding: 2px;
+    margin-top: 0.5rem;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 24px;
+    background: var(--bg-white, #ffffff);
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 0.25rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--info-color, #007acc) 0%, var(--btn-info-hover, #005a9e) 100%);
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.progress-bar-text {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dark, #495057);
+    font-size: 11px;
+    font-weight: 600;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.task-controls button {
+    padding: 0.375rem 0.75rem;
+    border: none;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.task-controls .btn-pause {
+    background: var(--warning-color, #ffc107);
+    color: var(--text-dark, #212529);
+}
+
+.task-controls .btn-pause:hover {
+    background: var(--btn-warning-hover, #ffb300);
+}
+
+.task-controls .btn-resume {
+    background: var(--success-color, #28a745);
+    color: white;
+}
+
+.task-controls .btn-resume:hover {
+    background: var(--btn-success-hover, #218838);
+}
+
+.task-controls .btn-cancel {
+    background: var(--danger-color, #dc3545);
+    color: white;
+}
+
+.task-controls .btn-cancel:hover {
+    background: var(--btn-danger-hover, #c82333);
+}
+
+.hidden-file-input {
+    display: none;
+}
+
+.progress-controls.show {
+    display: flex;
+}
+
+.cli-button-warning {
+    background: var(--warning-color, #ffbd2e);
+    color: var(--text-dark, #1e1e1e);
+}
+
+.cli-button-warning:hover {
+    background: var(--btn-warning-hover, #ffa500);
+}
+
+.cli-button-success {
+    background: var(--success-color, #27c93f);
+    color: white;
+}
+
+.cli-button-success:hover {
+    background: var(--btn-success-hover, #1fa832);
+}
+
+.cli-button-danger {
+    background: var(--danger-color, #f48771);
+    color: white;
+}
+
+.cli-button-danger:hover {
+    background: var(--btn-danger-hover, #e06b5a);
+}
+
+@media (max-width: 1199.98px) {
+    .cli-container {
+        padding: 18px;
+        min-height: 550px;
+    }
+    .cli-header {
+        padding: 9px 13px;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .cli-container {
+        padding: 16px;
+        min-height: 500px;
+    }
+    .cli-header {
+        padding: 8px 12px;
+        margin: -16px -16px 16px -16px;
+    }
+    .cli-header .dot {
+        width: 10px;
+        height: 10px;
+    }
+    .cli-input-group {
+        margin-bottom: 12px;
+    }
+    .cli-label {
+        font-size: 0.875rem;
+    }
+    .cli-input,
+    .cli-select {
+        padding: 9px;
+        font-size: 0.875rem;
+    }
+    .cli-button {
+        padding: 10px 20px;
+        font-size: 0.875rem;
+    }
+    .cli-log-container {
+        font-size: 0.875rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .cli-container {
+        padding: 14px;
+        min-height: 450px;
+        border-radius: 6px;
+    }
+    .cli-header {
+        padding: 7px 10px;
+        margin: -14px -14px 14px -14px;
+        border-radius: 6px 6px 0 0;
+    }
+    .cli-header .dot {
+        width: 9px;
+        height: 9px;
+    }
+    .cli-input-group {
+        margin-bottom: 10px;
+    }
+    .cli-label {
+        font-size: 0.8125rem;
+        margin-bottom: 4px;
+    }
+    .cli-input,
+    .cli-select {
+        padding: 8px;
+        font-size: 0.8125rem;
+    }
+    .cli-button {
+        padding: 9px 18px;
+        font-size: 0.8125rem;
+    }
+    .cli-log-container {
+        font-size: 0.8125rem;
+        padding: 12px;
+    }
+    .progress-controls {
+        gap: 8px;
+        margin-top: 10px;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .cli-container {
+        padding: 12px;
+        min-height: 400px;
+        border-radius: 4px;
+    }
+    .cli-header {
+        padding: 6px 8px;
+        margin: -12px -12px 12px -12px;
+        border-radius: 4px 4px 0 0;
+        gap: 8px;
+    }
+    .cli-header .dot {
+        width: 8px;
+        height: 8px;
+    }
+    .cli-input-group {
+        margin-bottom: 8px;
+    }
+    .cli-label {
+        font-size: 0.75rem;
+        margin-bottom: 3px;
+    }
+    .cli-input,
+    .cli-select {
+        padding: 7px;
+        font-size: 0.75rem;
+    }
+    .cli-button {
+        padding: 8px 16px;
+        font-size: 0.75rem;
+        width: 100%;
+    }
+    .cli-log-container {
+        font-size: 0.75rem;
+        padding: 10px;
+    }
+    .progress-controls {
+        gap: 6px;
+        margin-top: 8px;
+        flex-direction: column;
+    }
+    .progress-controls .cli-button {
+        width: 100%;
+    }
+}
+

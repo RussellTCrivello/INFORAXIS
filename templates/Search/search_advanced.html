@@ -1,0 +1,473 @@
+<!-- templates/search_advanced.html -->
+{% extends "base.html" %}
+
+{% block title %}{{ _('Advanced Search') }}{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/search-advanced.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<!-- ============================================================ -->
+<!-- Page header (slim, theme-aware — the search bar below is the  -->
+<!-- visual hero, not this banner).                                -->
+<!-- ============================================================ -->
+<header class="search-header">
+    <div class="search-header-content">
+        <h1 class="search-logo">
+            <i class="bi bi-search-heart" aria-hidden="true"></i>
+            {{ _('Advanced Search') }}
+        </h1>
+        <p class="search-subtitle">{{ _('Find exactly what you need with powerful filters and intelligent algorithms') }}</p>
+    </div>
+</header>
+
+<!-- Page Tips -->
+{% from 'components/page_tips.html' import page_tips %}
+{% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+<div class="tips-section">
+    <div class="tips-section-title">
+        <i class="bi bi-funnel"></i>
+        {{ _('Advanced Search Overview') }}
+    </div>
+    <ul class="tips-list">
+        <li>{{ _('Use quotes for exact phrases: "exact phrase"') }}</li>
+        <li>{{ _('Use AND, OR, NOT operators: term1 AND term2 OR term3 NOT term4') }}</li>
+        <li>{{ _('Filters work together to narrow results precisely') }}</li>
+        <li>{{ _('Search suggestions appear as you type') }}</li>
+    </ul>
+</div>
+{% endcall %}
+
+<!-- Search View Navigation (shared across the three search views) -->
+<div class="search-view-navigation section-card">
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('search_page') }}" class="btn btn-outline-primary search-view-btn {% if request.endpoint == 'search_page' %}active{% endif %}" data-view="search">
+            <i class="bi bi-search"></i> {{ _('Search') }}
+        </a>
+        <a href="{{ url_for('search_advanced') }}" class="btn btn-outline-primary search-view-btn {% if request.endpoint == 'search_advanced' %}active{% endif %}" data-view="advanced">
+            <i class="bi bi-funnel"></i> {{ _('Advanced Search') }}
+        </a>
+        <a href="{{ url_for('search_enhanced_page') }}" class="btn btn-outline-primary search-view-btn {% if request.endpoint == 'search_enhanced_page' %}active{% endif %}" data-view="enhanced">
+            <i class="bi bi-search-heart"></i> {{ _('Enhanced Search') }}
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Search command card — ONE surface for the whole search        -->
+<!-- intent: query bar (action inside), scope, syntax help.        -->
+<!-- The previous layout scattered this across four stacked boxes  -->
+<!-- (hero banner, "Search Within" panel, search bar, scope box).  -->
+<!-- ============================================================ -->
+<section class="search-command-card" aria-label="{{ _('Advanced Search') }}">
+
+    <!-- Query bar with the search action inside it -->
+    <div class="search-box-wrapper">
+        <div class="search-box">
+            <i class="bi bi-search search-icon" aria-hidden="true"></i>
+            <input type="text"
+                   class="search-input-main"
+                   id="mainSearchInput"
+                   placeholder="{{ _('Search files, content, categories... (supports multiple words, quotes, AND/OR/NOT)') }}"
+                   autocomplete="off"
+                   spellcheck="false"
+                   aria-label="{{ _('Search files, content, categories... (supports multiple words, quotes, AND/OR/NOT)') }}">
+            <button type="button" class="btn-clear-search-main" id="clearSearchBtn" style="display: none;"
+                    title="{{ _('Clear') }}" aria-label="{{ _('Clear') }}">
+                <i class="bi bi-x-circle" aria-hidden="true"></i>
+            </button>
+            <span class="search-box-divider" aria-hidden="true"></span>
+            <button type="button" class="btn btn-primary btn-search-main" onclick="executeAdvancedSearch()">
+                <i class="bi bi-search me-1" aria-hidden="true"></i>{{ _('Search') }}
+            </button>
+        </div>
+
+        <!-- Search Suggestions Dropdown -->
+        <div class="search-suggestions-dropdown" id="searchSuggestions">
+            <div class="suggestions-header">
+                <i class="bi bi-clock-history me-2" aria-hidden="true"></i>
+                <span>{{ _('Suggestions') }}</span>
+            </div>
+            <div class="suggestions-list" id="suggestionsList"></div>
+        </div>
+    </div>
+
+    <!-- Toolbar: scope (left) + lucky (right) -->
+    <div class="search-toolbar">
+
+        <!-- ======================================================== -->
+        <!-- Search Scope Control (FR-2.2 / FR-3.2)                    -->
+        <!-- Explicit, first-class control over the analyst-           -->
+        <!-- categorization scope. Operates ONLY on analyst (manual)   -->
+        <!-- categorization status - smart categorization is never     -->
+        <!-- consulted (FR-2.4). Rendered as a compact segmented       -->
+        <!-- control tightly coupled to the query.                     -->
+        <!-- ======================================================== -->
+        <div class="scope-selector-container" id="analystScopeSelector">
+            <span class="scope-selector-header" id="analystScopeLabel">
+                <i class="bi bi-funnel-fill me-1" aria-hidden="true"></i>{{ _('Search Scope') }}
+            </span>
+            <div class="scope-options" role="radiogroup" aria-labelledby="analystScopeLabel"
+                 aria-label="{{ _('Analyst categorization search scope') }}">
+                <label class="scope-option" title="{{ _('Files that have not yet been assigned an analyst category') }}">
+                    <input type="radio" name="analystScope" value="uncategorized"
+                           {% if analyst_scope != 'all' and analyst_scope != 'categorized' %}checked{% endif %}>
+                    <span class="scope-option-label">
+                        <i class="bi bi-file-earmark-minus me-1" aria-hidden="true"></i>{{ _('Uncategorized Files Only') }}
+                    </span>
+                    <span class="scope-option-tag">{{ _('default') }}</span>
+                </label>
+                <label class="scope-option" title="{{ _('Search the entire dataset regardless of analyst categorization') }}">
+                    <input type="radio" name="analystScope" value="all"
+                           {% if analyst_scope == 'all' %}checked{% endif %}>
+                    <span class="scope-option-label">
+                        <i class="bi bi-collection me-1" aria-hidden="true"></i>{{ _('All Files') }}
+                    </span>
+                </label>
+                <label class="scope-option" title="{{ _('Only files already assigned an analyst category') }}">
+                    <input type="radio" name="analystScope" value="categorized"
+                           {% if analyst_scope == 'categorized' %}checked{% endif %}>
+                    <span class="scope-option-label">
+                        <i class="bi bi-person-check me-1" aria-hidden="true"></i>{{ _('Analyst-Categorized Files Only') }}
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="search-toolbar-side">
+            <button type="button" class="btn btn-lucky" onclick="feelingLucky()" title="{{ _('I\'m Feeling Lucky') }}">
+                <i class="bi bi-stars me-1" aria-hidden="true"></i>{{ _('Lucky') }}
+            </button>
+        </div>
+    </div>
+
+    <p class="scope-note">
+        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+        {{ _('This scope filters on analyst (manual) categorization only. It is completely independent of smart categorization.') }}
+    </p>
+
+    <!-- Search syntax help (progressive disclosure — one line until opened) -->
+    <div class="search-help-text">
+        <button class="search-help-toggle" type="button" data-bs-toggle="collapse"
+                data-bs-target="#syntaxHelp" aria-expanded="false" aria-controls="syntaxHelp">
+            <i class="bi bi-lightbulb me-1" aria-hidden="true"></i>{{ _('Tips') }}
+            <i class="bi bi-chevron-down search-help-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse" id="syntaxHelp">
+            <div class="syntax-help-content">
+                <span class="syntax-help-item">{{ _('Use quotes for exact phrases: "exact phrase"') }}</span>
+                <span class="syntax-help-item">{{ _('Multiple words: word1 word2 (searches for both)') }}</span>
+                <span class="syntax-help-item">{{ _('Operators: word1 AND word2 OR word3 NOT word4') }}</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Active Filters Chips -->
+<div class="filters-chips-container" id="filtersChipsContainer" style="display: none;">
+    <div class="filters-chips-header">
+        <i class="bi bi-funnel me-2" aria-hidden="true"></i>
+        <span>{{ _('Active Filters') }}:</span>
+        <button type="button" class="btn-clear-all-filters" onclick="clearAllFilters()">
+            <i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ _('Clear All') }}
+        </button>
+    </div>
+    <div class="filters-chips" id="filtersChips"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Advanced Filters Panel (Collapsible) — the single home for   -->
+<!-- every filter. The former separate "Search Within" block      -->
+<!-- duplicated the Sources/Sides filters below.                   -->
+<!-- ============================================================ -->
+<div class="advanced-filters-panel">
+    <div class="filters-panel-header" onclick="toggleFiltersPanel()" role="button" tabindex="0"
+         aria-expanded="false" aria-controls="filtersPanelContent"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleFiltersPanel();}">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-sliders me-2" aria-hidden="true"></i>
+            <span>{{ _('Advanced Filters') }}</span>
+            <span class="badge bg-primary ms-2" id="activeFiltersCount">0</span>
+        </div>
+        <i class="bi bi-chevron-down" id="filtersToggleIcon" aria-hidden="true"></i>
+    </div>
+
+    <div class="filters-panel-content" id="filtersPanelContent">
+        <p class="filters-perf-note">
+            <i class="bi bi-database-gear me-1" aria-hidden="true"></i>
+            {{ _('Selecting a source or side limits search to that scope, improving performance') }}
+        </p>
+
+        <div class="filters-grid">
+            <!-- File Type Filter -->
+            <div class="filter-group">
+                <label class="filter-label" for="fileType">
+                    <i class="bi bi-filetype-pdf me-1" aria-hidden="true"></i>
+                    {{ _('File Type') }}
+                </label>
+                <select class="form-select filter-select" id="fileType" multiple>
+                    <option value="">{{ _('All Types') }}</option>
+                    <option value="pdf">PDF</option>
+                    <option value="docx">Word Document</option>
+                    <option value="xlsx">Excel</option>
+                    <option value="txt">{{ _('Text') }}</option>
+                    <option value="html">HTML</option>
+                    <option value="jpg">Image (JPG)</option>
+                    <option value="png">Image (PNG)</option>
+                </select>
+            </div>
+
+            <!-- Smart Categories Filter (system-generated taxonomy) -->
+            <div class="filter-group">
+                <label class="filter-label" for="categoriesSelect">
+                    <i class="bi bi-tags me-1" aria-hidden="true"></i>
+                    {{ _('Smart Categories') }}
+                    <small class="filter-sublabel">{{ _('system-generated') }}</small>
+                </label>
+                <select class="form-select filter-select" id="categoriesSelect" multiple>
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+
+            <!-- Analyst Categories Filter (manual taxonomy - separate namespace, FR-1.4) -->
+            <div class="filter-group">
+                <label class="filter-label" for="analystCategoriesFilter">
+                    <i class="bi bi-person-tags me-1" aria-hidden="true"></i>
+                    {{ _('Analyst Categories') }}
+                    <small class="filter-sublabel">{{ _('manually assigned') }}</small>
+                </label>
+                <select class="form-select filter-select" id="analystCategoriesFilter" multiple>
+                    <!-- Will be populated dynamically from /api/analyst/categories -->
+                </select>
+            </div>
+
+            <!-- Sources Filter (also the performance scope — see note above) -->
+            <div class="filter-group">
+                <label class="filter-label" for="sourcesSelect">
+                    <i class="bi bi-building me-1" aria-hidden="true"></i>
+                    {{ _('Sources') }}
+                </label>
+                <select class="form-select filter-select" id="sourcesSelect" multiple>
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+
+            <!-- Sides Filter (also the performance scope — see note above) -->
+            <div class="filter-group">
+                <label class="filter-label" for="sidesSelect">
+                    <i class="bi bi-diagram-3 me-1" aria-hidden="true"></i>
+                    {{ _('Sides') }}
+                </label>
+                <select class="form-select filter-select" id="sidesSelect" multiple>
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+
+            <!-- Date Range Filter -->
+            <div class="filter-group">
+                <label class="filter-label" for="dateFrom">
+                    <i class="bi bi-calendar-range me-1" aria-hidden="true"></i>
+                    {{ _('Date Range') }}
+                </label>
+                <div class="date-range-inputs">
+                    <input type="date" class="form-control filter-date" id="dateFrom" placeholder="{{ _('From') }}"
+                           aria-label="{{ _('From') }}">
+                    <span class="date-separator" aria-hidden="true">{{ _('to') }}</span>
+                    <input type="date" class="form-control filter-date" id="dateTo" placeholder="{{ _('To') }}"
+                           aria-label="{{ _('To') }}">
+                </div>
+            </div>
+
+            <!-- File Status Filter -->
+            <div class="filter-group">
+                <span class="filter-label" id="statusFilterLabel">
+                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i>
+                    {{ _('Status') }}
+                </span>
+                <div class="status-checkboxes" role="group" aria-labelledby="statusFilterLabel">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="Read" id="statusRead" checked>
+                        <label class="form-check-label" for="statusRead">
+                            <i class="bi bi-check-circle-fill text-success me-1" aria-hidden="true"></i>{{ _('Analyzed') }}
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="Unread" id="statusUnread">
+                        <label class="form-check-label" for="statusUnread">
+                            <i class="bi bi-hourglass-split text-warning me-1" aria-hidden="true"></i>{{ _('Pending') }}
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Options -->
+            <div class="filter-group">
+                <span class="filter-label" id="searchOptionsLabel">
+                    <i class="bi bi-gear me-1" aria-hidden="true"></i>
+                    {{ _('Search Options') }}
+                </span>
+                <div class="search-options" role="group" aria-labelledby="searchOptionsLabel">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="caseSensitive">
+                        <label class="form-check-label" for="caseSensitive">
+                            {{ _('Case Sensitive') }}
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="wholeWord">
+                        <label class="form-check-label" for="wholeWord">
+                            {{ _('Whole Words Only') }}
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="useFuzzy" checked>
+                        <label class="form-check-label" for="useFuzzy">
+                            {{ _('Fuzzy Matching') }}
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Actions -->
+        <div class="filter-actions-bar">
+            <button type="button" class="btn btn-outline-primary" onclick="resetAllFilters()">
+                <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>{{ _('Reset') }}
+            </button>
+            <button type="button" class="btn btn-primary" onclick="executeAdvancedSearch()">
+                <i class="bi bi-search me-1" aria-hidden="true"></i>{{ _('Apply Filters') }}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Search Results Section -->
+<div id="searchResultsSection" class="search-results-section" style="display: none;">
+    <div class="results-header">
+        <div class="results-info">
+            <!-- Select-all control (FR-1.2): selects every result on the page -->
+            <div class="form-check select-all-check">
+                <input class="form-check-input" type="checkbox" id="selectAllResults"
+                       onchange="toggleSelectAllResults(this.checked)" title="{{ _('Select all results on this page') }}">
+                <label class="form-check-label" for="selectAllResults"><span class="visually-hidden">{{ _('Select all results on this page') }}</span></label>
+            </div>
+            <span id="resultsCount" class="results-count">0</span>
+            <span class="results-label">{{ _('results found') }}</span>
+            <span class="results-time" id="searchTime"></span>
+        </div>
+        <div class="results-actions">
+            <select class="form-select form-select-sm results-sort" id="sortBy" onchange="sortResults()" aria-label="{{ _('Sort') }}">
+                <option value="relevance">{{ _('Sort: Relevance') }}</option>
+                <option value="date">{{ _('Date (Newest)') }}</option>
+                <option value="date_old">{{ _('Date (Oldest)') }}</option>
+                <option value="name">{{ _('Name (A-Z)') }}</option>
+                <option value="size">{{ _('Size (Largest)') }}</option>
+            </select>
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" title="{{ _('Export/Print Results') }}">
+                    <i class="bi bi-download me-1" aria-hidden="true"></i>{{ _('Export') }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" onclick="exportResults('csv'); return false;">
+                        <i class="bi bi-file-earmark-spreadsheet me-2" aria-hidden="true"></i>{{ _('Export as CSV') }}
+                    </a></li>
+                    <li><a class="dropdown-item" href="#" onclick="exportResults('excel'); return false;">
+                        <i class="bi bi-file-earmark-excel me-2" aria-hidden="true"></i>{{ _('Export as Excel') }}
+                    </a></li>
+                    <li><a class="dropdown-item" href="#" onclick="exportResults('json'); return false;">
+                        <i class="bi bi-file-earmark-code me-2" aria-hidden="true"></i>{{ _('Export as JSON') }}
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" onclick="printResults(); return false;">
+                        <i class="bi bi-printer me-2" aria-hidden="true"></i>{{ _('Print Results') }}
+                    </a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Manual Categorization Bar (FR-1.2 / FR-1.3)                   -->
+    <!-- Operates exclusively on ANALYST categories - a fully separate -->
+    <!-- namespace from smart categories (FR-1.4). Smart categories   -->
+    <!-- can never be assigned or modified from this control.          -->
+    <!-- ============================================================ -->
+    <div id="analystCategorizationBar" class="analyst-categorization-bar" style="display: none;">
+        <div class="acb-selection-info">
+            <i class="bi bi-person-check-fill" aria-hidden="true"></i>
+            <span><strong id="analystSelectedCount">0</strong> {{ _('selected') }}</span>
+            <button type="button" class="btn btn-link btn-sm p-0 ms-2" onclick="clearResultSelection()">
+                {{ _('Clear') }}
+            </button>
+        </div>
+        <div class="acb-controls">
+            <select class="form-select form-select-sm" id="analystCategorySelect"
+                    title="{{ _('Analyst-defined categories only (never smart categories)') }}">
+                <option value="">{{ _('Choose analyst category…') }}</option>
+            </select>
+            <div class="input-group input-group-sm acb-new-category">
+                <input type="text" class="form-control" id="newAnalystCategoryInput"
+                       placeholder="{{ _('…or new category name') }}" maxlength="255">
+            </div>
+            <button type="button" class="btn btn-sm btn-analyst-assign" onclick="assignAnalystCategory()">
+                <i class="bi bi-tag-fill me-1" aria-hidden="true"></i>{{ _('Categorize') }}
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="removeAnalystCategoriesFromSelection()"
+                    title="{{ _('Remove analyst categories from selected files (returns them to uncategorized scope)') }}">
+                <i class="bi bi-tag me-1" aria-hidden="true"></i>{{ _('Remove') }}
+            </button>
+        </div>
+        <a href="{{ url_for('analyst_categorization_page') }}" class="acb-view-link" target="_blank" rel="noopener">
+            <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>{{ _('Analyst View') }}
+        </a>
+    </div>
+
+    <div id="resultsContainer" class="results-container">
+        <!-- Results will be populated here -->
+    </div>
+
+    <!-- Pagination -->
+    <div id="pagination" class="results-pagination"></div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="searchLoadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-spinner-wrapper">
+        <div class="loading-spinner" role="status" aria-live="polite"></div>
+        <p class="loading-text">{{ _('Searching...') }}</p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script type="application/json" id="search-advanced-page-data">{{ {
+    "translations": {
+        "searchError": _('Search error'),
+        "noResultsFound": _('No results found matching your criteria'),
+        "noResultsToExport": _('No results to export'),
+        "searching": _('Searching...'),
+        "resultsFound": _('results found'),
+        "inSeconds": _('in {seconds} seconds'),
+        "largeSearchConfirm": _('Searching without a source or side filter may be slow on large datasets. Continue?'),
+        "untitled": _('Untitled'),
+        "notAvailable": _('N/A'),
+        "unknown": _('unknown'),
+        "analystCategorizeSuccess": _('Analyst category assigned'),
+        "analystRemoveSuccess": _('Analyst categories removed'),
+        "analystActionError": _('Analyst categorization failed'),
+        "selectFilesFirst": _('Select one or more files first'),
+        "chooseOrCreateCategory": _('Choose an analyst category or type a new one'),
+        "smartCategories": _('Smart'),
+        "analystCategories": _('Analyst'),
+        "selectForCategorization": _('Select for manual categorization'),
+        "selectFileForCategorization": _('Select {file} for manual categorization'),
+        "removeAllConfirm": _('Remove all analyst categories from {count} selected file(s)? They will return to "uncategorized" for analyst search scope. Smart categories are not affected.'),
+        "assignedToast": _('Assigned "{category}" to {count} file(s)')
+    },
+    "initialScope": analyst_scope,
+    "canCategorize": current_user.is_authenticated and current_user.has_role('admin', 'analyst')
+}|tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/pages/search-advanced-page.js') }}"></script>
+{% endblock %}
