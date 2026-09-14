@@ -8,6 +8,8 @@ Part 1: Core pipeline and text extraction
 
 import logging
 import os
+import threading
+from collections import OrderedDict
 import math
 from typing import Dict, Any, Optional, List, Tuple
 import time
@@ -130,6 +132,9 @@ class StoragePipeline:
     _shared_db_hub = None
     _shared_db_hub_lock = None
     
+    #: How many per-file store outcomes to retain for the reader's accounting.
+    _OUTCOME_KEEP = 10000
+
     def __init__(self, db_hub=None, source_name: str = None, side_name: str = None, db_service=None):
         """
         Initialize storage pipeline
@@ -142,7 +147,6 @@ class StoragePipeline:
         """
         # Initialize lock for thread-safe singleton access
         if StoragePipeline._shared_db_hub_lock is None:
-            import threading
             StoragePipeline._shared_db_hub_lock = threading.Lock()
         
         # Initialize ContentDBService (preferred method)
@@ -193,6 +197,14 @@ class StoragePipeline:
         # Statistics (DATA-04: full counter set with consistency relationships:
         # discovered >= completed(stored+duplicates) + failed + skipped;
         # storage failures are tracked separately and never folded into success)
+        #: Outcome of the most recent store attempt per file path.  Workers
+        #: process distinct files concurrently, so a path-keyed map is safe and
+        #: lets the reader classify a resolved duplicate as "nothing new was
+        #: stored" instead of counting it as a fresh success.  Bounded by
+        #: :data:`_OUTCOME_KEEP`.
+        self._store_outcomes: "OrderedDict[str, str]" = OrderedDict()
+        self._outcome_lock = threading.Lock()
+
         self.stats = {
             'files_discovered': 0,
             'files_queued': 0,
@@ -482,6 +494,11 @@ class StoragePipeline:
                             )
                             self.stats['files_duplicates'] += 1
                             self.stats['files_processed'] += 1
+                            # ``file_path`` is bound later in this method, so the
+                            # outcome key is built from the file info directly.
+                            self._record_store_outcome(
+                                file_info.get('path', ''), 'duplicate'
+                            )
                             return existing_path_id
                     else:
                         # Hash exists but db_hub not available - proceed with storage
@@ -847,6 +864,21 @@ class StoragePipeline:
                         path_id = storage_result.get('path_id')
                         hash_id = storage_result.get('hash_id')
                         error_msg = storage_result.get('error')
+
+                        # Degraded-but-stored: derived steps that are contained
+                        # in savepoints (raw display text, keywords, title)
+                        # report here instead of failing the document.  Logged,
+                        # never silent.
+                        warnings = storage_result.get('warnings') or []
+                        for warning in warnings:
+                            logger.warning(
+                                "[STORAGE] ⚠️  '%s' stored with degraded data: %s",
+                                file_name, warning,
+                            )
+                        if warnings:
+                            self.stats['files_degraded'] = (
+                                self.stats.get('files_degraded', 0) + 1
+                            )
                         
                         # Check if this is a duplicate
                         if error_msg and 'Duplicate' in error_msg:
@@ -856,7 +888,9 @@ class StoragePipeline:
                             )
                             self.stats['files_duplicates'] += 1
                             self.stats['files_processed'] += 1
+                            self._record_store_outcome(file_path, 'duplicate')
                         else:
+                            self._record_store_outcome(file_path, 'stored')
                             # Log successful storage with details
                             stored_details = []
                             stored_details.append(f"Path ID: {path_id}")
@@ -2789,6 +2823,27 @@ class StoragePipeline:
     def get_statistics(self) -> Dict[str, int]:
         """Get pipeline statistics"""
         return self.stats.copy()
+
+    def _record_store_outcome(self, file_path: str, outcome: str) -> None:
+        """Remember how a file was stored (``stored`` or ``duplicate``)."""
+        if not file_path:
+            return
+        with self._outcome_lock:
+            self._store_outcomes[file_path] = outcome
+            self._store_outcomes.move_to_end(file_path)
+            while len(self._store_outcomes) > self._OUTCOME_KEEP:
+                self._store_outcomes.popitem(last=False)
+
+    def get_store_outcome(self, file_path: str) -> Optional[str]:
+        """Outcome of the last store attempt for ``file_path``, or None.
+
+        ``'duplicate'`` means the content is already stored under an existing
+        path, so nothing new was written for this file.
+        """
+        if not file_path:
+            return None
+        with self._outcome_lock:
+            return self._store_outcomes.get(file_path)
     
     def verify_file_stored(self, path_id: int) -> Optional[Dict[str, Any]]:
         """

@@ -1,19 +1,23 @@
 from .best_repo import BaseRepository
 from ..queries.keyword_queries import KeywordQueries
 from core.serialization import pack_int_list, unpack_int_list
+import logging
+
+logger = logging.getLogger(__name__)
 
 class KeywordsRepository(BaseRepository):
 
     def insert_keywords(self, category_id, list_keywords_ids):
-        """Insert keywords with pickled list"""
+        """Insert keywords with pickled list.
+
+        Failures propagate: swallowing them here made a missing keyword index
+        look like a successful ingest (the same silent-failure pattern that
+        hid the transaction aborts in production).
+        """
         keyword_byte = pack_int_list(list_keywords_ids)
-        try:
-            query = KeywordQueries.insert_keyword()
-            params = (keyword_byte, category_id)
-            return self.execute(query, params, True)
-        except Exception as e:
-            print(e)
-            return None
+        query = KeywordQueries.insert_keyword()
+        params = (keyword_byte, category_id)
+        return self.execute(query, params, True)
 
     def select_all_keywords(self):
         """Get all keywords and unpickle them"""

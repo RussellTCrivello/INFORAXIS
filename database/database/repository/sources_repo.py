@@ -39,14 +39,15 @@ class SourcesRepository(BaseRepository):
             category_id,
         )
 
-        try:
-            return self.execute(
-                SourceQueries.insert_source(),
-                params,
-                fetchone=True
-            )
-        except Exception as e:
-            print(e)
+        # Failures propagate: returning None here made ``create_source`` look
+        # successful with ``source_id=None`` and the file then failed later
+        # with an unrelated foreign-key error.  Callers already handle the
+        # exception (StoragePipeline wraps source creation in try/except).
+        return self.execute(
+            SourceQueries.insert_source(),
+            params,
+            fetchone=True
+        )
 
     def update_info_sources(
         self,

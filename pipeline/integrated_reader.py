@@ -393,6 +393,15 @@ class IntegratedFileReader:
                         )
                     if path_id:
                         result['database_path_id'] = path_id
+
+                        # DEDUP ACCOUNTING: a path that resolved to an
+                        # already-stored document is not new work.  Counting it
+                        # as succeeded made a re-run report "1 succeeded, 0
+                        # stored, 1 duplicate" - inconsistent in the Jobs UI
+                        # and API.  It is reported as skipped (the file was
+                        # accounted for, nothing new was written) while the
+                        # storage statistics keep the duplicate count.
+                        outcome = self._outcome_after_store(file_path, result, outcome)
                         # Storage success message is already logged by _store_file_sync
                         # Just add a brief confirmation here
                         file_name = file_info.get('name', Path(file_path).name)
@@ -1454,6 +1463,15 @@ class IntegratedFileReader:
                         if not result:
                             result = {}
                         result['database_path_id'] = path_id
+
+                        # DEDUP ACCOUNTING: a path that resolved to an
+                        # already-stored document is not new work.  Counting it
+                        # as succeeded made a re-run report "1 succeeded, 0
+                        # stored, 1 duplicate" - inconsistent in the Jobs UI
+                        # and API.  It is reported as skipped (the file was
+                        # accounted for, nothing new was written) while the
+                        # storage statistics keep the duplicate count.
+                        outcome = self._outcome_after_store(file_path, result, outcome)
                         # Storage success message is already logged by _store_file_sync
                         # Just add a brief confirmation for batch processing
                         file_name = file_info.get('name', os.path.basename(file_path))
@@ -1554,6 +1572,30 @@ class IntegratedFileReader:
             # timeout the unit is settled and this is a no-op, so a file can
             # never be counted twice.
             self._finish_unit(unit, outcome)
+
+    def _outcome_after_store(self, file_path: str, result, outcome: str) -> str:
+        """Refine a completed outcome with the storage pipeline's verdict.
+
+        A store attempt that resolved to an already-stored document wrote
+        nothing new, so the file is accounted for as *skipped* (with
+        ``duplicate`` flagged on the result) instead of *succeeded*.  Live
+        progress, job statistics and the storage counters then agree.
+
+        Never raises: accounting must not break an ingest that actually
+        succeeded.
+        """
+        pipeline = getattr(self, 'storage_pipeline', None)
+        if pipeline is None:
+            return outcome
+        try:
+            store_outcome = pipeline.get_store_outcome(file_path)
+        except Exception:
+            return outcome
+        if store_outcome == 'duplicate':
+            if isinstance(result, dict):
+                result['duplicate'] = True
+            return OUTCOME_SKIPPED
+        return outcome
 
     def __enter__(self):
         """Context manager entry"""
