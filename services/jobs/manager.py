@@ -288,12 +288,28 @@ class JobManager:
             emit_state["phase"] = phase
             _persist(_fields_for(snapshot))
 
-        def flush_progress(final_percent: Optional[int] = None) -> None:
-            """Publish the last known state (used at every job boundary)."""
+        def flush_progress(final_percent: Optional[int] = None,
+                           final_stats: Optional[Dict[str, Any]] = None) -> None:
+            """Publish the last known state (used at every job boundary).
+
+            ``final_stats`` carries the engine's closing accounting (storage
+            counters such as ``files_stored``/``files_duplicates`` and the
+            byte totals).  The periodic progress callbacks only publish the
+            reader's live snapshot, so without merging these here the job -
+            and therefore the Jobs page and ``/api/jobs/<id>`` - reported
+            ``duplicates: null`` even though the engine had detected the
+            duplicates.  Live keys win where both exist (they describe what
+            actually happened), and the final numbers fill in the rest.
+            """
             snapshot = emit_state["last"]
-            if snapshot is None:
+            if snapshot is None and not final_stats:
                 return
-            fields = _fields_for(snapshot)
+            merged: Dict[str, Any] = dict(snapshot or {})
+            for key, value in (final_stats or {}).items():
+                if value is None:
+                    continue
+                merged.setdefault(key, value)
+            fields = _fields_for(merged)
             if final_percent is not None:
                 fields["progress"] = min(100, max(0, int(final_percent)))
             _persist(fields)
@@ -323,7 +339,7 @@ class JobManager:
                 })
                 # Keep the real percent: a paused job resumes from where it
                 # stopped, and showing 0% would misrepresent the stored work.
-                flush_progress()
+                flush_progress(final_stats=getattr(result, "stats", {}) or {})
                 self._publish(job_id, "JOB_PAUSED", {})
                 return
             if cancelled:
@@ -364,7 +380,10 @@ class JobManager:
                 "result_summary": getattr(result, "to_dict", dict)().get("result_summary")
                 if hasattr(result, "to_dict") else None,
             })
-            flush_progress(final_percent if final_percent is not None else 100)
+            flush_progress(
+                final_percent if final_percent is not None else 100,
+                final_stats=final_stats,
+            )
         except Exception as exc:
             logger.exception("Job %s failed", job_id)
             from core.errors import client_safe_message

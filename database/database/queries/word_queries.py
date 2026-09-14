@@ -39,12 +39,12 @@ class WordQueries(BaseQueries):
             RETURNING id;
         """
     @staticmethod
-    def insert_tmp_words():
-        return"""
-            INSERT INTO words (word)
-            SELECT word
-            FROM tmp_words
-            ON CONFLICT (word) DO NOTHING
+    def get_words_by_ids() -> str:
+        """Return ``id, word`` pairs for a batch of word ids."""
+        return """
+            SELECT id, word
+            FROM words
+            WHERE id = ANY(%s)
         """
     
     @staticmethod

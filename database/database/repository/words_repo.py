@@ -1,6 +1,4 @@
 from .best_repo import BaseRepository
-import io
-import csv
 import logging
 
 from ..queries.word_queries import WordQueries
@@ -20,19 +18,26 @@ class WordsRepository(BaseRepository):
 
     def bulk_insert_words(self, words):
         """
-        Bulk insert words using PostgreSQL COPY for maximum performance.
-        PRODUCTION-READY: Handles very large word lists (>1M words) with batched processing.
-        
+        Bulk insert words into the dictionary, ignoring duplicates.
+
+        Uses one ``INSERT ... ON CONFLICT DO NOTHING`` per page instead of the
+        old session-scoped ``tmp_words`` + ``COPY`` pipeline: it is atomic,
+        needs no temporary objects and is safe to run from several threads
+        against a shared connection pool.
+
+        Very large word lists (>100K words) are still processed in batches so a
+        single document cannot spike memory.
+
         Args:
             words: List of word tuples or strings to insert
         """
         if not words:
             return []
         
-        # PRODUCTION: For very large word lists (>100K words), process in batches
-        # to prevent memory exhaustion and improve transaction management
+        # For very large word lists (>100K words), process in batches to keep
+        # the per-call working set bounded.
         total_words = len(words)
-        batch_size = 100000  # 100K words per batch (optimal for COPY performance)
+        batch_size = 100000  # 100K words per batch
         use_batching = total_words > batch_size
         
         if use_batching:
@@ -56,23 +61,22 @@ class WordsRepository(BaseRepository):
     
     def _bulk_insert_words_batch(self, words):
         """
-        Internal method to insert a batch of words using PostgreSQL COPY.
-        
+        Internal method inserting one batch of words into the dictionary.
+
+        Empty and oversized tokens are filtered out first; the remaining words
+        go to the database in paged ``INSERT ... ON CONFLICT DO NOTHING``
+        statements (see :meth:`BaseRepository.bulk_upsert_words`).
+
         Args:
             words: List of word tuples or strings to insert
         """
         if not words:
             return
-        
-        buffer = io.StringIO()
-        # Use csv.writer to properly escape commas, quotes, and newlines
-        # QUOTE_MINIMAL will quote fields containing delimiter, quote char, or newline
-        # This ensures GPS coordinates like "27.234281, -45.238564" are handled correctly
-        writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
-        valid_words_count = 0
+
+        valid_words = []
         oversized_skipped = 0
         oversized_longest = 0
-        
+
         # Import CPU management for large bulk operations
         try:
             from core.resource_coordinator import should_yield, get_yield_duration
@@ -80,30 +84,30 @@ class WordsRepository(BaseRepository):
             cpu_management_available = True
         except ImportError:
             cpu_management_available = False
-        
+
         for row_idx, row in enumerate(words):
             # Yield periodically during bulk processing
             if cpu_management_available and row_idx > 0 and row_idx % 1000 == 0:
                 if should_yield():
                     time.sleep(get_yield_duration())
-            
+
             # Ensure we only write the word text, not IDs
             # row should be a tuple like (word,) or just the word string
             if isinstance(row, tuple):
                 word_text = row[0] if len(row) > 0 else str(row)
             else:
                 word_text = str(row)
-            
-            # Handle None, empty strings, and ensure we have a valid string
+
+            # Handle None and empty strings, and ensure we have a valid string
             if word_text is None:
                 word_text = ''
             else:
                 word_text = str(word_text).strip()
-            
+
             # Skip empty words (but log for debugging)
             if not word_text:
                 continue
-            
+
             # PostgreSQL btree indexes cannot hold entries larger than ~1/3
             # of a buffer page (2704 bytes).  A single oversized token (e.g.
             # a multi-KB base64/data-URI run that survives tokenization as
@@ -116,11 +120,8 @@ class WordsRepository(BaseRepository):
                     oversized_longest = len(word_text)
                 continue
 
-            # Write as a single-column CSV row
-            # csv.writer will automatically escape commas, quotes, and newlines
-            writer.writerow([word_text])
-            valid_words_count += 1
-        
+            valid_words.append((word_text,))
+
         if oversized_skipped:
             logger.warning(
                 "Skipped %d oversized token(s) (longest %d chars) that exceed "
@@ -130,12 +131,10 @@ class WordsRepository(BaseRepository):
                 oversized_skipped, oversized_longest, MAX_WORD_BYTES,
             )
 
-        # If no valid words after filtering, return early
-        if valid_words_count == 0:
+        if not valid_words:
             return
-        
-        buffer.seek(0)
-        self.create_temp_copy_to_words(WordQueries.insert_tmp_words(), buffer)
+
+        self.bulk_upsert_words(valid_words)
 
     def select_all_words(self):
 
@@ -147,14 +146,54 @@ class WordsRepository(BaseRepository):
         return " ".join(dictionary[i] for i in ids)
 
     def select_content_ids_by_words(self, words):
- 
-        dictionary = dict(self.execute(WordQueries.get_all('word','id'), None, False, True))
+        """Resolve word strings to their dictionary ids, preserving order.
+
+        Only the words actually asked for are looked up (batched ``WHERE word
+        = ANY(%s)`` queries).  The previous implementation loaded the *entire*
+        words table into a Python dict on every call, which made storing one
+        document cost O(number of words in the database).
+
+        Missing words are skipped, exactly as before: callers persist content
+        relative to the ids that exist.
+        """
+        if not words:
+            return []
+
+        # Deduplicate while preserving order so the lookup array stays small
+        # even for documents that repeat the same words thousands of times.
+        unique_words = list(dict.fromkeys(words))
+        mapping = self.get_word_ids_batch(unique_words)
+
         result = []
         for word in words:
-            if word in dictionary:
-                result.append(int(dictionary[word]))
-
+            word_id = mapping.get(word)
+            if word_id is not None:
+                result.append(int(word_id))
         return result
+
+    def select_words_by_ids(self, ids):
+        """Return the word strings for the given word ids, preserving order.
+
+        Counterpart of :meth:`select_content_ids_by_words`; used wherever ids
+        (not words) are the input.  Unknown ids are skipped.
+        """
+        if not ids:
+            return []
+
+        mapping = {}
+        batch_size = 10000
+        ordered = list(dict.fromkeys(ids))
+        for start in range(0, len(ordered), batch_size):
+            batch = ordered[start:start + batch_size]
+            rows = self.execute(
+                WordQueries.get_words_by_ids(),
+                (batch,),
+                fetchall=True
+            )
+            if rows:
+                mapping.update({int(row[0]): row[1] for row in rows})
+
+        return [mapping[i] for i in ids if i in mapping]
     
     def select_by_id(self, id):
 

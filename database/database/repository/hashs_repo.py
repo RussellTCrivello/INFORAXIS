@@ -48,9 +48,44 @@ class HashsRepository(BaseRepository):
         return row[0] if row else None
 
     def check_duplicate(self, hash_value, source_id, side_id):
-        """Check for duplicate file"""
+        """Return the id of the *stored path* for this hash, or None.
+
+        A duplicate requires a live path referencing the hash row (DB-04/DB-05
+        semantics: an orphaned hash row does not make content a duplicate, so a
+        deleted file can be ingested again).  The value is a **path** id.
+        """
         row = self.execute(
             HashQueries.check_duplicate(),
+            (hash_value, source_id, side_id),
+            fetchone=True
+        )
+        return row[0] if row else None
+
+    def get_duplicate_document(self, hash_value, source_id, side_id):
+        """Return ``(hash_id, path_id)`` when this file is already stored.
+
+        Both ids come from the same row, so callers cannot mix up the two id
+        spaces (a path id used as a hash id resolves to an unrelated file).
+        ``None`` means no live path references the hash.
+        """
+        row = self.execute(
+            HashQueries.check_duplicate_document(),
+            (hash_value, source_id, side_id),
+            fetchone=True
+        )
+        if not row:
+            return None
+        return int(row[0]), int(row[1])
+
+    def get_hash_id_by_value(self, hash_value, source_id, side_id):
+        """Return the hash row id for this value/source/side, or None.
+
+        Used when the hash row already exists but has no path yet (for
+        example after a rolled-back attempt): the row is reused instead of
+        being duplicated.
+        """
+        row = self.execute(
+            HashQueries.get_hash_id_by_value(),
             (hash_value, source_id, side_id),
             fetchone=True
         )

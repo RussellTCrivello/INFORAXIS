@@ -67,7 +67,7 @@ def is_connection_error(error: Exception) -> bool:
         'closed', 'lost', 'refused', 'unreachable', 'broken pipe',
         'could not connect', 'connection reset', 'connection refused',
         'connection already closed', 'cursor already closed', 
-        'connection pointer is null', 'no copy in progress'
+        'connection pointer is null', 'server closed the connection'
     ]
     
     return any(keyword in error_str for keyword in connection_keywords)
@@ -78,7 +78,7 @@ def is_retryable_error(error: Exception) -> bool:
     Determine if an error is retryable.
     
     Transaction abort errors are NOT retryable - they indicate a failed transaction
-    that must be rolled back. However, transient COPY errors or connection issues are retryable.
+    that must be rolled back. Transient connection/deadlock errors are retryable.
     
     Args:
         error: The exception to check
@@ -104,17 +104,10 @@ def is_retryable_error(error: Exception) -> bool:
         if 'deadlock' in error_str or 'lock' in error_str:
             return True
     
-    # COPY errors that are not transaction-related might be retryable
-    # But "no copy in progress" usually indicates a state issue, not transient
-    if 'no copy in progress' in error_str:
-        # This is usually a cursor state issue, might be retryable with fresh cursor
-        return True
-    
-    # Temp table errors might be retryable if they're not transaction-related
-    if 'tmp_words' in error_str and 'does not exist' in error_str:
-        # If transaction is aborted, this is not retryable (already checked above)
-        # Otherwise, might be a transient issue
-        return True
+    # NOTE: the ingestion path no longer creates temporary tables or drives
+    # COPY, so the former rules for 'tmp_words does not exist' and 'no copy in
+    # progress' were removed.  Those messages were symptoms of two threads
+    # sharing one connection; retrying them merely repeated the failure.
     
     # Check for transient errors
     transient_keywords = ['timeout', 'temporary', 'retry', 'busy', 'locked']

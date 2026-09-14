@@ -13,9 +13,8 @@ the default 8 KB block size (btree version 4):
     HINT:  Values larger than 1/3 of a buffer page cannot be indexed.
 
 A single oversized token therefore aborts the whole
-``INSERT INTO words SELECT ... FROM tmp_words`` export query, rolls
-back the entire document transaction and fails the storage of the
-complete file.  This was seen in the wild with PST/e-mail ingests:
+word-dictionary insert, rolls back the entire document transaction and
+fails the storage of the complete file.  This was seen in the wild with PST/e-mail ingests:
 message bodies embed multi-kilobyte unbroken base64 or ``data:`` URI
 runs, and the tokenizer's word pattern matches such a run as one
 giant "word".

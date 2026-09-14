@@ -6,7 +6,8 @@ import logging
 import psycopg2
 
 from database.database.database import Database
-from database.exceptions import QueryError
+from database.database.repository.transaction_scope import TransactionScope
+from database.exceptions import QueryError, TransactionAbortedError
 
 from core.word_limits import MAX_WORD_BYTES, word_exceeds_db_limit
 
@@ -28,6 +29,72 @@ from database.database.repository.alerts_repo import AlertsRepository
 from core.serialization import pack_int_list, unpack_int_list
 
 
+def _as_id(value):
+    """Normalize a repository result into a plain integer id (or None).
+
+    Repositories sometimes return the id directly, sometimes a one-element
+    tuple (depending on the driver path taken by ``execute``).  Callers in
+    this module need one representation.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (tuple, list)):
+        value = value[0] if value else None
+        if value is None:
+            return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+
+def _keyword_occurrence_counts(sequence, patterns):
+    """Count overlapping occurrences of id patterns inside ``sequence``.
+
+    ``sequence`` is a list of ids (word ids, possibly ``None`` for unknown
+    gaps); ``patterns`` maps a keyword id to the list of word ids that make up
+    the keyword phrase.
+
+    Positions are indexed by the first id of each pattern, so the work is
+    proportional to the number of candidate positions instead of scanning the
+    whole document once per keyword.  The previous nested loop was
+    O(document length x keywords) and was a visible contributor to the CPU
+    saturation reported by the resource monitor during large ingests.
+
+    Returns:
+        ``{keyword_id: count}`` for the patterns that occur at least once.
+    """
+    if not sequence or not patterns:
+        return {}
+
+    positions = {}
+    for index, value in enumerate(sequence):
+        positions.setdefault(value, []).append(index)
+
+    counts = {}
+    length_of = len(sequence)
+    for keyword_id, pattern in patterns.items():
+        if not pattern:
+            continue
+        pattern_length = len(pattern)
+        candidates = positions.get(pattern[0])
+        if not candidates:
+            continue
+        if pattern_length == 1:
+            counts[keyword_id] = len(candidates)
+            continue
+        last_start = length_of - pattern_length
+        tail = pattern[1:]
+        count = 0
+        for start in candidates:
+            if start <= last_start and sequence[start + 1:start + pattern_length] == tail:
+                count += 1
+        if count:
+            counts[keyword_id] = count
+    return counts
+
+
 class ContentDBService:
 
     def __init__(self, db: Optional[Database] = None):
@@ -40,272 +107,102 @@ class ContentDBService:
     def transaction(self):
         """
         Transaction context manager for service-level operations.
-        All repository operations within this context share the same transaction.
-        
-        Thread-safe: Creates new repository instances with transaction connection,
-        avoiding modification of shared repository state.
-        
+
+        All repository operations on this service share one connection for the
+        duration of the block, so hash, path, content, word links and title are
+        committed together or not at all.
+
+        Thread safety: the connection is bound in a
+        :class:`TransactionScope` (context-local), **not** by assigning
+        connection-bound clones onto this shared service instance.  Two worker
+        threads storing documents at the same time therefore keep their own
+        connections; the previous attribute-swapping implementation let thread
+        B overwrite thread A's repositories, which sent thread A's statements
+        to thread B's session (``relation "tmp_words" does not exist``,
+        ``no COPY in progress``, then the aborted-transaction cascade).
+
+        Inside an existing transaction the block becomes a savepoint: a nested
+        failure rolls back only its own statements, never the surrounding unit
+        of work.
+
         Usage:
             with service.transaction():
                 service.create_hash(...)
                 service.create_path(...)
                 # All operations commit together or rollback on error
         """
-        
-        conn = None
-        original_repos = {}
-        transactional_repos = {}
-        
-        try:
-            conn = self.db.connect()
-            
-            # Create new repository instances with transaction connection
-            # This avoids modifying shared repository state and is thread-safe
-            repo_names = ['sources_repo', 'sides_repo', 'hashs_repo', 'paths_repo', 
-                         'words_repo', 'contents_repo', 'words_categorys_repo', 
-                         'categorys_repo', 'keywords_repo', 'keywords_paths_repo',
-                         'words_paths_repo', 'titles_content_repo', 'punctuation_repo',
-                         'alerts_repo']
-            
-            for repo_name in repo_names:
-                original_repo = getattr(self, repo_name, None)
-                if original_repo:
-                    # Store original repo
-                    original_repos[repo_name] = original_repo
-                    # Create new repository instance with transaction connection
-                    repo_class = original_repo.__class__
-                    transactional_repo = repo_class(self.db, connection=conn)
-                    transactional_repos[repo_name] = transactional_repo
-                    # Temporarily replace repo with transactional version
-                    setattr(self, repo_name, transactional_repo)
-            
-            try:
+        scope = self._scope
+
+        # Nested transaction: reuse the outer connection, contain failures.
+        if scope.active:
+            with scope.savepoint():
                 yield self
-                # Only commit if we got here without exceptions
+            return
+
+        conn = self.db.connect()
+        token = scope.bind(conn)
+        try:
+            yield self
+            conn.commit()
+            logger.debug("Service transaction committed successfully")
+        except BaseException as exc:
+            # Roll back once, here, at the only party that owns the unit of
+            # work - and then surface the original exception (callers classify
+            # on TransactionAbortedError / QueryError).
+            try:
                 if conn and not conn.closed:
-                    try:
-                        conn.commit()
-                        logger.debug("Service transaction committed successfully")
-                    except (psycopg2.errors.InFailedSqlTransaction, 
-                            psycopg2.errors.IntegrityError,
-                            psycopg2.errors.ForeignKeyViolation) as commit_err:
-                        # Transaction is aborted or has constraint violations - rollback
-                        logger.error(f"Commit failed (transaction error): {commit_err}, rolling back")
-                        try:
-                            conn.rollback()
-                        except:
-                            pass
-                        raise
-                    except Exception as commit_err:
-                        # Check if commit failed due to aborted transaction
-                        error_str = str(commit_err).lower()
-                        if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                            logger.error(f"Commit failed (transaction aborted): {commit_err}, rolling back")
-                            try:
-                                conn.rollback()
-                            except:
-                                pass
-                            raise psycopg2.errors.InFailedSqlTransaction(f"Transaction was aborted: {commit_err}")
-                        logger.error(f"Commit failed: {commit_err}, rolling back")
-                        try:
-                            conn.rollback()
-                        except:
-                            pass
-                        raise
-            except (psycopg2.errors.InFailedSqlTransaction, 
-                    psycopg2.errors.ForeignKeyViolation,
-                    psycopg2.errors.IntegrityError) as e:
-                # PRODUCTION: Immediate rollback for transaction errors
-                try:
-                    if conn and not conn.closed:
-                        conn.rollback()
-                        logger.error(f"Service transaction rolled back (transaction error): {e}")
-                    else:
-                        logger.warning(f"Connection already closed, skipping rollback: {e}")
-                except Exception as rollback_error:
-                    logger.error(f"Error during rollback: {rollback_error}")
-                # Re-raise the original exception so calling code knows transaction failed
-                raise
-            except Exception as e:
-                # PRODUCTION: Check if this is a QueryError wrapping a database error
-                if isinstance(e, QueryError):
-                    # QueryError wraps database errors - check if it's a transaction error
-                    error_str = str(e).lower()
-                    if any(keyword in error_str for keyword in ['foreign key', 'transaction aborted', 'violates constraint', 'integrity', 'temp table', 'copy operation']):
-                        try:
-                            if conn and not conn.closed:
-                                conn.rollback()
-                                logger.error(f"Service transaction rolled back (QueryError): {e}")
-                        except Exception as rollback_error:
-                            logger.error(f"Error during rollback: {rollback_error}")
-                        raise
-                
-                # Check if this is a transaction-aborting error
-                error_str = str(e).lower()
-                if 'current transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                    try:
-                        if conn and not conn.closed:
-                            conn.rollback()
-                            logger.error(f"Service transaction rolled back (aborted): {e}")
-                    except Exception as rollback_error:
-                        logger.error(f"Error during rollback: {rollback_error}")
-                else:
-                    # For other errors, still try to rollback
-                    try:
-                        if conn and not conn.closed:
-                            conn.rollback()
-                            logger.error(f"Service transaction rolled back: {e}")
-                    except Exception as rollback_error:
-                        logger.error(f"Error during rollback: {rollback_error}")
-                # Re-raise the original exception so calling code knows transaction failed
-                raise
-            finally:
-                # Clean up any temp tables that might have been created
-                # This ensures temp tables don't persist and cause issues for subsequent operations
-                if conn and not conn.closed:
-                    try:
-                        cleanup_cur = conn.cursor()
-                        try:
-                            # Drop temp table if it exists (non-blocking)
-                            cleanup_cur.execute("DROP TABLE IF EXISTS tmp_words")
-                            logger.debug("Cleaned up temp table tmp_words")
-                        except Exception:
-                            # Ignore errors - temp table might not exist or transaction might be aborted
-                            pass
-                        finally:
-                            try:
-                                cleanup_cur.close()
-                            except:
-                                pass
-                    except Exception:
-                        # Ignore cleanup errors - connection might be in bad state
-                        pass
-                
-                # Restore original repository instances
-                for repo_name in original_repos.keys():
-                    setattr(self, repo_name, original_repos[repo_name])
-        except Exception:
-            # Re-raise transaction errors
+                    conn.rollback()
+                    logger.error("Service transaction rolled back: %s", exc)
+            except Exception as rollback_err:
+                logger.error("Error during rollback: %s", rollback_err)
             raise
         finally:
-            # Always return connection to pool, even on error
-            # But first check if it's in a valid state and clean up
-            if conn:
+            scope.release(token)
+            try:
+                self.db.putconn(conn)
+            except Exception as put_err:
+                logger.error("Error returning connection to pool: %s", put_err)
                 try:
-                    # If connection is in a bad state, clean it up before returning to pool
-                    if conn.closed:
-                        logger.debug("Connection already closed, not returning to pool")
-                    else:
-                        # Ensure transaction is rolled back if still active and clean up temp tables
-                        try:
-                            # Check if connection is in a transaction or error state
-                            # Use transaction_status (available in psycopg2 2.5+) instead of status
-                            from psycopg2 import extensions
-                            
-                            # PRODUCTION: Check transaction status using version-compatible method
-                            # Method 1: Try modern transaction_status (psycopg2 2.5+)
-                            if hasattr(conn, 'info') and hasattr(conn.info, 'transaction_status'):
-                                transaction_status = conn.info.transaction_status
-                                # If in error state, rollback immediately
-                                if hasattr(extensions, 'TRANSACTION_STATUS_INERROR'):
-                                    if transaction_status == extensions.TRANSACTION_STATUS_INERROR:
-                                        try:
-                                            conn.rollback()
-                                            logger.debug("Rolled back connection in error state before returning")
-                                        except Exception as rollback_err:
-                                            logger.warning(f"Failed to rollback connection in error state: {rollback_err}")
-                                            # Connection is bad - close it instead of returning
-                                            try:
-                                                conn.close()
-                                            except:
-                                                pass
-                                            return
-                            
-                            # PRODUCTION: Test transaction state with a simple query
-                            # This will detect aborted transactions regardless of psycopg2 version
-                            try:
-                                test_cur = conn.cursor()
-                                test_cur.execute("SELECT 1")
-                                test_cur.close()
-                            except (psycopg2.errors.InFailedSqlTransaction, Exception) as test_err:
-                                # Transaction is aborted - rollback
-                                error_str = str(test_err).lower()
-                                if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                                    try:
-                                        conn.rollback()
-                                        logger.debug("Rolled back aborted transaction before returning connection")
-                                    except Exception as rollback_err:
-                                        logger.warning(f"Failed to rollback aborted transaction: {rollback_err}")
-                                        # If rollback fails, connection might be bad - close it
-                                        try:
-                                            conn.close()
-                                        except:
-                                            pass
-                                        return
-                            
-                            # Clean up any temp tables before returning connection to pool
-                            # This prevents temp tables from persisting and causing issues
-                            try:
-                                cleanup_cur = conn.cursor()
-                                try:
-                                    cleanup_cur.execute("DROP TABLE IF EXISTS tmp_words")
-                                    logger.debug("Cleaned up temp table before returning connection to pool")
-                                except Exception:
-                                    # Ignore errors - temp table might not exist
-                                    pass
-                                finally:
-                                    try:
-                                        cleanup_cur.close()
-                                    except:
-                                        pass
-                            except Exception:
-                                # Ignore cleanup errors - connection might be in bad state
-                                pass
-                                
-                        except Exception as cleanup_err:
-                            logger.warning(f"Error during connection cleanup: {cleanup_err}")
-                            # Continue to try returning connection even if cleanup failed
-                            # putconn will handle bad connections appropriately
-                        
-                        # CRITICAL: Always try to return connection to pool, even if cleanup failed
-                        # putconn() handles bad connections gracefully
-                        try:
-                            self.db.putconn(conn)
-                            logger.debug("Connection returned to pool")
-                        except Exception as put_err:
-                            logger.error(f"Error returning connection to pool: {put_err}")
-                            # If we can't return it, close it to prevent leak
-                            try:
-                                if not conn.closed:
-                                    conn.close()
-                                    logger.debug("Closed connection that couldn't be returned to pool")
-                            except Exception as close_err:
-                                logger.error(f"Error closing connection: {close_err}")
-                except Exception as e:
-                    logger.error(f"Error in transaction finally block: {e}")
-                    # Try to close connection if we can't return it
                     if conn and not conn.closed:
-                        try:
-                            conn.close()
-                        except:
-                            pass
+                        conn.close()
+                except Exception:
+                    pass
+
+    @contextmanager
+    def savepoint(self, name: Optional[str] = None):
+        """Run a block inside a ``SAVEPOINT`` of the current transaction.
+
+        Used for optional work (raw display text, keyword links, titles): a
+        failure inside the block is contained and cannot poison the rest of
+        the document transaction.
+        """
+        with self._scope.savepoint(name):
+            yield self
 
     def _init_repositories(self):
-        """Initialize all repository instances."""
-        self.sources_repo = SourcesRepository(self.db)
-        self.sides_repo = SidesRepository(self.db)
-        self.hashs_repo = HashsRepository(self.db)
-        self.paths_repo = PathsRepository(self.db)
-        self.words_repo = WordsRepository(self.db)
-        self.contents_repo = ContentsRepository(self.db)
-        self.words_categorys_repo = WordsCategorysRepository(self.db)
-        self.categorys_repo = CategorysRepository(self.db)
-        self.keywords_repo = KeywordsRepository(self.db)
-        self.keywords_paths_repo = KeywordsPathsRepository(self.db)
-        self.words_paths_repo = WordsPathsRepository(self.db)
-        self.titles_content_repo = TitlesContentRepository(self.db)
-        self.punctuation_repo = PunctuationRepository(self.db)
-        self.alerts_repo = AlertsRepository(self.db)
+        """Initialize all repository instances.
+
+        Every repository shares one :class:`TransactionScope`.  When
+        :meth:`transaction` binds a connection to the calling thread/task, all
+        of them pick it up for the duration of the block - without mutating
+        this (shared) service instance, which is what made concurrent storage
+        run statements on another thread's connection.
+        """
+        self._scope = TransactionScope(name="contents_db_service")
+        self.sources_repo = SourcesRepository(self.db, scope=self._scope)
+        self.sides_repo = SidesRepository(self.db, scope=self._scope)
+        self.hashs_repo = HashsRepository(self.db, scope=self._scope)
+        self.paths_repo = PathsRepository(self.db, scope=self._scope)
+        self.words_repo = WordsRepository(self.db, scope=self._scope)
+        self.contents_repo = ContentsRepository(self.db, scope=self._scope)
+        self.words_categorys_repo = WordsCategorysRepository(self.db, scope=self._scope)
+        self.categorys_repo = CategorysRepository(self.db, scope=self._scope)
+        self.keywords_repo = KeywordsRepository(self.db, scope=self._scope)
+        self.keywords_paths_repo = KeywordsPathsRepository(self.db, scope=self._scope)
+        self.words_paths_repo = WordsPathsRepository(self.db, scope=self._scope)
+        self.titles_content_repo = TitlesContentRepository(self.db, scope=self._scope)
+        self.punctuation_repo = PunctuationRepository(self.db, scope=self._scope)
+        self.alerts_repo = AlertsRepository(self.db, scope=self._scope)
 
     # def categories(self):
     #     result = self.categorys_repo.select_categorys_word_id()
@@ -529,123 +426,50 @@ class ContentDBService:
     ) -> List[int]:
         """
         Create content from a list of words.
-        
+
+        Steps (all inside the caller's transaction):
+          1. insert the words missing from the dictionary;
+          2. resolve the ids of every word of this document;
+          3. store the content as compressed pickled symbol pairs.
+
         Args:
             words: List of word strings
             path_id: Path ID to associate content with
             content_date: Optional date mentioned in content (None if no date mentioned)
-        
+
         Returns:
             List of word IDs (integers from words table)
-        
+
         Note: Content is stored as compressed, pickled symbol pairs:
         [(word_id, punct_before_id, punct_after_id, spacing_id, char_position), ...]
         The content preserves complete formatting information including punctuation, spacing, and positions.
-        
+
         Note: content_date stores a date mentioned in the content itself.
         If no date is mentioned, it will be empty (None).
         """
         # content_date should remain None if no date was found in content
         # Do not default to today's date
+        if words and len(words) > 100000:
+            logger.info(
+                "Processing large word list (%s words) for path_id %s",
+                f"{len(words):,}", path_id,
+            )
 
-        try:
-            # PRODUCTION: For very large word lists, process in batches to prevent memory issues
-            # Bulk insert words - repository handles batching internally for large lists
-            word_tuples = [(w,) for w in words]
-            
-            # Log if this is a very large word list
-            if len(words) > 100000:
-                logger.info(f"Processing large word list ({len(words):,} words) for path_id {path_id}")
-            
-            self.words_repo.bulk_insert_words(word_tuples)
-        except (psycopg2.errors.InFailedSqlTransaction, QueryError) as bulk_err:
-            # Transaction aborted or bulk insert failed - re-raise immediately
-            error_str = str(bulk_err).lower()
-            if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                logger.error(f"Transaction aborted during bulk word insert: {bulk_err}")
-                raise
-            # Check if it's a CSV/format error
-            if 'extra data' in error_str or 'badcopyfileformat' in error_str or 'csv' in error_str:
-                logger.error(f"CSV format error during bulk word insert: {bulk_err}")
-                raise QueryError(f"Failed to insert words due to format error (likely contains unescaped commas or special characters): {bulk_err}") from bulk_err
-            raise
-        except Exception as bulk_err:
-            # Check if it's a transaction abort error
-            error_str = str(bulk_err).lower()
-            if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                logger.error(f"Transaction aborted during bulk word insert: {bulk_err}")
-                raise QueryError(f"Transaction aborted during bulk word insert: {bulk_err}") from bulk_err
-            # Check if it's a CSV/format error
-            if 'extra data' in error_str or 'badcopyfileformat' in error_str or 'csv' in error_str:
-                logger.error(f"CSV format error during bulk word insert: {bulk_err}")
-                raise QueryError(f"Failed to insert words due to format error (likely contains unescaped commas or special characters): {bulk_err}") from bulk_err
-            raise
+        # 1. Bulk insert words - the repository batches internally for large lists.
+        # Nothing else may run on this connection in between: a failure here
+        # aborts the transaction and the caller rolls it back (the previous
+        # implementation continued after swallowed errors and referenced ids
+        # that no longer existed).
+        self.words_repo.bulk_insert_words([(w,) for w in words])
 
-        # PRODUCTION: Get word IDs after bulk insert
-        # IMPORTANT: Ensure COPY operation is fully completed and cursor is closed
-        # before executing SELECT query to avoid "another command is already in progress"
-        try:
-            # Get word IDs (numbers from words table)
-            # The bulk_insert_words should have properly closed its cursor
-            word_ids = self.words_repo.select_content_ids_by_words(words)
-        except (psycopg2.errors.InFailedSqlTransaction, QueryError) as select_err:
-            # Transaction aborted - re-raise immediately
-            error_str = str(select_err).lower()
-            if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                logger.error(f"Transaction aborted during word ID selection: {select_err}")
-                raise
-            # Check for "another command is already in progress" - cursor conflict
-            if 'another command is already in progress' in error_str:
-                logger.warning(f"Cursor conflict during word ID selection, retrying: {select_err}")
-                # Retry once after a brief delay to allow cursor cleanup
-                import time
-                time.sleep(0.05)  # 50ms delay
-                try:
-                    word_ids = self.words_repo.select_content_ids_by_words(words)
-                except Exception as retry_err:
-                    logger.error(f"Word ID selection failed on retry: {retry_err}")
-                    raise QueryError(f"Word ID selection failed after retry: {retry_err}") from retry_err
-            else:
-                raise
-        except Exception as select_err:
-            error_str = str(select_err).lower()
-            if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                logger.error(f"Transaction aborted during word ID selection: {select_err}")
-                raise QueryError(f"Transaction aborted during word ID selection: {select_err}") from select_err
-            # Check for "another command is already in progress" - cursor conflict
-            if 'another command is already in progress' in error_str:
-                logger.warning(f"Cursor conflict during word ID selection, retrying: {select_err}")
-                # Retry once after a brief delay to allow cursor cleanup
-                import time
-                time.sleep(0.05)  # 50ms delay
-                try:
-                    word_ids = self.words_repo.select_content_ids_by_words(words)
-                except Exception as retry_err:
-                    logger.error(f"Word ID selection failed on retry: {retry_err}")
-                    raise QueryError(f"Word ID selection failed after retry: {retry_err}") from retry_err
-            else:
-                raise
-            raise
-        
-        try:
-            # Store content as word IDs (compressed and pickled)
-            self.contents_repo.store_text_content(word_ids, content_date, path_id)
-        except (psycopg2.errors.InFailedSqlTransaction, QueryError) as store_err:
-            # Transaction aborted - re-raise immediately
-            error_str = str(store_err).lower()
-            if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                logger.error(f"Transaction aborted during content storage: {store_err}")
-                raise
-            raise
-        except Exception as store_err:
-            error_str = str(store_err).lower()
-            if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                logger.error(f"Transaction aborted during content storage: {store_err}")
-                raise QueryError(f"Transaction aborted during content storage: {store_err}") from store_err
-            raise
+        # 2. Resolve the word ids (only the words of this document are looked up).
+        word_ids = self.words_repo.select_content_ids_by_words(words)
+
+        # 3. Store content as compressed symbol pairs.
+        self.contents_repo.store_text_content(word_ids, content_date, path_id)
 
         return word_ids
-    
+
     def get_content_word_ids(self, path_id: int) -> List[int]:
         """
         Get content as word IDs (numbers from words table).
@@ -1122,7 +946,10 @@ class ContentDBService:
         keyword_words = []
         
         for kw_id, word_ids in keywords_dict.items():
-            words = self.words_repo.select_content_ids_by_words(word_ids)
+            # ``word_ids`` are ids: resolve them to text (the previous call to
+            # select_content_ids_by_words() treated the ids as words, so this
+            # method always returned empty keyword lists).
+            words = self.words_repo.select_words_by_ids(word_ids)
             keyword_words.append(words)
         
         return keyword_words
@@ -1165,29 +992,25 @@ class ContentDBService:
     # ============================================================
 
     def process_keywords_for_path(self, path_id: int, content_ids: List[int]) -> bool:
-       
-        try:
-            keywords_dict = self.get_all_keywords()
-            keyword_count: Dict[int, int] = {}
+        """Link the document to the keywords it contains.
 
-            # Search for keyword patterns in content
-            for kw_id, kw_pattern in keywords_dict.items():
-                pattern_length = len(kw_pattern)
-                
-                # Slide through content looking for pattern
-                for i in range(len(content_ids) - pattern_length + 1):
-                    if content_ids[i:i + pattern_length] == kw_pattern:
-                        keyword_count.setdefault(kw_id, 0)
-                        keyword_count[kw_id] += 1
+        Returns True when at least one keyword matched.  Failures propagate:
+        the caller decides (the ingestion path contains them in a savepoint and
+        logs them) instead of this method printing and pretending success.
+        """
+        if True:
+            keywords_dict = self.get_all_keywords()
+
+            # Search for keyword patterns in content.  The matcher indexes
+            # positions by first id, so a document is not rescanned once per
+            # keyword.
+            keyword_count = _keyword_occurrence_counts(content_ids, keywords_dict)
 
             # Insert keyword-path relationships
             if keyword_count:
                 self.keywords_paths_repo.bulk_insert_keywords_paths(path_id, keyword_count)
                 return True
-            
-            return False
-        except Exception as e:
-            print(f"Error processing keywords for path: {e}")
+
             return False
 
     def refresh_keyword_associations(self, keyword_ids=None) -> Dict[str, int]:
@@ -1244,15 +1067,7 @@ class ContentDBService:
                     for index in indexes:
                         if 0 <= index < len(sequence):
                             sequence[index] = word_id
-                matches = {}
-                for keyword_id, pattern in decoded.items():
-                    length = len(pattern)
-                    count = sum(
-                        1 for i in range(len(sequence) - length + 1)
-                        if sequence[i:i + length] == pattern
-                    )
-                    if count:
-                        matches[keyword_id] = count
+                matches = _keyword_occurrence_counts(sequence, decoded)
                 if matches:
                     self.keywords_paths_repo.bulk_insert_keywords_paths(path_id, matches)
                     added += len(matches)
@@ -1364,9 +1179,10 @@ class ContentDBService:
             'path_id': None,
             'content_ids': None,
             'title_ids': None,
+            'warnings': [],
             'error': None
         }
-        
+
         # INDEX SAFETY: PostgreSQL btree indexes cap entries at ~1/3 of a
         # buffer page (2704 bytes).  A single oversized token (a multi-KB
         # base64/data-URI run survives tokenization as one "word") would
@@ -1390,362 +1206,188 @@ class ContentDBService:
         if title_words:
             title_words = [w for w in title_words if not word_exceeds_db_limit(w)]
 
-        # Use service-level transaction for atomicity
         try:
+            # One transaction per document: hash, path, content, word index
+            # and title commit together or not at all.  Optional/derived
+            # steps (raw display text, keywords, title) are contained in
+            # savepoints so their failure cannot discard the document or
+            # poison the transaction for later statements.
             with self.transaction():
-                # PRODUCTION: Track transaction state to prevent continuing after abort
-                transaction_aborted = False
-                
-                # PRODUCTION: 1. Create hash (or get existing)
-                # Check for duplicates first (before any operations that might abort transaction)
-                try:
-                    # Check for duplicate hash first - this is a read operation, less likely to abort
-                    existing_hash_id = self.hashs_repo.check_duplicate(hash_value, source_id, side_id)
-                    if existing_hash_id:
-                        # Normalize existing_hash_id
-                        existing_hash_id = existing_hash_id[0] if isinstance(existing_hash_id, tuple) else existing_hash_id
-                        # Get existing path_id for this hash
-                        existing_path_id = self.get_path_id_by_hash_id(existing_hash_id)
-                        if existing_path_id:
-                            # Normalize existing_path_id
-                            existing_path_id = existing_path_id[0] if isinstance(existing_path_id, tuple) else existing_path_id
-                            result['hash_id'] = existing_hash_id
-                            result['path_id'] = existing_path_id
-                            result['success'] = True
-                            result['error'] = "Duplicate file - already processed"
-                            logger.info(f"Duplicate file detected: hash={hash_value[:16]}..., existing path_id={existing_path_id}")
-                            return result
-                except (psycopg2.errors.InFailedSqlTransaction, QueryError) as dup_check_err:
-                    # PRODUCTION: Transaction aborted during duplicate check - re-raise immediately
-                    error_str = str(dup_check_err).lower()
-                    if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                        result['error'] = f"Transaction aborted during duplicate check: {dup_check_err}"
-                        logger.error(f"Transaction aborted checking duplicate for file: {file_name}, error={dup_check_err}")
-                        raise
-                    raise
-                except Exception as dup_check_err:
-                    # PRODUCTION: Check if it's a transaction abort error
-                    error_str = str(dup_check_err).lower()
-                    if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                        result['error'] = f"Transaction aborted during duplicate check: {dup_check_err}"
-                        logger.error(f"Transaction aborted checking duplicate for file: {file_name}, error={dup_check_err}")
-                        raise QueryError(f"Transaction aborted during duplicate check: {dup_check_err}") from dup_check_err
-                    # For other errors during duplicate check, log but continue (might be a different issue)
-                    logger.debug(f"Error checking duplicate (non-critical): {dup_check_err}")
-                
-                # Create new hash if not duplicate
-                try:
-                    hash_id = self.create_hash(hash_value, source_id, side_id)
-                except (psycopg2.errors.InFailedSqlTransaction, QueryError) as hash_err:
-                    # PRODUCTION: Transaction already aborted or hash creation failed
-                    error_str = str(hash_err).lower()
-                    if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                        result['error'] = f"Transaction aborted during hash creation: {hash_err}"
-                        logger.error(f"Transaction aborted creating hash for file: {file_name}, error={hash_err}")
-                        raise
-                    raise
-                except Exception as hash_err:
-                    # PRODUCTION: Check if it's a transaction abort error
-                    error_str = str(hash_err).lower()
-                    if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                        result['error'] = f"Transaction aborted during hash creation: {hash_err}"
-                        logger.error(f"Transaction aborted creating hash for file: {file_name}, error={hash_err}")
-                        raise QueryError(f"Transaction aborted during hash creation: {hash_err}") from hash_err
-                    # Re-raise other exceptions
-                    raise
-                
-                # PRODUCTION: Normalize hash_id (might be tuple or int)
-                if hash_id:
-                    hash_id = hash_id[0] if isinstance(hash_id, tuple) else hash_id
-                
-                # PRODUCTION: If hash_id is None or 0, it means hash already exists (duplicate)
-                # This should have been caught by the duplicate check above, but handle it here as fallback
+                # 1. Duplicate detection -----------------------------------
+                # A hash that already has a stored path means the file was
+                # ingested before; report the existing ids instead of
+                # creating a second copy.
+                existing = self._find_stored_document(hash_value, source_id, side_id)
+                if existing is not None:
+                    hash_id, path_id = existing
+                    result.update(
+                        hash_id=hash_id,
+                        path_id=path_id,
+                        success=True,
+                        error="Duplicate file - already processed",
+                    )
+                    logger.info(
+                        "Duplicate file detected: hash=%s..., existing path_id=%s",
+                        hash_value[:16], path_id,
+                    )
+                    return result
+
+                # 2. Hash ---------------------------------------------------
+                hash_id = _as_id(self.create_hash(hash_value, source_id, side_id))
+                if not hash_id:
+                    # ``create_hash`` returns None when the hash already
+                    # exists but has no path yet (e.g. a previous attempt was
+                    # rolled back): reuse the existing dictionary row.  The
+                    # lookup asks for the *hash* id explicitly - the duplicate
+                    # helper returns a path id, which is a different id space.
+                    hash_id = _as_id(
+                        self.hashs_repo.get_hash_id_by_value(
+                            hash_value, source_id, side_id
+                        )
+                    )
+                    if hash_id:
+                        logger.info(
+                            "Reusing existing hash_id=%s (no path stored yet) for %s",
+                            hash_id, file_name,
+                        )
                 if not hash_id or hash_id <= 0:
-                    # Hash already exists - try to get existing hash_id and path_id
-                    # This is a fallback in case duplicate check above didn't catch it
-                    try:
-                        existing_hash_id = self.hashs_repo.check_duplicate(hash_value, source_id, side_id)
-                        if existing_hash_id:
-                            # Normalize existing_hash_id
-                            existing_hash_id = existing_hash_id[0] if isinstance(existing_hash_id, tuple) else existing_hash_id
-                            # Get existing path_id for this hash
-                            existing_path_id = self.get_path_id_by_hash_id(existing_hash_id)
-                            if existing_path_id:
-                                # Normalize existing_path_id
-                                existing_path_id = existing_path_id[0] if isinstance(existing_path_id, tuple) else existing_path_id
-                                result['hash_id'] = existing_hash_id
-                                result['path_id'] = existing_path_id
-                                result['success'] = True
-                                result['error'] = "Duplicate file - already processed"
-                                logger.info(f"Duplicate file detected (fallback): hash={hash_value[:16]}..., existing path_id={existing_path_id}")
-                                return result
-                            else:
-                                # Hash exists but no path - use the existing hash_id
-                                hash_id = existing_hash_id
-                                logger.info(f"Using existing hash_id={hash_id} (no path found)")
-                    except (psycopg2.errors.InFailedSqlTransaction, QueryError) as dup_err:
-                        # PRODUCTION: Transaction aborted during duplicate check - re-raise immediately
-                        error_str = str(dup_err).lower()
-                        if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                            result['error'] = f"Transaction aborted during duplicate check: {dup_err}"
-                            logger.error(f"Transaction aborted checking duplicate for file: {file_name}, error={dup_err}")
-                            raise
-                        raise
-                    except Exception as dup_err:
-                        # PRODUCTION: Check if it's a transaction abort error
-                        error_str = str(dup_err).lower()
-                        if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                            result['error'] = f"Transaction aborted during duplicate check: {dup_err}"
-                            logger.error(f"Transaction aborted checking duplicate for file: {file_name}, error={dup_err}")
-                            raise QueryError(f"Transaction aborted during duplicate check: {dup_err}") from dup_err
-                        # For other errors, log warning but continue (might be a data integrity issue)
-                        logger.warning(f"Error checking duplicate (fallback): {dup_err}")
-                        # If we can't get existing hash_id, raise error
-                        raise QueryError(f"Hash insert returned None but duplicate check failed: {dup_err}") from dup_err
-                
-                # Validate hash_id is valid before proceeding
-                if not hash_id or hash_id <= 0:
-                    # Raise exception to ensure transaction rollback
-                    error_msg = f"Invalid hash_id returned: {hash_id} for file: {file_name}"
-                    logger.error(error_msg)
-                    raise QueryError(error_msg)
-                
+                    raise QueryError(
+                        f"Could not create or resolve a hash record for "
+                        f"{file_name} (hash={hash_value[:16]}...)"
+                    )
+
+                # The hash must be visible to this transaction before the
+                # dependent path row is inserted; a missing row here means
+                # the transaction was rolled back underneath us.
+                if not self.hashs_repo.get_hash_by_id(hash_id):
+                    raise QueryError(
+                        f"Hash ID {hash_id} does not exist (transaction may "
+                        f"have been rolled back) for file: {file_name}"
+                    )
                 result['hash_id'] = hash_id
 
-                # 2. Create path (with validated hash_id)
-                # Verify hash_id exists before creating path (defensive check)
-                try:
-                    # Quick check to ensure hash_id exists in current transaction
-                    hash_check = self.hashs_repo.get_hash_by_id(hash_id)
-                    if not hash_check:
-                        error_msg = f"Hash ID {hash_id} does not exist (transaction may have been rolled back)"
-                        logger.error(error_msg)
-                        raise QueryError(error_msg)
-                except (psycopg2.errors.InFailedSqlTransaction, QueryError) as check_err:
-                    # Transaction aborted during hash check
-                    error_str = str(check_err).lower()
-                    if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                        result['error'] = f"Transaction aborted during hash verification: {check_err}"
-                        logger.error(f"Transaction aborted verifying hash for file: {file_name}, hash_id={hash_id}, error={check_err}")
-                        raise
-                    raise
-                
-                path_id = None
-                try:
-                    path_id = self.create_path(
-                        file_name, file_path, file_size, file_type,
-                        file_status, file_date, hash_id,
-                        coordinates=coordinates,
-                        extraction_provenance=extraction_provenance,
-                        processing_status=processing_status,
-                        status_detail=status_detail,
-                        attempts=attempts
-                    )
-                    # Normalize path_id
-                    if path_id:
-                        path_id = path_id[0] if isinstance(path_id, tuple) else path_id
-                except (psycopg2.errors.ForeignKeyViolation, psycopg2.errors.IntegrityError) as fk_err:
-                    result['error'] = f"Foreign key violation creating path (hash_id={hash_id} may not exist): {fk_err}"
-                    logger.error(f"Foreign key violation creating path for file: {file_name}, hash_id={hash_id}, error={fk_err}")
-                    # Verify hash_id one more time - it might have been rolled back
-                    try:
-                        hash_check = self.hashs_repo.get_hash_by_id(hash_id)
-                        if not hash_check:
-                            logger.error(f"Hash ID {hash_id} confirmed missing - transaction was rolled back")
-                    except:
-                        pass
-                    # Re-raise to ensure transaction rollback - don't return here
-                    raise
-                except (psycopg2.errors.InFailedSqlTransaction,) as tx_err:
-                    # Transaction is already aborted - don't proceed
-                    result['error'] = f"Transaction aborted before path creation: {tx_err}"
-                    logger.error(f"Transaction aborted creating path for file: {file_name}, error={tx_err}")
-                    # Re-raise to ensure transaction rollback
-                    raise
-                except Exception as path_err:
-                    # Check if it's a transaction abort or wrapped foreign key violation
-                    error_str = str(path_err).lower()
-                    if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                        result['error'] = f"Transaction aborted creating path: {path_err}"
-                        logger.error(f"Transaction aborted creating path for file: {file_name}, error={path_err}")
-                        # Re-raise to ensure transaction rollback
-                        raise
-                    if 'foreign key' in error_str or 'violates foreign key constraint' in error_str:
-                        result['error'] = f"Foreign key violation creating path (hash_id={hash_id} may not exist): {path_err}"
-                        logger.error(f"Foreign key violation creating path for file: {file_name}, hash_id={hash_id}, error={path_err}")
-                        # Re-raise to ensure transaction rollback
-                        raise
-                    # Re-raise other exceptions
-                    raise
-                
-                # Validate path_id was created successfully
-                # If transaction was aborted, path_id might be None or invalid
+                # 3. Path ---------------------------------------------------
+                path_id = _as_id(self.create_path(
+                    file_name, file_path, file_size, file_type,
+                    file_status, file_date, hash_id,
+                    coordinates=coordinates,
+                    extraction_provenance=extraction_provenance,
+                    processing_status=processing_status,
+                    status_detail=status_detail,
+                    attempts=attempts
+                ))
                 if not path_id or path_id <= 0:
-                    # Raise exception to ensure transaction rollback
-                    error_msg = f"Failed to create path record (returned: {path_id}) for file: {file_name}"
-                    logger.error(error_msg)
-                    raise QueryError(error_msg)
-                
+                    raise QueryError(
+                        f"Failed to create path record (returned: {path_id}) "
+                        f"for file: {file_name}"
+                    )
                 result['path_id'] = path_id
 
-                # 3. Create content (only if path_id is valid)
-                # PRODUCTION: Catch transaction abort errors and stop immediately
-                # If transaction is aborted, don't continue with word linking or title creation
-                # content_date stores a date mentioned in the content itself. If no date is mentioned, it will be empty (None).
-                content_ids = None
-                transaction_aborted = False
-                try:
-                    content_ids = self.create_content(content_words, path_id, content_date=content_date)
-                    result['content_ids'] = content_ids
-                except (psycopg2.errors.InFailedSqlTransaction, QueryError) as tx_err:
-                    # PRODUCTION: Transaction aborted during content creation - stop immediately
-                    transaction_aborted = True
-                    result['error'] = f"Transaction aborted during content creation: {tx_err}"
-                    logger.error(f"Transaction aborted creating content for file: {file_name}, path_id={path_id}, error={tx_err}")
-                    # Re-raise to ensure transaction rollback - don't continue with word linking or title
-                    raise
-                except Exception as content_err:
-                    # PRODUCTION: Check if it's a transaction abort error
-                    error_str = str(content_err).lower()
-                    if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                        transaction_aborted = True
-                        result['error'] = f"Transaction aborted during content creation: {content_err}"
-                        logger.error(f"Transaction aborted creating content for file: {file_name}, path_id={path_id}, error={content_err}")
-                        # Re-raise to ensure transaction rollback
-                        raise QueryError(f"Transaction aborted during content creation: {content_err}") from content_err
-                    # Check for COPY errors specifically (includes "no copy in progress")
-                    if 'no copy in progress' in error_str or ('copy' in error_str and 'bulk' in error_str):
-                        transaction_aborted = True
-                        result['error'] = f"Bulk insert failed during content creation: {content_err}"
-                        logger.error(f"Bulk insert failed creating content for file: {file_name}, path_id={path_id}, error={content_err}")
-                        raise QueryError(f"Bulk insert failed during content creation: {content_err}") from content_err
-                    # Re-raise other exceptions to let transaction handler deal with them
-                    raise
-                
-                # PRODUCTION: Only continue if transaction is still valid
-                if transaction_aborted:
-                    # Transaction was aborted - don't continue
-                    raise QueryError("Transaction aborted, cannot continue with word linking or title creation")
+                # 4. Content (word dictionary + compressed symbol pairs) -----
+                content_ids = self.create_content(
+                    content_words, path_id, content_date=content_date
+                )
+                result['content_ids'] = content_ids
 
-                # 3.5 Store the structured raw text for display fidelity
-                # (contents_raw, migration m0010). Same transaction as the
-                # word-ID store so the two never diverge. Failure here must
-                # NOT fail the ingest - the word-join fallback still works.
+                # 5. Raw display text (optional) -----------------------------
+                # Kept in the same transaction as the word store so the two
+                # never diverge, but contained in a savepoint: the word-join
+                # reconstruction still displays the document if the raw text
+                # is rejected (e.g. payload too large).
                 if raw_text:
                     try:
-                        self.contents_repo.store_raw_content(path_id, raw_text)
-                    except psycopg2.errors.InFailedSqlTransaction:
-                        # The transaction is already aborted - re-raise so the
-                        # whole ingest rolls back (never half-store).
+                        with self.savepoint():
+                            self.contents_repo.store_raw_content(path_id, raw_text)
+                    except TransactionAbortedError:
                         raise
-                    except Exception as raw_store_err:
-                        # Non-aborting failure (e.g. oversized payload): the
-                        # word-join fallback still displays, so continue.
-                        logger.warning(
-                            "Could not store raw display text for file %s (path_id=%s): %s",
-                            file_name, path_id, raw_store_err,
+                    except Exception as raw_err:
+                        self._note_optional_failure(
+                            result, 'raw_text', raw_err, file_name, path_id
                         )
 
-                # 4. Link words to path (only if path_id and content_ids are valid)
-                # PRODUCTION: Only proceed if content_ids were successfully created and transaction is still valid
-                if content_ids and not transaction_aborted:
-                    try:
-                        self.link_words_to_path(path_id, content_ids)
+                # 6. Word index (core) ---------------------------------------
+                # words_paths powers search; a failure here would leave the
+                # document stored but unsearchable, so it must roll back.
+                if content_ids:
+                    self.link_words_to_path(path_id, content_ids)
+                else:
+                    logger.warning(
+                        "No indexable content for %s (path_id=%s): the file "
+                        "is stored but has no word entries.", file_name, path_id,
+                    )
 
-                        # 5. Process keywords
-                        self.process_keywords_for_path(path_id, content_ids)
-                    except (psycopg2.errors.InFailedSqlTransaction, QueryError) as tx_err:
-                        # PRODUCTION: Transaction aborted during word linking - stop immediately
-                        transaction_aborted = True
-                        result['error'] = f"Transaction aborted during word linking: {tx_err}"
-                        logger.error(f"Transaction aborted linking words for file: {file_name}, path_id={path_id}, error={tx_err}")
-                        # Re-raise to ensure transaction rollback - don't continue with title
-                        raise
-                    except Exception as link_err:
-                        # PRODUCTION: Check if it's a transaction abort or foreign key error
-                        error_str = str(link_err).lower()
-                        if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                            transaction_aborted = True
-                            result['error'] = f"Transaction aborted during word linking: {link_err}"
-                            logger.error(f"Transaction aborted linking words for file: {file_name}, path_id={path_id}, error={link_err}")
-                            # Re-raise to ensure transaction rollback
-                            raise QueryError(f"Transaction aborted during word linking: {link_err}") from link_err
-                        # Check for foreign key violations (path might not exist due to rollback)
-                        if 'foreign key' in error_str or 'violates foreign key constraint' in error_str:
-                            transaction_aborted = True
-                            result['error'] = f"Foreign key violation linking words (path_id={path_id} may not exist due to transaction rollback): {link_err}"
-                            logger.error(f"Foreign key violation linking words for file: {file_name}, path_id={path_id}, error={link_err}")
-                            # Re-raise to ensure transaction rollback
-                            raise QueryError(f"Foreign key violation during word linking: {link_err}") from link_err
-                        # Re-raise other exceptions
-                        raise
-
-                # 6. Create title if provided
-                # PRODUCTION: Only create title if transaction is still valid
-                # Skip if transaction was aborted during content creation or word linking
-                if title_words and not transaction_aborted:
+                # 7. Keyword index (derived) ---------------------------------
+                if content_ids:
                     try:
-                        # PRODUCTION: Don't validate path_id - if transaction was aborted,
-                        # create_title_content will fail with InFailedSqlTransaction
-                        # We trust that path_id exists since we just created it in this transaction
-                        title_ids = self.create_title_content(title_words, path_id)
-                        result['title_ids'] = title_ids
-                    except (psycopg2.errors.InFailedSqlTransaction, QueryError) as tx_err:
-                        # Transaction aborted during title creation - re-raise to ensure transaction rollback
-                        error_str = str(tx_err).lower()
-                        if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                            logger.error(f"Transaction aborted during title creation for file: {file_name}, path_id={path_id}, error={tx_err}")
-                        else:
-                            logger.error(f"QueryError during title creation for file: {file_name}, path_id={path_id}, error={tx_err}")
-                        # Re-raise to ensure transaction rollback
+                        with self.savepoint():
+                            self.process_keywords_for_path(path_id, content_ids)
+                    except TransactionAbortedError:
+                        raise
+                    except Exception as kw_err:
+                        self._note_optional_failure(
+                            result, 'keywords', kw_err, file_name, path_id
+                        )
+
+                # 8. Title (derived) -----------------------------------------
+                if title_words:
+                    try:
+                        with self.savepoint():
+                            result['title_ids'] = self.create_title_content(
+                                title_words, path_id
+                            )
+                    except TransactionAbortedError:
                         raise
                     except Exception as title_err:
-                        error_str = str(title_err).lower()
-                        if 'transaction is aborted' in error_str or 'in failed sql transaction' in error_str:
-                            logger.error(f"Transaction aborted during title creation for file: {file_name}, path_id={path_id}, error={title_err}")
-                            # Re-raise to ensure transaction rollback
-                            raise QueryError(f"Transaction aborted during title creation: {title_err}") from title_err
-                        if 'foreign key' in error_str or 'violates foreign key constraint' in error_str:
-                            logger.error(f"Foreign key violation during title creation for file: {file_name}, path_id={path_id}, error={title_err}")
-                            # Re-raise to ensure transaction rollback
-                            raise QueryError(f"Foreign key violation during title creation: {title_err}") from title_err
-                        # For other title creation errors, log and re-raise to ensure transaction rollback
-                        logger.error(f"Error creating title for file: {file_name}, path_id={path_id}, error={title_err}")
-                        raise QueryError(f"Error creating title: {title_err}") from title_err
+                        self._note_optional_failure(
+                            result, 'title', title_err, file_name, path_id
+                        )
 
                 result['success'] = True
-                logger.info(f"Document processed successfully: path_id={path_id}, hash_id={hash_id}")
+                logger.info(
+                    "Document processed successfully: path_id=%s, hash_id=%s",
+                    path_id, hash_id,
+                )
                 return result
 
-        except (psycopg2.errors.InFailedSqlTransaction, 
-                psycopg2.errors.ForeignKeyViolation,
-                psycopg2.errors.IntegrityError) as db_err:
-            # Database constraint violation - transaction context manager will rollback
-            logger.error(f"Database error processing document: {db_err}")
-            result['error'] = f"Database error: {db_err}"
-            # Re-raise so transaction context manager can rollback
-            raise
         except Exception as e:
-            # Check if it's a wrapped database error (QueryError wraps psycopg2 errors)
-            if isinstance(e, QueryError):
-                # QueryError wraps database errors - check the underlying error
-                error_str = str(e).lower()
-                if any(keyword in error_str for keyword in ['foreign key', 'transaction aborted', 'violates constraint', 'integrity']):
-                    logger.error(f"Database error (QueryError) processing document: {e}")
-                    result['error'] = f"Database error: {e}"
-                    # Re-raise so transaction context manager can rollback
-                    raise
-            # Check error message for database-related errors
-            error_str = str(e).lower()
-            if any(keyword in error_str for keyword in ['foreign key', 'transaction aborted', 'violates constraint', 'integrity', 'query execution failed']):
-                logger.error(f"Database error (wrapped) processing document: {e}")
-                result['error'] = f"Database error: {e}"
-                # Re-raise so transaction context manager can rollback
-                raise
-            logger.error(f"Unexpected error processing document: {e}", exc_info=True)
-            result['error'] = str(e)
-            # Re-raise so transaction can rollback
+            # The transaction context has already rolled the unit of work
+            # back; surface the failure so the caller counts this file as
+            # not stored (never as a silent partial write).
+            result['error'] = f"{type(e).__name__}: {e}"
+            logger.error(
+                "Failed to store document '%s': %s: %s",
+                file_name, type(e).__name__, e, exc_info=True,
+            )
             raise
+
+    def _find_stored_document(self, hash_value, source_id, side_id):
+        """Return ``(hash_id, path_id)`` when this file is already stored.
+
+        Both ids are read from the same row (paths and hashs are independent
+        id spaces, so they can never be derived from one another).
+
+        ``None`` means no path exists for the hash, so the caller should
+        continue with the normal ingest (the hash row alone, without a path,
+        is not a stored document - it can be left over from a rolled-back
+        attempt and is reused rather than duplicated).
+        """
+        return self.hashs_repo.get_duplicate_document(hash_value, source_id, side_id)
+
+    @staticmethod
+    def _note_optional_failure(result, step, error, file_name, path_id):
+        """Record a contained failure of a derived-data step.
+
+        The document is still stored; the warning is logged loudly and carried
+        in the result so monitoring can spot systematic degradation instead of
+        the failure being silently swallowed.
+        """
+        message = f"{step} step failed: {type(error).__name__}: {error}"
+        result['warnings'].append(message)
+        logger.error(
+            "Optional %s step failed for file '%s' (path_id=%s), the document "
+            "itself is stored: %s",
+            step, file_name, path_id, error,
+        )
 
     # ============================================================
     # PUNCTUATION OPERATIONS

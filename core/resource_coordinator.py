@@ -66,6 +66,18 @@ class ResourceCoordinator:
     
     _instance = None
     _lock = threading.Lock()
+
+    #: CPU load is sampled without blocking.  ``psutil.cpu_percent(interval=X)``
+    #: sleeps for X seconds *in the calling thread*; the ingest loops call
+    #: ``should_yield()`` every 1000 items, so a blocking sample added ~100 ms
+    #: per call inside the storage transaction (measured: ~10 s of pure sleep
+    #: for a single 50k-word document).  ``interval=None`` returns the usage
+    #: since the previous call without sleeping; the value is cached for a
+    #: short window so hot loops do not even pay for the syscall.
+    _CPU_SAMPLE_TTL = 0.5
+    _cpu_sample = None
+    _cpu_sample_time = 0.0
+    _cpu_sample_lock = threading.Lock()
     
     def __new__(cls):
         if cls._instance is None:
@@ -94,6 +106,12 @@ class ResourceCoordinator:
             self.instance_id = f"{os.getpid()}_{int(time.time())}"
             self.instance_type = self._detect_instance_type()
             
+            # Prime the non-blocking CPU sampler (first delta has no window).
+            try:
+                psutil.cpu_percent(interval=None)
+            except Exception:
+                pass
+
             # System resources
             self.cpu_count = multiprocessing.cpu_count()
             try:
@@ -282,7 +300,7 @@ class ResourceCoordinator:
                 
                 # Check system resources
                 try:
-                    cpu_percent = psutil.cpu_percent(interval=0.5)  # Faster detection
+                    cpu_percent = self.get_cpu_percent()
                     memory = psutil.virtual_memory()
                     memory_percent = memory.percent
                     
@@ -421,6 +439,34 @@ class ResourceCoordinator:
         """
         return self._system_overload
     
+    def get_cpu_percent(self) -> float:
+        """Current CPU load percentage, sampled without blocking.
+
+        Uses the delta-based ``psutil.cpu_percent(interval=None)`` and caches
+        the result for :attr:`_CPU_SAMPLE_TTL`, so callers in hot loops pay
+        (almost) nothing.  Never raises: a monitoring failure must not break
+        the caller's work.
+        """
+        now = time.monotonic()
+        sample = ResourceCoordinator._cpu_sample
+        if sample is not None and (now - ResourceCoordinator._cpu_sample_time) < self._CPU_SAMPLE_TTL:
+            return sample
+
+        try:
+            value = float(psutil.cpu_percent(interval=None))
+        except Exception:
+            return sample if sample is not None else 0.0
+
+        # psutil returns 0.0 when no measurable window has elapsed since the
+        # previous sample; keep the last real reading in that case.
+        if value == 0.0 and sample is not None:
+            value = sample
+
+        with ResourceCoordinator._cpu_sample_lock:
+            ResourceCoordinator._cpu_sample = value
+            ResourceCoordinator._cpu_sample_time = now
+        return value
+
     def should_yield(self, aggressive: bool = False) -> bool:
         """
         Check if current operation should yield to prevent system overload.
@@ -432,7 +478,7 @@ class ResourceCoordinator:
             True if operation should yield/pause
         """
         try:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
+            cpu_percent = self.get_cpu_percent()
             memory = psutil.virtual_memory()
             memory_percent = memory.percent
             
@@ -452,8 +498,8 @@ class ResourceCoordinator:
             Seconds to sleep/yield (0.0 to 0.1)
         """
         try:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            
+            cpu_percent = self.get_cpu_percent()
+
             if cpu_percent > 95:
                 return 0.1  # 100ms for severe overload
             elif cpu_percent > 85:
@@ -469,7 +515,7 @@ class ResourceCoordinator:
         """Get current resource status"""
         instances = self._get_running_instances()
         try:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
+            cpu_percent = self.get_cpu_percent()
             memory = psutil.virtual_memory()
             memory_percent = memory.percent
             memory_available_gb = memory.available / (1024**3)

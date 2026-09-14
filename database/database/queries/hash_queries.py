@@ -47,6 +47,36 @@ class HashQueries(BaseQueries):
         return "SELECT hash FROM hashs WHERE id = %s"
     
     @staticmethod
+    def check_duplicate_document() -> str:
+        """Return ``(hash id, path id)`` for a stored duplicate, or no row.
+
+        ``check_duplicate()`` answers "does a live path reference this hash?"
+        and returns the *path* id.  Callers that need the hash id as well must
+        not reuse that value: paths and hashs are independent id spaces, so a
+        path id interpreted as a hash id resolves to an unrelated file.  This
+        query returns both ids from the same row, unambiguously.
+        """
+        return """
+            SELECT h.id, p.id
+            FROM hashs h
+            JOIN paths p ON p.hash_id = h.id
+            WHERE h.hash = %s AND h.source_id = %s AND h.side_id = %s
+            ORDER BY p.id
+            LIMIT 1
+        """
+
+    @staticmethod
+    def get_hash_id_by_value() -> str:
+        """Return the id of the hash row for a value/source/side, or no row."""
+        return """
+            SELECT id
+            FROM hashs
+            WHERE hash = %s AND source_id = %s AND side_id = %s
+            ORDER BY id
+            LIMIT 1
+        """
+
+    @staticmethod
     def check_duplicate() -> str:
         """Check if content is a duplicate.
 

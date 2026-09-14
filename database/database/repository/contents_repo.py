@@ -1,8 +1,11 @@
 from .best_repo import BaseRepository
+import logging
 import zlib
 from ..queries.content_queries import ContentQueries
 from ..queries.word_queries import WordQueries
 from core.serialization import pack_mapping, unpack_mapping
+
+logger = logging.getLogger(__name__)
 
 class ContentsRepository(BaseRepository):
     """
@@ -80,8 +83,12 @@ class ContentsRepository(BaseRepository):
                 return raw
         except Exception as raw_err:
             # Missing table (pre-m0010 database) or transient error: fall
-            # back to the legacy reconstruction rather than failing.
-            print(f"Raw content unavailable for path {path_id}: {raw_err}")
+            # back to the legacy reconstruction rather than failing (this is
+            # a read path - the caller only wants text to display).
+            logger.warning(
+                "Raw content unavailable for path %s, falling back to word "
+                "join: %s", path_id, raw_err,
+            )
 
         return self._load_word_join_content(path_id)
 
@@ -123,16 +130,28 @@ class ContentsRepository(BaseRepository):
                             # Fallback: if it's just a list of word IDs (shouldn't happen in new format)
                             all_word_ids.extend(symbol_pairs)
                 except Exception as e:
-                    print(f"Error loading content chunk: {e}")
+                    logger.warning(
+                        "Could not decode content chunk for path %s: %s", path_id, e
+                    )
                     continue
-        
+
         if not all_word_ids:
             return ""
-        
-        # Convert word IDs to words
-        # Get all words as {id: word} dictionary
-        word_rows = self.execute(WordQueries.get_all(), None, False, True)  # fetchall=True
-        dictionary = dict(word_rows) if word_rows else {}  # {id:word,id:word}
+
+        # Convert word IDs to words, looking up only the ids this document
+        # actually contains (the previous implementation loaded the entire
+        # words table on every display request).
+        dictionary = {}
+        unique_ids = list(dict.fromkeys(all_word_ids))
+        batch_size = 10000
+        for start in range(0, len(unique_ids), batch_size):
+            batch = unique_ids[start:start + batch_size]
+            word_rows = self.execute(
+                WordQueries.get_words_by_ids(), (batch,), fetchall=True
+            )
+            if word_rows:
+                dictionary.update({row[0]: row[1] for row in word_rows})
+
         return " ".join(dictionary.get(i, f"[ID:{i}]") for i in all_word_ids)
 
     def store_raw_content(self, path_id, text, chunk_size=1024 * 1024):
@@ -201,7 +220,7 @@ class ContentsRepository(BaseRepository):
                             all_word_ids.extend(symbol_pairs)
                 except Exception as e:
                     # If decompression/parsing fails, skip this chunk
-                    print(f"Error loading content chunk: {e}")
+                    logger.warning("Error loading content chunk for path %s: %s", path_id, e)
                     continue
         
         return all_word_ids
@@ -328,13 +347,13 @@ class ContentsRepository(BaseRepository):
         
         # If compressed size is within limit, store as single chunk
         if len(compressed) <= max_chunk_size:
-            try:
-                last_id = self.execute(
-                    ContentQueries.insert_content(), (compressed, date, path_id), True)
-                return [last_id] if last_id else []
-            except Exception as e:
-                print(f"Error storing symbol pairs: {e}")
-                return []
+            # Errors are NOT swallowed here: returning [] would make the
+            # caller believe the content was stored while the document kept
+            # only its word index, and the failure would stay invisible in
+            # the logs.  Let the transaction owner decide (it rolls back).
+            last_id = self.execute(
+                ContentQueries.insert_content(), (compressed, date, path_id), True)
+            return [last_id] if last_id else []
         
         # Content is too large, split into chunks
         chunk_ids = []
@@ -373,14 +392,14 @@ class ContentsRepository(BaseRepository):
             chunk_pickled = pack_mapping(chunk_data)
             chunk_compressed = zlib.compress(chunk_pickled)
             
-            try:
-                last_id = self.execute(
-                    ContentQueries.insert_content(), (chunk_compressed, date, path_id), True)
-                if last_id:
-                    chunk_ids.append(last_id)
-            except Exception as e:
-                print(f"Error storing symbol pairs chunk: {e}")
-            
+            # Propagate chunk failures: a partially stored document is worse
+            # than a clean rollback (the caller must not keep ids of content
+            # rows whose transaction is going to be discarded).
+            last_id = self.execute(
+                ContentQueries.insert_content(), (chunk_compressed, date, path_id), True)
+            if last_id:
+                chunk_ids.append(last_id)
+
             chunk_start = best_chunk_end
         
         return chunk_ids
@@ -425,11 +444,11 @@ class ContentsRepository(BaseRepository):
                                 ))
                             else:
                                 # Invalid format - skip
-                                print(f"Warning: Invalid symbol pair format: {pair}")
+                                logger.warning("Invalid symbol pair format: %s", pair)
                     else:
-                        print(f"Warning: Expected list of symbol pairs, got {type(symbol_pairs)}")
+                        logger.warning("Expected list of symbol pairs, got %s", type(symbol_pairs).__name__)
                 except Exception as e:
-                    print(f"Error loading symbol pairs: {e}")
+                    logger.warning("Error loading symbol pairs for path %s: %s", path_id, e)
                     continue
         
         return all_symbol_pairs

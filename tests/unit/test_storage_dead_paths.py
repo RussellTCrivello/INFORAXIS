@@ -104,7 +104,25 @@ class TestDisabledBlock:
         ]
         assert blocks, "the disabled block is no longer a string literal"
         block = blocks[0]
-        assert block.lineno < 1100 and (block.end_lineno or 0) > 1300
+
+        # The block must stay a string literal *inside* the storage helper, so
+        # it cannot execute.  Assert the structural property instead of the
+        # literal line numbers, which move whenever the helper above it grows.
+        enclosing = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.lineno <= block.lineno <= (node.end_lineno or node.lineno)
+        ]
+        assert enclosing, "the disabled block is no longer inside a function"
+        innermost = max(enclosing, key=lambda node: node.lineno)
+        assert innermost.name == "_store_file_sync", (
+            f"the disabled legacy block moved out of _store_file_sync "
+            f"(now in {innermost.name})"
+        )
+        assert (block.end_lineno or 0) - block.lineno > 200, (
+            "the disabled legacy block shrank unexpectedly"
+        )
 
     def test_every_path_operations_site_is_inside_that_string(self):
         sites, _textual, in_string, _lines = operation_sites(PIPELINE)
