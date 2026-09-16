@@ -226,13 +226,22 @@
         {% for source in sources|sort(attribute='importance', reverse=True) %}
         <div class="col-md-6 col-lg-4 col-xl-3 source-card-item" 
              data-name="{{ source.name|lower }}"
+             data-display-name="{{ source.name|e }}"
+             data-job="{{ (source.job or '')|e }}"
              data-importance="{{ source.importance }}"
              data-doc-count="{{ source.doc_count }}"
              data-id="{{ source.id }}"
              data-country="{{ (source.country or '')|lower }}"
+             data-country-label="{{ (source.country or '')|e }}"
              data-city="{{ (source.city or '')|lower }}"
+             data-city-label="{{ (source.city or '')|e }}"
              data-ownership="{{ (source.ownership or '')|lower }}"
-             data-access-status="{{ (source.access_status or '')|lower }}">
+             data-ownership-label="{{ (source.ownership or '')|e }}"
+             data-access-status="{{ (source.access_status or '')|lower }}"
+             data-access-status-label="{{ (source.access_status or '')|e }}"
+             data-category-name="{{ (source.category_name or '')|e }}"
+             data-category-id="{{ source.category_id or '' }}"
+             data-discovery-date="{% if source.date_source_discovery is string %}{{ source.date_source_discovery|e }}{% elif source.date_source_discovery %}{{ source.date_source_discovery.strftime('%Y-%m-%d')|e }}{% endif %}">
             <div class="id-card">
                 <div class="id-card-header">
                     <div class="id-card-icon">
@@ -678,7 +687,24 @@
         "sourceUpdatedSuccessfully": _('Source updated successfully!'),
         "sourceCreatedSuccessfully": _('Source created successfully!'),
         "error": _('Error'),
-        "errorSavingSource": _('Error saving source')
+        "errorSavingSource": _('Error saving source'),
+        "view": _('View'),
+        "viewDetails": _('View Details'),
+        "duplicateSource": _('Duplicate Source'),
+        "exportData": _('Export Data'),
+        "viewCategoriesKeywords": _('View Categories & Keywords'),
+        "sourceActions": _('Source actions'),
+        "documents": _('Documents'),
+        "select": _('Select'),
+        "jobType": _('Job/Type'),
+        "location": _('Location'),
+        "importance": _('Importance'),
+        "access": _('Access'),
+        "category": _('Category'),
+        "discovery": _('Discovery'),
+        "source": _('Source'),
+        "actions": _('Actions'),
+        "ownership": _('Ownership')
     }
 }|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/sources-list-page.js') }}"></script>

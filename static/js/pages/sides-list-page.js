@@ -91,23 +91,286 @@ function debounce(func, wait) {
     };
 }
 
+
+function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+}
+
+function escapeAttr(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function safeLocalStorageRef() {
+    try {
+        return window.localStorage || null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function getRecordContainer() {
+    return document.getElementById('sidesCardContainer');
+}
+
+function sideFromElement(item) {
+    const dataset = item.dataset || {};
+    const displayName = dataset.displayName || item.querySelector('.id-card-name')?.textContent?.trim() || dataset.name || '';
+    return {
+        id: String(dataset.id || '').trim(),
+        name: String(dataset.name || displayName).toLowerCase(),
+        nameDisplay: displayName,
+        importance: parseFloat(dataset.importance) || 0,
+        docCount: parseInt(dataset.docCount, 10) || 0,
+        sourceCount: parseInt(dataset.sourceCount, 10) || 0,
+        createdDate: dataset.createdDate || '',
+        element: item
+    };
+}
+
+function normalizeSideRecord(side) {
+    const displayName = side.nameDisplay || side.name || '';
+    return {
+        id: String(side.id || '').trim(),
+        name: String(displayName).toLowerCase(),
+        nameDisplay: displayName,
+        importance: Number.isFinite(Number(side.importance)) ? Number(side.importance) : 0.5,
+        docCount: Number.isFinite(Number(side.docCount)) ? Number(side.docCount) : 0,
+        sourceCount: Number.isFinite(Number(side.sourceCount)) ? Number(side.sourceCount) : 0,
+        createdDate: side.createdDate || '',
+        element: side.element || null
+    };
+}
+
+function formatImportance(value) {
+    const numeric = Math.max(0, Math.min(1, Number(value) || 0));
+    return `${Math.round(numeric * 100)}%`;
+}
+
+function renderStars(value) {
+    const stars = Math.round((Number(value) || 0) * 5);
+    let html = '';
+    for (let i = 0; i < 5; i += 1) {
+        html += `<i class="bi ${i < stars ? 'bi-star-fill text-warning' : 'bi-star text-muted'}"></i>`;
+    }
+    return html;
+}
+
+function sideActions(side, compact = false) {
+    const id = escapeAttr(side.id);
+    const nameJson = escapeAttr(JSON.stringify(side.nameDisplay || ''));
+    const viewLabel = translations.viewDetails || translations.view || 'View';
+    const label = compact ? '' : ` <span class="d-none d-xl-inline">${escapeHtml(viewLabel)}</span>`;
+    return `
+        <div class="btn-group btn-group-sm ia-action-group" role="group" aria-label="${escapeAttr(translations.sideActions || 'Side actions')}">
+            <button class="btn btn-outline-primary" onclick="viewSide(${id})" title="${escapeAttr(viewLabel)}"><i class="bi bi-eye"></i>${label}</button>
+            <button class="btn btn-outline-success" onclick="editSide(${id})" title="${escapeAttr(translations.editSide || 'Edit side')}"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-outline-info" onclick="duplicateSide(${id})" title="${escapeAttr(translations.duplicateSide || 'Duplicate side')}"><i class="bi bi-files"></i></button>
+            <button class="btn btn-outline-secondary" onclick="exportSide(${id})" title="${escapeAttr(translations.exportData || 'Export data')}"><i class="bi bi-download"></i></button>
+            <button class="btn btn-outline-primary" onclick="viewSideCategoriesKeywords(${id})" title="${escapeAttr(translations.viewCategoriesKeywords || 'View categories and keywords')}"><i class="bi bi-tags"></i></button>
+            <button class="btn btn-outline-danger" onclick='deleteSide(${id}, ${nameJson})' title="${escapeAttr(translations.deleteSide || 'Delete side')}"><i class="bi bi-trash"></i></button>
+        </div>`;
+}
+
+function createSideCard(side) {
+    const card = document.createElement('div');
+    card.className = 'col-md-6 col-lg-4 col-xl-3 side-card-item';
+    card.dataset.name = side.name;
+    card.dataset.displayName = side.nameDisplay;
+    card.dataset.importance = side.importance;
+    card.dataset.docCount = side.docCount;
+    card.dataset.sourceCount = side.sourceCount;
+    card.dataset.createdDate = side.createdDate || '';
+    card.dataset.id = side.id;
+    card.innerHTML = `
+        <div class="id-card ia-record-card">
+            <div class="id-card-header">
+                <div class="id-card-icon"><i class="bi bi-diagram-3"></i></div>
+                <div class="id-card-id"><span class="badge bg-secondary">#${escapeHtml(side.id)}</span></div>
+            </div>
+            <div class="id-card-body">
+                <h3 class="id-card-name">${escapeHtml(side.nameDisplay)}</h3>
+                <div class="id-card-info">
+                    <div class="id-card-field"><i class="bi bi-star text-muted"></i><span class="id-card-label">${escapeHtml(translations.importance || 'Importance')}:</span><div class="id-card-stars">${renderStars(side.importance)}<span class="ms-2 text-muted">(${formatImportance(side.importance)})</span></div></div>
+                    <div class="id-card-field"><i class="bi bi-building text-muted"></i><span class="id-card-label">${escapeHtml(translations.sources || 'Sources')}:</span><span class="badge bg-info">${side.sourceCount}</span></div>
+                    <div class="id-card-field"><i class="bi bi-file-earmark text-muted"></i><span class="id-card-label">${escapeHtml(translations.documents || 'Documents')}:</span><span class="badge bg-primary">${side.docCount}</span></div>
+                    <div class="id-card-field"><i class="bi bi-calendar text-muted"></i><span class="id-card-label">${escapeHtml(translations.created || 'Created')}:</span><span class="id-card-value">${escapeHtml(side.createdDate || '—')}</span></div>
+                </div>
+            </div>
+            <div class="id-card-footer">
+                <div class="d-flex align-items-center mb-2">
+                    <input type="checkbox" class="form-check-input side-checkbox me-2" value="${escapeAttr(side.id)}" onchange="updateBulkButtons()" aria-label="Select side: ${escapeAttr(side.nameDisplay)}">
+                    <small class="text-muted">${escapeHtml(translations.select || 'Select')}</small>
+                </div>
+                ${sideActions(side, true)}
+            </div>
+        </div>`;
+    return card;
+}
+
+function ensureStructuredViews() {
+    const grid = getRecordContainer();
+    if (!grid || !grid.parentElement) return {};
+    let tableView = document.getElementById('sidesTableView');
+    let listView = document.getElementById('sidesListView');
+    if (!tableView) {
+        tableView = document.createElement('div');
+        tableView.id = 'sidesTableView';
+        tableView.className = 'sides-structured-view d-none';
+        grid.parentElement.insertBefore(tableView, grid.nextSibling);
+    }
+    if (!listView) {
+        listView = document.createElement('div');
+        listView.id = 'sidesListView';
+        listView.className = 'sides-structured-view ia-record-list d-none';
+        grid.parentElement.insertBefore(listView, tableView.nextSibling);
+    }
+    return { grid, tableView, listView };
+}
+
+function renderSidesTable(records) {
+    const { tableView } = ensureStructuredViews();
+    if (!tableView) return;
+    tableView.innerHTML = `
+        <div class="table-wrapper sides-table-wrapper">
+            <table class="table table-hover align-middle sides-table" id="sidesTable" data-ia-table="sides" data-ia-sort="true">
+                <thead>
+                    <tr>
+                        <th style="width:44px"><input type="checkbox" onchange="this.closest('table').querySelectorAll('.side-checkbox').forEach(cb => cb.checked = this.checked); updateBulkButtons();"></th>
+                        <th>ID</th><th>${escapeHtml(translations.side || 'Side')}</th><th>${escapeHtml(translations.importance || 'Importance')}</th><th>${escapeHtml(translations.sources || 'Sources')}</th><th>${escapeHtml(translations.documents || 'Documents')}</th><th>${escapeHtml(translations.created || 'Created')}</th><th>${escapeHtml(translations.actions || 'Actions')}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${records.map(side => `
+                        <tr data-side-id="${escapeAttr(side.id)}">
+                            <td><input type="checkbox" class="form-check-input side-checkbox" value="${escapeAttr(side.id)}" onchange="updateBulkButtons()"></td>
+                            <td><span class="badge bg-secondary">#${escapeHtml(side.id)}</span></td>
+                            <td><strong title="${escapeAttr(side.nameDisplay)}">${escapeHtml(side.nameDisplay)}</strong></td>
+                            <td data-sort-value="${Number(side.importance) || 0}"><span class="badge bg-primary">${formatImportance(side.importance)}</span></td>
+                            <td data-sort-value="${side.sourceCount}"><span class="badge bg-info">${side.sourceCount}</span></td>
+                            <td data-sort-value="${side.docCount}"><span class="badge bg-primary">${side.docCount}</span></td>
+                            <td>${escapeHtml(side.createdDate || '—')}</td>
+                            <td>${sideActions(side, true)}</td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+}
+
+function renderSidesList(records) {
+    const { listView } = ensureStructuredViews();
+    if (!listView) return;
+    listView.innerHTML = records.map(side => `
+        <div class="ia-record-list-row side-card-item" data-id="${escapeAttr(side.id)}" data-name="${escapeAttr(side.name)}">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="min-w-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-secondary">#${escapeHtml(side.id)}</span>
+                        <strong class="ia-truncate" title="${escapeAttr(side.nameDisplay)}">${escapeHtml(side.nameDisplay)}</strong>
+                        <span class="badge bg-primary">${formatImportance(side.importance)}</span>
+                    </div>
+                    <div class="small text-muted mt-1">${side.sourceCount} ${escapeHtml((translations.sources || 'sources').toLowerCase())} · ${side.docCount} ${escapeHtml((translations.documents || 'documents').toLowerCase())} · ${escapeHtml(side.createdDate || (translations.noCreationDate || 'No creation date'))}</div>
+                </div>
+                ${sideActions(side, true)}
+            </div>
+        </div>`).join('');
+}
+
+function renderCurrentFormat() {
+    const { grid, tableView, listView } = ensureStructuredViews();
+    if (!grid) return;
+
+    grid.classList.toggle('d-none', currentFormat !== 'grid');
+    if (tableView) tableView.classList.toggle('d-none', currentFormat !== 'table');
+    if (listView) listView.classList.toggle('d-none', currentFormat !== 'list');
+
+    if (currentFormat === 'grid') {
+        filteredSides.forEach((side, index) => {
+            if (!side.element) {
+                side.element = createSideCard(side);
+                grid.appendChild(side.element);
+            }
+            side.element.style.display = '';
+            side.element.style.order = index;
+        });
+        allSides.forEach(side => {
+            if (!filteredSides.includes(side) && side.element) side.element.style.display = 'none';
+        });
+    } else {
+        allSides.forEach(side => {
+            if (side.element) side.element.style.display = 'none';
+        });
+        if (currentFormat === 'table') renderSidesTable(filteredSides);
+        if (currentFormat === 'list') renderSidesList(filteredSides);
+    }
+
+    window.InforaxisDataInterface?.refresh(grid.parentElement || document);
+}
+
+function upsertSideRecord(side, highlight = true) {
+    const normalized = normalizeSideRecord(side);
+    const index = allSides.findIndex(item => String(item.id) === String(normalized.id));
+    if (index >= 0) {
+        normalized.element = allSides[index].element;
+        if (normalized.element) {
+            const replacement = createSideCard(normalized);
+            normalized.element.replaceWith(replacement);
+            normalized.element = replacement;
+        }
+        allSides[index] = normalized;
+    } else {
+        normalized.element = createSideCard(normalized);
+        getRecordContainer()?.appendChild(normalized.element);
+        allSides.unshift(normalized);
+    }
+    applyFilters();
+    if (highlight) {
+        const selector = currentFormat === 'table'
+            ? `#sidesTable tr[data-side-id="${CSS.escape(String(normalized.id))}"]`
+            : currentFormat === 'list'
+                ? `#sidesListView [data-id="${CSS.escape(String(normalized.id))}"]`
+                : normalized.element;
+        window.InforaxisDataInterface?.highlightNewRecord(selector);
+    }
+}
+
+function removeSideRecord(sideId) {
+    const index = allSides.findIndex(item => String(item.id) === String(sideId));
+    if (index >= 0) {
+        const [removed] = allSides.splice(index, 1);
+        removed.element?.remove();
+    }
+    document.querySelectorAll(`[data-side-id="${CSS.escape(String(sideId))}"], .side-card-item[data-id="${CSS.escape(String(sideId))}"]`).forEach(el => el.remove());
+    applyFilters();
+    updateBulkButtons();
+}
+
 // Initialize sides data from DOM
 function initializeSidesData() {
-    const sideItems = document.querySelectorAll('.side-card-item');
-    allSides = [];
-    
+    const sideItems = document.querySelectorAll('.side-card-item[data-id]');
+    const map = new Map();
+
     sideItems.forEach(item => {
-        allSides.push({
-            id: item.getAttribute('data-id'),
-            name: item.getAttribute('data-name'),
-            importance: parseFloat(item.getAttribute('data-importance')) || 0,
-            docCount: parseInt(item.getAttribute('data-doc-count')) || 0,
-            sourceCount: parseInt(item.getAttribute('data-source-count')) || 0,
-            element: item
-        });
+        const side = sideFromElement(item);
+        if (side.id && !map.has(side.id)) {
+            map.set(side.id, side);
+        }
     });
-    
+
+    allSides = Array.from(map.values());
     filteredSides = [...allSides];
+
+    const formatSelect = document.getElementById('displayFormat');
+    const savedFormat = safeLocalStorageRef()?.getItem('inforaxis.sides.displayFormat');
+    if (formatSelect && savedFormat && Array.from(formatSelect.options).some(option => option.value === savedFormat)) {
+        currentFormat = savedFormat;
+        formatSelect.value = savedFormat;
+    } else if (formatSelect) {
+        currentFormat = formatSelect.value || currentFormat;
+    }
+
+    ensureStructuredViews();
     updateStats();
 }
 
@@ -115,50 +378,52 @@ function initializeSidesData() {
 function updateStats() {
     const totalCount = allSides.length;
     const filteredCount = filteredSides.length;
-    const visibleCount = document.querySelectorAll('.side-card-item:not([style*="display: none"])').length;
-    
+    const visibleCount = filteredSides.length;
+
     const totalEl = document.getElementById('totalSidesCount');
     const filteredEl = document.getElementById('filteredSidesCount');
     const visibleEl = document.getElementById('visibleSidesCount');
-    
-    if (totalEl) totalEl.textContent = totalCount;
-    if (filteredEl) filteredEl.textContent = filteredCount;
-    if (visibleEl) visibleEl.textContent = visibleCount;
+    const pageEl = document.getElementById('currentPageInfo');
+
+    if (totalEl) totalEl.textContent = totalCount.toLocaleString();
+    if (filteredEl) filteredEl.textContent = filteredCount.toLocaleString();
+    if (visibleEl) visibleEl.textContent = visibleCount.toLocaleString();
+    if (pageEl && filteredCount <= allSides.length) pageEl.textContent = `1 / ${Math.max(1, Math.ceil(filteredCount / Math.max(1, itemsPerPage)))}`;
 }
 
 // Apply filters and sorting
 function applyFilters() {
     const searchInput = document.getElementById('sideSearch');
     const sortBy = document.getElementById('sortBy');
-    
-    const searchTerm = (searchInput?.value || '').toLowerCase();
+
+    const searchTerm = (searchInput?.value || '').toLowerCase().trim();
     currentSort = sortBy?.value || 'importance-desc';
-    
-    // Filter
+
     filteredSides = allSides.filter(side => {
-        if (searchTerm && !side.name.includes(searchTerm)) {
-            return false;
-        }
-        return true;
+        if (!searchTerm) return true;
+        return [side.name, side.nameDisplay]
+            .join(' ')
+            .toLowerCase()
+            .includes(searchTerm);
     });
-    
-    // Sort
+
     const [sortField, sortDirection] = currentSort.split('-');
     filteredSides.sort((a, b) => {
-        let aVal, bVal;
-        
-        switch(sortField) {
+        let aVal;
+        let bVal;
+
+        switch (sortField) {
             case 'name':
-                aVal = a.name || '';
-                bVal = b.name || '';
+                aVal = a.nameDisplay || a.name || '';
+                bVal = b.nameDisplay || b.name || '';
                 break;
             case 'importance':
                 aVal = a.importance || 0;
                 bVal = b.importance || 0;
                 break;
             case 'id':
-                aVal = parseInt(a.id) || 0;
-                bVal = parseInt(b.id) || 0;
+                aVal = parseInt(a.id, 10) || 0;
+                bVal = parseInt(b.id, 10) || 0;
                 break;
             case 'doc_count':
                 aVal = a.docCount || 0;
@@ -169,32 +434,17 @@ function applyFilters() {
                 bVal = b.sourceCount || 0;
                 break;
             default:
-                aVal = a.name || '';
-                bVal = b.name || '';
+                aVal = a.nameDisplay || a.name || '';
+                bVal = b.nameDisplay || b.name || '';
         }
-        
-        if (sortDirection === 'asc') {
-            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-        } else {
-            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-        }
+
+        const result = typeof aVal === 'number' && typeof bVal === 'number'
+            ? aVal - bVal
+            : String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
+        return sortDirection === 'asc' ? result : -result;
     });
-    
-    // Show/hide cards
-    filteredSides.forEach((side, index) => {
-        if (side.element) {
-            side.element.style.display = '';
-            side.element.style.order = index;
-        }
-    });
-    
-    // Hide non-matching cards
-    allSides.forEach(side => {
-        if (!filteredSides.includes(side) && side.element) {
-            side.element.style.display = 'none';
-        }
-    });
-    
+
+    renderCurrentFormat();
     updateStats();
 }
 
@@ -202,14 +452,11 @@ function applyFilters() {
 function changeDisplayFormat() {
     const formatSelect = document.getElementById('displayFormat');
     if (!formatSelect) return;
-    
-    currentFormat = formatSelect.value;
-    const container = document.getElementById('sidesCardContainer');
-    if (!container) return;
-    
-    // For now, grid is the default - table/list views would require template changes
-    // This is a placeholder for future implementation
-    console.log('Display format changed to:', currentFormat);
+
+    currentFormat = formatSelect.value || 'grid';
+    safeLocalStorageRef()?.setItem('inforaxis.sides.displayFormat', currentFormat);
+    renderCurrentFormat();
+    updateBulkButtons();
 }
 
 // Change page size
@@ -229,37 +476,45 @@ function changePageSize() {
 }
 
 // Selection management
+function getActiveSidesContainer() {
+    return currentFormat === 'table'
+        ? document.getElementById('sidesTableView')
+        : currentFormat === 'list'
+            ? document.getElementById('sidesListView')
+            : document.getElementById('sidesCardContainer');
+}
+
+function getSelectedSideIds() {
+    const activeContainer = getActiveSidesContainer();
+    const checkboxes = activeContainer ? activeContainer.querySelectorAll('.side-checkbox:checked') : document.querySelectorAll('.side-checkbox:checked');
+    return Array.from(new Set(Array.from(checkboxes).map(cb => parseInt(cb.value, 10)).filter(Boolean)));
+}
+
 function selectAll() {
-    const checkboxes = document.querySelectorAll('.side-checkbox');
-    checkboxes.forEach(cb => {
-        if (cb.closest('.side-card-item') && !cb.closest('.side-card-item').style.display.includes('none')) {
-            cb.checked = true;
-        }
-    });
+    const activeContainer = getActiveSidesContainer();
+    const checkboxes = activeContainer ? activeContainer.querySelectorAll('.side-checkbox') : document.querySelectorAll('.side-checkbox');
+    checkboxes.forEach(cb => { cb.checked = true; });
     updateBulkButtons();
 }
 
 function selectNone() {
-    const checkboxes = document.querySelectorAll('.side-checkbox');
-    checkboxes.forEach(cb => cb.checked = false);
+    document.querySelectorAll('.side-checkbox').forEach(cb => { cb.checked = false; });
     updateBulkButtons();
 }
 
 function updateBulkButtons() {
-    const checkboxes = document.querySelectorAll('.side-checkbox:checked');
-    const hasSelection = checkboxes.length > 0;
-    
+    const hasSelection = getSelectedSideIds().length > 0;
+
     const bulkExportBtn = document.getElementById('bulkExportBtn');
     const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
-    
+
     if (bulkExportBtn) bulkExportBtn.disabled = !hasSelection;
     if (bulkUpdateBtn) bulkUpdateBtn.disabled = !hasSelection;
 }
 
 // Bulk operations
 function bulkExport() {
-    const checkboxes = document.querySelectorAll('.side-checkbox:checked');
-    const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const selectedIds = getSelectedSideIds();
     
     if (selectedIds.length === 0) {
         showToast('Please select sides to export', 'warning');
@@ -272,8 +527,7 @@ function bulkExport() {
 }
 
 function bulkUpdate() {
-    const checkboxes = document.querySelectorAll('.side-checkbox:checked');
-    const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const selectedIds = getSelectedSideIds();
     
     if (selectedIds.length === 0) {
         showToast('Please select sides to update', 'warning');
@@ -387,10 +641,24 @@ function duplicateSide(sideId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                const original = allSides.find(side => String(side.id) === String(sideId));
+                if (original && data.new_side_id) {
+                    const duplicated = normalizeSideRecord({
+                        ...original,
+                        id: data.new_side_id,
+                        name: data.new_name || `${original.nameDisplay} (Copy)`,
+                        nameDisplay: data.new_name || `${original.nameDisplay} (Copy)`,
+                        docCount: 0,
+                        sourceCount: 0,
+                        element: null
+                    });
+                    upsertSideRecord(duplicated, true);
+                } else {
+                    setTimeout(() => {
+                        window.location.href = window.location.pathname + '?t=' + Date.now();
+                    }, 500);
+                }
                 showToast(translations.sideDuplicatedSuccessfully || 'Side duplicated successfully!', 'success');
-                setTimeout(() => {
-                    window.location.href = window.location.pathname + '?t=' + Date.now();
-                }, 500);
             } else {
                 showToast((translations.errorDuplicatingSide || 'Error duplicating side') + ': ' + (data.message || (translations.unknownError || 'Unknown error')), 'error');
             }
@@ -473,9 +741,7 @@ function deleteSide(sideId, sideName = '') {
                 } else {
                     showToast(translations.sideDeletedSuccessfully || 'Side deleted successfully!', 'success');
                 }
-                setTimeout(() => {
-                    window.location.href = window.location.pathname + '?t=' + Date.now();
-                }, 500);
+                removeSideRecord(sideId);
             } else {
                 // Show formatted error notification
                 if (window.MessageFormatter) {
@@ -562,158 +828,92 @@ function openSideModal(sideId = null) {
     modal.show();
 }
 
-function submitSideForm() {
+async function submitSideForm() {
     const form = document.getElementById('sideForm');
     const sideId = document.getElementById('sideId').value;
+    const submitButton = document.querySelector('#sideModal .modal-footer .btn-primary');
     const formData = new FormData(form);
-    
-    // Validate required fields
+
     if (!formData.get('name')) {
+        form.classList.add('was-validated');
         showToast(translations.pleaseFillInSideName || 'Please fill in the side name', 'warning');
         return;
     }
-    
-    // Convert FormData to JSON
+
     const data = {
         name: formData.get('name'),
         importance: parseFloat(formData.get('importance')) || 0.5
     };
-    
+
     const url = sideId ? `/api/sides/${sideId}` : '/api/sides';
     const method = sideId ? 'PUT' : 'POST';
-    
-    // ✅ SECURITY: Get CSRF token
+    const sideName = data.name || 'Side';
+    const isEdit = !!sideId;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    
-    fetch(url, {
-        method: method,
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => {
-        console.log('Response status:', response.status);
-        // Check if response is ok (status 200-299)
-        if (!response.ok) {
-            return response.json().then(err => {
-                console.error('Error response:', err);
-                throw new Error(err.error || `HTTP error! status: ${response.status}`);
-            });
+
+    window.InforaxisDataInterface?.setButtonBusy(submitButton, true, {
+        label: isEdit ? (translations.updateSide || 'Update Side') : (translations.createSide || 'Create Side')
+    });
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.success === false) {
+            throw new Error(result.error || `HTTP error! status: ${response.status}`);
         }
-        return response.json();
-    })
-    .then(result => {
-        console.log('Response result:', result);
-        // Get side name from form
-        const sideName = document.getElementById('sideName')?.value || 'Side';
-        
-        // Check if result has success field (POST/PUT responses)
-        if (result && result.success !== undefined) {
-            if (result.success) {
-                // Show formatted success notification
-                const isEdit = sideId ? true : false;
-                if (window.MessageFormatter && typeof window.MessageFormatter.showCreateSuccess === 'function') {
-                    if (isEdit) {
-                        window.MessageFormatter.showUpdateSuccess(sideName, {
-                            title: 'Side Updated',
-                            duration: 4000
-                        });
-                    } else {
-                        window.MessageFormatter.showCreateSuccess(sideName, {
-                            title: 'Side Created',
-                            duration: 4000
-                        });
-                    }
-                } else {
-                    showToast(
-                        isEdit ? (translations.sideUpdatedSuccessfully || 'Side updated successfully!') : (translations.sideCreatedSuccessfully || 'Side created successfully!'),
-                        'success'
-                    );
-                }
-                
-                // Close modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('sideModal'));
-                if (modal) {
-                    modal.hide();
-                }
-                
-                // Small delay to ensure modal closes before reload
-                // Add cache-busting parameter to ensure fresh data
-                setTimeout(() => {
-                    window.location.href = window.location.pathname + '?t=' + Date.now();
-                }, 500);
+
+        if (window.MessageFormatter && typeof window.MessageFormatter.showCreateSuccess === 'function') {
+            if (isEdit) {
+                window.MessageFormatter.showUpdateSuccess(sideName, { title: 'Side Updated', duration: 4000 });
             } else {
-                // Show formatted error notification
-                if (window.MessageFormatter && typeof window.MessageFormatter.showCreateError === 'function') {
-                    const isEdit = sideId ? true : false;
-                    if (isEdit) {
-                        window.MessageFormatter.showUpdateError(sideName, {
-                            title: 'Update Failed',
-                            duration: 6000
-                        });
-                    } else {
-                        window.MessageFormatter.showCreateError(sideName, {
-                            title: 'Create Failed',
-                            duration: 6000
-                        });
-                    }
-                } else {
-                    showToast((translations.error || 'Error') + ': ' + (result.error || (translations.unknownError || 'Unknown error')), 'error');
-                }
+                window.MessageFormatter.showCreateSuccess(sideName, { title: 'Side Created', duration: 4000 });
             }
         } else {
-            // If no success field but response was ok, assume it worked
-            console.log('No success field, but response was ok - assuming success');
-            const isEdit = sideId ? true : false;
-            if (window.MessageFormatter && typeof window.MessageFormatter.showCreateSuccess === 'function') {
-                if (isEdit) {
-                    window.MessageFormatter.showUpdateSuccess(sideName, {
-                        title: 'Side Updated',
-                        duration: 4000
-                    });
-                } else {
-                    window.MessageFormatter.showCreateSuccess(sideName, {
-                        title: 'Side Created',
-                        duration: 4000
-                    });
-                }
-            } else {
-                showToast(
-                    isEdit ? (translations.sideUpdatedSuccessfully || 'Side updated successfully!') : (translations.sideCreatedSuccessfully || 'Side created successfully!'),
-                    'success'
-                );
-            }
-            const modal = bootstrap.Modal.getInstance(document.getElementById('sideModal'));
-            if (modal) {
-                modal.hide();
-            }
-            setTimeout(() => {
-                window.location.href = window.location.pathname + '?t=' + Date.now();
-            }, 500);
+            showToast(
+                isEdit ? (translations.sideUpdatedSuccessfully || 'Side updated successfully!') : (translations.sideCreatedSuccessfully || 'Side created successfully!'),
+                'success'
+            );
         }
-    })
-    .catch(error => {
+
+        const savedId = String(sideId || result.id || result.side?.id || result.side_id || '');
+        if (savedId) {
+            const existing = allSides.find(item => String(item.id) === savedId);
+            upsertSideRecord({
+                id: savedId,
+                nameDisplay: sideName,
+                importance: data.importance,
+                docCount: existing?.docCount || 0,
+                sourceCount: existing?.sourceCount || 0,
+                createdDate: existing?.createdDate || new Date().toISOString().slice(0, 10),
+                element: existing?.element || null
+            }, true);
+        } else {
+            window.location.href = window.location.pathname + '?t=' + Date.now();
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('sideModal'))?.hide();
+        form.reset();
+    } catch (error) {
         console.error('Error saving side:', error);
-        const sideName = document.getElementById('sideName')?.value || 'Side';
-        const isEdit = sideId ? true : false;
         if (window.MessageFormatter && typeof window.MessageFormatter.showCreateError === 'function') {
             if (isEdit) {
-                window.MessageFormatter.showUpdateError(sideName, {
-                    title: 'Update Error',
-                    duration: 6000
-                });
+                window.MessageFormatter.showUpdateError(sideName, { title: 'Update Error', duration: 6000 });
             } else {
-                window.MessageFormatter.showCreateError(sideName, {
-                    title: 'Create Error',
-                    duration: 6000
-                });
+                window.MessageFormatter.showCreateError(sideName, { title: 'Create Error', duration: 6000 });
             }
         } else {
             showToast((translations.errorSavingSide || 'Error saving side') + ': ' + error.message, 'error');
         }
-    });
+    } finally {
+        window.InforaxisDataInterface?.setButtonBusy(submitButton, false);
+    }
 }
 
 // Make functions globally accessible for onclick handlers
@@ -724,6 +924,8 @@ window.toggleSideStatus = toggleSideStatus;
 window.deleteSide = deleteSide;
 window.openSideModal = openSideModal;
 window.submitSideForm = submitSideForm;
+window.viewSideCategoriesKeywords = viewSideCategoriesKeywords;
+window.exportSide = exportSide;
 
 // Initialize importance slider
 document.addEventListener('DOMContentLoaded', function() {

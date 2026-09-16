@@ -177,6 +177,8 @@
     <script type="module" src="{{ url_for('static', filename='js/modules/charts/chart-colors.js') }}" async></script>
     
     {% block extra_css %}{% endblock %}
+    <!-- Data Interface System - loaded after page CSS to unify tables and Add/Create workflows -->
+    <link href="{{ url_for('static', filename='css/data-interface.css') }}" rel="stylesheet" crossorigin="anonymous">
 
     <!-- ============================================================
          LOCALIZATION RUNTIME (loads before every other script)
@@ -782,6 +784,9 @@
     
     <!-- Page-Specific JavaScript -->
     {% block extra_js %}{% endblock %}
+
+    <!-- Data Interface System - progressive table/modal enhancement after page renderers -->
+    <script type="module" src="{{ url_for('static', filename='js/modules/core/data-interface.js') }}" defer></script>
     
     <!-- Universal Page Initializer (Load Last) -->
     <!-- User account menu (logout / change password) -->

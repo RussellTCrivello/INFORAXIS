@@ -306,8 +306,8 @@
                                 <span class="row-number">{{ row_number }}</span>
                             </td>
                             <td class="col-name">
-                                <span class="file-name" data-file-id="{{ file[0] }}">
-                                    <strong>{{ file[1][:50] }}{% if file[1]|length > 50 %}...{% endif %}</strong>
+                                <span class="file-name ia-truncate" data-file-id="{{ file[0] }}" title="{{ file[1] }}">
+                                    <strong>{{ file[1] }}</strong>
                                 </span>
                             </td>
                             <td class="col-type">

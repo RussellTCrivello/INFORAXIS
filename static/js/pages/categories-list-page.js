@@ -48,10 +48,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize event listeners
     initializeEventListeners();
     
-    // Set initial display format
+    // Set initial display format, preserving the analyst's density preference
     const formatSelect = document.getElementById('displayFormat');
     if (formatSelect) {
-        currentFormat = formatSelect.value || 'grid';
+        let savedFormat = null;
+        try { savedFormat = window.localStorage?.getItem('inforaxis.categories.displayFormat'); } catch (e) { savedFormat = null; }
+        if (savedFormat && Array.from(formatSelect.options).some(option => option.value === savedFormat)) {
+            currentFormat = savedFormat;
+            formatSelect.value = savedFormat;
+        } else {
+            currentFormat = formatSelect.value || 'grid';
+        }
     }
     
     // Initial render
@@ -494,6 +501,7 @@ function changeDisplayFormat() {
     const formatSelect = document.getElementById('displayFormat');
     if (formatSelect && formatSelect.value) {
         currentFormat = formatSelect.value;
+        try { window.localStorage?.setItem('inforaxis.categories.displayFormat', currentFormat); } catch (e) { /* ignore */ }
     }
     
     // Remove all view mode classes

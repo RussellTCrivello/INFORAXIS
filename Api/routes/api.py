@@ -126,7 +126,29 @@ def register_api_routes(app):
                             logger.warning(f"Could not clear cache after creating source: {e}")
                         
                         logger.info(f"Successfully created source: {name} (ID: {source_id})")
-                        return jsonify({'success': True, 'id': source_id, 'message': 'Source created successfully'}), 201
+                        source_payload = {
+                            'id': source_id,
+                            'name': name,
+                            'job': job,
+                            'importance': importance,
+                            'country': country,
+                            'city': city,
+                            'description': description,
+                            'accounts': accounts,
+                            'note': note,
+                            'attachments': attachments,
+                            'ownership': ownership,
+                            'access_status': access_status,
+                            'category_id': category_id,
+                            'date_source_discovery': entry_date.isoformat() if entry_date else None,
+                            'doc_count': 0,
+                        }
+                        return jsonify({
+                            'success': True,
+                            'id': source_id,
+                            'source': source_payload,
+                            'message': 'Source created successfully'
+                        }), 201
                     else:
                         logger.error(f"insert_source returned invalid ID: {source_id}")
                         return jsonify({'success': False, 'error': 'Failed to create source: Invalid source ID returned'}), 500
@@ -353,7 +375,27 @@ def register_api_routes(app):
                     logger.warning(f"Could not clear cache after updating source: {e}")
                 
                 logger.info(f"Successfully updated source: {source_id}")
-                return jsonify({'success': True, 'message': 'Source updated successfully'})
+                source_payload = {
+                    'id': source_id,
+                    'name': update_params.get('name'),
+                    'job': update_params.get('job'),
+                    'importance': update_params.get('importance'),
+                    'country': update_params.get('country'),
+                    'city': update_params.get('city'),
+                    'description': update_params.get('description'),
+                    'accounts': update_params.get('accounts'),
+                    'note': update_params.get('note'),
+                    'attachments': update_params.get('attachments'),
+                    'ownership': update_params.get('ownership'),
+                    'access_status': update_params.get('access_status'),
+                    'category_id': update_params.get('category_id'),
+                    'date_source_discovery': entry_date_value.isoformat() if entry_date_value else None,
+                }
+                return jsonify({
+                    'success': True,
+                    'source': source_payload,
+                    'message': 'Source updated successfully'
+                })
             except Exception as e:
                 logger.error(f"Error updating source {source_id}: {e}", exc_info=True)
                 return client_error(e, subsystem='Api.routes.api', success_key='success', status=500)
@@ -541,7 +583,19 @@ def register_api_routes(app):
                         logger.warning(f"Could not clear cache after creating side: {e}")
                     
                     logger.info(f"Successfully created side: {name} (ID: {side_id})")
-                    return jsonify({'success': True, 'id': side_id, 'message': 'Side created successfully'}), 201
+                    side_payload = {
+                        'id': side_id,
+                        'name': name,
+                        'importance': importance,
+                        'doc_count': 0,
+                        'source_count': 0,
+                    }
+                    return jsonify({
+                        'success': True,
+                        'id': side_id,
+                        'side': side_payload,
+                        'message': 'Side created successfully'
+                    }), 201
                 else:
                     logger.error(f"insert_side returned invalid ID: {side_id}")
                     return jsonify({'success': False, 'error': 'Failed to create side: Invalid side ID returned'}), 500
@@ -636,7 +690,16 @@ def register_api_routes(app):
                     logger.warning(f"Could not clear cache after updating side: {e}")
                 
                 logger.info(f"Successfully updated side: {side_id}")
-                return jsonify({'success': True, 'message': 'Side updated successfully'})
+                side_payload = {
+                    'id': side_id,
+                    'name': name,
+                    'importance': importance_float,
+                }
+                return jsonify({
+                    'success': True,
+                    'side': side_payload,
+                    'message': 'Side updated successfully'
+                })
             except Exception as e:
                 logger.error(f"Error updating side {side_id}: {e}", exc_info=True)
                 return client_error(e, subsystem='Api.routes.api', success_key='success', status=500)

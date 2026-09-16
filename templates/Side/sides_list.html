@@ -226,9 +226,11 @@
         {% for side in sides|sort(attribute='importance', reverse=True) %}
         <div class="col-md-6 col-lg-4 col-xl-3 side-card-item" 
              data-name="{{ side.name|lower }}"
+             data-display-name="{{ side.name|e }}"
              data-importance="{{ side.importance }}"
              data-doc-count="{{ side.doc_count }}"
              data-source-count="{{ side.source_count }}"
+             data-created-date="{% if side.date_creation is string %}{{ side.date_creation|e }}{% elif side.date_creation %}{{ side.date_creation.strftime('%Y-%m-%d')|e }}{% endif %}"
              data-id="{{ side.id }}">
             <div class="id-card">
                 <div class="id-card-header" style="background: var(--gradient-bg);">
@@ -540,7 +542,21 @@
         "sideUpdatedSuccessfully": _('Side updated successfully!'),
         "sideCreatedSuccessfully": _('Side created successfully!'),
         "error": _('Error'),
-        "errorSavingSide": _('Error saving side')
+        "errorSavingSide": _('Error saving side'),
+        "view": _('View'),
+        "viewDetails": _('View Details'),
+        "duplicateSide": _('Duplicate Side'),
+        "exportData": _('Export Data'),
+        "viewCategoriesKeywords": _('View Categories & Keywords'),
+        "sideActions": _('Side actions'),
+        "sources": _('Sources'),
+        "documents": _('Documents'),
+        "select": _('Select'),
+        "importance": _('Importance'),
+        "created": _('Created'),
+        "side": _('Side'),
+        "actions": _('Actions'),
+        "noCreationDate": _('No creation date')
     }
 }|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/sides-list-page.js') }}"></script>

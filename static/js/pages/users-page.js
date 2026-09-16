@@ -218,7 +218,8 @@ function setupCreateUserForm() {
         }
 
         const submitBtn = document.getElementById('createUserSubmit');
-        submitBtn.disabled = true;
+        window.InforaxisDataInterface?.setButtonBusy(submitBtn, true, { label: 'Creating' });
+        if (!window.InforaxisDataInterface) submitBtn.disabled = true;
         try {
             const response = await fetch('/api/auth/users', {
                 method: 'POST',
@@ -237,7 +238,8 @@ function setupCreateUserForm() {
             errorBox.textContent = 'Error: ' + error.message;
             errorBox.classList.remove('d-none');
         } finally {
-            submitBtn.disabled = false;
+            window.InforaxisDataInterface?.setButtonBusy(submitBtn, false);
+            if (!window.InforaxisDataInterface) submitBtn.disabled = false;
         }
     });
 }
