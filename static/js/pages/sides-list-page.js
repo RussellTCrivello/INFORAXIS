@@ -234,7 +234,7 @@ function renderSidesTable(records) {
     if (!tableView) return;
     tableView.innerHTML = `
         <div class="table-wrapper sides-table-wrapper">
-            <table class="table table-hover align-middle sides-table" id="sidesTable" data-ia-table="sides" data-ia-sort="true">
+            <table class="table table-hover align-middle sides-table" id="sidesTable" data-ia-table="sides" data-ia-title="Sides" data-ia-sort="true" data-ia-toolbar="true">
                 <thead>
                     <tr>
                         <th style="width:44px"><input type="checkbox" onchange="this.closest('table').querySelectorAll('.side-checkbox').forEach(cb => cb.checked = this.checked); updateBulkButtons();"></th>

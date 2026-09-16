@@ -33,8 +33,11 @@ This audit enumerates the structured-data and Add/Create interfaces reviewed for
 
 ## Reusable system introduced
 
-- `static/css/data-interface.css`: shared density, table, status badge, record-list/card, modal and form tokens.
+- `static/css/data-interface.css`: shared enterprise workspace shell, light/dark theme tokens, density modes, table workbench controls, status badge, record-list/card, modal and form tokens.
 - `static/js/modules/core/data-interface.js`: progressive enhancement for all Jinja-rendered and dynamically rendered tables/modals.
+- Global table workbench controls provide per-table search, multi-column sorting, grouped column visibility, saved views, row counts, persistent density/preferences, keyboard row navigation, and expandable row detail summaries.
+- A global command/search palette (`Ctrl/Cmd+K`) exposes navigation, create/import/export actions, density controls, theme switching, and workspace preference reset.
+- A contextual selection bar appears when table rows are selected and proxies available page bulk actions without replacing existing backend workflows.
 - Source and side management now share table/list generation plus local Add/Edit/Duplicate/Delete updates, preserving context without forcing a reload.
 
 ## Interaction principles

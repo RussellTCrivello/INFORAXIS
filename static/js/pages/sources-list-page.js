@@ -275,7 +275,7 @@ function renderSourcesTable(records) {
     if (!tableView) return;
     tableView.innerHTML = `
         <div class="table-wrapper sources-table-wrapper">
-            <table class="table table-hover align-middle sources-table" id="sourcesTable" data-ia-table="sources" data-ia-sort="true">
+            <table class="table table-hover align-middle sources-table" id="sourcesTable" data-ia-table="sources" data-ia-title="Sources" data-ia-sort="true" data-ia-toolbar="true">
                 <thead>
                     <tr>
                         <th style="width:44px"><input type="checkbox" onchange="this.closest('table').querySelectorAll('.source-checkbox').forEach(cb => cb.checked = this.checked); updateBulkButtons();"></th>
