@@ -326,7 +326,9 @@ if (typeof window !== 'undefined') {
     // Don't override window.ChartExport - it's already set by the IIFE in chart-export.js
     // The module export is for ES6 imports only, window.ChartExport should be the actual object
     // window.ChartExport = chartExport; // REMOVED: Causes infinite recursion
-    window.ChartResponsive = chartResponsive;
+    if (!window.ChartResponsive?.init) {
+        window.ChartResponsive = chartResponsive;
+    }
     
     // Message system (already exposed globally by modules, but ensure availability)
     window.MessageSystem = MessageSystem;

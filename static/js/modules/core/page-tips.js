@@ -8,6 +8,7 @@ class PageTipsManager {
         this.tipsEnabled = true; // Default to enabled (visible)
         this.tipsVisible = false; // Default to collapsed (closed)
         this.broadcastChannel = null; // Store broadcast channel
+        this.listenersAttached = false;
         this.init();
     }
 
@@ -79,6 +80,9 @@ class PageTipsManager {
     }
 
     setupEventListeners() {
+        if (this.listenersAttached) return;
+        this.listenersAttached = true;
+
         // Listen for settings changes (from broadcast or direct updates)
         document.addEventListener('tipsSettingChanged', (e) => {
             this.tipsEnabled = e.detail.enabled;
@@ -125,15 +129,24 @@ class PageTipsManager {
     applyCollapsedState() {
         const content = document.getElementById('pageTipsContent');
         const icon = document.getElementById('tipsToggleIcon');
+        const toggleBtn = document.getElementById('toggleTipsBtn');
         
         if (!content || !icon) return;
         
         if (this.tipsVisible) {
             content.classList.remove('collapsed');
+            content.hidden = false;
+            content.setAttribute('aria-hidden', 'false');
             icon.classList.remove('rotated');
         } else {
             content.classList.add('collapsed');
+            content.hidden = true;
+            content.setAttribute('aria-hidden', 'true');
             icon.classList.add('rotated');
+        }
+
+        if (toggleBtn) {
+            toggleBtn.setAttribute('aria-expanded', String(this.tipsVisible));
         }
     }
 
@@ -188,15 +201,20 @@ let pageTipsManager;
 
 // Wait for DOM to be ready before initializing
 function initPageTipsManager() {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            pageTipsManager = new PageTipsManager();
-            window.pageTipsManager = pageTipsManager;
-        });
-    } else {
-        // DOM already ready, initialize immediately
+    const createManager = () => {
+        if (window.pageTipsManager instanceof PageTipsManager) {
+            pageTipsManager = window.pageTipsManager;
+            return;
+        }
         pageTipsManager = new PageTipsManager();
         window.pageTipsManager = pageTipsManager;
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', createManager, { once: true });
+    } else {
+        // DOM already ready, initialize immediately
+        createManager();
     }
 }
 

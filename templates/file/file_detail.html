@@ -576,7 +576,6 @@
 {% set whole_word_val = whole_word|default(False) %}
 {% set percentages_val = percentages|default({}) %}
 {% set word_frequencies_val = word_frequencies|default([]) %}
-<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
 <script type="application/json" id="file-detail-page-data">{{ {
     "fileId": file_id,
     "fileName": file_name,

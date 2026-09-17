@@ -10,6 +10,18 @@ img, video, canvas, svg {
     max-width: 100%;
 }
 
+.ia-chart-responsive {
+    position: relative;
+    min-width: 0;
+}
+
+.ia-chart-responsive > canvas.ia-chart-canvas,
+.ia-chart-canvas {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+}
+
 .table-responsive,
 .table-wrapper,
 .ia-table-scroll {

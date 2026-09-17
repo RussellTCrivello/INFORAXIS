@@ -59,6 +59,19 @@
     padding: 0.85rem 0.95rem;
 }
 
+.page-tips-content.collapsed,
+.page-tips-content[hidden] {
+    display: none;
+}
+
+#tipsToggleIcon {
+    transition: transform var(--motion-fast, 140ms) var(--ease-out, ease);
+}
+
+#tipsToggleIcon.rotated {
+    transform: rotate(180deg);
+}
+
 .tips-section {
     margin-bottom: 1rem;
 }

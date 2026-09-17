@@ -4,6 +4,9 @@
  */
 
 export function initBasePage() {
+    if (document.body?.dataset.iaBasePageInitialized === 'true') return;
+    if (document.body) document.body.dataset.iaBasePageInitialized = 'true';
+
     // Mobile menu toggle
     const menuToggle = document.getElementById('menuToggle');
     const sidebar = document.getElementById('sidebar');

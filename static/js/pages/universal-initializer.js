@@ -43,7 +43,7 @@ const pageDetectors = [
         if (path.includes('/analysis/batch')) return 'analysis-batch';
         if (path.includes('/email-words')) return 'email-words';
         if (path.includes('/archives')) return 'archives';
-        if (path.includes('/analysis/path')) return 'path-analysis';
+        if (path.includes('/analytics/path-analysis') || path.includes('/analysis/path')) return 'path-analysis';
         
         return 'default';
     }}
@@ -80,6 +80,35 @@ const pageHandlers = {
     'default': () => Promise.resolve({ default: () => {} }) // No-op for default
 };
 
+const pageScriptFiles = {
+    'files-list': 'files-list-page.js',
+    'file-detail': 'file-detail-page.js',
+    'keywords-list': 'keywords-list-page.js',
+    'keyword-detail': 'keyword-detail-page.js',
+    'category-words': 'category-words-page.js',
+    'words-list': 'words-list-page.js',
+    'word-detail': 'word-detail-page.js',
+    'sources-list': 'sources-list-page.js',
+    'source-detail': 'source-detail-page.js',
+    'sides-list': 'sides-list-page.js',
+    'side-detail': 'side-detail-page.js',
+    'search': 'search-page.js',
+    'search-enhanced': 'search-enhanced-page.js',
+    'search-advanced': 'search-advanced-page.js',
+    'upload': 'upload-page.js',
+    'dashboard': 'dashboard-page.js',
+    'comprehensive-dashboard': 'comprehensive-dashboard-page.js',
+    'notifications': 'notifications-page.js',
+    'import-export': 'import-export-page.js',
+    'analysis-batch': 'analysis-batch-page.js',
+    'email-words': 'email-words-page.js',
+    'archives': 'archives-page.js',
+    'path-analysis': 'path-analysis-page.js',
+    'concurrency-workspace': 'concurrency-dashboard-page.js',
+    'import-workspace': 'import-center-page.js',
+    'users-workspace': 'users-page.js'
+};
+
 /**
  * Detect page type
  */
@@ -96,12 +125,33 @@ function detectPageType() {
     return 'default';
 }
 
+function hasExplicitPageModule(pageType) {
+    const scriptFile = pageScriptFiles[pageType];
+    if (!scriptFile) return false;
+
+    return Array.from(document.scripts).some((script) => {
+        const src = script.getAttribute('src') || '';
+        return src.includes(`/js/pages/${scriptFile}`) || src.includes(`/static/js/pages/${scriptFile}`);
+    });
+}
+
+function hasBasePageScript() {
+    return Array.from(document.scripts).some((script) => {
+        const src = script.getAttribute('src') || '';
+        return src.includes('/js/pages/base-page.js') || src.includes('/static/js/pages/base-page.js');
+    });
+}
+
 /**
  * Initialize page
  */
 export async function initializePage() {
-    // Always initialize base page functionality first
-    initBasePage();
+    // base-page.js is already loaded by base.html. Only use the lightweight
+    // fallback handler on pages that include the universal initializer without
+    // the global base script to avoid duplicate menu listeners and intervals.
+    if (!hasBasePageScript()) {
+        initBasePage();
+    }
     
     // Detect page type
     const pageType = detectPageType();
@@ -111,6 +161,12 @@ export async function initializePage() {
         return;
     }
     
+    // If the template already included this page module, let that module's own
+    // DOMContentLoaded hooks run and avoid a second dynamic init/warning pass.
+    if (hasExplicitPageModule(pageType)) {
+        return;
+    }
+
     // Get page handler
     const handler = pageHandlers[pageType];
     if (!handler) {

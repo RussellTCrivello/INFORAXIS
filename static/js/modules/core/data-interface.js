@@ -75,8 +75,6 @@ const SELECTOR = {
         '.ia-scroll-body',
         '[data-ia-role="data-region"]',
         '[data-ia-scroll="true"]',
-        '.table-wrapper',
-        '.table-responsive',
         '.ia-table-scroll',
         '.results-container',
         '.search-results-container',
@@ -1650,20 +1648,63 @@ function highlightNewRecord(selectorOrElement) {
     window.setTimeout(() => element.classList.remove('ia-row-new', 'ia-card-new', 'ia-list-row-new'), 2600);
 }
 
+function shouldIgnoreMutationRoot(root) {
+    if (!(root instanceof HTMLElement)) return true;
+    return !!root.closest?.([
+        '#iaContextBar',
+        '#iaCommandPalette',
+        '.chart-loading-overlay',
+        '.chart-customizer-panel',
+        '.chart-export-panel',
+        '.toast',
+        '.toast-container',
+        '.select2-container',
+        '.flatpickr-calendar',
+        '.tox'
+    ].join(',')) || root.matches('canvas, script, style');
+}
+
 function startBodyObserver() {
+    if (document.body.dataset.iaBodyObserverStarted === 'true') return;
+
+    const queuedRoots = new Set();
+    let flushTimer = null;
+
+    const flushRefresh = () => {
+        flushTimer = null;
+        if (!queuedRoots.size) return;
+        const roots = Array.from(queuedRoots);
+        queuedRoots.clear();
+        roots.forEach((root) => {
+            if (!shouldIgnoreMutationRoot(root)) refresh(root);
+        });
+    };
+
     const observer = new MutationObserver((mutations) => {
-        const roots = new Set();
         mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
-                if (node.nodeType === Node.ELEMENT_NODE) roots.add(node);
+                if (node.nodeType !== Node.ELEMENT_NODE) return;
+                const element = node;
+                if (shouldIgnoreMutationRoot(element)) return;
+                queuedRoots.add(element.closest?.('.ia-scroll-framed-section, .section-card, .card, .modal, main, .main-content') || element);
             });
         });
-        roots.forEach((root) => refresh(root));
+
+        if (queuedRoots.size && !flushTimer) {
+            flushTimer = window.setTimeout(() => {
+                window.requestAnimationFrame(flushRefresh);
+            }, 120);
+        }
     });
+
     observer.observe(document.body, { childList: true, subtree: true });
+    window.__InforaxisDataInterfaceObserver = observer;
+    document.body.dataset.iaBodyObserverStarted = 'true';
 }
 
 function init() {
+    if (document.body.dataset.iaDataInterfaceInitialized === 'true') return;
+    document.body.dataset.iaDataInterfaceInitialized = 'true';
     initializeWorkspaceShell();
     refresh(document);
     startBodyObserver();

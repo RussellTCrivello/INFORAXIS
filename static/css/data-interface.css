@@ -1792,8 +1792,8 @@ body.ia-command-open {
 [data-ia-role="data-region"],
 [data-ia-scroll="true"],
 .ia-table-scroll,
-.table-wrapper,
-.table-responsive {
+.table-wrapper.ia-data-scroll-region,
+.table-responsive.ia-data-scroll-region {
     max-height: var(--ia-data-scroll-max-block);
     min-height: 0;
     overscroll-behavior: contain;
@@ -1803,8 +1803,8 @@ body.ia-command-open {
 [data-ia-role="data-region"],
 [data-ia-scroll="true"],
 .ia-table-scroll,
-.table-wrapper,
-.table-responsive {
+.table-wrapper.ia-data-scroll-region,
+.table-responsive.ia-data-scroll-region {
     overflow: auto;
 }
 
@@ -1813,8 +1813,8 @@ body.ia-command-open {
 .modal [data-ia-role="data-region"],
 .modal [data-ia-scroll="true"],
 .modal .ia-table-scroll,
-.modal .table-wrapper,
-.modal .table-responsive,
+.modal .table-wrapper.ia-data-scroll-region,
+.modal .table-responsive.ia-data-scroll-region,
 .archives-modal .ia-data-scroll-region {
     max-height: var(--ia-modal-scroll-max-block);
 }
