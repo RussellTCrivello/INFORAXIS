@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Import/Export') }}{% endblock %}
-{% block page_type %}import-export{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/import-export.css') }}" rel="stylesheet">
@@ -72,7 +71,7 @@
                 </h5>
             </div>
             <div class="section-content">
-            
+
             <div class="mb-3">
                 <label class="form-label">{{ _('Import Method') }}</label>
                 <select class="form-select" id="importMethod">
@@ -85,7 +84,7 @@
             <div id="pathsMethod" class="import-method">
                 <div class="mb-3">
                     <label class="form-label">{{ _('File Paths (one per line)') }}</label>
-                    <textarea class="form-control" id="filePaths" rows="5" 
+                    <textarea class="form-control" id="filePaths" rows="5"
                               placeholder="/path/to/file1.pdf&#10;/path/to/file2.docx"></textarea>
                 </div>
             </div>
@@ -136,7 +135,7 @@
                 </h5>
             </div>
             <div class="section-content">
-            
+
             <div class="mb-3">
                 <button class="btn btn-outline-primary w-100 mb-2" onclick="exportDatabaseBackup()">
                     <i class="bi bi-download me-1"></i>{{ _('Export Backup') }}
@@ -169,7 +168,7 @@
                 </h5>
             </div>
             <div class="section-content">
-            
+
             <div class="mb-3">
                 <button class="btn btn-outline-primary w-100 mb-2" onclick="exportSettings()">
                     <i class="bi bi-download me-1"></i>{{ _('Export Settings') }}
@@ -212,4 +211,3 @@
 }|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/import-export-page.js') }}"></script>
 {% endblock %}
-

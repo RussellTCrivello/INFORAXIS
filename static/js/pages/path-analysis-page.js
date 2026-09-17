@@ -25,12 +25,9 @@ let availableSides = [];
 let currentLoadingPath = null; // Track which path is currently being loaded
 let abortControllers = {}; // Track AbortControllers for each data type
 let expandedPaths = new Set(); // Track expanded paths for persistence
-let pathAnalysisInitialized = false;
 
 // 🚀 OPTIMIZED: Initialize on page load with error handling
-function initializePathAnalysisPage() {
-    if (pathAnalysisInitialized) return;
-    pathAnalysisInitialized = true;
+document.addEventListener('DOMContentLoaded', function() {
     // Load translations from JSON script tag
     const pageDataEl = document.getElementById('path-analysis-page-data');
     if (pageDataEl) {
@@ -41,12 +38,12 @@ function initializePathAnalysisPage() {
             console.error('Error parsing path analysis page data:', e);
         }
     }
-    
+
     console.log('Path Analysis page loaded');
-    
+
     // Load expanded paths state from localStorage BEFORE rendering
     loadExpandedPaths();
-    
+
     // Check if Chart.js is loaded
     if (typeof Chart === 'undefined') {
         console.error('Chart.js is not loaded! Charts will not work.');
@@ -54,37 +51,37 @@ function initializePathAnalysisPage() {
     } else {
         console.log('Chart.js loaded successfully, version:', Chart.version);
     }
-    
+
     // 🚀 OPTIMIZED: Load filters first (lightweight)
     loadFilters();
-    
+
     // 🚀 OPTIMIZED: Load path structure after a short delay to allow page to render
     // Tree state will be restored automatically in renderPathTree
     setTimeout(() => {
         loadPathStructure();
     }, 100);
-    
+
     // Add expand/collapse all button handlers
     const expandBtn = document.getElementById('expandAllBtn');
     const collapseBtn = document.getElementById('collapseAllBtn');
     if (expandBtn) expandBtn.addEventListener('click', expandAll);
     if (collapseBtn) collapseBtn.addEventListener('click', collapseAll);
-    
+
     // Add filter change handlers
     const sourceFilter = document.getElementById('sourceFilter');
     const sideFilter = document.getElementById('sideFilter');
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
-    
+
     if (sourceFilter) sourceFilter.addEventListener('change', handleFilterChange);
     if (sideFilter) sideFilter.addEventListener('change', handleFilterChange);
     if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', clearFilters);
-    
+
     // Add modal close button handlers
     const closeCategoryModalBtn = document.getElementById('closeCategoryModalBtn');
     const closeCategoryWordsModalBtn = document.getElementById('closeCategoryWordsModalBtn');
     if (closeCategoryModalBtn) closeCategoryModalBtn.addEventListener('click', closeCategoryModal);
     if (closeCategoryWordsModalBtn) closeCategoryWordsModalBtn.addEventListener('click', closeCategoryWordsModal);
-    
+
     // Prevent page refresh on path selection - ensure instant updates
     document.addEventListener('click', function(e) {
         const pathItem = e.target.closest('.path-item');
@@ -92,15 +89,7 @@ function initializePathAnalysisPage() {
             e.preventDefault();
         }
     }, true);
-
-    setupModalOverlayHandlers();
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializePathAnalysisPage, { once: true });
-} else {
-    initializePathAnalysisPage();
-}
+});
 
 // 🚀 FIXED: Load filters (sources and sides) with proper response handling
 async function loadFilters() {
@@ -111,7 +100,7 @@ async function loadFilters() {
             const sourcesData = await sourcesResponse.json();
             // 🚀 FIXED: Handle both array and object response formats
             availableSources = Array.isArray(sourcesData) ? sourcesData : (sourcesData.sources || []);
-            
+
             const sourceSelect = document.getElementById('sourceFilter');
             if (sourceSelect) {
                 availableSources.forEach(source => {
@@ -120,18 +109,18 @@ async function loadFilters() {
                     option.textContent = `${source.name}${source.country ? ' (' + source.country + ')' : ''}`;
                     sourceSelect.appendChild(option);
                 });
-                
+
                 console.log(`Loaded ${availableSources.length} sources`);
             }
         }
-        
+
         // Load sides
         const sidesResponse = await fetch('/api/analytics/sides');
         if (sidesResponse.ok) {
             const sidesData = await sidesResponse.json();
             // 🚀 FIXED: Handle both array and object response formats
             availableSides = Array.isArray(sidesData) ? sidesData : (sidesData.sides || []);
-            
+
             const sideSelect = document.getElementById('sideFilter');
             if (sideSelect) {
                 availableSides.forEach(side => {
@@ -140,7 +129,7 @@ async function loadFilters() {
                     option.textContent = side.name;
                     sideSelect.appendChild(option);
                 });
-                
+
                 console.log(`Loaded ${availableSides.length} sides`);
             }
         }
@@ -163,14 +152,14 @@ function getCurrentFilters() {
 function buildQueryString(baseParams) {
     const params = new URLSearchParams(baseParams);
     const filters = getCurrentFilters();
-    
+
     if (filters.source_id) {
         params.append('source_id', filters.source_id);
     }
     if (filters.side_id) {
         params.append('side_id', filters.side_id);
     }
-    
+
     return params.toString();
 }
 
@@ -178,24 +167,24 @@ function buildQueryString(baseParams) {
 function handleFilterChange() {
     const sourceFilterEl = document.getElementById('sourceFilter');
     const sideFilterEl = document.getElementById('sideFilter');
-    
+
     if (!sourceFilterEl || !sideFilterEl) {
         console.warn('Filter elements not found');
         return;
     }
-    
+
     const sourceFilter = sourceFilterEl.value;
     const sideFilter = sideFilterEl.value;
-    
+
     // Count active filters
     let activeFilterCount = 0;
     if (sourceFilter) activeFilterCount++;
     if (sideFilter) activeFilterCount++;
-    
+
     // Update filter status indicator
     const filterStatus = document.getElementById('filterStatus');
     const filterCount = document.getElementById('filterCount');
-    
+
     if (filterStatus && filterCount) {
         if (activeFilterCount > 0) {
             filterStatus.style.display = 'inline';
@@ -204,7 +193,7 @@ function handleFilterChange() {
             filterStatus.style.display = 'none';
         }
     }
-    
+
     // Show/hide clear button
     const clearBtn = document.getElementById('clearFiltersBtn');
     if (clearBtn) {
@@ -214,10 +203,10 @@ function handleFilterChange() {
             clearBtn.style.display = 'none';
         }
     }
-    
+
     // Reload path structure with filters
     loadPathStructure();
-    
+
     // If a path is currently selected, reload all its data with new filters
     if (selectedPath) {
         const fullPath = selectedPath.fullPath || selectedPath.full_path || selectedPath.name;
@@ -226,7 +215,7 @@ function handleFilterChange() {
             if (queryPath) {
                 // Show loading states
                 showLoadingStates();
-                
+
                 // Reload all data with new filters
                 Promise.all([
                     loadPathAnalytics(queryPath),
@@ -248,12 +237,12 @@ function clearFilters() {
     const sideFilter = document.getElementById('sideFilter');
     const clearBtn = document.getElementById('clearFiltersBtn');
     const filterStatus = document.getElementById('filterStatus');
-    
+
     if (sourceFilter) sourceFilter.value = '';
     if (sideFilter) sideFilter.value = '';
     if (clearBtn) clearBtn.style.display = 'none';
     if (filterStatus) filterStatus.style.display = 'none';
-    
+
     // Reload path structure without filters
     loadPathStructure();
 }
@@ -265,49 +254,49 @@ async function loadPathStructure() {
         console.warn('Path tree element not found');
         return;
     }
-    
+
     try {
         console.log('Loading path structure...');
-        
+
         // Get current filter values
         const sourceFilterEl = document.getElementById('sourceFilter');
         const sideFilterEl = document.getElementById('sideFilter');
         const sourceFilter = sourceFilterEl ? sourceFilterEl.value : '';
         const sideFilter = sideFilterEl ? sideFilterEl.value : '';
-        
+
         // Build URL with filters
         let url = '/api/analytics/paths/structure';
         const params = new URLSearchParams();
-        
+
         if (sourceFilter) {
             params.append('source_id', sourceFilter);
         }
         if (sideFilter) {
             params.append('side_id', sideFilter);
         }
-        
+
         if (params.toString()) {
             url += '?' + params.toString();
         }
-        
+
         console.log('Fetching with filters:', url);
         const response = await fetch(url);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
         console.log('Path structure loaded:', data);
-        
+
         pathStructure = data.structure || [];
-        
+
         if (pathStructure.length === 0) {
             console.warn('No path structure found in response');
         }
-        
+
         renderPathTree(pathStructure);
-        
+
     } catch (error) {
         console.error('Error loading path structure:', error);
         showError();
@@ -321,7 +310,7 @@ function renderPathTree(structure) {
         console.warn('Path tree element not found');
         return;
     }
-    
+
     if (!structure || structure.length === 0) {
         tree.innerHTML = `
             <div class="empty-state">
@@ -332,19 +321,19 @@ function renderPathTree(structure) {
         `;
         return;
     }
-    
+
     // Load expanded paths from localStorage
     loadExpandedPaths();
-    
+
     tree.innerHTML = '';
     structure.forEach(node => {
         const li = createPathNode(node);
         tree.appendChild(li);
     });
-    
+
     // Restore expanded state after rendering
     restoreExpandedState();
-    
+
     // Auto-select the first root path if no path is currently selected
     if (!selectedPath && structure.length > 0) {
         const firstNode = structure[0];
@@ -363,16 +352,16 @@ function renderPathTree(structure) {
 function createPathNode(node, depth = 0) {
     const li = document.createElement('li');
     li.className = 'path-node';
-    
+
     // Store path identifier for state persistence
     const fullPath = node.fullPath || node.full_path || node.name;
     li.setAttribute('data-path', fullPath);
-    
+
     const item = document.createElement('div');
     item.className = 'path-item';
-    
+
     const hasChildren = node.children && node.children.length > 0;
-    
+
     // Create expand button if node has children
     // Use appropriate chevron icon based on text direction (RTL/LTR)
     let expandBtnHtml = '';
@@ -382,22 +371,22 @@ function createPathNode(node, depth = 0) {
         const chevronIcon = isRTL ? 'bi-chevron-left' : 'bi-chevron-right';
         expandBtnHtml = `<span class="expand-btn" data-path="${fullPath}"><i class="bi ${chevronIcon}"></i></span>`;
     } else {
-        expandBtnHtml = `<span class="expand-placeholder"></span>`;
+        expandBtnHtml = `<span style="width: 20px;"></span>`;
     }
-    
+
     // 🚀 FIXED: Handle both camelCase and snake_case property names
     const isArchive = node.isArchive || node.type === 'archive';
     const fileCount = node.fileCount || node.file_count || 0;
     const iconClass = isArchive ? 'bi-file-earmark-zip' : 'bi-folder';
-    const itemIconClass = isArchive ? 'icon is-archive' : 'icon';
-    
+    const iconColor = isArchive ? 'color: var(--warning-color);' : '';  // Orange for archives
+
     item.innerHTML = `
         ${expandBtnHtml}
-        <i class="bi ${iconClass} ${itemIconClass}"></i>
+        <i class="bi ${iconClass} icon" style="${iconColor}"></i>
         <span class="path-name">${node.name}</span>
         <span class="path-stats">${fileCount}</span>
     `;
-    
+
     // Add click handler for expand button (if it exists)
     if (hasChildren) {
         const expandBtn = item.querySelector('.expand-btn');
@@ -408,7 +397,7 @@ function createPathNode(node, depth = 0) {
             });
         }
     }
-    
+
     // Add click handler for selecting the path (but not on expand button)
     item.addEventListener('click', function(e) {
         if (!e.target.closest('.expand-btn')) {
@@ -417,21 +406,21 @@ function createPathNode(node, depth = 0) {
             selectPath(node, item);
         }
     });
-    
+
     li.appendChild(item);
-    
+
     // Add children if any
     if (hasChildren) {
         const childrenUl = document.createElement('ul');
         childrenUl.className = 'path-children';
-        
+
         // Filter out children that have the same path as the parent (prevents duplicates)
         // Normalize paths by removing trailing slashes and converting to consistent format
         const normalizePath = (path) => {
             if (!path) return '';
             return path.toString().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
         };
-        
+
         const normalizedParentPath = normalizePath(fullPath);
         const filteredChildren = node.children.filter(child => {
             const childPath = child.fullPath || child.full_path || child.name;
@@ -439,31 +428,31 @@ function createPathNode(node, depth = 0) {
             // Exclude if paths match (after normalization) or if child path is empty/invalid
             return normalizedChildPath && normalizedChildPath !== normalizedParentPath;
         });
-        
+
         filteredChildren.forEach(child => {
             const childLi = createPathNode(child, depth + 1);
             childrenUl.appendChild(childLi);
         });
-        
+
         li.appendChild(childrenUl);
     }
-    
+
     return li;
 }
 
 // Toggle node expand/collapse
 function toggleNode(event) {
     event.stopPropagation();
-    
+
     const expandBtn = event.currentTarget;
     const pathNode = expandBtn.closest('.path-node');
     const children = pathNode.querySelector('.path-children');
-    
+
     if (children) {
         const isExpanding = !children.classList.contains('expanded');
         children.classList.toggle('expanded');
         expandBtn.classList.toggle('expanded');
-        
+
         // Save state to localStorage
         const path = expandBtn.getAttribute('data-path') || pathNode.getAttribute('data-path');
         if (path) {
@@ -481,12 +470,12 @@ function toggleNode(event) {
 function expandAll() {
     console.log('Expanding all folders...');
     expandedPaths.clear();
-    
+
     document.querySelectorAll('.path-node').forEach(node => {
         const path = node.getAttribute('data-path');
         const children = node.querySelector('.path-children');
         const expandBtn = node.querySelector('.expand-btn');
-        
+
         if (children && expandBtn) {
             children.classList.add('expanded');
             expandBtn.classList.add('expanded');
@@ -495,7 +484,7 @@ function expandAll() {
             }
         }
     });
-    
+
     saveExpandedPaths();
 }
 
@@ -503,14 +492,14 @@ function expandAll() {
 function collapseAll() {
     console.log('Collapsing all folders...');
     expandedPaths.clear();
-    
+
     document.querySelectorAll('.path-children').forEach(children => {
         children.classList.remove('expanded');
     });
     document.querySelectorAll('.expand-btn').forEach(btn => {
         btn.classList.remove('expanded');
     });
-    
+
     saveExpandedPaths();
 }
 
@@ -548,7 +537,7 @@ function loadExpandedPaths() {
 // Restore expanded state after tree is rendered
 function restoreExpandedState() {
     if (expandedPaths.size === 0) return;
-    
+
     // Small delay to ensure DOM is ready
     setTimeout(() => {
         document.querySelectorAll('.path-node').forEach(node => {
@@ -556,7 +545,7 @@ function restoreExpandedState() {
             if (path && expandedPaths.has(path)) {
                 const children = node.querySelector('.path-children');
                 const expandBtn = node.querySelector('.expand-btn');
-                
+
                 if (children && expandBtn) {
                     children.classList.add('expanded');
                     expandBtn.classList.add('expanded');
@@ -570,17 +559,17 @@ function restoreExpandedState() {
 async function selectPath(node, itemElement) {
     // This function is called from click handlers which already prevent default
     // No need to access event here as it's handled by the event listener
-    
+
     // Cancel any pending requests for the previous path
     cancelAllPendingRequests();
-    
+
     // Destroy all existing charts immediately
     destroyAllCharts();
-    
+
     // Set the new selected path and track it
     selectedPath = node;
     const fullPath = node.fullPath || node.full_path || '';
-    
+
     // Normalize path: ensure forward slashes and handle empty paths
     // IMPORTANT: Preserve :: separator for archive paths
     let queryPath = '';
@@ -588,7 +577,7 @@ async function selectPath(node, itemElement) {
         // Normalize to forward slashes (API expects this format)
         // But preserve :: separator for archive paths
         queryPath = fullPath.replace(/\\/g, '/');
-        
+
         // For archive paths, only remove trailing slash from the inner path part
         // Regular paths: remove trailing slash
         // Archive paths: preserve :: but remove trailing slash from inner path
@@ -610,58 +599,58 @@ async function selectPath(node, itemElement) {
         console.warn('Node missing fullPath, attempting to use name:', node.name);
         queryPath = node.name.replace(/\\/g, '/').replace(/\/$/, '');
     }
-    
+
     // Validate we have a path
     if (!queryPath || queryPath.trim() === '') {
         console.error('Cannot determine path for node:', node);
         return; // Don't proceed if we don't have a valid path
     }
-    
+
     currentLoadingPath = queryPath;
-    
+
     console.log('Selected path node:', node);
     console.log('Full path from node:', fullPath);
     console.log('Normalized query path:', queryPath);
-    
+
     // Update active state IMMEDIATELY (no delay)
     document.querySelectorAll('.path-item').forEach(item => item.classList.remove('active'));
     if (itemElement) {
         itemElement.classList.add('active');
     }
-    
+
     // Show details card, hide empty state IMMEDIATELY
     const pathDetailsCard = document.getElementById('pathDetailsCard');
     const emptyState = document.getElementById('emptyState');
     if (pathDetailsCard) pathDetailsCard.style.display = 'block';
     if (emptyState) emptyState.style.display = 'none';
-    
+
     // 🚀 FIXED: Handle both camelCase and snake_case property names
     const fileCount = node.fileCount || node.file_count || 0;
     const processedCount = node.processedCount || node.processed_count || 0;
     const totalSize = node.totalSize || node.total_size || 0;
     const isArchive = node.isArchive || node.type === 'archive';
-    
+
     // Update path details - show full path hierarchy IMMEDIATELY
     const pathParts = fullPath ? fullPath.split('/') : [node.name];
     const pathTitleEl = document.getElementById('pathTitle');
     if (pathTitleEl) pathTitleEl.textContent = node.name;
-    
+
     // Create breadcrumb with appropriate icon
     const titleIcon = isArchive ? 'bi-file-earmark-zip' : 'bi-folder';
-    const titleIconClass = isArchive ? 'path-title-icon is-archive' : 'path-title-icon';
+    const titleColor = isArchive ? 'color: var(--warning-color);' : '';
     const htmlElement = document.documentElement;
     const isRTL = htmlElement.getAttribute('dir') === 'rtl';
     const breadcrumbChevron = isRTL ? 'bi-chevron-left' : 'bi-chevron-right';
-    let breadcrumbHtml = `<i class="bi ${titleIcon} ${titleIconClass}"></i>`;
+    let breadcrumbHtml = `<i class="bi ${titleIcon}" style="${titleColor}"></i>`;
     pathParts.forEach((part, index) => {
         if (index > 0) {
-            breadcrumbHtml += ` <i class="bi ${breadcrumbChevron} breadcrumb-separator"></i> `;
+            breadcrumbHtml += ` <i class="bi ${breadcrumbChevron}" style="font-size: 0.75rem; opacity: 0.5;"></i> `;
         }
-        breadcrumbHtml += `<span class="${index === pathParts.length - 1 ? 'breadcrumb-current' : ''}">${part}</span>`;
+        breadcrumbHtml += `<span style="${index === pathParts.length - 1 ? 'font-weight: 600;' : ''}">${part}</span>`;
     });
     const pathBreadcrumbEl = document.getElementById('pathBreadcrumb');
     if (pathBreadcrumbEl) pathBreadcrumbEl.innerHTML = breadcrumbHtml;
-    
+
     // Update statistics IMMEDIATELY (from node data, no API call needed)
     const pathFileCountEl = document.getElementById('pathFileCount');
     if (pathFileCountEl) pathFileCountEl.textContent = fileCount.toLocaleString();
@@ -669,15 +658,15 @@ async function selectPath(node, itemElement) {
     if (pathProcessedCountEl) pathProcessedCountEl.textContent = processedCount.toLocaleString();
     const pathTotalSizeEl = document.getElementById('pathTotalSize');
     if (pathTotalSizeEl) pathTotalSizeEl.textContent = formatFileSize(totalSize);
-    
-    const processingRate = fileCount > 0 ? 
+
+    const processingRate = fileCount > 0 ?
         ((processedCount / fileCount) * 100).toFixed(1) : 0;
     const pathProcessingRateEl = document.getElementById('pathProcessingRate');
     if (pathProcessingRateEl) pathProcessingRateEl.textContent = processingRate + '%';
-    
+
     // Show loading states immediately for all sections (INSTANT FEEDBACK)
     showLoadingStates();
-    
+
     // Load all data for this path (in parallel) - NO PAGE REFRESH
     // These are async and will update the UI as data arrives
     Promise.all([
@@ -694,14 +683,14 @@ async function selectPath(node, itemElement) {
 // Build path from node hierarchy (fallback if fullPath is missing)
 function buildPathFromNode(node) {
     if (!node) return '';
-    
+
     // If we have a name but no fullPath, try to reconstruct from breadcrumb
     // This is a fallback - the API should always provide fullPath
     if (node.name) {
         console.warn('Node missing fullPath, using name only:', node.name);
         return node.name;
     }
-    
+
     return '';
 }
 
@@ -729,68 +718,67 @@ function destroyAllCharts() {
     });
 }
 
-function setChartCanvasLoading(canvas) {
-    if (!canvas) return;
-    canvas.classList.add('chart-canvas-loading');
-    canvas.classList.remove('chart-canvas-ready');
-}
-
-function setChartCanvasReady(canvas) {
-    if (!canvas) return;
-    canvas.classList.add('chart-canvas-ready');
-    canvas.classList.remove('chart-canvas-loading');
-}
-
-function getChartSizeClass(chartId) {
-    if (chartId === 'timelineChart') return 'path-chart-size-tall';
-    if (chartId === 'classificationChart') return 'path-chart-size-wide';
-    return 'path-chart-size-standard';
-}
-
 // Show loading states for all data sections
 function showLoadingStates() {
     // Show loading for charts - preserve canvas and use overlay
     const chartConfigs = [
-        { id: 'fileTypeChart' },
-        { id: 'statusChart' },
-        { id: 'timelineChart' },
-        { id: 'wordFrequencyChart' },
-        { id: 'classificationChart' }
+        { id: 'fileTypeChart', height: '600px' },
+        { id: 'statusChart', height: '600px' },
+        { id: 'timelineChart', height: '700px' },
+        { id: 'wordFrequencyChart', height: '600px' },
+        { id: 'classificationChart', height: '650px' }
     ];
-    
+
     chartConfigs.forEach(config => {
         const canvas = document.getElementById(config.id);
         const container = canvas ? canvas.parentElement : null;
-        
+
         if (container) {
             // Remove any existing loading overlay
             const existingLoading = container.querySelector('.chart-loading-overlay');
             if (existingLoading) {
                 existingLoading.remove();
             }
-            
+
             // Hide canvas but keep it in DOM
-            setChartCanvasLoading(canvas);
-            
+            if (canvas) {
+                canvas.style.display = 'none';
+                canvas.style.opacity = '0';
+            }
+
             // Add loading overlay
             const loadingOverlay = document.createElement('div');
-            loadingOverlay.className = `chart-loading-overlay ${getChartSizeClass(config.id)}`;
+            loadingOverlay.className = 'chart-loading-overlay';
+            loadingOverlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: var(--bg-section, #fff);
+                z-index: 10;
+                height: ${config.height};
+            `;
             loadingOverlay.innerHTML = `
                 <div class="spinner"></div>
-                <p class="chart-loading-message">${translations.loading}</p>
+                <p style="margin-top: 1rem; color: var(--text-light, #666);">${translations.loading}</p>
             `;
-            
+
             // Don't override CSS with inline styles - use CSS classes instead
             if (!container.classList.contains('chart-container-positioned')) {
                 container.classList.add('chart-container-positioned');
             }
-            
+
             container.appendChild(loadingOverlay);
         } else {
             // Canvas doesn't exist, find container and create canvas with loading state
             const chartCards = document.querySelectorAll('.chart-card');
             let chartContainer = null;
-            
+
             // Try to find the right container by looking for chart titles
             const titleMap = {
                 'fileTypeChart': 'File Type Distribution',
@@ -799,7 +787,7 @@ function showLoadingStates() {
                 'wordFrequencyChart': 'Top Keywords',
                 'classificationChart': 'Classification Distribution'
             };
-            
+
             for (let card of chartCards) {
                 const h3 = card.querySelector('h3');
                 if (h3 && h3.textContent.includes(titleMap[config.id] || '')) {
@@ -807,30 +795,46 @@ function showLoadingStates() {
                     if (chartContainer) break;
                 }
             }
-            
+
             // Fallback: use container by index if title matching fails
             if (!chartContainer && chartCards[chartConfigs.indexOf(config)]) {
                 chartContainer = chartCards[chartConfigs.indexOf(config)].querySelector('.chart-container');
             }
-            
+
             if (chartContainer) {
                 // Clear any existing content and create canvas with loading overlay
                 const canvas = document.createElement('canvas');
                 canvas.id = config.id;
-                setChartCanvasLoading(canvas);
-                
+                canvas.style.display = 'none';
+                canvas.style.opacity = '0';
+
                 const loadingOverlay = document.createElement('div');
-                // Use CSS classes instead of inline styles for responsive behavior.
-                loadingOverlay.className = `chart-loading-overlay chart-loading-overlay-responsive ${getChartSizeClass(config.id)}`;
+                loadingOverlay.className = 'chart-loading-overlay';
+                // Use CSS classes instead of inline styles for better responsive behavior
+                loadingOverlay.className = 'chart-loading-overlay chart-loading-overlay-responsive';
+                // Only set essential dynamic styles
+                loadingOverlay.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    background: var(--bg-section, #fff);
+                    z-index: 10;
+                `;
                 loadingOverlay.innerHTML = `
                     <div class="spinner"></div>
-                    <p class="chart-loading-message">${translations.loading}</p>
+                    <p style="margin-top: 1rem; color: var(--text-light, #666);">${translations.loading}</p>
                 `;
-                
+
                 chartContainer.innerHTML = '';
                 chartContainer.appendChild(canvas);
                 chartContainer.appendChild(loadingOverlay);
-                
+
                 // Don't override CSS with inline styles - use CSS classes instead
                 if (!chartContainer.classList.contains('chart-container-positioned')) {
                     chartContainer.classList.add('chart-container-positioned');
@@ -838,31 +842,31 @@ function showLoadingStates() {
             }
         }
     });
-    
+
     // Show loading for word cloud
     const wordCloud = document.getElementById('wordCloud');
     if (wordCloud) {
         wordCloud.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${translations.loadingKeywords}</p></div>`;
     }
-    
+
     // Show loading for files
     const filesGrid = document.getElementById('filesGrid');
     if (filesGrid) {
         filesGrid.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${translations.loadingFiles}</p></div>`;
     }
-    
+
     // Reset classification details - show loading state
     const classificationDetails = document.getElementById('classificationDetails');
     if (classificationDetails) {
-        classificationDetails.innerHTML = '<div class="loading-state analysis-loading-state"><div class="spinner"></div><p>' + translations.loading + '</p></div>';
+        classificationDetails.innerHTML = '<div class="loading-state" style="padding: 2rem;"><div class="spinner"></div><p>' + translations.loading + '</p></div>';
     }
-    
+
     // Reset category words details - show loading state
     const categoryWordsDetails = document.getElementById('categoryWordsDetails');
     if (categoryWordsDetails) {
-        categoryWordsDetails.innerHTML = '<div class="loading-state analysis-loading-state"><div class="spinner"></div><p>' + translations.loading + '</p></div>';
+        categoryWordsDetails.innerHTML = '<div class="loading-state" style="padding: 2rem;"><div class="spinner"></div><p>' + translations.loading + '</p></div>';
     }
-    
+
     // Reset summary counts
     const totalFilesEl = document.getElementById('totalFilesCount');
     if (totalFilesEl) totalFilesEl.textContent = '0';
@@ -885,7 +889,7 @@ async function loadPathAnalytics(pathName) {
         console.log('Ignoring stale analytics response for:', pathName);
         return;
     }
-    
+
     // Validate path
     if (!pathName || pathName.trim() === '') {
         console.warn('Empty path provided to loadPathAnalytics');
@@ -894,16 +898,16 @@ async function loadPathAnalytics(pathName) {
         showChartError('timelineChart');
         return;
     }
-    
+
     // Cancel previous analytics request if any
     if (abortControllers.analytics) {
         abortControllers.analytics.abort();
     }
-    
+
     // Create new AbortController for this request
     abortControllers.analytics = new AbortController();
     const signal = abortControllers.analytics.signal;
-    
+
     try {
         // Normalize path before sending
         const normalizedPath = pathName.replace(/\\/g, '/').replace(/\/$/, '');
@@ -911,21 +915,21 @@ async function loadPathAnalytics(pathName) {
         const url = `/api/analytics/path/analytics?${queryString}`;
         console.log('Fetching analytics from:', url);
         const response = await fetch(url, { signal });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Double-check this is still the current path
         if (currentLoadingPath !== pathName) {
             console.log('Ignoring stale analytics response for:', pathName);
             return;
         }
-        
+
         console.log('Analytics data received for path:', pathName, data);
-        
+
         // Validate response structure
         if (!data || typeof data !== 'object') {
             console.error('Invalid analytics response format:', data);
@@ -934,7 +938,7 @@ async function loadPathAnalytics(pathName) {
             showChartError('timelineChart');
             return;
         }
-        
+
         // Check for error in response
         if (data.error) {
             console.error('API returned error:', data.error);
@@ -943,29 +947,29 @@ async function loadPathAnalytics(pathName) {
             showChartError('timelineChart');
             return;
         }
-        
+
         // Render file type chart (always call, let function handle empty data)
         const typeDist = data.typeDistribution || [];
         console.log('Rendering file type chart with', typeDist.length, 'types');
         renderFileTypeChart(typeDist);
-        
+
         // Render status chart (always call, let function handle empty data)
         const statusDist = data.statusDistribution || [];
         console.log('Rendering status chart with', statusDist.length, 'statuses');
         renderStatusChart(statusDist);
-        
+
         // Render timeline chart (always call, let function handle empty data)
         const timeline = data.timeline || [];
         console.log('Rendering timeline chart with', timeline.length, 'dates');
         renderTimelineChart(timeline);
-        
+
     } catch (error) {
         // Ignore abort errors
         if (error.name === 'AbortError') {
             console.log('Analytics request cancelled for:', pathName);
             return;
         }
-        
+
         // Only show error if this is still the current path
         if (currentLoadingPath === pathName) {
             console.error('Error loading path analytics:', error);
@@ -992,9 +996,10 @@ function showChartError(chartId) {
         if (loadingOverlay) {
             loadingOverlay.remove();
         }
-        
+
+        const height = chartId === 'timelineChart' ? '700px' : (chartId === 'classificationChart' ? '650px' : '600px');
         container.innerHTML = `
-            <div class="empty-state path-chart-empty-state ${getChartSizeClass(chartId)}">
+            <div class="empty-state" style="height: ${height};">
                 <i class="bi bi-exclamation-triangle"></i>
                 <p>${translations.errorLoadingChart}</p>
             </div>
@@ -1008,11 +1013,11 @@ function renderFileTypeChart(typeDistribution) {
     if (!selectedPath) {
         return;
     }
-    
+
     // Find or create canvas container
     let canvas = document.getElementById('fileTypeChart');
     let container = canvas ? canvas.parentElement : null;
-    
+
     // If canvas doesn't exist, create it
     if (!canvas || !container) {
         const chartCard = document.querySelector('.chart-card');
@@ -1022,25 +1027,25 @@ function renderFileTypeChart(typeDistribution) {
                 // Remove loading overlay if exists
                 const loadingOverlay = chartContainer.querySelector('.chart-loading-overlay');
                 if (loadingOverlay) loadingOverlay.remove();
-                
+
                 chartContainer.innerHTML = '<canvas id="fileTypeChart"></canvas>';
                 container = chartContainer;
                 canvas = document.getElementById('fileTypeChart');
             }
         }
     }
-    
+
     if (!canvas || !container) {
         console.error('File type chart canvas not found');
         return;
     }
-    
+
     // Remove loading overlay
     const loadingOverlay = container.querySelector('.chart-loading-overlay');
     if (loadingOverlay) {
         loadingOverlay.remove();
     }
-    
+
     // Destroy existing chart first
     if (charts.fileType) {
         try {
@@ -1050,13 +1055,13 @@ function renderFileTypeChart(typeDistribution) {
         }
         charts.fileType = null;
     }
-    
+
     if (!typeDistribution || typeDistribution.length === 0) {
         // Show "no data" message
-        container.innerHTML = `<div class="empty-state empty-state-chart-md"><i class="bi bi-pie-chart"></i><p>${translations.noFileTypeData}</p></div>`;
+        container.innerHTML = `<div class="empty-state" style="height: 600px;"><i class="bi bi-pie-chart"></i><p>${translations.noFileTypeData}</p></div>`;
         return;
     }
-    
+
     // Ensure canvas exists in container - recreate if needed
     if (container.querySelector('#fileTypeChart') !== canvas || !canvas) {
         // Remove any existing content except canvas
@@ -1072,17 +1077,21 @@ function renderFileTypeChart(typeDistribution) {
             return;
         }
     }
-    
+
     // Show canvas
-    setChartCanvasReady(canvas);
-    
+    canvas.style.display = 'block';
+    canvas.style.opacity = '1';
+    canvas.style.maxWidth = '100%';
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+
     try {
         const ctx = canvas.getContext('2d');
         if (!ctx) {
             console.error('Failed to get 2d context for file type chart');
             return;
         }
-        
+
         // Generate enough colors for all file types using ChartColors utility
         const chartColors = window.ChartColors ? window.ChartColors.getChartColors(Math.max(typeDistribution.length, 10)) : null;
         const colorPalette = chartColors || [
@@ -1092,13 +1101,13 @@ function renderFileTypeChart(typeDistribution) {
             '#eab308', '#22c55e', '#f97316', '#ec4899', '#6366f1',
             '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#3b82f6'
         ];
-        
+
         // Ensure we have enough colors (repeat if needed)
         const colors = [];
         for (let i = 0; i < typeDistribution.length; i++) {
             colors.push(colorPalette[i % colorPalette.length]);
         }
-        
+
         charts.fileType = new Chart(ctx, {
             type: 'doughnut',
             data: {
@@ -1163,7 +1172,7 @@ function renderFileTypeChart(typeDistribution) {
                 }
             }
         });
-        
+
         // Ensure chart is fully rendered and visible
         setTimeout(() => {
             if (charts.fileType) {
@@ -1171,7 +1180,7 @@ function renderFileTypeChart(typeDistribution) {
                 charts.fileType.update('none');
             }
         }, 100);
-        
+
         // Attach export buttons
         if (window.ChartExport && container) {
             setTimeout(() => {
@@ -1189,11 +1198,11 @@ function renderStatusChart(statusDistribution) {
     if (!selectedPath) {
         return;
     }
-    
+
     // Find or create canvas container
     let canvas = document.getElementById('statusChart');
     let container = canvas ? canvas.parentElement : null;
-    
+
     // If canvas doesn't exist, restore it from loading state
     if (!canvas || !container) {
         const chartCards = document.querySelectorAll('.chart-card');
@@ -1210,47 +1219,51 @@ function renderStatusChart(statusDistribution) {
             }
         }
     }
-    
+
     if (!canvas || !container) {
         console.error('Status chart canvas not found');
         return;
     }
-    
+
     // Remove loading overlay
     const loadingOverlay = container.querySelector('.chart-loading-overlay');
     if (loadingOverlay) {
         loadingOverlay.remove();
     }
-    
+
     if (charts.status) {
         charts.status.destroy();
     }
-    
+
     if (!statusDistribution || statusDistribution.length === 0) {
         // Show "no data" message
-        container.innerHTML = `<div class="empty-state empty-state-chart-md"><i class="bi bi-check-circle"></i><p>${translations.noStatusData}</p></div>`;
+        container.innerHTML = `<div class="empty-state" style="height: 600px;"><i class="bi bi-check-circle"></i><p>${translations.noStatusData}</p></div>`;
         return;
     }
-    
+
     // Ensure canvas exists in container
     if (container.querySelector('#statusChart') !== canvas) {
         container.innerHTML = '<canvas id="statusChart"></canvas>';
         canvas = document.getElementById('statusChart');
     }
-    
+
     // Show canvas
-    setChartCanvasReady(canvas);
-    
+    canvas.style.display = 'block';
+    canvas.style.opacity = '1';
+    canvas.style.maxWidth = '100%';
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+
     try {
         const ctx = canvas.getContext('2d');
-        
+
         // Map status to colors
         const colors = statusDistribution.map(s => {
             const successColor = window.ChartColors ? window.ChartColors.getThemeColors().success : '#10b981';
             const dangerColor = window.ChartColors ? window.ChartColors.getThemeColors().danger : '#ef4444';
             return s.status === translations.read ? successColor : dangerColor;
         });
-        
+
         charts.status = new Chart(ctx, {
             type: 'pie',
             data: {
@@ -1315,7 +1328,7 @@ function renderStatusChart(statusDistribution) {
                 }
             }
         });
-        
+
         // Ensure chart is fully rendered and visible
         setTimeout(() => {
             if (charts.status) {
@@ -1323,7 +1336,7 @@ function renderStatusChart(statusDistribution) {
                 charts.status.update('none');
             }
         }, 100);
-        
+
         // Attach export buttons
         if (window.ChartExport && container) {
             setTimeout(() => {
@@ -1341,11 +1354,11 @@ function renderTimelineChart(timeline) {
     if (!selectedPath) {
         return;
     }
-    
+
     // Find or create canvas container
     let canvas = document.getElementById('timelineChart');
     let container = canvas ? canvas.parentElement : null;
-    
+
     // If canvas doesn't exist, restore it from loading state
     if (!canvas || !container) {
         const chartCards = document.querySelectorAll('.chart-card');
@@ -1362,46 +1375,50 @@ function renderTimelineChart(timeline) {
             }
         }
     }
-    
+
     if (!canvas || !container) {
         console.error('Timeline chart canvas not found');
         return;
     }
-    
+
     // Remove loading overlay
     const loadingOverlay = container.querySelector('.chart-loading-overlay');
     if (loadingOverlay) {
         loadingOverlay.remove();
     }
-    
+
     if (charts.timeline) {
         charts.timeline.destroy();
     }
-    
+
     if (!timeline || timeline.length === 0) {
         // Show "no data" message
-        container.innerHTML = `<div class="empty-state empty-state-chart-xl"><i class="bi bi-calendar-event"></i><p>${translations.noTimelineData}</p></div>`;
+        container.innerHTML = `<div class="empty-state" style="height: 700px;"><i class="bi bi-calendar-event"></i><p>${translations.noTimelineData}</p></div>`;
         return;
     }
-    
+
     // Ensure canvas exists in container
     if (container.querySelector('#timelineChart') !== canvas) {
         container.innerHTML = '<canvas id="timelineChart"></canvas>';
         canvas = document.getElementById('timelineChart');
     }
-    
+
     // Show canvas
-    setChartCanvasReady(canvas);
-    
+    canvas.style.display = 'block';
+    canvas.style.opacity = '1';
+    canvas.style.maxWidth = '100%';
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+
     try {
         const ctx = canvas.getContext('2d');
-        
+
         // Format dates for better display
         const labels = timeline.map(t => {
             const date = new Date(t.date);
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         });
-        
+
         charts.timeline = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1517,7 +1534,7 @@ function renderTimelineChart(timeline) {
                 }
             }
         });
-        
+
         // Ensure chart is fully rendered and visible
         setTimeout(() => {
             if (charts.timeline) {
@@ -1525,7 +1542,7 @@ function renderTimelineChart(timeline) {
                 charts.timeline.update('none');
             }
         }, 100);
-        
+
         // Attach export buttons
         if (window.ChartExport && container) {
             setTimeout(() => {
@@ -1544,45 +1561,45 @@ async function loadPathWords(pathName) {
         console.log('Ignoring stale words response for:', pathName);
         return;
     }
-    
+
     const wordCloud = document.getElementById('wordCloud');
     if (!wordCloud) {
         console.warn('Word cloud element not found');
         return;
     }
-    
+
     // Cancel previous words request if any
     if (abortControllers.words) {
         abortControllers.words.abort();
     }
-    
+
     // Create new AbortController for this request
     abortControllers.words = new AbortController();
     const signal = abortControllers.words.signal;
-    
+
     wordCloud.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${translations.loadingKeywords}</p></div>`;
-    
+
     try {
         // Normalize path before sending
         const normalizedPath = pathName.replace(/\\/g, '/').replace(/\/$/, '');
         console.log('Loading words for path:', normalizedPath);
         const queryString = buildQueryString({ path: normalizedPath, limit: 30 });
         const response = await fetch(`/api/analytics/path/words?${queryString}`, { signal });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Double-check this is still the current path
         if (currentLoadingPath !== pathName) {
             console.log('Ignoring stale words response for:', pathName);
             return;
         }
-        
+
         console.log('Words data received for path:', pathName, data);
-        
+
         // Validate response structure
         if (!data || typeof data !== 'object') {
             console.error('Invalid words response format:', data);
@@ -1595,7 +1612,7 @@ async function loadPathWords(pathName) {
             `;
             return;
         }
-        
+
         // Check for error in response
         if (data.error) {
             console.error('API returned error:', data.error);
@@ -1608,7 +1625,7 @@ async function loadPathWords(pathName) {
             `;
             return;
         }
-        
+
         if (data.words && data.words.length > 0) {
             console.log('Rendering', data.words.length, 'words');
             renderWordCloud(data.words);
@@ -1633,7 +1650,7 @@ async function loadPathWords(pathName) {
             console.log('Words request cancelled for:', pathName);
             return;
         }
-        
+
         // Only show error if this is still the current path
         if (currentLoadingPath === pathName) {
             console.error('Error loading path words:', error);
@@ -1660,7 +1677,7 @@ function renderWordCloud(words) {
         console.warn('Word cloud container not found');
         return;
     }
-    
+
     if (!words || words.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -1670,18 +1687,18 @@ function renderWordCloud(words) {
         `;
         return;
     }
-    
+
     container.innerHTML = '';
-    
+
     // 🚀 FIXED: Handle both camelCase and snake_case property names
     const maxCount = words[0]?.fileCount || words[0]?.file_count || 1;
-    
+
     words.forEach(word => {
         const wordItem = document.createElement('div');
         wordItem.className = 'word-item';
         const fileCount = word.fileCount || word.file_count || 0;
         const wordText = word.word || '';
-        
+
         // Scale font size based on frequency (larger for more frequent words)
         const fontSize = Math.min(0.875 + (fileCount / maxCount) * 0.5, 1.5);
         wordItem.style.fontSize = fontSize + 'rem';
@@ -1694,7 +1711,7 @@ function renderWordCloud(words) {
         };
         container.appendChild(wordItem);
     });
-    
+
     // Note: Word frequency chart is rendered separately in loadPathWords
 }
 
@@ -1704,11 +1721,11 @@ function renderWordFrequencyChart(words) {
     if (!selectedPath) {
         return;
     }
-    
+
     // Find or create canvas container
     let canvas = document.getElementById('wordFrequencyChart');
     let container = canvas ? canvas.parentElement : null;
-    
+
     // If canvas doesn't exist, restore it from loading state
     if (!canvas || !container) {
         const chartCards = document.querySelectorAll('.chart-card');
@@ -1725,36 +1742,40 @@ function renderWordFrequencyChart(words) {
             }
         }
     }
-    
+
     if (!canvas || !container) {
         console.error('Word frequency chart canvas not found');
         return;
     }
-    
+
     // Remove loading overlay
     const loadingOverlay = container.querySelector('.chart-loading-overlay');
     if (loadingOverlay) {
         loadingOverlay.remove();
     }
-    
+
     if (charts.wordFrequency) {
         charts.wordFrequency.destroy();
     }
-    
+
     if (!words || words.length === 0) {
-        container.innerHTML = `<div class="empty-state empty-state-chart-md"><i class="bi bi-bar-chart"></i><p>${translations.noWordFrequencyData}</p></div>`;
+        container.innerHTML = `<div class="empty-state" style="height: 600px;"><i class="bi bi-bar-chart"></i><p>${translations.noWordFrequencyData}</p></div>`;
         return;
     }
-    
+
     // Ensure canvas exists in container
     if (container.querySelector('#wordFrequencyChart') !== canvas) {
         container.innerHTML = '<canvas id="wordFrequencyChart"></canvas>';
         canvas = document.getElementById('wordFrequencyChart');
     }
-    
+
     // Show canvas
-    setChartCanvasReady(canvas);
-    
+    canvas.style.display = 'block';
+    canvas.style.opacity = '1';
+    canvas.style.maxWidth = '100%';
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+
     try {
         const ctx = canvas.getContext('2d');
         // 🚀 FIXED: Handle both camelCase and snake_case property names
@@ -1846,7 +1867,7 @@ function renderWordFrequencyChart(words) {
                 }
             }
         });
-        
+
         // Ensure chart is fully rendered and visible
         setTimeout(() => {
             if (charts.wordFrequency) {
@@ -1854,7 +1875,7 @@ function renderWordFrequencyChart(words) {
                 charts.wordFrequency.update('none');
             }
         }, 100);
-        
+
         // Attach export buttons
         if (window.ChartExport && container) {
             setTimeout(() => {
@@ -1873,45 +1894,45 @@ async function loadPathFiles(pathName) {
         console.log('Ignoring stale files response for:', pathName);
         return;
     }
-    
+
     const filesGrid = document.getElementById('filesGrid');
     if (!filesGrid) {
         console.warn('Files grid element not found');
         return;
     }
-    
+
     // Cancel previous files request if any
     if (abortControllers.files) {
         abortControllers.files.abort();
     }
-    
+
     // Create new AbortController for this request
     abortControllers.files = new AbortController();
     const signal = abortControllers.files.signal;
-    
+
     filesGrid.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${translations.loadingFiles}</p></div>`;
-    
+
     try {
         // Normalize path before sending
         const normalizedPath = pathName.replace(/\\/g, '/').replace(/\/$/, '');
         console.log('Loading files for path:', normalizedPath);
         const queryString = buildQueryString({ path: normalizedPath });
         const response = await fetch(`/api/analytics/path/files?${queryString}`, { signal });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Double-check this is still the current path
         if (currentLoadingPath !== pathName) {
             console.log('Ignoring stale files response for:', pathName);
             return;
         }
-        
+
         console.log('Files data received for path:', pathName, data);
-        
+
         // Validate response structure
         if (!data || typeof data !== 'object') {
             console.error('Invalid files response format:', data);
@@ -1924,7 +1945,7 @@ async function loadPathFiles(pathName) {
             `;
             return;
         }
-        
+
         // Check for error in response
         if (data.error) {
             console.error('API returned error:', data.error);
@@ -1937,7 +1958,7 @@ async function loadPathFiles(pathName) {
             `;
             return;
         }
-        
+
         if (data.files && data.files.length > 0) {
             console.log(`Rendering ${data.files.length} files`);
             renderFiles(data.files);
@@ -1957,7 +1978,7 @@ async function loadPathFiles(pathName) {
             console.log('Files request cancelled for:', pathName);
             return;
         }
-        
+
         // Only show error if this is still the current path
         if (currentLoadingPath === pathName) {
             console.error('Error loading path files:', error);
@@ -1982,16 +2003,58 @@ function renderFiles(files) {
     const grid = document.getElementById('filesGrid');
     grid.innerHTML = '';
 
+    // Add custom scrollbar styling
+    if (!document.getElementById('filesGridScrollbarStyle')) {
+        const style = document.createElement('style');
+        style.id = 'filesGridScrollbarStyle';
+        style.textContent = `
+            .files-grid::-webkit-scrollbar {
+                width: 8px;
+            }
+            .files-grid::-webkit-scrollbar-track {
+                background: var(--border-light);
+                border-radius: 4px;
+            }
+            .files-grid::-webkit-scrollbar-thumb {
+                background: var(--border-dark);
+                border-radius: 4px;
+            }
+            .files-grid::-webkit-scrollbar-thumb:hover {
+                background: var(--text-muted);
+            }
+            .file-card-number {
+                position: absolute;
+                top: 0.5rem;
+                left: 0.5rem;
+                background: var(--primary-color);
+                color: white;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.75rem;
+                font-weight: 600;
+                z-index: 10;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            .file-card {
+                position: relative;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     files.forEach((file, index) => {
         const card = document.createElement('div');
         card.className = 'file-card';
         card.onclick = () => window.location.href = `/file/${file.id}`;
-        
+
         const fileIcon = getFileIcon(file.type);
         const statusClass = file.status === translations.read ? 'read' : 'unread';
         const fileNumber = index + 1;
-        
+
         card.innerHTML = `
             <div class="file-card-number">${fileNumber}</div>
             <div class="file-card-header">
@@ -2009,10 +2072,10 @@ function renderFiles(files) {
             </div>
             <span class="file-status-badge ${statusClass}">${file.status}</span>
         `;
-        
+
         grid.appendChild(card);
     });
-    
+
     // Check if horizontal scrolling is needed and show hint
     setTimeout(() => {
         const filesSection = document.getElementById('filesSection');
@@ -2020,7 +2083,7 @@ function renderFiles(files) {
         if (filesSection && scrollHint) {
             const hasScroll = filesSection.scrollWidth > filesSection.clientWidth;
             scrollHint.style.display = hasScroll ? 'block' : 'none';
-            
+
             // Add visual indicator for scrolling
             if (hasScroll) {
                 filesSection.classList.add('has-scroll');
@@ -2069,44 +2132,44 @@ async function loadPathClassifications(pathName) {
         console.log('Ignoring stale classifications response for:', pathName);
         return;
     }
-    
+
     // Cancel previous classifications request if any
     if (abortControllers.classifications) {
         abortControllers.classifications.abort();
     }
-    
+
     // Create new AbortController for this request
     abortControllers.classifications = new AbortController();
     const signal = abortControllers.classifications.signal;
-    
+
     try {
         // Normalize path before sending
         const normalizedPath = pathName.replace(/\\/g, '/').replace(/\/$/, '');
         console.log('Loading classifications for path:', normalizedPath);
         const queryString = buildQueryString({ path: normalizedPath });
         const response = await fetch(`/api/analytics/path/classifications?${queryString}`, { signal });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Double-check this is still the current path
         if (currentLoadingPath !== pathName) {
             console.log('Ignoring stale classifications response for:', pathName);
             return;
         }
-        
+
         console.log('Classifications data received for path:', pathName, data);
-        
+
         // Validate response structure
         if (!data || typeof data !== 'object') {
             console.error('Invalid classifications response format:', data);
             const canvas = document.getElementById('classificationChart');
             if (canvas && canvas.parentElement) {
                 canvas.parentElement.innerHTML = `
-                    <div class="empty-state empty-state-chart-md">
+                    <div class="empty-state" style="height: 600px;">
                         <i class="bi bi-exclamation-circle"></i>
                         <p>${translations.errorLoadingClassification}</p>
                     </div>
@@ -2114,14 +2177,14 @@ async function loadPathClassifications(pathName) {
             }
             return;
         }
-        
+
         // Check for error in response
         if (data.error) {
             console.error('API returned error:', data.error);
             const canvas = document.getElementById('classificationChart');
             if (canvas && canvas.parentElement) {
                 canvas.parentElement.innerHTML = `
-                    <div class="empty-state empty-state-chart-md">
+                    <div class="empty-state" style="height: 600px;">
                         <i class="bi bi-exclamation-circle"></i>
                         <p>${translations.errorLoadingClassification}: ${data.error}</p>
                     </div>
@@ -2129,17 +2192,17 @@ async function loadPathClassifications(pathName) {
             }
             return;
         }
-        
+
         // Update summary
         document.getElementById('totalFilesCount').textContent = data.totalFiles || 0;
         document.getElementById('categorizedFilesCount').textContent = data.categorizedFiles || 0;
         document.getElementById('uncategorizedFilesCount').textContent = data.uncategorizedFiles || 0;
-        
+
         // Always render classification chart (let function handle empty data)
         const classifications = data.classifications || [];
         console.log('Rendering classification chart with', classifications.length, 'classifications');
         renderClassificationChart(classifications);
-        
+
         // Always render classification details table (let function handle empty data)
         renderClassificationDetails(classifications);
     } catch (error) {
@@ -2148,14 +2211,14 @@ async function loadPathClassifications(pathName) {
             console.log('Classifications request cancelled for:', pathName);
             return;
         }
-        
+
         // Only show error if this is still the current path
         if (currentLoadingPath === pathName) {
             console.error('Error loading classifications:', error);
             const canvas = document.getElementById('classificationChart');
             if (canvas && canvas.parentElement) {
                 canvas.parentElement.innerHTML = `
-                    <div class="empty-state empty-state-chart-md">
+                    <div class="empty-state" style="height: 600px;">
                         <i class="bi bi-exclamation-circle"></i>
                         <p>${translations.errorLoadingClassification}</p>
                     </div>
@@ -2176,11 +2239,11 @@ function renderClassificationChart(classifications) {
     if (!selectedPath) {
         return;
     }
-    
+
     // Find or create canvas container
     let canvas = document.getElementById('classificationChart');
     let container = canvas ? canvas.parentElement : null;
-    
+
     // If canvas doesn't exist, restore it from loading state
     if (!canvas || !container) {
         const chartCards = document.querySelectorAll('.chart-card');
@@ -2197,39 +2260,43 @@ function renderClassificationChart(classifications) {
             }
         }
     }
-    
+
     if (!canvas || !container) {
         console.error('Classification chart canvas not found');
         return;
     }
-    
+
     // Remove loading overlay
     const loadingOverlay = container.querySelector('.chart-loading-overlay');
     if (loadingOverlay) {
         loadingOverlay.remove();
     }
-    
+
     if (charts.classification) {
         charts.classification.destroy();
     }
-    
+
     if (!classifications || classifications.length === 0) {
-        container.innerHTML = `<div class="empty-state empty-state-chart-lg"><i class="bi bi-tags"></i><p>${translations.noClassificationData}</p></div>`;
+        container.innerHTML = `<div class="empty-state" style="height: 650px;"><i class="bi bi-tags"></i><p>${translations.noClassificationData}</p></div>`;
         return;
     }
-    
+
     // Ensure canvas exists in container
     if (container.querySelector('#classificationChart') !== canvas) {
         container.innerHTML = '<canvas id="classificationChart"></canvas>';
         canvas = document.getElementById('classificationChart');
     }
-    
+
     // Show canvas
-    setChartCanvasReady(canvas);
-    
+    canvas.style.display = 'block';
+    canvas.style.opacity = '1';
+    canvas.style.maxWidth = '100%';
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+
     try {
         const ctx = canvas.getContext('2d');
-        
+
         // Generate colors for categories using ChartColors utility
         const chartColors = window.ChartColors ? window.ChartColors.getChartColors(Math.max(classifications.length, 10)) : null;
         const colors = chartColors || [
@@ -2237,12 +2304,12 @@ function renderClassificationChart(classifications) {
             '#06b6d4', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6',
             '#3b82f6', '#84cc16', '#f43f5e', '#06b6d4', '#a855f7'
         ];
-        
+
         // Set data attribute for right-side legend
         if (container) {
             container.setAttribute('data-legend-position', 'right');
         }
-        
+
         charts.classification = new Chart(ctx, {
             type: 'doughnut',
             data: {
@@ -2332,7 +2399,7 @@ function renderClassificationChart(classifications) {
                 }
             }
         });
-        
+
         // Don't set fixed heights via inline styles - let CSS handle responsive sizing
         // Only resize the chart if needed
         setTimeout(() => {
@@ -2340,7 +2407,7 @@ function renderClassificationChart(classifications) {
                 charts.classification.resize();
             }
         }, 300);
-        
+
         // Attach export buttons
         if (window.ChartExport && container) {
             setTimeout(() => {
@@ -2363,61 +2430,65 @@ function renderClassificationDetails(classifications) {
     // Handle empty data
     if (!classifications || classifications.length === 0) {
         container.innerHTML = `
-            <div class="empty-state category-breakdown-empty">
-                <i class="bi bi-tags" aria-hidden="true"></i>
-                <p>${translations.noClassificationData}</p>
+            <div class="empty-state" style="padding: 2rem; text-align: center;">
+                <i class="bi bi-tags" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
+                <p style="color: var(--text-light); font-size: 0.875rem;">${translations.noClassificationData}</p>
             </div>
         `;
         return;
     }
 
     let html = `
-        <h4 class="category-breakdown-title">
+        <h4 style="margin-bottom: 1rem; color: var(--text-heading); font-size: 1.1rem;">
             <i class="bi bi-list-check"></i> ${translations.detailedBreakdown}
-            <span class="category-breakdown-subtitle">
+            <span style="font-size: 0.875rem; color: var(--text-light); font-weight: 400; margin-inline-start: 0.5rem;">
                 ${translations.clickRowToSeeFiles}
             </span>
         </h4>
-        <div class="table-wrapper category-breakdown-table-wrapper">
-            <table class="table category-breakdown-table">
+        <div style="overflow-x: auto; overflow-y: visible; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch;">
+            <table style="width: 100%; min-width: 600px; border-collapse: collapse; table-layout: auto;">
                 <thead>
-                    <tr>
-                        <th>${translations.category}</th>
-                        <th class="text-center">${translations.files}</th>
-                        <th class="text-center">${translations.keywords}</th>
-                        <th class="text-center">${translations.percentage}</th>
-                        <th>${translations.distribution}</th>
+                    <tr style="background: var(--table-header-bg); border-bottom: 2px solid var(--table-border);">
+                        <th style="padding: 0.75rem; text-align: start; font-weight: 600; color: var(--table-header-text);">${translations.category}</th>
+                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.files}</th>
+                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.keywords}</th>
+                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.percentage}</th>
+                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.distribution}</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
 
-    classifications.forEach((cat) => {
+    classifications.forEach((cat, index) => {
         // Handle both camelCase and snake_case property names
         const categoryName = cat.category || cat.category_name || 'Unknown';
         const fileCount = cat.fileCount || cat.file_count || 0;
         const totalKeywords = cat.totalKeywords || cat.total_keywords || 0;
         const percentage = cat.percentage || 0;
+
         const isUncategorized = categoryName === 'Uncategorized';
-        const categoryClass = isUncategorized ? 'category-icon-danger' : 'category-icon-primary';
-        const progressClass = isUncategorized ? 'category-distribution-fill-danger' : 'category-distribution-fill-primary';
+        const backgroundColor = index % 2 === 0 ? 'var(--table-row-bg)' : 'var(--bg-section)';
+        const categoryColor = isUncategorized ? 'var(--danger-color)' : 'var(--primary-color)';
 
         html += `
             <tr class="category-row-clickable"
-                data-category="${categoryName.replace(/"/g, '&quot;')}">
-                <td>
-                    <div class="category-breakdown-label">
-                        <i class="bi bi-tag-fill category-breakdown-icon ${categoryClass}"></i>
-                        <span>${categoryName}</span>
-                        <i class="bi bi-box-arrow-up-right category-breakdown-open-icon"></i>
+                data-category="${categoryName.replace(/"/g, '&quot;')}"
+                style="background: ${backgroundColor}; border-bottom: 1px solid var(--table-border); cursor: pointer; transition: background-color 0.2s;"
+                onmouseover="this.style.background='var(--table-row-hover)'"
+                onmouseout="this.style.background='${backgroundColor}'">
+                <td style="padding: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="bi bi-tag-fill" style="color: ${categoryColor};"></i>
+                        <span style="font-weight: 500; word-break: break-word; overflow-wrap: break-word;">${categoryName}</span>
+                        <i class="bi bi-box-arrow-up-right" style="font-size: 0.75rem; color: var(--text-muted); margin-inline-start: 0.25rem;"></i>
                     </div>
                 </td>
-                <td class="text-center fw-semibold">${fileCount}</td>
-                <td class="text-center">${totalKeywords}</td>
-                <td class="text-center">${percentage.toFixed(1)}%</td>
-                <td>
-                    <div class="category-distribution-track">
-                        <div class="category-distribution-fill ${progressClass}" style="width: ${percentage}%;"></div>
+                <td style="padding: 0.75rem; text-align: center; font-weight: 600;">${fileCount}</td>
+                <td style="padding: 0.75rem; text-align: center;">${totalKeywords}</td>
+                <td style="padding: 0.75rem; text-align: center;">${percentage.toFixed(1)}%</td>
+                <td style="padding: 0.75rem;">
+                    <div style="background: var(--border-color); border-radius: 0.25rem; height: 20px; overflow: hidden;">
+                        <div style="background: ${categoryColor}; height: 100%; width: ${percentage}%; transition: width 0.3s;"></div>
                     </div>
                 </td>
             </tr>
@@ -2448,13 +2519,13 @@ async function openCategoryModal(category) {
     const modal = document.getElementById('categoryFilesModal');
     const titleElement = document.getElementById('modalCategoryTitle');
     const contentElement = document.getElementById('modalFilesContent');
-    
+
     // Update modal title
     titleElement.innerHTML = formatTranslation('filesInCategory', { category: category });
-    
+
     // Show modal
     modal.classList.add('active');
-    
+
     // Show loading state
     contentElement.innerHTML = `
         <div class="modal-loading">
@@ -2462,24 +2533,24 @@ async function openCategoryModal(category) {
             <p>${formatTranslation('loadingFilesFor', { category: category })}</p>
         </div>
     `;
-    
+
     try {
         // 🚀 FIXED: Handle both camelCase and snake_case property names
         const currentPath = selectedPath ? (selectedPath.fullPath || selectedPath.full_path || selectedPath.name) : '';
-        
+
         // Fetch files for this category
         const response = await fetch(
             `/api/analytics/path/category-files?path=${encodeURIComponent(currentPath)}&category=${encodeURIComponent(category)}`
         );
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         console.log(`Loaded ${data.files.length} files for category ${category}`);
-        
+
         if (data.files && data.files.length > 0) {
             renderModalFiles(data.files, category);
         } else {
@@ -2506,28 +2577,27 @@ async function openCategoryModal(category) {
 // Render files in modal
 function renderModalFiles(files, category) {
     const contentElement = document.getElementById('modalFilesContent');
-    
+
     let html = `
         <div class="modal-header-info-box">
             <div>
                 <div>
-                    <strong class="modal-file-count">${files.length}</strong>
-                    <span class="modal-file-count-label"> ${formatTranslation('fileFound', { count: files.length, s: files.length !== 1 ? 's' : '' })}</span>
+                    <strong style="font-size: 1.1rem; color: var(--text-heading);">${files.length}</strong>
+                    <span style="color: var(--text-light);"> ${formatTranslation('fileFound', { count: files.length, s: files.length !== 1 ? 's' : '' })}</span>
                 </div>
-                <div class="modal-file-context">
-                    ${category === 'Uncategorized' ? 
-                        `<i class="bi bi-info-circle"></i> ${translations.theseFilesNoKeywords}` : 
+                <div style="font-size: 0.875rem; color: var(--text-light);">
+                    ${category === 'Uncategorized' ?
+                        `<i class="bi bi-info-circle"></i> ${translations.theseFilesNoKeywords}` :
                         `<i class="bi bi-tags"></i> ${translations.classificationBasedOnKeywords}`}
                 </div>
             </div>
         </div>
     `;
-    
+
     files.forEach(file => {
         const fileIcon = getFileIcon(file.type);
         const hasKeywords = file.keywords && file.keywords.length > 0;
-        const statusClass = file.status === translations.read ? 'status-dot-read' : 'status-dot-unread';
-        
+
         html += `
             <div class="modal-file-card" onclick="window.open('/file/${file.id}', '_blank')">
                 <div class="modal-file-header">
@@ -2538,20 +2608,20 @@ function renderModalFiles(files, category) {
                             <span><i class="bi bi-file-earmark"></i> ${file.type || translations.unknownType}</span>
                             <span><i class="bi bi-hdd"></i> ${formatFileSize(file.size)}</span>
                             ${file.created ? `<span><i class="bi bi-calendar"></i> ${new Date(file.created).toLocaleDateString()}</span>` : ''}
-                            <span><i class="bi bi-circle-fill status-dot ${statusClass}"></i> ${file.status}</span>
+                            <span><i class="bi bi-circle-fill" style="font-size: 0.5rem; color: ${file.status === translations.read ? 'var(--success-color)' : 'var(--danger-color)'};"></i> ${file.status}</span>
                         </div>
                     </div>
                 </div>
         `;
-        
+
         if (hasKeywords) {
             html += `
                 <div class="modal-keywords">
-                    <span class="modal-keywords-label">
+                    <span style="font-size: 0.875rem; color: var(--text-light); margin-inline-end: 0.5rem;">
                         <i class="bi bi-tags"></i> ${translations.keywords}:
                     </span>
             `;
-            
+
             file.keywords.forEach(keyword => {
                 html += `
                     <div class="modal-keyword-badge">
@@ -2560,19 +2630,19 @@ function renderModalFiles(files, category) {
                     </div>
                 `;
             });
-            
+
             html += `</div>`;
         } else if (category !== 'Uncategorized') {
             html += `
-                <div class="modal-file-note">
+                <div style="padding-top: 0.75rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted);">
                     <i class="bi bi-info-circle"></i> ${translations.noSpecificKeywords}
                 </div>
             `;
         }
-        
+
         html += `</div>`;
     });
-    
+
     contentElement.innerHTML = html;
 }
 
@@ -2586,7 +2656,7 @@ function closeCategoryModal() {
 }
 
 // Close modal when clicking outside
-function setupModalOverlayHandlers() {
+document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('categoryFilesModal');
     if (modal) {
         modal.addEventListener('click', function(e) {
@@ -2595,7 +2665,7 @@ function setupModalOverlayHandlers() {
             }
         });
     }
-    
+
     // Close modal with Escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
@@ -2603,7 +2673,7 @@ function setupModalOverlayHandlers() {
             closeCategoryWordsModal();
         }
     });
-    
+
     // Category Words Modal handlers
     const wordsModal = document.getElementById('categoryWordsModal');
     if (wordsModal) {
@@ -2613,7 +2683,7 @@ function setupModalOverlayHandlers() {
             }
         });
     }
-}
+});
 
 // Load category words analysis
 async function loadCategoryWordsAnalysis(pathName) {
@@ -2622,66 +2692,66 @@ async function loadCategoryWordsAnalysis(pathName) {
         console.log('Ignoring stale category words response for:', pathName);
         return;
     }
-    
+
     // Cancel previous category words request if any
     if (abortControllers.categoryWords) {
         abortControllers.categoryWords.abort();
     }
-    
+
     // Create new AbortController for this request
     abortControllers.categoryWords = new AbortController();
     const signal = abortControllers.categoryWords.signal;
-    
+
     try {
         // Normalize path before sending
         const normalizedPath = pathName.replace(/\\/g, '/').replace(/\/$/, '');
         console.log('Loading category words analysis for path:', normalizedPath);
         const queryString = buildQueryString({ path: normalizedPath });
         const response = await fetch(`/api/analytics/path/category-words-analysis?${queryString}`, { signal });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Double-check this is still the current path
         if (currentLoadingPath !== pathName) {
             console.log('Ignoring stale category words response for:', pathName);
             return;
         }
-        
+
         console.log('Category words analysis data received for path:', pathName, data);
-        
+
         // Validate response structure
         if (!data || typeof data !== 'object') {
             console.error('Invalid category words response format:', data);
             document.getElementById('categoryWordsDetails').innerHTML = `
-                <div class="empty-state category-breakdown-empty">
+                <div class="empty-state" style="padding: 2rem;">
                     <i class="bi bi-exclamation-circle"></i>
                     <p>${translations.errorLoadingCategoryAnalysis}: Invalid response format</p>
                 </div>
             `;
             return;
         }
-        
+
         // Check for error in response
         if (data.error) {
             console.error('API returned error:', data.error);
             document.getElementById('categoryWordsDetails').innerHTML = `
-                <div class="empty-state category-breakdown-empty">
+                <div class="empty-state" style="padding: 2rem;">
                     <i class="bi bi-exclamation-circle"></i>
                     <p>${translations.errorLoadingCategoryAnalysis}: ${data.error}</p>
                 </div>
             `;
             return;
         }
-        
+
         // Update summary
         document.getElementById('totalCategoriesCount').textContent = data.totalCategories || 0;
         document.getElementById('totalCategoryWordsCount').textContent = data.totalWords || 0;
         document.getElementById('totalCategoryFilesCount').textContent = data.totalFiles || 0;
-        
+
         // Always render category words details table (let function handle empty data)
         const categories = data.categories || [];
         console.log('Rendering category words details with', categories.length, 'categories');
@@ -2692,12 +2762,12 @@ async function loadCategoryWordsAnalysis(pathName) {
             console.log('Category words request cancelled for:', pathName);
             return;
         }
-        
+
         // Only show error if this is still the current path
         if (currentLoadingPath === pathName) {
             console.error('Error loading category words analysis:', error);
             document.getElementById('categoryWordsDetails').innerHTML = `
-                <div class="empty-state category-breakdown-empty">
+                <div class="empty-state" style="padding: 2rem;">
                     <i class="bi bi-exclamation-circle"></i>
                     <p>${translations.errorLoadingCategoryAnalysis}</p>
                 </div>
@@ -2722,36 +2792,36 @@ function renderCategoryWordsDetails(categories) {
     // Handle empty data
     if (!categories || categories.length === 0) {
         container.innerHTML = `
-            <div class="empty-state category-breakdown-empty">
-                <i class="bi bi-diagram-3" aria-hidden="true"></i>
-                <p>${translations.noCategoryData}</p>
+            <div class="empty-state" style="padding: 2rem; text-align: center;">
+                <i class="bi bi-diagram-3" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
+                <p style="color: var(--text-light); font-size: 0.875rem;">${translations.noCategoryData}</p>
             </div>
         `;
         return;
     }
 
     let html = `
-        <h4 class="category-breakdown-title">
+        <h4 style="margin-bottom: 1rem; color: var(--text-heading); font-size: 1.1rem;">
             <i class="bi bi-table"></i> ${translations.categoryWordsBreakdown}
-            <span class="category-breakdown-subtitle">
+            <span style="font-size: 0.875rem; color: var(--text-light); font-weight: 400; margin-inline-start: 0.5rem;">
                 ${translations.clickRowToSeeWords}
             </span>
         </h4>
-        <div class="table-wrapper category-breakdown-table-wrapper">
-            <table class="table category-breakdown-table">
+        <div style="overflow-x: auto; overflow-y: visible; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch;">
+            <table style="width: 100%; min-width: 600px; border-collapse: collapse; table-layout: auto;">
                 <thead>
-                    <tr>
-                        <th>${translations.categoryName}</th>
-                        <th class="text-center">${translations.files}</th>
-                        <th class="text-center">${translations.words}</th>
-                        <th class="text-center">${translations.percentage}</th>
-                        <th>${translations.distribution}</th>
+                    <tr style="background: var(--table-header-bg); border-bottom: 2px solid var(--table-border);">
+                        <th style="padding: 0.75rem; text-align: start; font-weight: 600; color: var(--table-header-text);">${translations.categoryName}</th>
+                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.files}</th>
+                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.words}</th>
+                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.percentage}</th>
+                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.distribution}</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
 
-    categories.forEach((cat) => {
+    categories.forEach((cat, index) => {
         // Handle both camelCase and snake_case property names
         const categoryId = cat.categoryId || cat.category_id || 0;
         const categoryName = cat.categoryName || cat.category_name || 'Unknown';
@@ -2759,23 +2829,29 @@ function renderCategoryWordsDetails(categories) {
         const wordCount = cat.wordCount || cat.word_count || 0;
         const filePercentage = cat.filePercentage || cat.file_percentage || 0;
 
+        const backgroundColor = index % 2 === 0 ? 'var(--table-row-bg)' : 'var(--bg-section)';
+        const categoryColor = 'var(--primary-color)';
+
         html += `
-            <tr class="category-words-row-clickable category-row-clickable"
+            <tr class="category-words-row-clickable"
                 data-category-id="${categoryId}"
-                data-category-name="${categoryName.replace(/"/g, '&quot;')}">
-                <td>
-                    <div class="category-breakdown-label">
-                        <i class="bi bi-bookmark-fill category-breakdown-icon category-icon-primary"></i>
-                        <span>${categoryName}</span>
-                        <i class="bi bi-box-arrow-up-right category-breakdown-open-icon"></i>
+                data-category-name="${categoryName.replace(/"/g, '&quot;')}"
+                style="background: ${backgroundColor}; border-bottom: 1px solid var(--table-border); cursor: pointer; transition: background-color 0.2s;"
+                onmouseover="this.style.background='var(--table-row-hover)'"
+                onmouseout="this.style.background='${backgroundColor}'">
+                <td style="padding: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="bi bi-bookmark-fill" style="color: ${categoryColor};"></i>
+                        <span style="font-weight: 500; word-break: break-word; overflow-wrap: break-word;">${categoryName}</span>
+                        <i class="bi bi-box-arrow-up-right" style="font-size: 0.75rem; color: var(--text-muted); margin-inline-start: 0.25rem;"></i>
                     </div>
                 </td>
-                <td class="text-center fw-semibold">${fileCount}</td>
-                <td class="text-center">${wordCount}</td>
-                <td class="text-center">${filePercentage.toFixed(1)}%</td>
-                <td>
-                    <div class="category-distribution-track">
-                        <div class="category-distribution-fill category-distribution-fill-primary" style="width: ${filePercentage}%;"></div>
+                <td style="padding: 0.75rem; text-align: center; font-weight: 600;">${fileCount}</td>
+                <td style="padding: 0.75rem; text-align: center;">${wordCount}</td>
+                <td style="padding: 0.75rem; text-align: center;">${filePercentage.toFixed(1)}%</td>
+                <td style="padding: 0.75rem;">
+                    <div style="background: var(--border-color); border-radius: 0.25rem; height: 20px; overflow: hidden;">
+                        <div style="background: ${categoryColor}; height: 100%; width: ${filePercentage}%; transition: width 0.3s;"></div>
                     </div>
                 </td>
             </tr>
@@ -2813,20 +2889,20 @@ async function openCategoryWordsModal(categoryId, categoryName) {
     const modal = document.getElementById('categoryWordsModal');
     const titleElement = document.getElementById('modalCategoryWordsTitle');
     const contentElement = document.getElementById('modalCategoryWordsContent');
-    
+
     // Store category context for use when opening word files
     currentCategoryContext.categoryId = categoryId;
     currentCategoryContext.categoryName = categoryName;
-    
+
     // Update modal title
     titleElement.innerHTML = formatTranslation('wordsInCategoryTitle', { category: categoryName });
-    
+
     // Show modal
     modal.classList.add('active');
-    
+
     // Set initial z-index for the first modal (default is 10000)
     modal.style.zIndex = '10000';
-    
+
     // Show loading state
     contentElement.innerHTML = `
         <div class="modal-loading">
@@ -2834,24 +2910,24 @@ async function openCategoryWordsModal(categoryId, categoryName) {
             <p>${formatTranslation('loadingWordsFor', { category: categoryName })}</p>
         </div>
     `;
-    
+
     try {
         // 🚀 FIXED: Handle both camelCase and snake_case property names
         const currentPath = selectedPath ? (selectedPath.fullPath || selectedPath.full_path || selectedPath.name) : '';
-        
+
         // Fetch words for this category
         const response = await fetch(
             `/api/analytics/path/category-words-detail?category_id=${categoryId}&path=${encodeURIComponent(currentPath)}`
         );
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         console.log(`Loaded ${data.words.length} words for category ${categoryName}`);
-        
+
         if (data.words && data.words.length > 0) {
             renderCategoryWords(data.words, categoryName, categoryId);
         } else {
@@ -2880,36 +2956,40 @@ function renderCategoryWords(words, categoryName, categoryId) {
     const contentElement = document.getElementById('modalCategoryWordsContent');
 
     let html = `
-        <div class="modal-summary-callout">
-            <div class="modal-summary-row">
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-section); border-radius: 0.5rem; border-left: 4px solid var(--primary-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                 <div>
-                    <strong class="modal-file-count">${words.length}</strong>
-                    <span class="modal-file-count-label"> ${formatTranslation('wordsInCategory', { count: words.length, s: words.length !== 1 ? 's' : '' })}</span>
+                    <strong style="font-size: 1.1rem; color: var(--text-heading);">${words.length}</strong>
+                    <span style="color: var(--text-light);"> ${formatTranslation('wordsInCategory', { count: words.length, s: words.length !== 1 ? 's' : '' })}</span>
                 </div>
-                <div class="modal-file-context">
+                <div style="font-size: 0.875rem; color: var(--text-light);">
                     <i class="bi bi-info-circle"></i> ${translations.clickWordToSeeFiles}
                 </div>
             </div>
         </div>
 
-        <div class="category-words-grid">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
     `;
 
     words.forEach(word => {
-        const usageClass = word.fileCount > 10 ? 'usage-count-high' : word.fileCount > 5 ? 'usage-count-medium' : 'usage-count-low';
+        const usageColor = word.fileCount > 10 ? 'var(--success-color)' : word.fileCount > 5 ? 'var(--warning-color)' : 'var(--text-muted)';
+
         const wordTextEscaped = word.word.replace(/"/g, '&quot;');
         html += `
-            <div class="word-card-clickable category-word-card"
+            <div class="word-card-clickable"
                  data-word-id="${word.id}"
                  data-word-text="${wordTextEscaped}"
-                 data-category-id="${categoryId || ''}">
-                <div class="category-word-card-header">
-                    <span class="category-word-text">${word.word}</span>
-                    <span class="category-word-count ${usageClass}">
+                 data-category-id="${categoryId || ''}"
+                 style="background: var(--bg-section); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; transition: all 0.2s; cursor: pointer;"
+                 onmouseover="this.style.borderColor='var(--primary-color)'; this.style.transform='translateY(-2px)'; const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim(); this.style.boxShadow='0 4px 12px ' + (primaryColor ? primaryColor + '26' : 'rgba(102, 126, 234, 0.15)');"
+                 onmouseout="this.style.borderColor='var(--border-color)'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 600; color: var(--text-heading); word-break: break-word;">${word.word}</span>
+                    <span style="background: ${usageColor}; color: var(--text-white); padding: 0.125rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600; flex-shrink: 0; margin-left: 0.5rem;">
                         ${word.fileCount}
                     </span>
                 </div>
-                <div class="category-word-meta">
+                <div style="font-size: 0.75rem; color: var(--text-light);">
                     <i class="bi bi-files"></i> ${formatTranslation('foundInFiles', { count: word.fileCount, s: word.fileCount !== 1 ? 's' : '' })}
                 </div>
             </div>
@@ -2922,14 +3002,14 @@ function renderCategoryWords(words, categoryName, categoryId) {
 
     contentElement.innerHTML = html;
 
-    // Add event handlers for word cards
+    // Add event delegation for word card clicks
     contentElement.querySelectorAll('.word-card-clickable').forEach(card => {
         card.addEventListener('click', function() {
             const wordId = this.getAttribute('data-word-id');
             const wordText = this.getAttribute('data-word-text');
-            const categoryId = this.getAttribute('data-category-id');
+            const catId = this.getAttribute('data-category-id');
             if (wordId && wordText) {
-                openWordFilesModal(parseInt(wordId), wordText, categoryId ? parseInt(categoryId) : null);
+                openWordFilesModal(parseInt(wordId), wordText, catId ? parseInt(catId) : null);
             }
         });
     });
@@ -2941,26 +3021,26 @@ async function openWordFilesModal(wordId, wordText, categoryId = null) {
     const modal = document.getElementById('categoryFilesModal');
     const titleElement = document.getElementById('modalCategoryTitle');
     const contentElement = document.getElementById('modalFilesContent');
-    
+
     // Check if categoryWordsModal is currently open
     const wordsModal = document.getElementById('categoryWordsModal');
     const isWordsModalOpen = wordsModal && wordsModal.classList.contains('active');
-    
+
     // Use categoryId from parameter or from current context
     const effectiveCategoryId = categoryId || currentCategoryContext.categoryId;
     const categoryName = currentCategoryContext.categoryName || '';
-    
+
     // Update modal title - show category context if available
     if (effectiveCategoryId && categoryName) {
-        titleElement.innerHTML = formatTranslation('filesContaining', { word: wordText }) + 
-            ` <span class="modal-title-context">(${translations.inCategory || 'in category'}: ${categoryName})</span>`;
+        titleElement.innerHTML = formatTranslation('filesContaining', { word: wordText }) +
+            ` <span style="font-size: 0.875rem; color: var(--text-light); font-weight: 400;">(${translations.inCategory || 'in category'}: ${categoryName})</span>`;
     } else {
         titleElement.innerHTML = formatTranslation('filesContaining', { word: wordText });
     }
-    
+
     // Show modal
     modal.classList.add('active');
-    
+
     // If opening from another modal, set higher z-index to appear above it
     // Default modal z-index is 10000, so we need to set it higher
     if (isWordsModalOpen) {
@@ -2975,7 +3055,7 @@ async function openWordFilesModal(wordId, wordText, categoryId = null) {
             wordsModal.style.zIndex = '';
         }
     }
-    
+
     // Show loading state
     contentElement.innerHTML = `
         <div class="modal-loading">
@@ -2983,30 +3063,30 @@ async function openWordFilesModal(wordId, wordText, categoryId = null) {
             <p>${formatTranslation('loadingFilesContaining', { word: wordText })}</p>
         </div>
     `;
-    
+
     try {
         // 🚀 FIXED: Handle both camelCase and snake_case property names
         const currentPath = selectedPath ? (selectedPath.fullPath || selectedPath.full_path || selectedPath.name) : '';
-        
+
         // Build query string with optional category_id
         let queryString = `word_id=${wordId}&path=${encodeURIComponent(currentPath)}`;
         if (effectiveCategoryId) {
             queryString += `&category_id=${effectiveCategoryId}`;
         }
-        
+
         // Fetch files containing this word (with category filter if provided)
         const response = await fetch(
             `/api/analytics/path/word-files?${queryString}`
         );
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         console.log(`Loaded ${data.files.length} files containing "${wordText}"${effectiveCategoryId ? ` (filtered by category ${effectiveCategoryId})` : ''}`);
-        
+
         if (data.files && data.files.length > 0) {
             renderWordFiles(data.files, wordText, data.word, effectiveCategoryId, categoryName);
         } else {
@@ -3038,16 +3118,16 @@ function renderWordFiles(files, wordText, wordDisplay, categoryId = null, catego
         <div class="modal-header-info-box">
             <div>
                 <div>
-                    <strong class="modal-file-count">${files.length}</strong>
-                    <span class="modal-file-count-label"> ${formatTranslation('filesContain', { count: files.length, s: files.length !== 1 ? 's' : '', word: wordDisplay })}</span>
+                    <strong style="font-size: 1.1rem; color: var(--text-dark);">${files.length}</strong>
+                    <span style="color: var(--text-light);"> ${formatTranslation('filesContain', { count: files.length, s: files.length !== 1 ? 's' : '', word: wordDisplay })}</span>
                     ${categoryId && categoryName ? `
-                        <div class="modal-file-category-context">
-                            <i class="bi bi-bookmark-fill"></i>
+                        <div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;">
+                            <i class="bi bi-bookmark-fill" style="color: var(--primary-color);"></i>
                             ${translations.showingCategoryWords || 'Showing words from category'}: <strong>${categoryName}</strong>
                         </div>
                     ` : ''}
                 </div>
-                <div class="modal-file-context">
+                <div style="font-size: 0.875rem; color: var(--text-light);">
                     <i class="bi bi-sort-down"></i> ${translations.sortedByFrequency}
                 </div>
             </div>
@@ -3056,7 +3136,6 @@ function renderWordFiles(files, wordText, wordDisplay, categoryId = null, catego
 
     files.forEach(file => {
         const fileIcon = getFileIcon(file.type);
-        const statusClass = file.status === translations.read ? 'status-dot-read' : 'status-dot-unread';
 
         html += `
             <div class="modal-file-card" onclick="window.open('/file/${file.id}', '_blank')">
@@ -3068,34 +3147,34 @@ function renderWordFiles(files, wordText, wordDisplay, categoryId = null, catego
                             <span><i class="bi bi-file-earmark"></i> ${file.type || translations.unknownType}</span>
                             <span><i class="bi bi-hdd"></i> ${formatFileSize(file.size)}</span>
                             ${file.created ? `<span><i class="bi bi-calendar"></i> ${new Date(file.created).toLocaleDateString()}</span>` : ''}
-                            <span><i class="bi bi-circle-fill status-dot ${statusClass}"></i> ${file.status}</span>
+                            <span><i class="bi bi-circle-fill" style="font-size: 0.5rem; color: ${file.status === translations.read ? 'var(--success-color)' : 'var(--danger-color)'};"></i> ${file.status}</span>
                         </div>
                     </div>
                 </div>
                 <div class="modal-keywords">
-                    <span class="modal-keywords-label">
+                    <span style="font-size: 0.875rem; color: var(--text-light); margin-inline-end: 0.5rem;">
                         <i class="bi bi-file-text"></i> ${formatTranslation('appearsTimesInFile', { count: file.wordCount, s: file.wordCount !== 1 ? 's' : '' })}
                     </span>
                     ${file.words && file.words.length > 0 ? `
-                        <div class="modal-word-breakdown">
-                            <div class="modal-word-breakdown-label">
+                        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                            <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.5rem; font-weight: 500;">
                                 <i class="bi bi-tags"></i>
                                 ${categoryId && categoryName ?
                                     `${translations.categoryWordsInFile || 'Category words in file'}: <strong>${categoryName}</strong>` :
                                     (translations.wordsInFile || 'Words in file')}:
                             </div>
-                            <div class="modal-word-chip-list">
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                                 ${file.words.slice(0, 20).map(word => `
-                                    <span class="modal-word-chip">
-                                        <span class="modal-word-chip-text">${escapeHtml(word.word)}</span>
-                                        <span class="modal-word-chip-count">(${word.count})</span>
+                                    <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: var(--border-light); border-radius: 0.375rem; font-size: 0.75rem; color: var(--text-dark);">
+                                        <span style="font-weight: 500;">${escapeHtml(word.word)}</span>
+                                        <span style="color: var(--text-muted);">(${word.count})</span>
                                     </span>
                                 `).join('')}
-                                ${file.words.length > 20 ? `<span class="modal-word-chip-more">+${file.words.length - 20} more</span>` : ''}
+                                ${file.words.length > 20 ? `<span style="font-size: 0.75rem; color: var(--text-muted); padding: 0.25rem 0.5rem;">+${file.words.length - 20} more</span>` : ''}
                             </div>
                         </div>
                     ` : `
-                        <div class="modal-file-note">
+                        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted);">
                             <i class="bi bi-info-circle"></i> ${translations.noWordsInFile}
                         </div>
                     `}
@@ -3128,10 +3207,6 @@ function closeCategoryWordsModal() {
 if (typeof window !== 'undefined') {
     window.closeCategoryModal = closeCategoryModal;
     window.closeCategoryWordsModal = closeCategoryWordsModal;
-}
-
-export default function init() {
-    initializePathAnalysisPage();
 }
 
 function showError() {

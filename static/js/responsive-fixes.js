@@ -1,84 +1,194 @@
 /**
- * Responsive data hygiene for INFORAXIS.
- *
- * The enterprise workspace layout is owned by CSS (styles.css,
- * responsive-fixes.css, and data-interface.css). This module deliberately avoids
- * writing visual/layout inline styles; its only job is to add semantic metadata
- * that CSS and assistive technology can use on compact screens.
+ * JavaScript fixes for responsive design issues
+ * Prevents duplicate pagination and fixes layout problems
  */
 
 (function() {
     'use strict';
 
-    const TABLE_SELECTOR = 'table';
-    const CELL_SELECTOR = 'tbody tr:not(.ia-detail-row) td';
+    /**
+     * Remove duplicate pagination containers
+     */
+    function removeDuplicatePagination() {
+        // Find all pagination containers
+        const paginationContainers = document.querySelectorAll('.unified-pagination-container');
 
-    function headerText(headers, index) {
-        const header = headers[index];
-        if (!header) return '';
-        return (header.textContent || '')
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
+        if (paginationContainers.length > 1) {
+            // Keep only the first one, remove the rest
+            for (let i = 1; i < paginationContainers.length; i++) {
+                paginationContainers[i].remove();
+            }
+        }
 
-    function tablesFromRoot(root) {
-        const tables = [];
-        const elementRoot = root instanceof Element ? root : null;
-        const closestTable = elementRoot?.closest(TABLE_SELECTOR);
-
-        if (elementRoot?.matches(TABLE_SELECTOR)) tables.push(elementRoot);
-        if (closestTable) tables.push(closestTable);
-        root.querySelectorAll?.(TABLE_SELECTOR).forEach((table) => tables.push(table));
-
-        return Array.from(new Set(tables));
+        // Also check for old pagination containers
+        const oldPaginationContainers = document.querySelectorAll('.pagination-container');
+        if (oldPaginationContainers.length > 1) {
+            for (let i = 1; i < oldPaginationContainers.length; i++) {
+                oldPaginationContainers[i].remove();
+            }
+        }
     }
 
     /**
-     * Add data-label attributes to cells so narrow layouts can expose column
-     * context without JavaScript taking over the table layout.
+     * Fix table responsiveness on small screens
      */
-    function annotateResponsiveTables(root = document) {
-        tablesFromRoot(root).forEach((table) => {
-            if (table.dataset.responsiveLabels === 'false') return;
+    function fixTableResponsiveness() {
+        const tables = document.querySelectorAll('table');
 
-            const headers = Array.from(table.querySelectorAll('thead th'));
-            if (!headers.length) return;
+        tables.forEach(table => {
+            // Add data-label attributes to table cells for mobile view
+            if (window.innerWidth <= 767) {
+                const headers = table.querySelectorAll('thead th');
+                const rows = table.querySelectorAll('tbody tr');
 
-            table.querySelectorAll(CELL_SELECTOR).forEach((cell) => {
-                if (cell.hasAttribute('data-label')) return;
-                const index = cell.cellIndex;
-                const label = headerText(headers, index);
-                if (label) cell.setAttribute('data-label', label);
-            });
-        });
-    }
-
-    function initResponsiveMetadata() {
-        annotateResponsiveTables(document);
-
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        annotateResponsiveTables(node);
-                    }
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    cells.forEach((cell, index) => {
+                        if (headers[index]) {
+                            const label = headers[index].textContent.trim();
+                            cell.setAttribute('data-label', label);
+                        }
+                    });
                 });
-            });
-        });
-
-        observer.observe(document.documentElement, {
-            childList: true,
-            subtree: true
-        });
-
-        window.INFORAXISResponsive = Object.assign(window.INFORAXISResponsive || {}, {
-            annotateResponsiveTables
+            }
         });
     }
 
+    /**
+     * Fix button groups on small screens
+     */
+    function fixButtonGroups() {
+        const buttonGroups = document.querySelectorAll('.btn-group');
+
+        buttonGroups.forEach(group => {
+            if (window.innerWidth <= 575) {
+                group.style.flexDirection = 'column';
+                group.style.width = '100%';
+
+                const buttons = group.querySelectorAll('.btn');
+                buttons.forEach(btn => {
+                    btn.style.width = '100%';
+                    btn.style.marginBottom = '0.25rem';
+                });
+            } else {
+                group.style.flexDirection = 'row';
+                group.style.width = 'auto';
+
+                const buttons = group.querySelectorAll('.btn');
+                buttons.forEach(btn => {
+                    btn.style.width = 'auto';
+                    btn.style.marginBottom = '0';
+                });
+            }
+        });
+    }
+
+    /**
+     * Fix filter controls grid on small screens
+     */
+    function fixFilterControls() {
+        const filterGrids = document.querySelectorAll('.filter-controls-grid');
+
+        filterGrids.forEach(grid => {
+            if (window.innerWidth <= 575) {
+                grid.style.gridTemplateColumns = '1fr';
+            } else if (window.innerWidth <= 767) {
+                grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+            } else if (window.innerWidth <= 991) {
+                grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            } else {
+                grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
+            }
+        });
+    }
+
+    /**
+     * Fix action bar on small screens
+     */
+    function fixActionBar() {
+        const actionBars = document.querySelectorAll('.action-bar');
+
+        actionBars.forEach(bar => {
+            if (window.innerWidth <= 575) {
+                bar.style.flexDirection = 'column';
+                bar.style.alignItems = 'stretch';
+
+                const actionGroups = bar.querySelectorAll('.action-group');
+                actionGroups.forEach(group => {
+                    group.style.flexDirection = 'column';
+                    group.style.width = '100%';
+
+                    const buttons = group.querySelectorAll('.btn-action');
+                    buttons.forEach(btn => {
+                        btn.style.width = '100%';
+                    });
+                });
+            } else {
+                bar.style.flexDirection = 'row';
+                bar.style.alignItems = 'center';
+            }
+        });
+    }
+
+    /**
+     * Fix page header on small screens
+     */
+    function fixPageHeader() {
+        const pageHeaders = document.querySelectorAll('.page-header');
+
+        pageHeaders.forEach(header => {
+            if (window.innerWidth <= 575) {
+                header.style.flexDirection = 'column';
+                header.style.alignItems = 'stretch';
+
+                const buttonContainer = header.querySelector('.d-flex.gap-2');
+                if (buttonContainer) {
+                    buttonContainer.style.width = '100%';
+                    buttonContainer.style.flexDirection = 'column';
+
+                    const buttons = buttonContainer.querySelectorAll('.btn');
+                    buttons.forEach(btn => {
+                        btn.style.width = '100%';
+                        btn.style.marginBottom = '0.5rem';
+                    });
+                }
+            } else {
+                header.style.flexDirection = 'row';
+                header.style.alignItems = 'flex-start';
+            }
+        });
+    }
+
+    /**
+     * Initialize all fixes
+     */
+    function initResponsiveFixes() {
+        removeDuplicatePagination();
+        fixTableResponsiveness();
+        fixButtonGroups();
+        fixFilterControls();
+        fixActionBar();
+        fixPageHeader();
+    }
+
+    // Run on DOM ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initResponsiveMetadata);
+        document.addEventListener('DOMContentLoaded', initResponsiveFixes);
     } else {
-        initResponsiveMetadata();
+        initResponsiveFixes();
     }
+
+    // Run on window resize with debounce
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function() {
+            initResponsiveFixes();
+        }, 250);
+    });
+
+    // Also run after a short delay to catch dynamically loaded content
+    setTimeout(initResponsiveFixes, 500);
+    setTimeout(initResponsiveFixes, 1000);
+
 })();

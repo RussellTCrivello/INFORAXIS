@@ -34,7 +34,7 @@ export function loadRootView() {
         hash: hashCount,
         geolocation: geolocationCount
     });
-    
+
     // Update sidebar counts from stats
     if (window.appData?.stats) {
         updateAllSidebarCounts(window.appData.stats);
@@ -65,14 +65,14 @@ export function loadRootView() {
             }
         });
     });
-    
+
     console.log('Root view loaded successfully');
 }
 
 function renderRootCard(section, count, icon) {
     const label = sectionLabels[section] || section;
     return `
-        <div class="explorer-item" data-section="${section}" role="button" tabindex="0" title="${label}" aria-label="${label}: ${count} ${translations.items || 'items'}">
+        <div class="explorer-item" data-section="${section}" style="cursor: pointer;" role="button" tabindex="0" title="${label}" aria-label="${label}: ${count} ${translations.items || 'items'}">
             <div class="explorer-item-icon"><i class="bi bi-${icon}" aria-hidden="true"></i></div>
             <div class="explorer-item-name">${label}</div>
             <div class="explorer-item-details">${count} ${translations.items || 'items'}</div>
@@ -85,4 +85,3 @@ function updateNavItemCount(startItem, endItem, total) {
     if (!navItemCount) return;
     navItemCount.textContent = total ? `${startItem}-${endItem} / ${total}` : '';
 }
-

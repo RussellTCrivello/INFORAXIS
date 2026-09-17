@@ -78,69 +78,69 @@
     <!-- Layout Navigation -->
     <nav class="tab-navigation" role="tablist" aria-label="{{ _('Dashboard views') }}">
         <!-- Files Tab -->
-        <button class="tab-button active" 
-                role="tab" 
-                aria-selected="true" 
+        <button class="tab-button active"
+                role="tab"
+                aria-selected="true"
                 aria-controls="layout-files"
                 data-layout="files"
                 tabindex="0">
             <i class="bi bi-files" aria-hidden="true"></i> {{ _('Files') }}
         </button>
-        
+
         <!-- Categories Tab -->
-        <button class="tab-button" 
-                role="tab" 
-                aria-selected="false" 
+        <button class="tab-button"
+                role="tab"
+                aria-selected="false"
                 aria-controls="layout-categories"
                 data-layout="categories"
                 tabindex="-1">
             <i class="bi bi-collection" aria-hidden="true"></i> {{ _('Categories') }}
         </button>
-        
+
         <!-- Keywords Tab -->
-        <button class="tab-button" 
-                role="tab" 
-                aria-selected="false" 
+        <button class="tab-button"
+                role="tab"
+                aria-selected="false"
                 aria-controls="layout-keywords"
                 data-layout="keywords"
                 tabindex="-1">
             <i class="bi bi-tags" aria-hidden="true"></i> {{ _('Keywords') }}
         </button>
-        
+
         <!-- Sources Tab -->
-        <button class="tab-button" 
-                role="tab" 
-                aria-selected="false" 
+        <button class="tab-button"
+                role="tab"
+                aria-selected="false"
                 aria-controls="layout-sources"
                 data-layout="sources"
                 tabindex="-1">
             <i class="bi bi-database" aria-hidden="true"></i> {{ _('Sources') }}
         </button>
-        
+
         <!-- Sides Tab -->
-        <button class="tab-button" 
-                role="tab" 
-                aria-selected="false" 
+        <button class="tab-button"
+                role="tab"
+                aria-selected="false"
                 aria-controls="layout-sides"
                 data-layout="sides"
                 tabindex="-1">
             <i class="bi bi-diagram-3" aria-hidden="true"></i> {{ _('Sides') }}
         </button>
-        
+
         <!-- Words Tab -->
-        <button class="tab-button" 
-                role="tab" 
-                aria-selected="false" 
+        <button class="tab-button"
+                role="tab"
+                aria-selected="false"
                 aria-controls="layout-words"
                 data-layout="words"
                 tabindex="-1">
             <i class="bi bi-fonts" aria-hidden="true"></i> {{ _('Words') }}
         </button>
-        
+
         <!-- Similar Files Tab -->
-        <button class="tab-button" 
-                role="tab" 
-                aria-selected="false" 
+        <button class="tab-button"
+                role="tab"
+                aria-selected="false"
                 aria-controls="layout-similar"
                 data-layout="similar"
                 tabindex="-1">
@@ -203,8 +203,8 @@
                 </div>
                 <div class="results-section">
                     <div class="results-header">
-                        <h3 class="dashboard-chart-title">{{ _('File Types Chart') }}</h3>
-                        <span class="results-count dashboard-chart-count" id="files-chart-count" aria-live="polite">-</span>
+                        <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">{{ _('File Types Chart') }}</h3>
+                        <span class="results-count" id="files-chart-count" aria-live="polite" style="font-size: 1rem; font-weight: 500;">-</span>
                     </div>
                     <div class="chart-container-layout" role="img" aria-label="{{ _('File types distribution chart') }}">
                         <canvas id="files-chart"></canvas>
@@ -376,7 +376,7 @@
                     </div>
                 </div>
             </div>
-            <div class="combined-view combined-view-spaced">
+            <div class="combined-view" style="margin-top: 2rem;">
                 <div class="results-section">
                     <div class="results-header">
                         <h3>{{ _('Size Distribution Chart') }}</h3>
@@ -488,7 +488,7 @@
                 <div id="words-results" aria-live="polite" aria-busy="false">
                     <div class="skeleton-loader skeleton-table"></div>
                 </div>
-                <div class="words-chart-container" id="words-chart-container" style="display: none;" role="img" aria-label="{{ _('Words distribution chart') }}">
+                <div class="words-chart-container" id="words-chart-container" style="display: none; min-height: 500px; height: 500px; background: var(--bg-white); border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid var(--border-color); position: relative; max-width: 100%; width: 100%; box-sizing: border-box;" role="img" aria-label="{{ _('Words distribution chart') }}">
                     <canvas id="words-chart"></canvas>
                 </div>
             </div>
@@ -550,6 +550,7 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
 <script type="application/json" id="comprehensive-dashboard-page-data">{{ {
     "translations": {
         "fileType": _('File Type'),

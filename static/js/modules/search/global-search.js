@@ -50,15 +50,15 @@ export function initializeSearch() {
                 currentSearchController.abort();
                 currentSearchController = null;
             }
-            
+
             clearTimeout(searchTimeout);
-            
+
             // Clear results immediately if query is too short
             if (this.value.trim().length < 2) {
                 clearResults();
                 return;
             }
-            
+
             searchTimeout = setTimeout(() => {
                 if (this.value.trim().length >= 2) {
                     performSearch();
@@ -153,14 +153,14 @@ export async function performSearch() {
         if (currentSearchController) {
             currentSearchController.abort();
         }
-        
+
         // Create new AbortController for this search
         currentSearchController = new AbortController();
         const signal = currentSearchController.signal;
-        
+
         // Check if comprehensive search is enabled
         const searchAllData = document.getElementById('searchAllData')?.checked || false;
-        
+
         // Get advanced search options
         const advancedOptions = advancedSearch.getAdvancedSearchOptions();
 
@@ -193,14 +193,14 @@ export async function performSearch() {
 
         const apiUrl = endpoints.search(params);
         const data = await apiGet(apiUrl, {}, { signal });
-        
+
         // Clear controller after successful fetch
         currentSearchController = null;
-        
+
         // Enhance results with advanced search features
         let results = data.results || [];
         results = advancedSearch.enhanceResultsDisplay(results);
-        
+
         searchState.results = results;
         searchState.totalResults = data.pagination?.total || 0;
         searchState.totalPages = data.pagination?.total_pages || 0;
@@ -214,7 +214,7 @@ export async function performSearch() {
             // Silently handle abort - this is expected behavior
             return;
         }
-        
+
         console.error('Search error:', error);
         notificationSystem.error('Error performing search: ' + (error.message || 'Unknown error'));
     } finally {
@@ -272,7 +272,7 @@ function displayResults(data) {
         }
         resultsByType[resultType].push(result);
     });
-    
+
     // Display results grouped by type
     const typeLabels = {
         'file': { icon: 'bi-file-earmark', label: 'Files', color: 'primary' },
@@ -283,11 +283,11 @@ function displayResults(data) {
         'word': { icon: 'bi-text-paragraph', label: 'Words', color: 'dark' },
         'title': { icon: 'bi-heading', label: 'Titles', color: 'primary' }
     };
-    
+
     Object.keys(resultsByType).forEach(resultType => {
         const typeInfo = typeLabels[resultType] || { icon: 'bi-circle', label: resultType, color: 'secondary' };
         const typeResults = resultsByType[resultType];
-        
+
         html += `
             <div class="mb-4">
                 <h5 class="mb-3">
@@ -295,10 +295,10 @@ function displayResults(data) {
                     ${typeInfo.label} (${typeResults.length})
                 </h5>
         `;
-        
+
         typeResults.forEach(result => {
             const resultType = result.result_type || 'file';
-            
+
             // Build result HTML based on type
             let resultHtml = '';
             let resultName = result.name || result.file_name || 'Unknown';
@@ -313,7 +313,7 @@ function fileDetailHref(fileId) {
 
             let resultLink = '#';
             let resultDetails = '';
-            
+
             switch(resultType) {
                 case 'file':
                     resultLink = fileDetailHref(result.id);
@@ -418,7 +418,7 @@ function fileDetailHref(fileId) {
                     `;
                     break;
             }
-            
+
             html += `
                 <div class="list-group-item list-group-item-action">
                     <div class="d-flex justify-content-between align-items-start">
@@ -437,10 +437,10 @@ function fileDetailHref(fileId) {
                 </div>
             `;
         });
-        
+
         html += '</div>';
     });
-    
+
     // If no results by type, show empty message
     if (Object.keys(resultsByType).length === 0) {
         html = `
@@ -450,7 +450,7 @@ function fileDetailHref(fileId) {
             </div>
         `;
     }
-    
+
     resultsContainer.innerHTML = html;
 }
 
@@ -526,7 +526,7 @@ export async function exportResults(format) {
             const { getCSRFTokenAsync } = await import('../core/utils.js');
             csrfToken = await getCSRFTokenAsync();
         }
-        
+
         // Handle blob response - need to use fetch directly for blob
         const response = await fetch(endpoints.searchExport(), {
             method: 'POST',
@@ -657,9 +657,9 @@ async function renderPreviewBody(body, previewData) {
 
         if (formatted) {
             ensureFormattedContentStyles();
-            content = `<div class="formatted-content-wrapper preview-scroll-pane">${formatted}</div>`;
+            content = `<div class="formatted-content-wrapper" style="max-height: 500px; overflow-y: auto;">${formatted}</div>`;
         } else {
-            content = `<pre class="bg-light p-3 preview-scroll-pane">${escapeHtml(text)}</pre>`;
+            content = `<pre class="bg-light p-3" style="max-height: 500px; overflow-y: auto;">${escapeHtml(text)}</pre>`;
         }
     } else {
         content = `<p class="text-muted">${previewData.message || 'Preview not available'}</p>`;

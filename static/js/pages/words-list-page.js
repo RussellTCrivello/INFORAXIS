@@ -132,12 +132,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function escapeHtml(value) {
-        const div = document.createElement('div');
-        div.textContent = String(value == null ? '' : value);
-        return div.innerHTML;
-    }
-
     function renderRows(words, page) {
         if (!tableBody) return;
 
@@ -152,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tableBody.innerHTML = `
                 <tr><td colspan="6" class="text-center py-5 text-muted">
                     <i class="bi bi-book display-4 mb-3"></i>
-                    <div>${escapeHtml(message)}</div>
+                    <div>${message}</div>
                 </td></tr>`;
             return;
         }
@@ -173,7 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>
                     <div class="d-flex align-items-center">
                         <span class="word-text" data-word-id="${word.id}">
-                            <strong>${escapeHtml(word.word || '')}</strong>
+                            <strong>${(word.word || '').replace(/</g,'&lt;')}</strong>
                         </span>
                         <button class="btn btn-sm btn-link p-0 ms-1" onclick="editWord(${word.id})" title="${translations.editWord}">
                             <i class="bi bi-pencil"></i>
@@ -204,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (unusedEl) unusedEl.textContent = unusedCount;
     }
 
-    function renderPaginator(page, total_pages, totalItems = null) {
+    function renderPaginator(page, total_pages) {
         // Find or create pagination container
         let paginationContainer = document.querySelector('.pagination-container');
         if (!paginationContainer) {
@@ -235,9 +229,6 @@ document.addEventListener('DOMContentLoaded', function() {
             module.renderUnifiedPagination({
                 currentPage: page,
                 totalPages: total_pages,
-                totalItems: totalItems,
-                pageSize: Number(document.getElementById('perPage')?.value || new URLSearchParams(window.location.search).get('per_page') || currentPerPage || 10),
-                itemLabel: translations.words || 'words',
                 containerId: paginationContainer.id,
                 onPageChange: (targetPage) => {
                     // Update URL without page reload
@@ -334,14 +325,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const statCard = wordsTable.closest('.stat-card');
         if (!statCard) return null;
 
-        let container = statCard.querySelector('.unified-pagination-container, .pagination-container');
+        let container = statCard.querySelector('.pagination-container');
         if (container) {
-            container.classList.add('unified-pagination-container');
+            container.style.display = 'flex';
             return container;
         }
 
         container = document.createElement('div');
-        container.className = 'unified-pagination-container pagination-container words-pagination';
+        container.className = 'd-flex justify-content-between align-items-center mt-3 mb-3 pagination-container';
+        container.style.display = 'flex';
+        container.style.width = '100%';
+        container.style.clear = 'both';
 
         const tableWrapper = statCard.querySelector('.table-wrapper');
         if (tableWrapper && tableWrapper.parentNode) {
@@ -443,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const totalPages = json.total_pages || 1;
 
                 renderRows(words, pageNum);
-                renderPaginator(pageNum, totalPages, json.total);
+                renderPaginator(pageNum, totalPages);
                 updateSearchInfo(json);
 
                 // STALE-01: keep the server-rendered "Total Words" stat card
@@ -489,14 +483,12 @@ document.addEventListener('DOMContentLoaded', function() {
         checkboxes.forEach(cb => selectedWords.add(parseInt(cb.value)));
 
         const hasSelection = selectedWords.size > 0;
-        if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
-        if (bulkUpdateBtn) bulkUpdateBtn.disabled = !hasSelection;
+        bulkDeleteBtn.disabled = !hasSelection;
+        bulkUpdateBtn.disabled = !hasSelection;
 
         const allCheckboxes = document.querySelectorAll('.word-checkbox');
-        if (selectAllCheckbox) {
-            selectAllCheckbox.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
-            selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
-        }
+        selectAllCheckbox.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+        selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
     }
 
     function toggleSelectAll() {
@@ -533,28 +525,28 @@ document.addEventListener('DOMContentLoaded', function() {
             currentSort = field;
             currentOrder = 'asc';
         }
-        if (sortBySelect) sortBySelect.value = currentSort;
-        if (sortOrderSelect) sortOrderSelect.value = currentOrder;
+        sortBySelect.value = currentSort;
+        sortOrderSelect.value = currentOrder;
         updateSortIcons();
         fetchPage(currentPage);
     }
 
     function applySorting() {
-        currentSort = sortBySelect?.value || currentSort;
-        currentOrder = sortOrderSelect?.value || currentOrder;
+        currentSort = sortBySelect.value;
+        currentOrder = sortOrderSelect.value;
         currentPage = 1;
         updateSortIcons();
         fetchPage(1);
     }
 
     function changePageSize() {
-        currentPerPage = parseInt(perPageSelect?.value || currentPerPage || 10, 10);
+        currentPerPage = parseInt(perPageSelect.value);
         currentPage = 1;
         fetchPage(1);
     }
 
     function clearSearch() {
-        if (searchInput) searchInput.value = '';
+        searchInput.value = '';
         currentPage = 1;
         fetchPage(1);
     }

@@ -11,9 +11,9 @@ import { loadSectionView } from '../views/section-view.js';
  */
 export function setViewMode(mode) {
     if (!navigationState) return;
-    
+
     navigationState.currentView = mode;
-    
+
     // Update toggle buttons
     document.querySelectorAll('.view-toggle-btn').forEach(btn => {
         btn.classList.remove('active');
@@ -21,7 +21,7 @@ export function setViewMode(mode) {
             btn.classList.add('active');
         }
     });
-    
+
     // Apply view mode to current section
     applyViewMode();
 }
@@ -49,26 +49,34 @@ export function getViewMode() {
  */
 export function setFileViewMode(mode) {
     if (!navigationState) return;
-    
+
     // Validate mode
     if (mode !== 'grid' && mode !== 'list') {
         mode = 'list';
     }
-    
+
     navigationState.fileViewMode = mode;
-    
+
     // Save to localStorage
     try {
         localStorage.setItem('fileViewMode', mode);
     } catch (e) {
         console.warn('Could not save file view mode to localStorage:', e);
     }
-    
+
     // Update toggle buttons
     document.querySelectorAll('.file-view-toggle .view-toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-view') === mode);
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-view') === mode) {
+            btn.classList.add('active');
+            btn.style.background = '#3b82f6';
+            btn.style.color = 'white';
+        } else {
+            btn.style.background = 'transparent';
+            btn.style.color = '#64748b';
+        }
     });
-    
+
     // Reload current file view with new mode
     applyFileViewMode();
 }
@@ -82,7 +90,7 @@ function applyFileViewMode() {
         // Get current state from history to preserve item name
         const currentState = navigationState.history?.[navigationState.currentIndex];
         const itemName = currentState?.itemName || null;
-        
+
         // Use dynamic import to avoid circular dependencies
         Promise.all([
             import('../views/item-view.js'),
@@ -125,7 +133,7 @@ export function getFileViewMode() {
     } catch (e) {
         // Ignore localStorage errors
     }
-    
+
     return navigationState?.fileViewMode || 'list';
 }
 
@@ -138,4 +146,3 @@ export function initializeFileViewMode() {
         navigationState.fileViewMode = saved;
     }
 }
-

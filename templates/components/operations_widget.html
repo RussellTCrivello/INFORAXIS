@@ -46,14 +46,14 @@
           <td><a href="/operations/jobs/${j.job_id}"><code>${j.job_id}</code></a></td>
           <td>${(j.job_type||'').replace(/_/g,' ')}</td>
           <td>${badge(j.status)}</td>
-          <td class="widget-progress-cell">
-            <div class="progress progress-slim">
+          <td style="min-width:90px;">
+            <div class="progress" style="height:6px;">
               <!-- Transition on width so each poll animates instead of
                    snapping; the bar reflects the live, dynamically growing
                    workload (nested objects included). -->
-              <div class="progress-bar smooth-progress" role="progressbar"
+              <div class="progress-bar" role="progressbar"
                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="${j.progress||0}"
-                   style="width:${j.progress||0}%;"></div>
+                   style="width:${j.progress||0}%; transition: width .3s ease;"></div>
             </div>
           </td>
           <td class="text-muted">

@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error parsing dashboard page data:', e);
         }
     }
-    
+
     console.log('Dashboard page loaded');
 });
 
@@ -129,18 +129,18 @@ async function loadStorageStatistics() {
         const response = await fetch('/api/analytics/storage-stats');
         const data = await response.json();
         storageData = data;
-        
+
         // Update summary cards only if they exist (they're in the main dashboard)
         const totalFilesEl = document.getElementById('totalFiles');
         if (totalFilesEl) {
             totalFilesEl.textContent = data.total.files.toLocaleString();
         }
-        
+
         // Render storage charts
         updateStorageView('type', null);
         renderStorageTimeline(data.timeline);
         renderLargestFiles(data.largest_files);
-        
+
     } catch (error) {
         console.error('Error loading storage statistics:', error);
     }
@@ -149,7 +149,7 @@ async function loadStorageStatistics() {
 // Update storage view
 function updateStorageView(view, clickedButton) {
     currentStorageView = view;
-    
+
     // Update active button - use clickedButton parameter if provided, otherwise use event
     const button = clickedButton || (typeof event !== 'undefined' && event.target ? event.target : null);
     document.querySelectorAll('.section-card .btn-control').forEach(btn => {
@@ -165,37 +165,37 @@ function updateStorageView(view, clickedButton) {
             }
         });
     }
-    
+
     if (!storageData) return;
-    
+
     let chartData, detailsHtml;
-    
+
     if (view === 'type') {
         chartData = {
             labels: storageData.by_type.map(t => t.type),
             data: storageData.by_type.map(t => t.total_size)
         };
-        
+
         detailsHtml = storageData.by_type.map(t => `
-            <div class="storage-detail-row">
+            <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
                 <span><strong>${t.type}</strong> (${t.count} ${translations.files})</span>
                 <span>${formatFileSize(t.total_size)}</span>
             </div>
         `).join('');
-        
+
     } else if (view === 'status') {
         chartData = {
             labels: storageData.by_status.map(s => s.status),
             data: storageData.by_status.map(s => s.total_size)
         };
-        
+
         detailsHtml = storageData.by_status.map(s => `
-            <div class="storage-detail-row">
+            <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
                 <span><strong>${s.status}</strong> (${s.count} ${translations.files})</span>
                 <span>${formatFileSize(s.total_size)}</span>
             </div>
         `).join('');
-        
+
     } else { // size
         const sizeCategories = [
             { name: 'Tiny (<100KB)', min: 0, max: 100 * 1024 },
@@ -204,7 +204,7 @@ function updateStorageView(view, clickedButton) {
             { name: 'Large (10-100MB)', min: 10 * 1024 * 1024, max: 100 * 1024 * 1024 },
             { name: 'Huge (>100MB)', min: 100 * 1024 * 1024, max: Infinity }
         ];
-        
+
         // Calculate from by_type data
         const sizeData = sizeCategories.map(cat => ({
             name: cat.name,
@@ -215,20 +215,20 @@ function updateStorageView(view, clickedButton) {
                 return sum;
             }, 0)
         }));
-        
+
         chartData = {
             labels: sizeData.map(s => s.name),
             data: sizeData.map(s => s.size)
         };
-        
+
         detailsHtml = sizeData.map(s => `
-            <div class="storage-detail-row">
+            <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
                 <span><strong>${s.name}</strong></span>
                 <span>${formatFileSize(s.size)}</span>
             </div>
         `).join('');
     }
-    
+
     document.getElementById('storageDetails').innerHTML = detailsHtml;
     renderStorageChart(chartData);
 }
@@ -236,11 +236,11 @@ function updateStorageView(view, clickedButton) {
 // Render storage chart
 function renderStorageChart(chartData) {
     const canvas = document.getElementById('storageChart');
-    
+
     if (charts.storage) {
         charts.storage.destroy();
     }
-    
+
     const ctx = canvas.getContext('2d');
     charts.storage = new Chart(ctx, {
         type: 'doughnut',
@@ -274,7 +274,7 @@ function renderStorageChart(chartData) {
             }
         }
     });
-    
+
     // Attach chart controls (type selector and export)
     if (window.ChartExport) {
         const chartContainer = canvas.closest('.chart-container, .section-card');
@@ -289,11 +289,11 @@ function renderStorageChart(chartData) {
 // Render storage timeline
 function renderStorageTimeline(timeline) {
     const canvas = document.getElementById('storageTimelineChart');
-    
+
     if (charts.storageTimeline) {
         charts.storageTimeline.destroy();
     }
-    
+
     const ctx = canvas.getContext('2d');
     charts.storageTimeline = new Chart(ctx, {
         type: 'line',
@@ -363,7 +363,7 @@ async function loadProcessingStatistics() {
     try {
         const response = await fetch('/api/analytics/processing-statistics');
         const data = await response.json();
-        
+
         // Update summary cards only if they exist
         const processingRateEl = document.getElementById('processingRate');
         if (processingRateEl) {
@@ -372,11 +372,11 @@ async function loadProcessingStatistics() {
             const overallRate = totalFiles > 0 ? ((totalProcessed / totalFiles) * 100).toFixed(1) : 0;
             processingRateEl.textContent = overallRate + '%';
         }
-        
+
         // Render charts
         renderSuccessRateChart(data.by_type);
         renderProcessingSpeedChart(data.daily_speed);
-        
+
     } catch (error) {
         console.error('Error loading processing statistics:', error);
     }
@@ -385,11 +385,11 @@ async function loadProcessingStatistics() {
 // Render success rate chart
 function renderSuccessRateChart(typeData) {
     const canvas = document.getElementById('successRateChart');
-    
+
     if (charts.successRate) {
         charts.successRate.destroy();
     }
-    
+
     const ctx = canvas.getContext('2d');
     charts.successRate = new Chart(ctx, {
         type: 'bar',
@@ -421,7 +421,7 @@ function renderSuccessRateChart(typeData) {
             }
         }
     });
-    
+
     // Attach chart controls
     if (window.ChartExport) {
         const chartContainer = canvas.closest('.chart-container, .section-card');
@@ -436,11 +436,11 @@ function renderSuccessRateChart(typeData) {
 // Render processing speed chart
 function renderProcessingSpeedChart(speedData) {
     const canvas = document.getElementById('processingSpeedChart');
-    
+
     if (charts.processingSpeed) {
         charts.processingSpeed.destroy();
     }
-    
+
     const ctx = canvas.getContext('2d');
     charts.processingSpeed = new Chart(ctx, {
         type: 'line',
@@ -473,7 +473,7 @@ function renderProcessingSpeedChart(speedData) {
             }
         }
     });
-    
+
     // Attach chart controls
     if (window.ChartExport) {
         const chartContainer = canvas.closest('.chart-container, .section-card');
@@ -493,19 +493,19 @@ async function loadContentStatistics() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        
+
         // Validate response
         if (!data.success) {
             console.error('API returned error:', data.error || 'Unknown error');
             return;
         }
-        
+
         // Update summary cards only if they exist
         const totalCategoriesEl = document.getElementById('totalCategories');
         if (totalCategoriesEl && data.categories && Array.isArray(data.categories)) {
             totalCategoriesEl.textContent = data.categories.length;
         }
-        
+
         // Render charts with validation
         if (data.coverage) {
             renderContentCoverageChart(data.coverage);
@@ -516,7 +516,7 @@ async function loadContentStatistics() {
         if (data.top_words && Array.isArray(data.top_words) && data.top_words.length > 0) {
             renderTopWordsCloud(data.top_words.slice(0, 30));
         }
-        
+
     } catch (error) {
         console.error('Error loading content statistics:', error);
     }
@@ -528,17 +528,17 @@ function renderContentCoverageChart(coverage) {
         console.warn('No coverage data to render');
         return;
     }
-    
+
     const canvas = document.getElementById('contentCoverageChart');
     if (!canvas) {
         console.error('contentCoverageChart canvas not found');
         return;
     }
-    
+
     if (charts.contentCoverage) {
         charts.contentCoverage.destroy();
     }
-    
+
     const ctx = canvas.getContext('2d');
     charts.contentCoverage = new Chart(ctx, {
         type: 'doughnut',
@@ -570,7 +570,7 @@ function renderContentCoverageChart(coverage) {
             }
         }
     });
-    
+
     // Attach chart controls
     if (window.ChartExport) {
         const chartContainer = canvas.closest('.chart-container, .section-card');
@@ -588,21 +588,21 @@ function renderTopCategoriesChart(categories) {
         console.warn('No categories data to render');
         return;
     }
-    
+
     const canvas = document.getElementById('topCategoriesChart');
     if (!canvas) {
         console.error('topCategoriesChart canvas not found');
         return;
     }
-    
+
     if (charts.topCategories) {
         charts.topCategories.destroy();
     }
-    
+
     // Validate category structure - handle both {name, file_count} and {name, count} formats
     const labels = categories.map(c => c.name || c.category_name || 'Unknown');
     const values = categories.map(c => c.file_count || c.count || 0);
-    
+
     const ctx = canvas.getContext('2d');
     charts.topCategories = new Chart(ctx, {
         type: 'bar',
@@ -625,7 +625,7 @@ function renderTopCategoriesChart(categories) {
             }
         }
     });
-    
+
     // Attach chart controls
     if (window.ChartExport) {
         const chartContainer = canvas.closest('.chart-container, .section-card');
@@ -641,7 +641,7 @@ function renderTopCategoriesChart(categories) {
 function renderTopWordsCloud(words) {
     const container = document.getElementById('topWordsCloud');
     container.innerHTML = '';
-    
+
     words.forEach((word, index) => {
         const wordItem = document.createElement('div');
         wordItem.className = 'word-item';
@@ -659,20 +659,20 @@ function renderTopWordsCloud(words) {
 function renderLargestFiles(files) {
     const tbody = document.getElementById('largestFilesTable');
     tbody.innerHTML = '';
-    
+
     files.forEach(file => {
         const row = document.createElement('tr');
-        row.classList.add('clickable-row');
+        row.style.cursor = 'pointer';
         row.onclick = () => window.location.href = `/file/${file.id}`;
-        
+
         row.innerHTML = `
             <td><strong>${file.name}</strong></td>
             <td><span class="badge bg-primary">${file.type || translations.unknown}</span></td>
             <td><strong>${formatFileSize(file.size)}</strong></td>
             <td>${file.source}</td>
-            <td class="file-path-cell">${file.path}</td>
+            <td style="font-size: 0.875rem; color: var(--text-light);">${file.path}</td>
         `;
-        
+
         tbody.appendChild(row);
     });
 }
@@ -692,7 +692,7 @@ let currentTimelinePeriod = 'month';
 // 🚀 OPTIMIZED: Initialize dashboard with lazy loading
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Dashboard page: DOMContentLoaded fired');
-    
+
     // Update active navigation button based on current page
     const currentPath = window.location.pathname;
     document.querySelectorAll('.dashboard-nav-btn').forEach(btn => {
@@ -702,7 +702,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.classList.add('active');
         }
     });
-    
+
     // Load critical data immediately
     console.log('Dashboard page: Loading summary statistics...');
     loadDashboardSummary().catch(error => {
@@ -711,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadTimelineData('month');
     loadCategoryDistribution();
     loadFileTypeDistribution();
-    
+
     // 🚀 OPTIMIZED: Lazy load file types (only needed for search dropdown)
     // Load when search tab is activated instead of on page load
     const searchTab = document.getElementById('tab-search');
@@ -741,13 +741,13 @@ function switchTab(tabName, event) {
             btn.classList.add('active');
         }
     });
-    
+
     // Update content
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     const activeTab = document.getElementById('tab-' + tabName);
     if (activeTab) {
         activeTab.classList.add('active');
-        
+
         // 🚀 OPTIMIZED: Load tab-specific data only when tab is activated
         switch(tabName) {
             case 'keywords':
@@ -802,7 +802,7 @@ async function loadDashboardSummary() {
         }
         const data = await response.json();
         console.log('loadDashboardSummary: Data received:', data);
-        
+
         // 🚀 OPTIMIZED: Check if elements exist before updating
         const totalFilesEl = document.getElementById('totalFiles');
         console.log('loadDashboardSummary: totalFiles element found:', !!totalFilesEl);
@@ -812,48 +812,48 @@ async function loadDashboardSummary() {
         } else {
             console.warn('loadDashboardSummary: totalFiles element not found!');
         }
-        
+
         const processedFilesEl = document.getElementById('processedFiles');
         if (processedFilesEl) processedFilesEl.textContent = (data.processedFiles || 0).toLocaleString();
-        
+
         const uniqueTypesEl = document.getElementById('uniqueTypes');
         if (uniqueTypesEl) uniqueTypesEl.textContent = data.uniqueTypes || 0;
-        
+
         const totalWordsEl = document.getElementById('totalWords');
         if (totalWordsEl) totalWordsEl.textContent = (data.totalWords || 0).toLocaleString();
-        
+
         const totalCategoriesEl = document.getElementById('totalCategories');
         if (totalCategoriesEl) totalCategoriesEl.textContent = data.totalCategories || 0;
-        
+
         const totalKeywordsEl = document.getElementById('totalKeywords');
         if (totalKeywordsEl) totalKeywordsEl.textContent = (data.totalKeywords || 0).toLocaleString();
-        
+
         // Format storage size
         const storageSizeEl = document.getElementById('storageSize');
         if (storageSizeEl) {
             const sizeGB = ((data.totalSize || 0) / (1024 ** 3)).toFixed(2);
             storageSizeEl.textContent = sizeGB + ' GB';
         }
-        
+
         // Format database size
         const databaseSizeEl = document.getElementById('databaseSize');
         if (databaseSizeEl) {
             databaseSizeEl.textContent = formatFileSize(data.databaseSize || 0);
         }
-        
+
         // Update change indicators
         const processingRateEl = document.getElementById('processingRate');
         if (processingRateEl) {
             processingRateEl.textContent = (data.processingRate || 0).toFixed(1) + '% ' + translations.processed;
         }
-        
+
         const filesChangeEl = document.getElementById('filesChange');
         if (filesChangeEl) {
             filesChangeEl.innerHTML = `<i class="bi bi-arrow-up"></i> ${data.recentFiles || 0} ${translations.thisWeek}`;
         }
-        
+
         console.log('loadDashboardSummary: Successfully updated all elements');
-        
+
     } catch (error) {
         console.error('Error loading dashboard summary:', error);
         console.error('Error details:', error.message, error.stack);
@@ -863,7 +863,7 @@ async function loadDashboardSummary() {
             totalFilesEl.textContent = '-';
             console.log('loadDashboardSummary: Set totalFiles to "-" due to error');
         }
-        
+
         // Try to update all elements to show error state
         const elements = ['totalFiles', 'processedFiles', 'uniqueTypes', 'totalWords', 'totalCategories', 'storageSize'];
         elements.forEach(id => {
@@ -886,30 +886,30 @@ async function loadTimelineData(period) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        
+
         // Validate response
         if (!data.success) {
             console.error('API returned error:', data.error || 'Unknown error');
             return;
         }
-        
+
         // Validate data structure
-        if (!data.labels || !data.fileCount || !data.processedCount || 
+        if (!data.labels || !data.fileCount || !data.processedCount ||
             !Array.isArray(data.labels) || !Array.isArray(data.fileCount) || !Array.isArray(data.processedCount)) {
             console.error('Invalid timeline data structure:', data);
             return;
         }
-        
+
         if (charts.timeline) {
             charts.timeline.destroy();
         }
-        
+
         const canvas = document.getElementById('timelineChart');
         if (!canvas) {
             console.error('timelineChart canvas not found');
             return;
         }
-        
+
         const ctx = canvas.getContext('2d');
         charts.timeline = new Chart(ctx, {
             type: 'line',
@@ -988,19 +988,19 @@ async function loadCategoryDistribution() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        
+
         // Validate response
         if (!data.success) {
             console.error('API returned error:', data.error || 'Unknown error');
             return;
         }
-        
+
         // Validate data structure
         if (!data.labels || !data.values || !Array.isArray(data.labels) || !Array.isArray(data.values)) {
             console.error('Invalid data structure:', data);
             return;
         }
-        
+
         // Check if we have data
         if (data.labels.length === 0 || data.values.length === 0) {
             console.warn('No category data available');
@@ -1019,17 +1019,17 @@ async function loadCategoryDistribution() {
             }
             return;
         }
-        
+
         if (charts.processing) {
             charts.processing.destroy();
         }
-        
+
         const canvas = document.getElementById('processingChart');
         if (!canvas) {
             console.error('processingChart canvas not found');
             return;
         }
-        
+
         const ctx = canvas.getContext('2d');
         charts.processing = new Chart(ctx, {
             type: 'doughnut',
@@ -1065,7 +1065,7 @@ async function loadCategoryDistribution() {
                 }
             }
         });
-        
+
         // Attach chart controls for this specific chart
         if (window.ChartExport && canvas) {
             setTimeout(() => {
@@ -1088,19 +1088,19 @@ async function loadCategoryCharts() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        
+
         // Validate response
         if (!data.success) {
             console.error('API returned error:', data.error || 'Unknown error');
             return;
         }
-        
+
         // Validate data structure
         if (!data.labels || !data.values || !Array.isArray(data.labels) || !Array.isArray(data.values)) {
             console.error('Invalid data structure:', data);
             return;
         }
-        
+
         // Check if we have data
         if (data.labels.length === 0 || data.values.length === 0) {
             console.warn('No category data available');
@@ -1131,18 +1131,18 @@ async function loadCategoryCharts() {
             }
             return;
         }
-        
+
         // Pie chart
         if (charts.categoryPie) {
             charts.categoryPie.destroy();
         }
-        
+
         const pieCanvas = document.getElementById('categoryPieChart');
         if (!pieCanvas) {
             console.error('categoryPieChart canvas not found');
             return;
         }
-        
+
         const pieCtx = pieCanvas.getContext('2d');
         charts.categoryPie = new Chart(pieCtx, {
             type: 'pie',
@@ -1182,18 +1182,18 @@ async function loadCategoryCharts() {
                 }
             }
         });
-        
+
         // Bar chart
         if (charts.categoryBar) {
             charts.categoryBar.destroy();
         }
-        
+
         const barCanvas = document.getElementById('categoryBarChart');
         if (!barCanvas) {
             console.error('categoryBarChart canvas not found');
             return;
         }
-        
+
         const barCtx = barCanvas.getContext('2d');
         charts.categoryBar = new Chart(barCtx, {
             type: 'bar',
@@ -1239,7 +1239,7 @@ async function loadCategoryCharts() {
                 }
             }
         });
-        
+
         // Attach chart controls for pie chart - ensure it gets its own controls
         if (window.ChartExport && pieCanvas && charts.categoryPie) {
             setTimeout(() => {
@@ -1250,7 +1250,7 @@ async function loadCategoryCharts() {
                 }
             }, 200);
         }
-        
+
         // Attach chart controls for bar chart - ensure it gets its own controls
         if (window.ChartExport && barCanvas && charts.categoryBar) {
             setTimeout(() => {
@@ -1274,29 +1274,29 @@ async function loadFileTypeDistribution() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        
+
         // Validate response
         if (!data.success) {
             console.error('API returned error:', data.error || 'Unknown error');
             return;
         }
-        
+
         // Validate data structure
         if (!data.types || !Array.isArray(data.types) || data.types.length === 0) {
             console.warn('No file type data available');
             return;
         }
-        
+
         if (charts.fileType) {
             charts.fileType.destroy();
         }
-        
+
         const canvas = document.getElementById('fileTypeChart');
         if (!canvas) {
             console.error('fileTypeChart canvas not found');
             return;
         }
-        
+
         const ctx = canvas.getContext('2d');
         charts.fileType = new Chart(ctx, {
             type: 'bar',
@@ -1339,11 +1339,11 @@ async function loadWordFrequency(limit) {
     currentWordLimit = limit;
     const grid = document.getElementById('wordFrequencyGrid');
     grid.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${translations.loadingWordFrequency}</p></div>`;
-    
+
     try {
         const response = await fetch(`/api/analytics/word-frequency?limit=${limit}`);
         const data = await response.json();
-        
+
         if (data.words && data.words.length > 0) {
             grid.innerHTML = '';
             data.words.forEach(word => {
@@ -1389,21 +1389,21 @@ function updateWordLimit(limit) {
 async function loadPathHierarchy() {
     const tree = document.getElementById('pathTree');
     if (!tree) return; // Element might not exist if tab not active
-    
+
     tree.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${translations.loadingPathHierarchy}</p></div>`;
-    
+
     try {
         const response = await fetch('/api/analytics/path-hierarchy');
         const data = await response.json();
-        
+
         // 🚀 FIXED: Use 'structure' instead of 'hierarchy' to match API response
         const structure = data.structure || data.hierarchy || [];
-        
+
         if (structure.length > 0) {
             tree.innerHTML = '';
             structure.forEach(path => {
                 const li = document.createElement('li');
-                const processingRate = path.file_count > 0 ? 
+                const processingRate = path.file_count > 0 ?
                     ((path.processed_count / path.file_count) * 100).toFixed(1) : 0;
                 li.innerHTML = `
                     <div class="path-item">
@@ -1434,21 +1434,21 @@ async function loadPathHierarchy() {
 async function loadFileReports() {
     const grid = document.getElementById('fileReportsGrid');
     grid.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${translations.loadingFileReports}</p></div>`;
-    
+
     try {
         const response = await fetch('/api/analytics/search-files?limit=20');
         const data = await response.json();
-        
+
         if (data.files && data.files.length > 0) {
             grid.innerHTML = '';
             data.files.forEach(file => {
                 const card = document.createElement('div');
                 card.className = 'file-report-card';
                 card.onclick = () => window.location.href = `/file/${file.id}`;
-                
+
                 const fileIcon = getFileIcon(file.type);
                 const fileSize = formatFileSize(file.size);
-                
+
                 card.innerHTML = `
                     <div class="file-icon">${fileIcon}</div>
                     <div class="file-name" title="${file.name}">${file.name}</div>
@@ -1478,7 +1478,7 @@ async function loadFileTypes() {
     try {
         const response = await fetch('/api/analytics/file-type-distribution');
         const data = await response.json();
-        
+
         const select = document.getElementById('searchType');
         data.types.forEach(type => {
             const option = document.createElement('option');
@@ -1496,30 +1496,30 @@ async function performSearch() {
     const query = document.getElementById('searchQuery').value;
     const type = document.getElementById('searchType').value;
     const resultsGrid = document.getElementById('searchResults');
-    
+
     resultsGrid.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${translations.searching}</p></div>`;
-    
+
     try {
         const params = new URLSearchParams();
         if (query) params.append('q', query);
         if (type) params.append('type', type);
         params.append('limit', '50');
-        
+
         const response = await fetch(`/api/analytics/search-files?${params.toString()}`);
         const data = await response.json();
-        
+
         document.getElementById('searchResultCount').textContent = `${data.files.length} ${translations.results}`;
-        
+
         if (data.files && data.files.length > 0) {
             resultsGrid.innerHTML = '';
             data.files.forEach(file => {
                 const card = document.createElement('div');
                 card.className = 'file-report-card';
                 card.onclick = () => window.location.href = `/file/${file.id}`;
-                
+
                 const fileIcon = getFileIcon(file.type);
                 const fileSize = formatFileSize(file.size);
-                
+
                 card.innerHTML = `
                     <div class="file-icon">${fileIcon}</div>
                     <div class="file-name" title="${file.name}">${file.name}</div>
@@ -1574,7 +1574,7 @@ document.addEventListener('DOMContentLoaded', function() {
             performSearch();
         }
     });
-    
+
     // Start polling for active processing tasks
     startProcessingProgressPolling();
 });
@@ -1620,7 +1620,7 @@ if (typeof window !== 'undefined') {
     if (typeof downloadChart !== 'undefined') window.downloadChart = downloadChart;
     if (typeof exportData !== 'undefined') window.exportData = exportData;
     if (typeof downloadData !== 'undefined') window.downloadData = downloadData;
-    
+
     console.log('Dashboard functions exposed globally:', {
         switchTab: typeof window.switchTab,
         updateTimeline: typeof window.updateTimeline,

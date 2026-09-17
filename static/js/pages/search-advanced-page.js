@@ -50,12 +50,8 @@ const searchState = {
     searchHistory: []
 };
 
-let advancedSearchInitialized = false;
-
 // Initialize on page load
-function initializeAdvancedSearchPage() {
-    if (advancedSearchInitialized) return;
-    advancedSearchInitialized = true;
+document.addEventListener('DOMContentLoaded', function() {
     console.log('Advanced Search page loaded - Google-like implementation');
     initializePageData();
     initializeSearch();
@@ -63,13 +59,7 @@ function initializeAdvancedSearchPage() {
     loadFilterOptions();
     loadSearchHistory();
     setupEventListeners();
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeAdvancedSearchPage, { once: true });
-} else {
-    initializeAdvancedSearchPage();
-}
+});
 
 // Read server-provided page data (initial scope, permissions, translations)
 function initializePageData() {
@@ -115,19 +105,19 @@ function initializeScopeSelector() {
 function initializeSearch() {
     const mainInput = document.getElementById('mainSearchInput');
     if (!mainInput) return;
-    
+
     // Real-time search suggestions
     let suggestionTimeout;
     mainInput.addEventListener('input', function(e) {
         const query = e.target.value.trim();
         searchState.query = query;
-        
+
         // Show/hide clear button
         const clearBtn = document.getElementById('clearSearchBtn');
         if (clearBtn) {
             clearBtn.style.display = query ? 'block' : 'none';
         }
-        
+
         // Debounce suggestions
         clearTimeout(suggestionTimeout);
         if (query.length >= 2) {
@@ -138,7 +128,7 @@ function initializeSearch() {
             hideSuggestions();
         }
     });
-    
+
     // Enter key to search
     mainInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
@@ -148,7 +138,7 @@ function initializeSearch() {
             hideSuggestions();
         }
     });
-    
+
     // Clear search
     const clearBtn = document.getElementById('clearSearchBtn');
     if (clearBtn) {
@@ -171,7 +161,7 @@ function setupEventListeners() {
             element.addEventListener('change', updateFilterChips);
         }
     });
-    
+
     // Date changes
     ['dateFrom', 'dateTo'].forEach(id => {
         const element = document.getElementById(id);
@@ -179,7 +169,7 @@ function setupEventListeners() {
             element.addEventListener('change', updateFilterChips);
         }
     });
-    
+
     // Status checkboxes
     ['statusRead', 'statusUnread'].forEach(id => {
         const element = document.getElementById(id);
@@ -201,7 +191,7 @@ async function loadFilterOptions() {
                 `<option value="${c.id}">${escapeHtml(c.name)}</option>`
             ).join('');
         }
-        
+
         // Load sources (advanced-filters panel - the single home for
         // source/side scoping since the old "Search Within" block was
         // merged into it)
@@ -288,7 +278,7 @@ async function loadSearchSuggestions(query) {
     try {
         const response = await fetch(`/api/search/suggestions?query=${encodeURIComponent(query)}&limit=8`);
         const data = await response.json();
-        
+
         if (data.suggestions && Array.isArray(data.suggestions)) {
             searchState.suggestions = data.suggestions;
             displaySuggestions(data.suggestions, query);
@@ -302,21 +292,21 @@ async function loadSearchSuggestions(query) {
 function displaySuggestions(suggestions, query) {
     const dropdown = document.getElementById('searchSuggestions');
     const list = document.getElementById('suggestionsList');
-    
+
     if (!dropdown || !list) return;
-    
+
     if (suggestions.length === 0) {
         hideSuggestions();
         return;
     }
-    
+
     list.innerHTML = suggestions.map(suggestion => `
         <div class="suggestion-item" onclick="selectSuggestion('${suggestion.replace(/'/g, "\\'")}')">
             <i class="bi bi-search"></i>
             <span>${highlightMatch(suggestion, query)}</span>
         </div>
     `).join('');
-    
+
     dropdown.classList.add('active');
 }
 
@@ -346,7 +336,7 @@ function hideSuggestions() {
 // Update filter chips
 function updateFilterChips() {
     const chips = [];
-    
+
     // File types
     const fileTypes = Array.from(document.getElementById('fileType').selectedOptions).map(o => o.value);
     if (fileTypes.length > 0) {
@@ -354,7 +344,7 @@ function updateFilterChips() {
             if (type) chips.push({ type: 'fileType', label: 'File Type', value: type });
         });
     }
-    
+
     // Categories (smart taxonomy - separate from analyst categories, FR-1.4)
     const categories = Array.from(document.getElementById('categoriesSelect').selectedOptions).map(o => o.value);
     if (categories.length > 0) {
@@ -373,7 +363,7 @@ function updateFilterChips() {
             chips.push({ type: 'analystCategory', label: 'Analyst Category', value: opt.textContent, id: opt.value });
         });
     }
-    
+
     // Sources
     const sources = Array.from(document.getElementById('sourcesSelect').selectedOptions).map(o => o.value);
     if (sources.length > 0) {
@@ -384,7 +374,7 @@ function updateFilterChips() {
             }
         });
     }
-    
+
     // Sides
     const sides = Array.from(document.getElementById('sidesSelect').selectedOptions).map(o => o.value);
     if (sides.length > 0) {
@@ -395,7 +385,7 @@ function updateFilterChips() {
             }
         });
     }
-    
+
     // Date range
     const dateFrom = document.getElementById('dateFrom').value;
     const dateTo = document.getElementById('dateTo').value;
@@ -405,7 +395,7 @@ function updateFilterChips() {
     if (dateTo) {
         chips.push({ type: 'dateTo', label: 'To', value: dateTo });
     }
-    
+
     // Status
     const statusRead = document.getElementById('statusRead').checked;
     const statusUnread = document.getElementById('statusUnread').checked;
@@ -414,10 +404,10 @@ function updateFilterChips() {
     } else if (!statusRead && statusUnread) {
         chips.push({ type: 'status', label: 'Status', value: 'Pending' });
     }
-    
+
     // Display chips
     displayFilterChips(chips);
-    
+
     // Update active filters count
     const countEl = document.getElementById('activeFiltersCount');
     if (countEl) {
@@ -429,14 +419,14 @@ function updateFilterChips() {
 function displayFilterChips(chips) {
     const container = document.getElementById('filtersChipsContainer');
     const chipsEl = document.getElementById('filtersChips');
-    
+
     if (!container || !chipsEl) return;
-    
+
     if (chips.length === 0) {
         container.style.display = 'none';
         return;
     }
-    
+
     container.style.display = 'block';
     chipsEl.innerHTML = chips.map((chip, index) => {
         const chipClass = chip.priority ? 'filter-chip priority-chip' : 'filter-chip';
@@ -518,7 +508,7 @@ function clearAllFilters() {
 function toggleFiltersPanel() {
     const content = document.getElementById('filtersPanelContent');
     const icon = document.getElementById('filtersToggleIcon');
-    
+
     if (content && icon) {
         content.classList.toggle('active');
         icon.classList.toggle('bi-chevron-down');
@@ -530,12 +520,12 @@ function toggleFiltersPanel() {
 async function executeAdvancedSearch() {
     const startTime = performance.now();
     const query = document.getElementById('mainSearchInput').value.trim();
-    
+
     if (!query && getActiveFiltersCount() === 0) {
         alert('Please enter a search query or select filters');
         return;
     }
-    
+
     // Hide suggestions
     hideSuggestions();
 
@@ -543,14 +533,14 @@ async function executeAdvancedSearch() {
     searchState.selectedIds = new Set();
     updateSelectionBar();
 
-    // Collect filters before showing the loading overlay so a cancelled broad
-    // search never leaves the interface visually blocked.
-    
-    // Source/side scoping lives in the advanced-filters
+    // Show loading
+    showLoading();
+
+    // Collect filters. Source/side scoping lives in the advanced-filters
     // panel (the former "Search Within" block was merged into it).
     const sourceIds = Array.from(document.getElementById('sourcesSelect').selectedOptions).map(o => parseInt(o.value));
     const sideIds = Array.from(document.getElementById('sidesSelect').selectedOptions).map(o => parseInt(o.value));
-    
+
     const filters = {
         file_type: Array.from(document.getElementById('fileType').selectedOptions).map(o => o.value).filter(v => v),
         category_id: Array.from(document.getElementById('categoriesSelect').selectedOptions).map(o => parseInt(o.value)),
@@ -561,10 +551,10 @@ async function executeAdvancedSearch() {
         date_to: document.getElementById('dateTo').value || null,
         status: []
     };
-    
+
     if (document.getElementById('statusRead').checked) filters.status.push('Read');
     if (document.getElementById('statusUnread').checked) filters.status.push('Unread');
-    
+
     // Show warning if searching without source/side filter (for large databases)
     if (!filters.source_id.length && !filters.side_id.length && !query) {
         const confirmSearch = confirm(tPage('largeSearchConfirm',
@@ -572,15 +562,13 @@ async function executeAdvancedSearch() {
         if (!confirmSearch) return;
     }
 
-    showLoading();
-    
     // Search options
     const options = {
         case_sensitive: document.getElementById('caseSensitive').checked,
         whole_word: document.getElementById('wholeWord').checked,
         use_fuzzy: document.getElementById('useFuzzy').checked
     };
-    
+
     try {
         // Use advanced search API
         const params = new URLSearchParams({
@@ -620,18 +608,18 @@ async function executeAdvancedSearch() {
         }
         if (filters.date_from) params.append('date_from', filters.date_from);
         if (filters.date_to) params.append('date_to', filters.date_to);
-        
+
         const response = await fetch(`/api/search?${params.toString()}`);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         const endTime = performance.now();
         searchState.searchTime = ((endTime - startTime) / 1000).toFixed(2);
-        
+
         // Process results
         if (data.results && Array.isArray(data.results)) {
             searchState.results = data.results;
@@ -642,7 +630,7 @@ async function executeAdvancedSearch() {
             searchState.totalResults = 0;
             displayResults([], null);
         }
-        
+
         // Note: Search history is already saved by the API endpoint
         // This is a backup save (optional, won't cause errors if it fails)
         if (query) {
@@ -650,7 +638,7 @@ async function executeAdvancedSearch() {
             // For now, skip to avoid duplicate saves - API already handles it
             // saveToSearchHistory(query, filters);
         }
-        
+
     } catch (error) {
         console.error('Search error:', error);
         alert(tPage('searchError', 'Search error') + ': ' + error.message);
@@ -713,15 +701,15 @@ function displayResults(results, pagination) {
     const container = document.getElementById('resultsContainer');
     const countEl = document.getElementById('resultsCount');
     const timeEl = document.getElementById('searchTime');
-    
+
     if (!section || !container) return;
-    
+
     section.style.display = 'block';
-    
+
     if (countEl) {
         countEl.textContent = searchState.totalResults.toLocaleString();
     }
-    
+
     if (timeEl) {
         const pageDataEl = document.getElementById('search-advanced-page-data');
         let timeText = `in ${searchState.searchTime} seconds`;
@@ -733,7 +721,7 @@ function displayResults(results, pagination) {
         }
         timeEl.textContent = timeText;
     }
-    
+
     if (results.length === 0) {
         container.innerHTML = `
             <div class="results-empty-state">
@@ -743,7 +731,7 @@ function displayResults(results, pagination) {
         `;
         return;
     }
-    
+
     container.innerHTML = results.map(result => {
         const snippet = result.snippet || result.file_name || '';
         const highlightedSnippet = highlightQueryTerms(snippet, searchState.query);
@@ -819,7 +807,7 @@ function displayResults(results, pagination) {
 
     // Sync the select-all checkbox with the fresh result page
     syncSelectAllCheckbox();
-    
+
     // Update pagination
     if (pagination && pagination.total_pages > 1) {
         updatePagination(pagination);
@@ -1047,16 +1035,16 @@ function showAnalystToast(message) {
 // Highlight query terms in text
 function highlightQueryTerms(text, query) {
     if (!query || !text) return text;
-    
+
     // Parse query for terms (handle quotes, AND, OR, NOT)
     const terms = parseQueryTerms(query);
-    
+
     let highlighted = text;
     terms.forEach(term => {
         const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
         highlighted = highlighted.replace(regex, '<mark>$1</mark>');
     });
-    
+
     return highlighted;
 }
 
@@ -1065,18 +1053,18 @@ function parseQueryTerms(query) {
     const terms = [];
     const quoted = query.match(/"([^"]+)"/g);
     const unquoted = query.replace(/"([^"]+)"/g, '').trim();
-    
+
     if (quoted) {
         quoted.forEach(q => terms.push(q.replace(/"/g, '')));
     }
-    
+
     if (unquoted) {
         unquoted.split(/\s+(?:AND|OR|NOT)\s+/i).forEach(term => {
             const cleanTerm = term.trim().replace(/\b(AND|OR|NOT)\b/gi, '').trim();
             if (cleanTerm) terms.push(cleanTerm);
         });
     }
-    
+
     return terms.length > 0 ? terms : [query];
 }
 
@@ -1084,14 +1072,11 @@ function parseQueryTerms(query) {
 function updatePagination(pagination) {
     const paginationEl = document.getElementById('pagination');
     if (!paginationEl) return;
-    
+
     import('../modules/rendering/unified-pagination.js').then(module => {
         module.renderUnifiedPagination({
             currentPage: pagination.page,
             totalPages: pagination.total_pages,
-            totalItems: pagination.total || searchState.totalResults,
-            pageSize: pagination.per_page || searchState.resultsPerPage,
-            itemLabel: tPage('results', 'results'),
             containerId: 'pagination',
             onPageChange: (page) => {
                 searchState.currentPage = page;
@@ -1109,19 +1094,13 @@ function updatePagination(pagination) {
 // Show loading
 function showLoading() {
     const overlay = document.getElementById('searchLoadingOverlay');
-    if (overlay) {
-        overlay.classList.add('active');
-        overlay.style.display = 'grid';
-    }
+    if (overlay) overlay.style.display = 'flex';
 }
 
 // Hide loading
 function hideLoading() {
     const overlay = document.getElementById('searchLoadingOverlay');
-    if (overlay) {
-        overlay.classList.remove('active');
-        overlay.style.display = 'none';
-    }
+    if (overlay) overlay.style.display = 'none';
 }
 
 // Get active filters count
@@ -1129,7 +1108,6 @@ function getActiveFiltersCount() {
     let count = 0;
     count += document.getElementById('fileType').selectedOptions.length;
     count += document.getElementById('categoriesSelect').selectedOptions.length;
-    count += document.getElementById('analystCategoriesFilter')?.selectedOptions.length || 0;
     count += document.getElementById('sourcesSelect').selectedOptions.length;
     count += document.getElementById('sidesSelect').selectedOptions.length;
     if (document.getElementById('dateFrom').value) count++;
@@ -1176,18 +1154,18 @@ async function loadSearchHistory() {
 // Save to search history
 async function saveToSearchHistory(query, filters) {
     if (!query || !query.trim()) return; // Don't save empty queries
-    
+
     try {
         const response = await fetch('/api/search/history', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 query: query.trim(),
                 filters: filters || {},
                 result_count: searchState.totalResults || 0
             })
         });
-        
+
         if (!response.ok) {
             // Don't show error to user, just log it
             const errorData = await response.json().catch(() => ({}));
@@ -1212,10 +1190,10 @@ function exportResults(format = 'csv') {
         alert('No results to export');
         return;
     }
-    
+
     const timestamp = new Date().toISOString().split('T')[0];
     const query = document.getElementById('mainSearchInput')?.value || 'search';
-    
+
     switch (format) {
         case 'csv':
             exportAsCSV(timestamp, query);
@@ -1252,9 +1230,9 @@ function exportAsCSV(timestamp, query) {
         'Date Created',
         'Snippet'
     ];
-    
+
     const csvRows = [headers.join(',')];
-    
+
     searchState.results.forEach(result => {
         const row = [
             escapeCSV(result.id || ''),
@@ -1276,7 +1254,7 @@ function exportAsCSV(timestamp, query) {
         ];
         csvRows.push(row.join(','));
     });
-    
+
     const csv = csvRows.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     downloadBlob(blob, `search_results_${sanitizeFilename(query)}_${timestamp}.csv`);
@@ -1287,7 +1265,7 @@ function exportAsExcel(timestamp, query) {
     // For now, export as CSV with Excel-compatible format
     // In production, you might want to use a library like SheetJS
     exportAsCSV(timestamp, query);
-    
+
     // Alternative: Use server-side Excel generation
     // fetch('/api/search/export', {
     //     method: 'POST',
@@ -1331,7 +1309,7 @@ function exportAsJSON(timestamp, query) {
             snippet: result.snippet
         }))
     };
-    
+
     const json = JSON.stringify(exportData, null, 2);
     const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
     downloadBlob(blob, `search_results_${sanitizeFilename(query)}_${timestamp}.json`);
@@ -1343,10 +1321,10 @@ function printResults() {
         alert('No results to print');
         return;
     }
-    
+
     const query = document.getElementById('mainSearchInput')?.value || 'Search Results';
     const printWindow = window.open('', '_blank');
-    
+
     const printContent = `
 <!DOCTYPE html>
 <html>
@@ -1421,7 +1399,7 @@ function printResults() {
     </script>
 </body>
 </html>`;
-    
+
     printWindow.document.write(printContent);
     printWindow.document.close();
 }

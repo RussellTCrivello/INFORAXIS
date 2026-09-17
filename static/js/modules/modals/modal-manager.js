@@ -38,15 +38,15 @@ export function openAddItemModal(modalId, section) {
         notificationSystem.error(`Modal ${modalId} not found`);
         return;
     }
-    
+
     // Check if it's a Bootstrap modal (has 'modal fade' classes)
     const isBootstrapModal = modal.classList.contains('modal') && modal.classList.contains('fade');
-    
+
     if (isBootstrapModal) {
         // Handle Bootstrap modals
         if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
             const bsModal = new bootstrap.Modal(modal);
-            
+
             // Initialize modal based on section
             if (section === 'category') {
                 // Use new Bootstrap modal with search
@@ -67,10 +67,10 @@ export function openAddItemModal(modalId, section) {
                     return;
                 }
             }
-            
+
             // Default Bootstrap modal show
             bsModal.show();
-            
+
             // Focus trap
             setTimeout(() => {
                 const firstInput = modal.querySelector('input[type="text"], input[type="number"], select, textarea');
@@ -84,7 +84,7 @@ export function openAddItemModal(modalId, section) {
         }
         return;
     }
-    
+
     // Legacy archives-modal handling
     // Show modal with proper animation
     modal.style.display = 'flex';
@@ -93,7 +93,7 @@ export function openAddItemModal(modalId, section) {
     modal.style.visibility = 'visible';
     modal.style.opacity = '1';
     document.body.style.overflow = 'hidden';
-    
+
     // Focus trap
     setTimeout(() => {
         const firstInput = modal.querySelector('input[type="text"], input[type="number"], select, textarea');
@@ -132,7 +132,7 @@ export function closeAddItemModal(modalId) {
 
     // Check if it's a Bootstrap modal
     const isBootstrapModal = modal.classList.contains('modal') && modal.classList.contains('fade');
-    
+
     if (isBootstrapModal) {
         // Handle Bootstrap modal close
         if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
@@ -147,14 +147,14 @@ export function closeAddItemModal(modalId) {
     // Legacy archives-modal handling
     // Remove active class first for animation
     modal.classList.remove('active');
-    
+
     // Wait for animation to complete before hiding
     setTimeout(() => {
         modal.style.display = 'none';
         modal.style.visibility = 'hidden';
         modal.style.opacity = '0';
     }, 300);
-    
+
     document.body.style.overflow = '';
 
     // Reset form
@@ -218,7 +218,7 @@ export async function loadItemsForModal(section, page = 1, search = '') {
     }
 
     // Show loading
-    listElement.innerHTML = '<div class="empty-state modal-state">Loading...</div>';
+    listElement.innerHTML = '<div class="empty-state" style="padding: 2rem; text-align: center; color: #64748b;">Loading...</div>';
 
     // Build API URL and params based on section
     let apiUrl = '';
@@ -226,14 +226,14 @@ export async function loadItemsForModal(section, page = 1, search = '') {
         page: page,
         per_page: addItemModalState[section]?.perPage || 10
     };
-    
+
     if (search) {
         params.q = search;
     }
 
     try {
         let data;
-        
+
         // Modals use different endpoints than section views
         // Modals use /api/* endpoints (page-based pagination)
         // Section views use /api/archives/* endpoints (cursor pagination)
@@ -263,10 +263,10 @@ export async function loadItemsForModal(section, page = 1, search = '') {
                 break;
             default:
                 console.error(`Unknown section: ${section}`);
-                listElement.innerHTML = `<div class="empty-state modal-state modal-state-error">Unknown section: ${section}</div>`;
+                listElement.innerHTML = `<div class="empty-state" style="padding: 2rem; text-align: center; color: #ef4444;">Unknown section: ${section}</div>`;
                 return;
         }
-        
+
         let items = [];
         let total = 0;
         let totalPages = 1;
@@ -314,7 +314,7 @@ export async function loadItemsForModal(section, page = 1, search = '') {
 
         // Render items
         renderItemsList(listId, items, section);
-        
+
         // Render unified pagination
         renderModalPagination(section, page, totalPages);
     } catch (error) {
@@ -331,7 +331,7 @@ export async function loadItemsForModal(section, page = 1, search = '') {
                 errorMessage = error.toString();
             }
         }
-        listElement.innerHTML = `<div class="empty-state modal-state modal-state-error">Error loading items: ${errorMessage}</div>`;
+        listElement.innerHTML = `<div class="empty-state" style="padding: 2rem; text-align: center; color: #ef4444;">Error loading items: ${errorMessage}</div>`;
     }
 }
 
@@ -346,7 +346,7 @@ export function renderItemsList(listId, items, section) {
     if (!listElement) return;
 
     if (items.length === 0) {
-        listElement.innerHTML = `<div class="empty-state modal-state">${translations.noItemsFound || 'No items found'}</div>`;
+        listElement.innerHTML = `<div class="empty-state" style="padding: 2rem; text-align: center; color: #64748b;">${translations.noItemsFound || 'No items found'}</div>`;
         return;
     }
 
@@ -396,16 +396,16 @@ function getItemDetailsForList(item, section) {
 function renderModalPagination(section, page, totalPages) {
     const paginationContainer = document.getElementById(`${section}Pagination`);
     if (!paginationContainer) return;
-    
+
     // Show pagination container if there are multiple pages
     if (totalPages > 1) {
         paginationContainer.style.display = 'block';
-        
+
         // Ensure container has an ID
         if (!paginationContainer.id) {
             paginationContainer.id = `${section}Pagination`;
         }
-        
+
         // Use unified pagination
         import('../rendering/unified-pagination.js').then(module => {
             module.renderUnifiedPagination({
@@ -444,7 +444,7 @@ export function searchItems(section) {
     if (!searchInput) return;
 
     const searchTerm = searchInput.value.trim();
-    
+
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         loadItemsForModal(section, 1, searchTerm);
@@ -459,12 +459,12 @@ export async function submitAddItem(section) {
     const modalId = `add${section.charAt(0).toUpperCase() + section.slice(1)}Modal`;
     const submitBtn = document.querySelector(`#${modalId} .add-item-btn-submit`);
     const originalBtnText = submitBtn ? submitBtn.textContent : '';
-    
+
     try {
         // Show loading state
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="bi bi-arrow-repeat ia-spin"></i> ${translations.submitting || 'Submitting...'}`;
+            submitBtn.innerHTML = `<i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite;"></i> ${translations.submitting || 'Submitting...'}`;
         }
 
         let data = {};
@@ -492,21 +492,21 @@ export async function submitAddItem(section) {
                     }
                     return;
                 }
-                
+
                 const toNullIfEmpty = (value) => {
                     const trimmed = typeof value === 'string' ? value.trim() : value;
                     return trimmed === '' ? null : trimmed;
                 };
-                
+
                 const ownershipValue = document.getElementById('sourceOwnership')?.value || '';
                 const accessStatusValue = document.getElementById('sourceAccessStatus')?.value || '';
                 const dateDiscoveryValue = document.getElementById('sourceDateDiscovery')?.value || '';
                 const categoryValue = document.getElementById('sourceCategory')?.value || '';
-                
+
                 // VALIDATION FIX: Clamp importance between 0 and 1
                 let importance = parseFloat(document.getElementById('sourceImportance').value) || 0.5;
                 importance = Math.max(0, Math.min(1, importance)); // Clamp between 0 and 1
-                
+
                 // VALIDATION FIX: Validate other field lengths
                 const job = document.getElementById('sourceJob').value.trim();
                 const country = document.getElementById('sourceCountry').value.trim();
@@ -515,7 +515,7 @@ export async function submitAddItem(section) {
                 const accounts = document.getElementById('sourceAccounts')?.value.trim() || '';
                 const note = document.getElementById('sourceNote')?.value.trim() || '';
                 const attachments = document.getElementById('sourceAttachments')?.value.trim() || '';
-                
+
                 if (job.length > 255) {
                     notificationSystem.error('Job/Type cannot exceed 255 characters');
                     if (submitBtn) {
@@ -548,7 +548,7 @@ export async function submitAddItem(section) {
                     }
                     return;
                 }
-                
+
                 data = {
                     name: sourceName,
                     job: job,
@@ -589,7 +589,7 @@ export async function submitAddItem(section) {
                 // VALIDATION FIX: Clamp importance between 0 and 1
                 let sideImportance = parseFloat(document.getElementById('sideImportance').value) || 0.5;
                 sideImportance = Math.max(0, Math.min(1, sideImportance)); // Clamp between 0 and 1
-                
+
                 data = {
                     name: sideName,
                     importance: sideImportance
@@ -607,7 +607,7 @@ export async function submitAddItem(section) {
                     }
                     return;
                 }
-                
+
                 const wordsArray = Array.isArray(selectedWords) ? selectedWords : [selectedWords];
                 if (wordsArray.length < 2) {
                     notificationSystem.error(translations.keywordRequiresMultipleWords || 'Keywords must contain at least 2 words. Please select multiple words to create a keyword phrase.');
@@ -617,10 +617,10 @@ export async function submitAddItem(section) {
                     }
                     return;
                 }
-                
+
                 const categoryId = window.$ ? $('#keywordCategory').val() : null;
                 const keywordPhrase = wordsArray.join(' ');
-                
+
                 // Check for duplicate before submitting
                 try {
                     const checkResponse = await fetch('/api/keyword/check', {
@@ -634,7 +634,7 @@ export async function submitAddItem(section) {
                             category_id: categoryId || '1'
                         })
                     });
-                    
+
                     const checkData = await checkResponse.json();
                     if (checkData.exists) {
                         notificationSystem.error(checkData.message || `Keyword "${keywordPhrase}" already exists in this category`);
@@ -648,13 +648,13 @@ export async function submitAddItem(section) {
                     console.warn('Error checking keyword duplicate:', error);
                     // Continue with submission if check fails (backend will catch it)
                 }
-                
+
                 formData = new FormData();
                 formData.append('keywords_text', keywordPhrase);
                 formData.append('category_id', categoryId || '1');
                 // CSRF token will be added to header in fetch call below
                 // Also add to form data for compatibility (will be set in submit section)
-                
+
                 apiUrl = '/keywords/add';
                 useFormData = true;
                 break;
@@ -663,12 +663,12 @@ export async function submitAddItem(section) {
                 // Check if using Bootstrap modal (new format)
                 const categoryWordInput = document.getElementById('categoryWordInput');
                 const selectedCategoryWordIdInput = document.getElementById('selectedCategoryWordId');
-                
+
                 if (categoryWordInput && selectedCategoryWordIdInput) {
                     // Bootstrap modal format
                     const wordText = categoryWordInput.value.trim();
                     const wordId = selectedCategoryWordIdInput.value;
-                    
+
                     if (!wordText || !wordId) {
                         notificationSystem.error(translations.categoryNameRequired || 'Please select or enter a word');
                         if (submitBtn) {
@@ -677,7 +677,7 @@ export async function submitAddItem(section) {
                         }
                         return;
                     }
-                    
+
                     data = {
                         category_name: wordText.trim()
                     };
@@ -718,10 +718,10 @@ export async function submitAddItem(section) {
                 const { getCSRFTokenAsync } = await import('../core/utils.js');
                 csrfToken = await getCSRFTokenAsync();
             }
-            
+
             // Add CSRF token to form data for compatibility
             formData.append('csrf_token', csrfToken);
-            
+
             response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
@@ -754,7 +754,7 @@ export async function submitAddItem(section) {
                     const successMessage = result.message || translations.successfullyAdded || 'Successfully added!';
                     notificationSystem.success(successMessage);
                     closeAddItemModal(modalId);
-                    
+
                     setTimeout(() => {
                         window.location.href = window.location.pathname + '?t=' + Date.now();
                     }, 500);
@@ -765,7 +765,7 @@ export async function submitAddItem(section) {
             } else {
                 notificationSystem.success(translations.successfullyAdded || 'Successfully added!');
                 closeAddItemModal(modalId);
-                
+
                 // Reload current view
                 if (window.fms && window.fms.navigation) {
                     if (window.fms.core.state.navigationState.currentSection) {
@@ -807,7 +807,7 @@ export function searchCategoryWords() {
     if (!searchInput) return;
 
     const searchTerm = searchInput.value.trim();
-    
+
     if (searchTimeout) {
         clearTimeout(searchTimeout);
     }
@@ -822,21 +822,21 @@ export function searchCategoryWords() {
 export async function submitAddWordsCategorys() {
     const submitBtn = document.querySelector('#addWordsCategorysModal .add-item-btn-submit');
     const originalBtnText = submitBtn ? submitBtn.textContent : '';
-    
+
     try {
         // Show loading state
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="bi bi-arrow-repeat ia-spin"></i> ${translations.submitting || 'Submitting...'}`;
+            submitBtn.innerHTML = `<i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite;"></i> ${translations.submitting || 'Submitting...'}`;
         }
 
         const wordId = document.getElementById('wordsCategorysWordId')?.value;
         const categoryId = document.getElementById('wordsCategorysCategoryId')?.value;
-        
+
         // Check if using jQuery Select2
         let wordIdValue = wordId;
         let categoryIdValue = categoryId;
-        
+
         if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
             const $wordSelect = jQuery('#wordsCategorysWordId');
             const $categorySelect = jQuery('#wordsCategorysCategoryId');
@@ -847,7 +847,7 @@ export async function submitAddWordsCategorys() {
                 categoryIdValue = $categorySelect.val();
             }
         }
-        
+
         if (!wordIdValue || !categoryIdValue) {
             notificationSystem.error(translations.bothWordAndCategoryRequired || 'Both word and category are required');
             if (submitBtn) {
@@ -856,15 +856,15 @@ export async function submitAddWordsCategorys() {
             }
             return;
         }
-        
+
         const data = {
             word_id: parseInt(wordIdValue),
             category_id: parseInt(categoryIdValue)
         };
-        
+
         const { apiPost } = await import('../api/api-client.js');
         const response = await apiPost('/api/words-categorys/add', data);
-        
+
         if (response.success !== false) {
             // Show appropriate message based on whether relationship already existed
             if (response.already_exists) {
@@ -877,7 +877,7 @@ export async function submitAddWordsCategorys() {
                 );
             }
             closeAddItemModal('addWordsCategorysModal');
-            
+
             // Reload page to refresh data
             setTimeout(() => {
                 window.location.href = window.location.pathname + '?t=' + Date.now();
@@ -918,7 +918,7 @@ export function setupModalKeyboardHandlers() {
                     }
                 }
             });
-            
+
             // Also close file modal with Escape
             const fileModal = document.getElementById('fileModal');
             if (fileModal && fileModal.classList.contains('active')) {
@@ -948,7 +948,7 @@ async function getCSRFTokenAsyncForModal() {
         const token = metaToken.getAttribute('content');
         if (token) return token;
     }
-    
+
     try {
         const response = await fetch('/api/csrf-token');
         if (!response.ok) {
@@ -972,7 +972,7 @@ function showToastForModal(message, type = 'info', duration = 4000) {
         toastContainer.style.zIndex = '9999';
         document.body.appendChild(toastContainer);
     }
-    
+
     const toastId = 'toast-' + Date.now();
     const icons = {
         success: 'check-circle-fill',
@@ -980,14 +980,14 @@ function showToastForModal(message, type = 'info', duration = 4000) {
         warning: 'exclamation-triangle-fill',
         info: 'info-circle-fill'
     };
-    
+
     const bgColors = {
         success: 'success',
         error: 'danger',
         warning: 'warning',
         info: 'info'
     };
-    
+
     const toastHtml = `
         <div id="${toastId}" class="toast align-items-center text-white bg-${bgColors[type]} border-0" role="alert">
             <div class="d-flex">
@@ -999,13 +999,13 @@ function showToastForModal(message, type = 'info', duration = 4000) {
             </div>
         </div>
     `;
-    
+
     toastContainer.insertAdjacentHTML('beforeend', toastHtml);
     const toastElement = document.getElementById(toastId);
     if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
         const toast = new bootstrap.Toast(toastElement, { delay: duration });
         toast.show();
-        
+
         toastElement.addEventListener('hidden.bs.toast', () => {
             toastElement.remove();
         });
@@ -1031,22 +1031,22 @@ export function openAddCategoryModal() {
         console.error('Add category modal not found');
         return;
     }
-    
+
     if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
         console.error('Bootstrap not available');
         return;
     }
-    
+
     const modal = new bootstrap.Modal(modalElement);
     const wordInput = document.getElementById('categoryWordInput');
     const wordResults = document.getElementById('categoryWordSearchResults');
     const selectedWordIdInput = document.getElementById('selectedCategoryWordId');
-    
+
     if (!wordInput || !wordResults || !selectedWordIdInput) {
         console.error('Required modal elements not found');
         return;
     }
-    
+
     // Clean up handlers
     if (categoryClickOutsideHandler) {
         document.removeEventListener('click', categoryClickOutsideHandler, true);
@@ -1064,7 +1064,7 @@ export function openAddCategoryModal() {
         clearTimeout(categoryWordSearchTimeout);
         categoryWordSearchTimeout = null;
     }
-    
+
     // Reset state
     selectedCategoryWordId = null;
     selectedCategoryWordText = null;
@@ -1072,40 +1072,40 @@ export function openAddCategoryModal() {
     selectedWordIdInput.value = '';
     wordResults.style.display = 'none';
     wordResults.innerHTML = '';
-    
+
     // Initialize word search
     function initializeWordSearch() {
         if (categoryWordSearchTimeout) {
             clearTimeout(categoryWordSearchTimeout);
             categoryWordSearchTimeout = null;
         }
-        
+
         if (categoryWordInputHandler) {
             wordInput.removeEventListener('input', categoryWordInputHandler);
         }
         if (categoryWordKeydownHandler) {
             wordInput.removeEventListener('keydown', categoryWordKeydownHandler);
         }
-        
+
         categoryWordInputHandler = function(e) {
             const searchTerm = e.target.value.trim();
-            
+
             if (categoryWordSearchTimeout) {
                 clearTimeout(categoryWordSearchTimeout);
             }
-            
+
             if (searchTerm.length === 0) {
                 wordResults.style.display = 'none';
                 wordResults.innerHTML = '';
                 return;
             }
-            
+
             categoryWordSearchTimeout = setTimeout(() => {
                 searchWordsForCategory(searchTerm);
             }, 300);
         };
         wordInput.addEventListener('input', categoryWordInputHandler);
-        
+
         categoryWordKeydownHandler = function(e) {
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -1119,29 +1119,29 @@ export function openAddCategoryModal() {
             }
         };
         wordInput.addEventListener('keydown', categoryWordKeydownHandler);
-        
+
         setTimeout(() => {
             wordInput.focus();
         }, 300);
     }
-    
+
     // Search words function
     async function searchWordsForCategory(searchTerm) {
         if (!searchTerm || searchTerm.length === 0) {
             wordResults.style.display = 'none';
             return;
         }
-        
+
         try {
             const params = new URLSearchParams({
                 q: searchTerm,
                 page: 1,
                 per_page: 20
             });
-            
+
             const response = await fetch(`/api/words/search?${params.toString()}`);
             const data = await response.json();
-            
+
             if (data.results && data.results.length > 0) {
                 renderWordResultsForCategory(data.results, searchTerm);
             } else {
@@ -1152,23 +1152,23 @@ export function openAddCategoryModal() {
             wordResults.style.display = 'none';
         }
     }
-    
+
     // Render word results
     function renderWordResultsForCategory(results, searchTerm) {
         wordResults.innerHTML = '';
-        
+
         if (results.length > 0) {
             results.forEach((item, index) => {
                 const wordId = item.id || item.word_id;
                 const wordText = item.text || item.word || '';
                 const usageCount = item.usage_count || 0;
-                
+
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'word-result-item';
                 itemDiv.tabIndex = 0;
                 itemDiv.setAttribute('data-word-id', wordId);
                 itemDiv.setAttribute('data-word-text', wordText);
-                
+
                 itemDiv.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="bi bi-check-circle me-2 text-primary"></i>
@@ -1176,11 +1176,11 @@ export function openAddCategoryModal() {
                         ${usageCount > 0 ? `<small class="text-muted ms-2">(${usageCount} files)</small>` : ''}
                     </div>
                 `;
-                
+
                 itemDiv.addEventListener('click', function() {
                     selectWordForCategory(wordId, wordText);
                 });
-                
+
                 itemDiv.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
@@ -1207,24 +1207,24 @@ export function openAddCategoryModal() {
                         }
                     }
                 });
-                
+
                 wordResults.appendChild(itemDiv);
             });
         }
-        
+
         // Show option to create new word
         const exactMatch = results.some(item => {
             const wordText = (item.text || item.word || '').toLowerCase();
             return wordText === searchTerm.toLowerCase();
         });
-        
+
         if (!exactMatch && searchTerm.length > 0 && !searchTerm.match(/^\d+$/)) {
             const createDiv = document.createElement('div');
             createDiv.className = 'word-result-item word-result-create';
             createDiv.tabIndex = 0;
             createDiv.setAttribute('data-word-id', 'new');
             createDiv.setAttribute('data-word-text', searchTerm);
-            
+
             createDiv.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-plus-circle me-2 text-success"></i>
@@ -1232,24 +1232,24 @@ export function openAddCategoryModal() {
                     <small class="text-muted ms-2">(create new)</small>
                 </div>
             `;
-            
+
             createDiv.addEventListener('click', function() {
                 selectWordForCategory('new', searchTerm);
             });
-            
+
             createDiv.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     selectWordForCategory('new', searchTerm);
                 }
             });
-            
+
             wordResults.appendChild(createDiv);
         }
-        
+
         wordResults.style.display = 'block';
     }
-    
+
     // Select word function
     async function selectWordForCategory(wordId, wordText) {
         if (wordId === 'new') {
@@ -1268,7 +1268,7 @@ export function openAddCategoryModal() {
                         csrf_token: csrfToken
                     })
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToastForModal('Word created successfully', 'success');
@@ -1282,7 +1282,7 @@ export function openAddCategoryModal() {
                 return;
             }
         }
-        
+
         selectedCategoryWordId = wordId;
         selectedCategoryWordText = wordText;
         wordInput.value = wordText;
@@ -1290,21 +1290,21 @@ export function openAddCategoryModal() {
         wordResults.style.display = 'none';
         wordInput.focus();
     }
-    
+
     // Show modal and initialize
     modal.show();
-    
+
     // Wait for modal to be fully shown
     modalElement.addEventListener('shown.bs.modal', function onShown() {
         modalElement.removeEventListener('shown.bs.modal', onShown);
         initializeWordSearch();
-        
+
         // Add click outside handler
         const wordInputContainer = wordInput.closest('.position-relative') || wordInput.parentElement;
         categoryClickOutsideHandler = function(e) {
             const target = e.target;
-            if (wordInputContainer && wordResults && 
-                !wordInputContainer.contains(target) && 
+            if (wordInputContainer && wordResults &&
+                !wordInputContainer.contains(target) &&
                 !wordResults.contains(target)) {
                 wordResults.style.display = 'none';
             }
@@ -1313,19 +1313,19 @@ export function openAddCategoryModal() {
             document.addEventListener('click', categoryClickOutsideHandler, true);
         }, 100);
     }, { once: true });
-    
+
     // Clean up when modal is hidden
     modalElement.addEventListener('hidden.bs.modal', function onHidden() {
         if (categoryClickOutsideHandler) {
             document.removeEventListener('click', categoryClickOutsideHandler, true);
             categoryClickOutsideHandler = null;
         }
-        
+
         if (categoryWordSearchTimeout) {
             clearTimeout(categoryWordSearchTimeout);
             categoryWordSearchTimeout = null;
         }
-        
+
         if (categoryWordInputHandler && wordInput) {
             wordInput.removeEventListener('input', categoryWordInputHandler);
             categoryWordInputHandler = null;
@@ -1334,14 +1334,14 @@ export function openAddCategoryModal() {
             wordInput.removeEventListener('keydown', categoryWordKeydownHandler);
             categoryWordKeydownHandler = null;
         }
-        
+
         if (wordInput) wordInput.value = '';
         if (selectedWordIdInput) selectedWordIdInput.value = '';
         if (wordResults) {
             wordResults.style.display = 'none';
             wordResults.innerHTML = '';
         }
-        
+
         selectedCategoryWordId = null;
         selectedCategoryWordText = null;
     }, { once: true });
@@ -1353,20 +1353,20 @@ export function openAddCategoryModal() {
 export async function saveCategory() {
     const wordInput = document.getElementById('categoryWordInput');
     const selectedWordIdInput = document.getElementById('selectedCategoryWordId');
-    
+
     if (!wordInput || !selectedWordIdInput) {
         showToastForModal('Form elements not found', 'error');
         return;
     }
-    
+
     const wordText = wordInput.value.trim();
     const wordId = selectedWordIdInput.value;
-    
+
     if (!wordText || !wordId) {
         showToastForModal('Please select or enter a word', 'warning');
         return;
     }
-    
+
     try {
         showToastForModal('Adding category...', 'info');
         const csrfToken = getCSRFTokenForModal() || await getCSRFTokenAsyncForModal();
@@ -1382,7 +1382,7 @@ export async function saveCategory() {
                 csrf_token: csrfToken
             })
         });
-        
+
         const contentType = response.headers.get('content-type') || '';
         let data;
         if (contentType.includes('application/json')) {
@@ -1390,10 +1390,10 @@ export async function saveCategory() {
         } else {
             data = { success: true, message: 'Category added successfully' };
         }
-        
+
         if (data.success) {
             showToastForModal(data.message || 'Category added successfully', 'success');
-            
+
             // Close modal
             const modalElement = document.getElementById('addCategoryModal');
             if (modalElement && typeof bootstrap !== 'undefined') {
@@ -1402,7 +1402,7 @@ export async function saveCategory() {
                     modal.hide();
                 }
             }
-            
+
             // Reload page or refresh view
             setTimeout(() => {
                 if (window.loadRootView) {
@@ -1442,12 +1442,12 @@ export function openAddWordsCategorysModal() {
         console.error('Add words-categorys modal not found');
         return;
     }
-    
+
     if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
         console.error('Bootstrap not available');
         return;
     }
-    
+
     const modal = new bootstrap.Modal(modalElement);
     const wordInput = document.getElementById('wordsCategorysWordInput');
     const categoryInput = document.getElementById('wordsCategorysCategoryInput');
@@ -1455,12 +1455,12 @@ export function openAddWordsCategorysModal() {
     const categoryResults = document.getElementById('wordsCategorysCategorySearchResults');
     const selectedWordIdInput = document.getElementById('selectedWordsCategorysWordId');
     const selectedCategoryIdInput = document.getElementById('selectedWordsCategorysCategoryId');
-    
+
     if (!wordInput || !categoryInput || !wordResults || !categoryResults || !selectedWordIdInput || !selectedCategoryIdInput) {
         console.error('Required modal elements not found');
         return;
     }
-    
+
     // Clean up handlers
     if (wordsCategorysClickOutsideHandler) {
         document.removeEventListener('click', wordsCategorysClickOutsideHandler, true);
@@ -1490,7 +1490,7 @@ export function openAddWordsCategorysModal() {
         clearTimeout(wordsCategorysCategorySearchTimeout);
         wordsCategorysCategorySearchTimeout = null;
     }
-    
+
     // Reset state
     selectedWordsCategorysWordId = null;
     selectedWordsCategorysWordText = null;
@@ -1504,40 +1504,40 @@ export function openAddWordsCategorysModal() {
     wordResults.innerHTML = '';
     categoryResults.style.display = 'none';
     categoryResults.innerHTML = '';
-    
+
     // Initialize word search
     function initializeWordSearch() {
         if (wordsCategorysWordSearchTimeout) {
             clearTimeout(wordsCategorysWordSearchTimeout);
             wordsCategorysWordSearchTimeout = null;
         }
-        
+
         if (wordsCategorysWordInputHandler) {
             wordInput.removeEventListener('input', wordsCategorysWordInputHandler);
         }
         if (wordsCategorysWordKeydownHandler) {
             wordInput.removeEventListener('keydown', wordsCategorysWordKeydownHandler);
         }
-        
+
         wordsCategorysWordInputHandler = function(e) {
             const searchTerm = e.target.value.trim();
-            
+
             if (wordsCategorysWordSearchTimeout) {
                 clearTimeout(wordsCategorysWordSearchTimeout);
             }
-            
+
             if (searchTerm.length === 0) {
                 wordResults.style.display = 'none';
                 wordResults.innerHTML = '';
                 return;
             }
-            
+
             wordsCategorysWordSearchTimeout = setTimeout(() => {
                 searchWordsForWordsCategorys(searchTerm);
             }, 300);
         };
         wordInput.addEventListener('input', wordsCategorysWordInputHandler);
-        
+
         wordsCategorysWordKeydownHandler = function(e) {
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -1551,45 +1551,45 @@ export function openAddWordsCategorysModal() {
             }
         };
         wordInput.addEventListener('keydown', wordsCategorysWordKeydownHandler);
-        
+
         setTimeout(() => {
             wordInput.focus();
         }, 300);
     }
-    
+
     // Initialize category search
     function initializeCategorySearch() {
         if (wordsCategorysCategorySearchTimeout) {
             clearTimeout(wordsCategorysCategorySearchTimeout);
             wordsCategorysCategorySearchTimeout = null;
         }
-        
+
         if (wordsCategorysCategoryInputHandler) {
             categoryInput.removeEventListener('input', wordsCategorysCategoryInputHandler);
         }
         if (wordsCategorysCategoryKeydownHandler) {
             categoryInput.removeEventListener('keydown', wordsCategorysCategoryKeydownHandler);
         }
-        
+
         wordsCategorysCategoryInputHandler = function(e) {
             const searchTerm = e.target.value.trim();
-            
+
             if (wordsCategorysCategorySearchTimeout) {
                 clearTimeout(wordsCategorysCategorySearchTimeout);
             }
-            
+
             if (searchTerm.length === 0) {
                 categoryResults.style.display = 'none';
                 categoryResults.innerHTML = '';
                 return;
             }
-            
+
             wordsCategorysCategorySearchTimeout = setTimeout(() => {
                 searchCategoriesForWordsCategorys(searchTerm);
             }, 300);
         };
         categoryInput.addEventListener('input', wordsCategorysCategoryInputHandler);
-        
+
         wordsCategorysCategoryKeydownHandler = function(e) {
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -1604,24 +1604,24 @@ export function openAddWordsCategorysModal() {
         };
         categoryInput.addEventListener('keydown', wordsCategorysCategoryKeydownHandler);
     }
-    
+
     // Search words function
     async function searchWordsForWordsCategorys(searchTerm) {
         if (!searchTerm || searchTerm.length === 0) {
             wordResults.style.display = 'none';
             return;
         }
-        
+
         try {
             const params = new URLSearchParams({
                 q: searchTerm,
                 page: 1,
                 per_page: 20
             });
-            
+
             const response = await fetch(`/api/words/search?${params.toString()}`);
             const data = await response.json();
-            
+
             if (data.results && data.results.length > 0) {
                 renderWordResultsForWordsCategorys(data.results, searchTerm);
             } else {
@@ -1632,23 +1632,23 @@ export function openAddWordsCategorysModal() {
             wordResults.style.display = 'none';
         }
     }
-    
+
     // Render word results
     function renderWordResultsForWordsCategorys(results, searchTerm) {
         wordResults.innerHTML = '';
-        
+
         if (results.length > 0) {
             results.forEach((item, index) => {
                 const wordId = item.id || item.word_id;
                 const wordText = item.text || item.word || '';
                 const usageCount = item.usage_count || 0;
-                
+
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'word-result-item';
                 itemDiv.tabIndex = 0;
                 itemDiv.setAttribute('data-word-id', wordId);
                 itemDiv.setAttribute('data-word-text', wordText);
-                
+
                 itemDiv.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="bi bi-check-circle me-2 text-primary"></i>
@@ -1656,11 +1656,11 @@ export function openAddWordsCategorysModal() {
                         ${usageCount > 0 ? `<small class="text-muted ms-2">(${usageCount} files)</small>` : ''}
                     </div>
                 `;
-                
+
                 itemDiv.addEventListener('click', function() {
                     selectWordForWordsCategorys(wordId, wordText);
                 });
-                
+
                 itemDiv.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
@@ -1687,24 +1687,24 @@ export function openAddWordsCategorysModal() {
                         }
                     }
                 });
-                
+
                 wordResults.appendChild(itemDiv);
             });
         }
-        
+
         // Show option to create new word
         const exactMatch = results.some(item => {
             const wordText = (item.text || item.word || '').toLowerCase();
             return wordText === searchTerm.toLowerCase();
         });
-        
+
         if (!exactMatch && searchTerm.length > 0 && !searchTerm.match(/^\d+$/)) {
             const createDiv = document.createElement('div');
             createDiv.className = 'word-result-item word-result-create';
             createDiv.tabIndex = 0;
             createDiv.setAttribute('data-word-id', 'new');
             createDiv.setAttribute('data-word-text', searchTerm);
-            
+
             createDiv.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-plus-circle me-2 text-success"></i>
@@ -1712,24 +1712,24 @@ export function openAddWordsCategorysModal() {
                     <small class="text-muted ms-2">(create new)</small>
                 </div>
             `;
-            
+
             createDiv.addEventListener('click', function() {
                 selectWordForWordsCategorys('new', searchTerm);
             });
-            
+
             createDiv.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     selectWordForWordsCategorys('new', searchTerm);
                 }
             });
-            
+
             wordResults.appendChild(createDiv);
         }
-        
+
         wordResults.style.display = 'block';
     }
-    
+
     // Select word function
     async function selectWordForWordsCategorys(wordId, wordText) {
         if (wordId === 'new') {
@@ -1748,7 +1748,7 @@ export function openAddWordsCategorysModal() {
                         csrf_token: csrfToken
                     })
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToastForModal('Word created successfully', 'success');
@@ -1762,7 +1762,7 @@ export function openAddWordsCategorysModal() {
                 return;
             }
         }
-        
+
         selectedWordsCategorysWordId = wordId;
         selectedWordsCategorysWordText = wordText;
         wordInput.value = wordText;
@@ -1770,24 +1770,24 @@ export function openAddWordsCategorysModal() {
         wordResults.style.display = 'none';
         wordInput.focus();
     }
-    
+
     // Search categories function
     async function searchCategoriesForWordsCategorys(searchTerm) {
         if (!searchTerm || searchTerm.length === 0) {
             categoryResults.style.display = 'none';
             return;
         }
-        
+
         try {
             const params = new URLSearchParams({
                 q: searchTerm,
                 page: 1,
                 per_page: 20
             });
-            
+
             const response = await fetch(`/api/categories/search?${params.toString()}`);
             const data = await response.json();
-            
+
             if (data.results && data.results.length > 0) {
                 renderCategoryResultsForWordsCategorys(data.results, searchTerm);
             } else {
@@ -1798,23 +1798,23 @@ export function openAddWordsCategorysModal() {
             categoryResults.style.display = 'none';
         }
     }
-    
+
     // Render category results
     function renderCategoryResultsForWordsCategorys(results, searchTerm) {
         categoryResults.innerHTML = '';
-        
+
         if (results.length > 0) {
             results.forEach((item, index) => {
                 const categoryId = item.id;
                 const categoryName = item.name || '';
                 const fileCount = item.file_count || 0;
-                
+
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'word-result-item';
                 itemDiv.tabIndex = 0;
                 itemDiv.setAttribute('data-category-id', categoryId);
                 itemDiv.setAttribute('data-category-name', categoryName);
-                
+
                 itemDiv.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="bi bi-check-circle me-2 text-primary"></i>
@@ -1822,11 +1822,11 @@ export function openAddWordsCategorysModal() {
                         ${fileCount > 0 ? `<small class="text-muted ms-2">(${fileCount} files)</small>` : ''}
                     </div>
                 `;
-                
+
                 itemDiv.addEventListener('click', function() {
                     selectCategoryForWordsCategorys(categoryId, categoryName);
                 });
-                
+
                 itemDiv.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
@@ -1853,24 +1853,24 @@ export function openAddWordsCategorysModal() {
                         }
                     }
                 });
-                
+
                 categoryResults.appendChild(itemDiv);
             });
         }
-        
+
         // Show option to create new category
         const exactMatch = results.some(item => {
             const categoryName = (item.name || '').toLowerCase();
             return categoryName === searchTerm.toLowerCase();
         });
-        
+
         if (!exactMatch && searchTerm.length > 0 && !searchTerm.match(/^\d+$/)) {
             const createDiv = document.createElement('div');
             createDiv.className = 'word-result-item word-result-create';
             createDiv.tabIndex = 0;
             createDiv.setAttribute('data-category-id', 'new');
             createDiv.setAttribute('data-category-name', searchTerm);
-            
+
             createDiv.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-plus-circle me-2 text-success"></i>
@@ -1878,24 +1878,24 @@ export function openAddWordsCategorysModal() {
                     <small class="text-muted ms-2">(create new)</small>
                 </div>
             `;
-            
+
             createDiv.addEventListener('click', function() {
                 selectCategoryForWordsCategorys('new', searchTerm);
             });
-            
+
             createDiv.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     selectCategoryForWordsCategorys('new', searchTerm);
                 }
             });
-            
+
             categoryResults.appendChild(createDiv);
         }
-        
+
         categoryResults.style.display = 'block';
     }
-    
+
     // Select category function
     async function selectCategoryForWordsCategorys(categoryId, categoryName) {
         if (categoryId === 'new') {
@@ -1914,7 +1914,7 @@ export function openAddWordsCategorysModal() {
                         csrf_token: csrfToken
                     })
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToastForModal('Category created successfully', 'success');
@@ -1928,7 +1928,7 @@ export function openAddWordsCategorysModal() {
                 return;
             }
         }
-        
+
         selectedWordsCategorysCategoryId = categoryId;
         selectedWordsCategorysCategoryText = categoryName;
         categoryInput.value = categoryName;
@@ -1936,29 +1936,29 @@ export function openAddWordsCategorysModal() {
         categoryResults.style.display = 'none';
         categoryInput.focus();
     }
-    
+
     // Show modal and initialize
     modal.show();
-    
+
     // Wait for modal to be fully shown
     modalElement.addEventListener('shown.bs.modal', function onShown() {
         modalElement.removeEventListener('shown.bs.modal', onShown);
         initializeWordSearch();
         initializeCategorySearch();
-        
+
         // Add click outside handler
         const wordInputContainer = wordInput.closest('.position-relative') || wordInput.parentElement;
         const categoryInputContainer = categoryInput.closest('.position-relative') || categoryInput.parentElement;
-        
+
         wordsCategorysClickOutsideHandler = function(e) {
             const target = e.target;
-            if (wordInputContainer && wordResults && 
-                !wordInputContainer.contains(target) && 
+            if (wordInputContainer && wordResults &&
+                !wordInputContainer.contains(target) &&
                 !wordResults.contains(target)) {
                 wordResults.style.display = 'none';
             }
-            if (categoryInputContainer && categoryResults && 
-                !categoryInputContainer.contains(target) && 
+            if (categoryInputContainer && categoryResults &&
+                !categoryInputContainer.contains(target) &&
                 !categoryResults.contains(target)) {
                 categoryResults.style.display = 'none';
             }
@@ -1967,14 +1967,14 @@ export function openAddWordsCategorysModal() {
             document.addEventListener('click', wordsCategorysClickOutsideHandler, true);
         }, 100);
     }, { once: true });
-    
+
     // Clean up when modal is hidden
     modalElement.addEventListener('hidden.bs.modal', function onHidden() {
         if (wordsCategorysClickOutsideHandler) {
             document.removeEventListener('click', wordsCategorysClickOutsideHandler, true);
             wordsCategorysClickOutsideHandler = null;
         }
-        
+
         if (wordsCategorysWordSearchTimeout) {
             clearTimeout(wordsCategorysWordSearchTimeout);
             wordsCategorysWordSearchTimeout = null;
@@ -1983,7 +1983,7 @@ export function openAddWordsCategorysModal() {
             clearTimeout(wordsCategorysCategorySearchTimeout);
             wordsCategorysCategorySearchTimeout = null;
         }
-        
+
         if (wordsCategorysWordInputHandler && wordInput) {
             wordInput.removeEventListener('input', wordsCategorysWordInputHandler);
             wordsCategorysWordInputHandler = null;
@@ -2000,7 +2000,7 @@ export function openAddWordsCategorysModal() {
             categoryInput.removeEventListener('keydown', wordsCategorysCategoryKeydownHandler);
             wordsCategorysCategoryKeydownHandler = null;
         }
-        
+
         if (wordInput) wordInput.value = '';
         if (categoryInput) categoryInput.value = '';
         if (selectedWordIdInput) selectedWordIdInput.value = '';
@@ -2013,7 +2013,7 @@ export function openAddWordsCategorysModal() {
             categoryResults.style.display = 'none';
             categoryResults.innerHTML = '';
         }
-        
+
         selectedWordsCategorysWordId = null;
         selectedWordsCategorysWordText = null;
         selectedWordsCategorysCategoryId = null;
@@ -2029,20 +2029,20 @@ export async function saveWordsCategorys() {
     const categoryInput = document.getElementById('wordsCategorysCategoryInput');
     const selectedWordIdInput = document.getElementById('selectedWordsCategorysWordId');
     const selectedCategoryIdInput = document.getElementById('selectedWordsCategorysCategoryId');
-    
+
     if (!wordInput || !categoryInput || !selectedWordIdInput || !selectedCategoryIdInput) {
         showToastForModal('Form elements not found', 'error');
         return;
     }
-    
+
     const wordId = selectedWordIdInput.value;
     const categoryId = selectedCategoryIdInput.value;
-    
+
     if (!wordId || !categoryId) {
         showToastForModal('Please select both a word and a category', 'warning');
         return;
     }
-    
+
     try {
         showToastForModal('Adding relationship...', 'info');
         const csrfToken = getCSRFTokenForModal() || await getCSRFTokenAsyncForModal();
@@ -2059,7 +2059,7 @@ export async function saveWordsCategorys() {
                 csrf_token: csrfToken
             })
         });
-        
+
         const contentType = response.headers.get('content-type') || '';
         let data;
         if (contentType.includes('application/json')) {
@@ -2067,10 +2067,10 @@ export async function saveWordsCategorys() {
         } else {
             data = { success: true, message: 'Relationship added successfully' };
         }
-        
+
         if (data.success) {
             showToastForModal(data.message || 'Relationship added successfully', 'success');
-            
+
             // Close modal
             const modalElement = document.getElementById('addWordsCategorysModal');
             if (modalElement && typeof bootstrap !== 'undefined') {
@@ -2079,7 +2079,7 @@ export async function saveWordsCategorys() {
                     modal.hide();
                 }
             }
-            
+
             // Reload page or refresh view
             setTimeout(() => {
                 if (window.loadRootView) {
@@ -2118,12 +2118,12 @@ export function openAddKeywordModalFromArchives() {
         console.error('Add keyword modal not found');
         return;
     }
-    
+
     if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
         console.error('Bootstrap not available');
         return;
     }
-    
+
     const modal = new bootstrap.Modal(modalElement);
     const wordInput = document.getElementById('keywordWordInput');
     const categoryInput = document.getElementById('keywordCategoryInput');
@@ -2132,12 +2132,12 @@ export function openAddKeywordModalFromArchives() {
     const selectedWordsContainer = document.getElementById('selectedKeywordWordsContainer');
     const selectedWordsList = document.getElementById('selectedKeywordWordsList');
     const selectedCategoryIdInput = document.getElementById('selectedKeywordCategoryId');
-    
+
     if (!wordInput || !categoryInput || !wordResults || !categoryResults || !selectedWordsList) {
         console.error('Required modal elements not found');
         return;
     }
-    
+
     // Clean up handlers
     if (archivesKeywordClickOutsideHandler) {
         document.removeEventListener('click', archivesKeywordClickOutsideHandler, true);
@@ -2167,7 +2167,7 @@ export function openAddKeywordModalFromArchives() {
         clearTimeout(archivesKeywordCategorySearchTimeout);
         archivesKeywordCategorySearchTimeout = null;
     }
-    
+
     // Reset state
     archivesSelectedWords = [];
     archivesSelectedCategoryId = null;
@@ -2181,40 +2181,40 @@ export function openAddKeywordModalFromArchives() {
     categoryResults.innerHTML = '';
     if (selectedWordsContainer) selectedWordsContainer.style.display = 'none';
     if (selectedWordsList) selectedWordsList.innerHTML = '';
-    
+
     // Initialize word search
     function initializeWordSearch() {
         if (archivesKeywordWordSearchTimeout) {
             clearTimeout(archivesKeywordWordSearchTimeout);
             archivesKeywordWordSearchTimeout = null;
         }
-        
+
         if (archivesKeywordWordInputHandler) {
             wordInput.removeEventListener('input', archivesKeywordWordInputHandler);
         }
         if (archivesKeywordWordKeydownHandler) {
             wordInput.removeEventListener('keydown', archivesKeywordWordKeydownHandler);
         }
-        
+
         archivesKeywordWordInputHandler = function(e) {
             const searchTerm = e.target.value.trim();
-            
+
             if (archivesKeywordWordSearchTimeout) {
                 clearTimeout(archivesKeywordWordSearchTimeout);
             }
-            
+
             if (searchTerm.length === 0) {
                 wordResults.style.display = 'none';
                 wordResults.innerHTML = '';
                 return;
             }
-            
+
             archivesKeywordWordSearchTimeout = setTimeout(() => {
                 searchWordsForArchivesKeyword(searchTerm);
             }, 300);
         };
         wordInput.addEventListener('input', archivesKeywordWordInputHandler);
-        
+
         archivesKeywordWordKeydownHandler = function(e) {
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -2228,45 +2228,45 @@ export function openAddKeywordModalFromArchives() {
             }
         };
         wordInput.addEventListener('keydown', archivesKeywordWordKeydownHandler);
-        
+
         setTimeout(() => {
             wordInput.focus();
         }, 300);
     }
-    
+
     // Initialize category search
     function initializeCategorySearch() {
         if (archivesKeywordCategorySearchTimeout) {
             clearTimeout(archivesKeywordCategorySearchTimeout);
             archivesKeywordCategorySearchTimeout = null;
         }
-        
+
         if (archivesKeywordCategoryInputHandler) {
             categoryInput.removeEventListener('input', archivesKeywordCategoryInputHandler);
         }
         if (archivesKeywordCategoryKeydownHandler) {
             categoryInput.removeEventListener('keydown', archivesKeywordCategoryKeydownHandler);
         }
-        
+
         archivesKeywordCategoryInputHandler = function(e) {
             const searchTerm = e.target.value.trim();
-            
+
             if (archivesKeywordCategorySearchTimeout) {
                 clearTimeout(archivesKeywordCategorySearchTimeout);
             }
-            
+
             if (searchTerm.length === 0) {
                 categoryResults.style.display = 'none';
                 categoryResults.innerHTML = '';
                 return;
             }
-            
+
             archivesKeywordCategorySearchTimeout = setTimeout(() => {
                 searchCategoriesForArchivesKeyword(searchTerm);
             }, 300);
         };
         categoryInput.addEventListener('input', archivesKeywordCategoryInputHandler);
-        
+
         archivesKeywordCategoryKeydownHandler = function(e) {
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -2281,24 +2281,24 @@ export function openAddKeywordModalFromArchives() {
         };
         categoryInput.addEventListener('keydown', archivesKeywordCategoryKeydownHandler);
     }
-    
+
     // Search words function
     async function searchWordsForArchivesKeyword(searchTerm) {
         if (!searchTerm || searchTerm.length === 0) {
             wordResults.style.display = 'none';
             return;
         }
-        
+
         try {
             const params = new URLSearchParams({
                 q: searchTerm,
                 page: 1,
                 per_page: 20
             });
-            
+
             const response = await fetch(`/api/words/search?${params.toString()}`);
             const data = await response.json();
-            
+
             if (data.results && data.results.length > 0) {
                 renderWordResultsForArchivesKeyword(data.results, searchTerm);
             } else {
@@ -2309,28 +2309,28 @@ export function openAddKeywordModalFromArchives() {
             wordResults.style.display = 'none';
         }
     }
-    
+
     // Render word results
     function renderWordResultsForArchivesKeyword(results, searchTerm) {
         wordResults.innerHTML = '';
-        
+
         if (results.length > 0) {
             results.forEach((item, index) => {
                 const wordId = item.id || item.word_id;
                 const wordText = item.text || item.word || '';
                 const usageCount = item.usage_count || 0;
-                
+
                 // Skip if already selected
                 if (archivesSelectedWords.some(w => w.text === wordText)) {
                     return;
                 }
-                
+
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'word-result-item';
                 itemDiv.tabIndex = 0;
                 itemDiv.setAttribute('data-word-id', wordId);
                 itemDiv.setAttribute('data-word-text', wordText);
-                
+
                 itemDiv.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="bi bi-check-circle me-2 text-primary"></i>
@@ -2338,11 +2338,11 @@ export function openAddKeywordModalFromArchives() {
                         ${usageCount > 0 ? `<small class="text-muted ms-2">(${usageCount} files)</small>` : ''}
                     </div>
                 `;
-                
+
                 itemDiv.addEventListener('click', function() {
                     selectWordForArchivesKeyword(wordId, wordText);
                 });
-                
+
                 itemDiv.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
@@ -2369,24 +2369,24 @@ export function openAddKeywordModalFromArchives() {
                         }
                     }
                 });
-                
+
                 wordResults.appendChild(itemDiv);
             });
         }
-        
+
         // Show option to create new word
         const exactMatch = results.some(item => {
             const wordText = (item.text || item.word || '').toLowerCase();
             return wordText === searchTerm.toLowerCase();
         });
-        
+
         if (!exactMatch && searchTerm.length > 0 && !searchTerm.match(/^\d+$/)) {
             const createDiv = document.createElement('div');
             createDiv.className = 'word-result-item word-result-create';
             createDiv.tabIndex = 0;
             createDiv.setAttribute('data-word-id', 'new');
             createDiv.setAttribute('data-word-text', searchTerm);
-            
+
             createDiv.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-plus-circle me-2 text-success"></i>
@@ -2394,24 +2394,24 @@ export function openAddKeywordModalFromArchives() {
                     <small class="text-muted ms-2">(create new)</small>
                 </div>
             `;
-            
+
             createDiv.addEventListener('click', function() {
                 selectWordForArchivesKeyword('new', searchTerm);
             });
-            
+
             createDiv.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     selectWordForArchivesKeyword('new', searchTerm);
                 }
             });
-            
+
             wordResults.appendChild(createDiv);
         }
-        
+
         wordResults.style.display = 'block';
     }
-    
+
     // Select word function
     async function selectWordForArchivesKeyword(wordId, wordText) {
         if (wordId === 'new') {
@@ -2430,7 +2430,7 @@ export function openAddKeywordModalFromArchives() {
                         csrf_token: csrfToken
                     })
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToastForModal('Word created successfully', 'success');
@@ -2444,60 +2444,60 @@ export function openAddKeywordModalFromArchives() {
                 return;
             }
         }
-        
+
         // Add to selected words
         if (!archivesSelectedWords.some(w => w.text === wordText)) {
             archivesSelectedWords.push({ id: wordId, text: wordText });
             updateSelectedWordsDisplay();
         }
-        
+
         wordInput.value = '';
         wordResults.style.display = 'none';
         wordInput.focus();
     }
-    
+
     // Update selected words display
     function updateSelectedWordsDisplay() {
         if (!selectedWordsList || !selectedWordsContainer) return;
-        
+
         if (archivesSelectedWords.length === 0) {
             selectedWordsContainer.style.display = 'none';
             selectedWordsList.innerHTML = '';
             return;
         }
-        
+
         selectedWordsContainer.style.display = 'block';
         selectedWordsList.innerHTML = archivesSelectedWords.map((word, index) => `
-            <span class="badge bg-primary d-flex align-items-center gap-1 archives-selected-word-badge" data-word-id="${word.id}" data-word-text="${escapeHtml(word.text)}">
+            <span class="badge bg-primary d-flex align-items-center gap-1" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;" data-word-id="${word.id}" data-word-text="${escapeHtml(word.text)}">
                 ${escapeHtml(word.text)}
-                <button type="button" class="btn-close btn-close-white archives-selected-word-remove" onclick="removeArchivesSelectedWord(${index})" aria-label="Remove"></button>
+                <button type="button" class="btn-close btn-close-white" style="font-size: 0.6rem;" onclick="removeArchivesSelectedWord(${index})" aria-label="Remove"></button>
             </span>
         `).join('');
     }
-    
+
     // Remove selected word
     window.removeArchivesSelectedWord = function(index) {
         archivesSelectedWords.splice(index, 1);
         updateSelectedWordsDisplay();
     };
-    
+
     // Search categories function
     async function searchCategoriesForArchivesKeyword(searchTerm) {
         if (!searchTerm || searchTerm.length === 0) {
             categoryResults.style.display = 'none';
             return;
         }
-        
+
         try {
             const params = new URLSearchParams({
                 q: searchTerm,
                 page: 1,
                 per_page: 20
             });
-            
+
             const response = await fetch(`/api/categories/search?${params.toString()}`);
             const data = await response.json();
-            
+
             if (data.results && data.results.length > 0) {
                 renderCategoryResultsForArchivesKeyword(data.results, searchTerm);
             } else {
@@ -2508,23 +2508,23 @@ export function openAddKeywordModalFromArchives() {
             categoryResults.style.display = 'none';
         }
     }
-    
+
     // Render category results
     function renderCategoryResultsForArchivesKeyword(results, searchTerm) {
         categoryResults.innerHTML = '';
-        
+
         if (results.length > 0) {
             results.forEach((item, index) => {
                 const categoryId = item.id;
                 const categoryName = item.name || '';
                 const fileCount = item.file_count || 0;
-                
+
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'word-result-item';
                 itemDiv.tabIndex = 0;
                 itemDiv.setAttribute('data-category-id', categoryId);
                 itemDiv.setAttribute('data-category-name', categoryName);
-                
+
                 itemDiv.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="bi bi-check-circle me-2 text-primary"></i>
@@ -2532,11 +2532,11 @@ export function openAddKeywordModalFromArchives() {
                         ${fileCount > 0 ? `<small class="text-muted ms-2">(${fileCount} files)</small>` : ''}
                     </div>
                 `;
-                
+
                 itemDiv.addEventListener('click', function() {
                     selectCategoryForArchivesKeyword(categoryId, categoryName);
                 });
-                
+
                 itemDiv.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
@@ -2563,24 +2563,24 @@ export function openAddKeywordModalFromArchives() {
                         }
                     }
                 });
-                
+
                 categoryResults.appendChild(itemDiv);
             });
         }
-        
+
         // Show option to create new category
         const exactMatch = results.some(item => {
             const categoryName = (item.name || '').toLowerCase();
             return categoryName === searchTerm.toLowerCase();
         });
-        
+
         if (!exactMatch && searchTerm.length > 0 && !searchTerm.match(/^\d+$/)) {
             const createDiv = document.createElement('div');
             createDiv.className = 'word-result-item word-result-create';
             createDiv.tabIndex = 0;
             createDiv.setAttribute('data-category-id', 'new');
             createDiv.setAttribute('data-category-name', searchTerm);
-            
+
             createDiv.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-plus-circle me-2 text-success"></i>
@@ -2588,24 +2588,24 @@ export function openAddKeywordModalFromArchives() {
                     <small class="text-muted ms-2">(create new)</small>
                 </div>
             `;
-            
+
             createDiv.addEventListener('click', function() {
                 selectCategoryForArchivesKeyword('new', searchTerm);
             });
-            
+
             createDiv.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     selectCategoryForArchivesKeyword('new', searchTerm);
                 }
             });
-            
+
             categoryResults.appendChild(createDiv);
         }
-        
+
         categoryResults.style.display = 'block';
     }
-    
+
     // Select category function
     async function selectCategoryForArchivesKeyword(categoryId, categoryName) {
         if (categoryId === 'new') {
@@ -2624,7 +2624,7 @@ export function openAddKeywordModalFromArchives() {
                         csrf_token: csrfToken
                     })
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToastForModal('Category created successfully', 'success');
@@ -2638,7 +2638,7 @@ export function openAddKeywordModalFromArchives() {
                 return;
             }
         }
-        
+
         archivesSelectedCategoryId = categoryId;
         archivesSelectedCategoryText = categoryName;
         categoryInput.value = categoryName;
@@ -2646,29 +2646,29 @@ export function openAddKeywordModalFromArchives() {
         categoryResults.style.display = 'none';
         categoryInput.focus();
     }
-    
+
     // Show modal and initialize
     modal.show();
-    
+
     // Wait for modal to be fully shown
     modalElement.addEventListener('shown.bs.modal', function onShown() {
         modalElement.removeEventListener('shown.bs.modal', onShown);
         initializeWordSearch();
         initializeCategorySearch();
-        
+
         // Add click outside handler
         const wordInputContainer = wordInput.closest('.position-relative') || wordInput.parentElement;
         const categoryInputContainer = categoryInput.closest('.position-relative') || categoryInput.parentElement;
-        
+
         archivesKeywordClickOutsideHandler = function(e) {
             const target = e.target;
-            if (wordInputContainer && wordResults && 
-                !wordInputContainer.contains(target) && 
+            if (wordInputContainer && wordResults &&
+                !wordInputContainer.contains(target) &&
                 !wordResults.contains(target)) {
                 wordResults.style.display = 'none';
             }
-            if (categoryInputContainer && categoryResults && 
-                !categoryInputContainer.contains(target) && 
+            if (categoryInputContainer && categoryResults &&
+                !categoryInputContainer.contains(target) &&
                 !categoryResults.contains(target)) {
                 categoryResults.style.display = 'none';
             }
@@ -2677,14 +2677,14 @@ export function openAddKeywordModalFromArchives() {
             document.addEventListener('click', archivesKeywordClickOutsideHandler, true);
         }, 100);
     }, { once: true });
-    
+
     // Clean up when modal is hidden
     modalElement.addEventListener('hidden.bs.modal', function onHidden() {
         if (archivesKeywordClickOutsideHandler) {
             document.removeEventListener('click', archivesKeywordClickOutsideHandler, true);
             archivesKeywordClickOutsideHandler = null;
         }
-        
+
         if (archivesKeywordWordSearchTimeout) {
             clearTimeout(archivesKeywordWordSearchTimeout);
             archivesKeywordWordSearchTimeout = null;
@@ -2693,7 +2693,7 @@ export function openAddKeywordModalFromArchives() {
             clearTimeout(archivesKeywordCategorySearchTimeout);
             archivesKeywordCategorySearchTimeout = null;
         }
-        
+
         if (archivesKeywordWordInputHandler && wordInput) {
             wordInput.removeEventListener('input', archivesKeywordWordInputHandler);
             archivesKeywordWordInputHandler = null;
@@ -2710,7 +2710,7 @@ export function openAddKeywordModalFromArchives() {
             categoryInput.removeEventListener('keydown', archivesKeywordCategoryKeydownHandler);
             archivesKeywordCategoryKeydownHandler = null;
         }
-        
+
         if (wordInput) wordInput.value = '';
         if (categoryInput) categoryInput.value = '';
         if (selectedCategoryIdInput) selectedCategoryIdInput.value = '';
@@ -2724,7 +2724,7 @@ export function openAddKeywordModalFromArchives() {
         }
         if (selectedWordsList) selectedWordsList.innerHTML = '';
         if (selectedWordsContainer) selectedWordsContainer.style.display = 'none';
-        
+
         archivesSelectedWords = [];
         archivesSelectedCategoryId = null;
         archivesSelectedCategoryText = null;
@@ -2737,15 +2737,15 @@ export function openAddKeywordModalFromArchives() {
 export async function saveKeywordFromArchives() {
     const wordInput = document.getElementById('keywordWordInput');
     const selectedWordsList = document.getElementById('selectedKeywordWordsList');
-    
+
     if (!wordInput || !selectedWordsList) {
         showToastForModal('Form elements not found', 'error');
         return;
     }
-    
+
     // Get selected words from state (more reliable than parsing badges)
     const selectedWords = archivesSelectedWords.length > 0 ? archivesSelectedWords : [];
-    
+
     // Fallback: get from badges if state is empty
     if (selectedWords.length === 0) {
         const badges = selectedWordsList.querySelectorAll('.badge');
@@ -2757,21 +2757,21 @@ export async function saveKeywordFromArchives() {
             }
         });
     }
-    
+
     if (selectedWords.length === 0) {
         showToastForModal('At least one word is required', 'warning');
         return;
     }
-    
+
     if (selectedWords.length < 2) {
         showToastForModal('Keywords must contain at least 2 words. Please select multiple words to create a keyword phrase.', 'warning');
         return;
     }
-    
+
     const keywordPhrase = selectedWords.map(w => w.text).join(' ');
     const selectedCategoryIdInput = document.getElementById('selectedKeywordCategoryId');
     const categoryId = selectedCategoryIdInput ? selectedCategoryIdInput.value : '1';
-    
+
     // Check for duplicate
     try {
         const csrfToken = getCSRFTokenForModal() || await getCSRFTokenAsyncForModal();
@@ -2786,7 +2786,7 @@ export async function saveKeywordFromArchives() {
                 category_id: categoryId
             })
         });
-        
+
         const checkData = await checkResponse.json();
         if (checkData.exists) {
             showToastForModal(checkData.message || `Keyword "${keywordPhrase}" already exists in this category`, 'error');
@@ -2795,7 +2795,7 @@ export async function saveKeywordFromArchives() {
     } catch (error) {
         console.warn('Error checking keyword duplicate:', error);
     }
-    
+
     // Submit keyword
     try {
         showToastForModal('Adding keyword...', 'info');
@@ -2803,7 +2803,7 @@ export async function saveKeywordFromArchives() {
         const formData = new FormData();
         formData.append('keywords_text', keywordPhrase);
         formData.append('category_id', categoryId);
-        
+
         const response = await fetch('/keywords/add', {
             method: 'POST',
             headers: {
@@ -2813,7 +2813,7 @@ export async function saveKeywordFromArchives() {
             body: formData,
             redirect: 'follow'
         });
-        
+
         const contentType = response.headers.get('content-type') || '';
         let data;
         if (contentType.includes('application/json')) {
@@ -2821,10 +2821,10 @@ export async function saveKeywordFromArchives() {
         } else {
             data = { success: true, message: 'Keyword added successfully' };
         }
-        
+
         if (data.success) {
             showToastForModal(data.message || 'Keyword added successfully', 'success');
-            
+
             // Close modal
             const modalElement = document.getElementById('addKeywordModal');
             if (modalElement && typeof bootstrap !== 'undefined') {
@@ -2833,7 +2833,7 @@ export async function saveKeywordFromArchives() {
                     modal.hide();
                 }
             }
-            
+
             // Reload page or refresh view
             setTimeout(() => {
                 if (window.loadRootView) {

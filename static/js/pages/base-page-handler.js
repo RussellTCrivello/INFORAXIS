@@ -4,9 +4,6 @@
  */
 
 export function initBasePage() {
-    if (document.body?.dataset.iaBasePageInitialized === 'true') return;
-    if (document.body) document.body.dataset.iaBasePageInitialized = 'true';
-
     // Mobile menu toggle
     const menuToggle = document.getElementById('menuToggle');
     const sidebar = document.getElementById('sidebar');
@@ -15,13 +12,13 @@ export function initBasePage() {
             sidebar.classList.toggle('show');
         });
     }
-    
+
     // Sidebar active state management
     updateSidebarActiveState();
-    
+
     // Convert flash messages to notifications
     convertFlashMessages();
-    
+
     // Update notification badge
     updateNotificationBadge();
     setInterval(updateNotificationBadge, 30000);
@@ -34,10 +31,10 @@ function updateSidebarActiveState() {
     const currentPath = window.location.pathname;
     const currentEndpoint = document.body.dataset.currentEndpoint || window.currentEndpoint || '';
     const sidebarLinks = document.querySelectorAll('.sidebar-nav-link:not(.language-switcher .sidebar-nav-link)');
-    
+
     // Check if server already set an active state correctly
     const serverActiveLink = document.querySelector('.sidebar-nav-link.active:not(.language-switcher .sidebar-nav-link)');
-    
+
     // If server set an active state and it matches current endpoint, trust it
     if (serverActiveLink && currentEndpoint) {
         const activeEndpoint = serverActiveLink.getAttribute('data-endpoint');
@@ -46,10 +43,10 @@ function updateSidebarActiveState() {
             return;
         }
     }
-    
+
     // Otherwise, find and set the correct active state
     let foundActive = false;
-    
+
     // Priority 1: Match by endpoint name (most reliable)
     if (currentEndpoint) {
         sidebarLinks.forEach(link => {
@@ -62,7 +59,7 @@ function updateSidebarActiveState() {
             }
         });
     }
-    
+
     // Priority 2: Match by URL path (fallback)
     if (!foundActive) {
         sidebarLinks.forEach(link => {
@@ -106,17 +103,17 @@ function convertFlashMessages() {
         } else if (alert.classList.contains('alert-info')) {
             type = 'info';
         }
-        
+
         // Extract message text (remove icon and close button text)
         const messageText = alert.textContent.trim();
-        
+
         // Show notification using message system
         if (window.MessageSystem && messageText) {
             window.MessageSystem.show(messageText, type, {
                 skipTranslation: false
             });
         }
-        
+
         // Remove the original alert after a short delay
         setTimeout(function() {
             if (alert.parentNode) {
@@ -137,7 +134,7 @@ async function updateNotificationBadge() {
     try {
         const response = await fetch('/api/notifications/stats');
         const data = await response.json();
-        
+
         if (data.success && data.stats) {
             const badge = document.getElementById('notificationsBadge');
             if (badge) {
@@ -154,4 +151,3 @@ async function updateNotificationBadge() {
         console.error('Error updating notification badge:', error);
     }
 }
-

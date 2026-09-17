@@ -4,7 +4,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Sources Management') }}{% endblock %}
-{% block page_type %}sources-list{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/sources-list.css') }}" rel="stylesheet">
@@ -78,7 +77,7 @@
 <div class="row g-4 mb-2">
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon stat-card-icon-primary">
+            <div class="stat-card-icon" style="background: var(--alert-info-bg); color: var(--primary-color);">
                 <i class="bi bi-building"></i>
             </div>
             <div class="stat-card-content">
@@ -89,7 +88,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon stat-card-icon-info">
+            <div class="stat-card-icon" style="background: var(--alert-info-bg); color: var(--info-color, #06b6d4);">
                 <i class="bi bi-funnel"></i>
             </div>
             <div class="stat-card-content">
@@ -100,7 +99,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon stat-card-icon-success">
+            <div class="stat-card-icon" style="background: var(--alert-success-bg); color: var(--success-color);">
                 <i class="bi bi-eye"></i>
             </div>
             <div class="stat-card-content">
@@ -111,7 +110,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon stat-card-icon-warning">
+            <div class="stat-card-icon" style="background: var(--alert-warning-bg); color: var(--warning-color);">
                 <i class="bi bi-table"></i>
             </div>
             <div class="stat-card-content">
@@ -131,10 +130,10 @@
                 {{ _('Search Sources') }}
             </label>
             <div class="search-input-wrapper">
-                <input type="text" 
-                       id="sourceSearch" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search sources...') }}" 
+                <input type="text"
+                       id="sourceSearch"
+                       class="form-control search-input"
+                       placeholder="{{ _('Search sources...') }}"
                        autocomplete="off">
                 <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
                     <i class="bi bi-x"></i>
@@ -221,28 +220,19 @@
             {{ _('All Sources') }} ({{ _('Page') }} {{ page }}/{{ total_pages }})
         </h5>
     </div>
-    
+
     <!-- ID Card Grid -->
     <div class="row g-4" id="sourcesCardContainer">
         {% for source in sources|sort(attribute='importance', reverse=True) %}
-        <div class="col-md-6 col-lg-4 col-xl-3 source-card-item" 
+        <div class="col-md-6 col-lg-4 col-xl-3 source-card-item"
              data-name="{{ source.name|lower }}"
-             data-display-name="{{ source.name|e }}"
-             data-job="{{ (source.job or '')|e }}"
              data-importance="{{ source.importance }}"
              data-doc-count="{{ source.doc_count }}"
              data-id="{{ source.id }}"
              data-country="{{ (source.country or '')|lower }}"
-             data-country-label="{{ (source.country or '')|e }}"
              data-city="{{ (source.city or '')|lower }}"
-             data-city-label="{{ (source.city or '')|e }}"
              data-ownership="{{ (source.ownership or '')|lower }}"
-             data-ownership-label="{{ (source.ownership or '')|e }}"
-             data-access-status="{{ (source.access_status or '')|lower }}"
-             data-access-status-label="{{ (source.access_status or '')|e }}"
-             data-category-name="{{ (source.category_name or '')|e }}"
-             data-category-id="{{ source.category_id or '' }}"
-             data-discovery-date="{% if source.date_source_discovery is string %}{{ source.date_source_discovery|e }}{% elif source.date_source_discovery %}{{ source.date_source_discovery.strftime('%Y-%m-%d')|e }}{% endif %}">
+             data-access-status="{{ (source.access_status or '')|lower }}">
             <div class="id-card">
                 <div class="id-card-header">
                     <div class="id-card-icon">
@@ -252,23 +242,23 @@
                         <span class="badge bg-secondary">#{{ source.id }}</span>
                     </div>
                 </div>
-                
+
                 <div class="id-card-body">
                     <h3 class="id-card-name">{{ source.name }}</h3>
-                    
+
                     <div class="id-card-info">
                         <div class="id-card-field">
                             <i class="bi bi-briefcase me-2 text-muted"></i>
                             <span class="id-card-label">{{ _('Job/Type') }}:</span>
                             <span class="id-card-value">{{ source.job or '-' }}</span>
                         </div>
-                        
+
                         <div class="id-card-field">
                             <i class="bi bi-geo-alt me-2 text-muted"></i>
                             <span class="id-card-label">{{ _('Location') }}:</span>
                             <span class="id-card-value">{{ source.city or source.country or '-' }}{% if source.city and source.country %}, {{ source.country }}{% endif %}</span>
                         </div>
-                        
+
                         <div class="id-card-field">
                             <i class="bi bi-star me-2 text-muted"></i>
                             <span class="id-card-label">{{ _('Importance') }}:</span>
@@ -284,13 +274,13 @@
                                 <span class="ms-2 text-muted">({{ (source.importance * 100)|round|int }}%)</span>
                             </div>
                         </div>
-                        
+
                         <div class="id-card-field">
                             <i class="bi bi-file-earmark me-2 text-muted"></i>
                             <span class="id-card-label">{{ _('Documents') }}:</span>
                             <span class="badge bg-primary">{{ source.doc_count }}</span>
                         </div>
-                        
+
                         {% if source.ownership %}
                         <div class="id-card-field">
                             <i class="bi bi-shield-check me-2 text-muted"></i>
@@ -298,7 +288,7 @@
                             <span class="id-card-value">{{ source.ownership }}</span>
                         </div>
                         {% endif %}
-                        
+
                         {% if source.access_status %}
                         <div class="id-card-field">
                             <i class="bi bi-lock me-2 text-muted"></i>
@@ -306,7 +296,7 @@
                             <span class="badge bg-info">{{ source.access_status }}</span>
                         </div>
                         {% endif %}
-                        
+
                         {% if source.category_name %}
                         <div class="id-card-field">
                             <i class="bi bi-tags me-2 text-muted"></i>
@@ -314,7 +304,7 @@
                             <span class="badge bg-success">{{ source.category_name }}</span>
                         </div>
                         {% endif %}
-                        
+
                         {% if source.date_source_discovery %}
                         <div class="id-card-field">
                             <i class="bi bi-calendar-event me-2 text-muted"></i>
@@ -330,11 +320,11 @@
                         {% endif %}
                     </div>
                 </div>
-                
+
                 <div class="id-card-footer">
                     <div class="d-flex align-items-center mb-2">
-                        <input type="checkbox" class="form-check-input source-checkbox me-2" 
-                               value="{{ source.id }}" 
+                        <input type="checkbox" class="form-check-input source-checkbox me-2"
+                               value="{{ source.id }}"
                                onchange="updateBulkButtons()"
                                aria-label="{{ _('Select source') }}: {{ source.name }}">
                         <small class="text-muted">{{ _('Select') }}</small>
@@ -418,21 +408,21 @@
                     <div class="row g-3">
                         <div class="col-md-12">
                             <label class="form-label">{{ _('Source Name') }} *</label>
-                            <input type="text" name="name" id="sourceName" class="form-control" 
+                            <input type="text" name="name" id="sourceName" class="form-control"
                                    placeholder="{{ _('e.g., International News Agency') }}" required>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label">{{ _('Job/Type') }} *</label>
-                            <input type="text" name="job" id="sourceJob" class="form-control" 
+                            <input type="text" name="job" id="sourceJob" class="form-control"
                                  placeholder="{{ _('e.g., International News Job') }}" required>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label">{{ _('Importance') }} *</label>
-                            <input type="range" name="importance" class="form-range" 
-                                   min="0" max="1" step="0.01" 
-                                   value="0.5" 
+                            <input type="range" name="importance" class="form-range"
+                                   min="0" max="1" step="0.01"
+                                   value="0.5"
                                    id="importanceSlider">
                             <div class="d-flex justify-content-between small text-muted">
                                 <span>{{ _('Low') }}</span>
@@ -440,16 +430,16 @@
                                 <span>{{ _('High') }}</span>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-8">
                             <label class="form-label">{{ _('Country') }} *</label>
-                            <input type="text" name="country" id="sourceCountry" class="form-control" 
+                            <input type="text" name="country" id="sourceCountry" class="form-control"
                                    placeholder="" required>
                         </div>
-                        
+
                         <div class="col-md-4">
                             <label class="form-label">{{ _('City') }}</label>
-                            <input type="text" name="city" id="sourceCity" class="form-control" 
+                            <input type="text" name="city" id="sourceCity" class="form-control"
                                    placeholder="{{ _('e.g., Washington DC') }}" list="cities">
                             <datalist id="cities">
                                 <option value="Washington DC">
@@ -464,31 +454,31 @@
                                 <option value="Moscow">
                             </datalist>
                         </div>
-                        
+
                         <div class="col-md-12">
                             <label class="form-label">{{ _('Description') }}</label>
-                            <textarea name="description" id="sourceDescription" class="form-control" rows="3" 
+                            <textarea name="description" id="sourceDescription" class="form-control" rows="3"
                                       placeholder="{{ _('Brief description of the source...') }}"></textarea>
                         </div>
-                        
+
                         <div class="col-md-12">
                             <label class="form-label">{{ _('Social Media Accounts') }}</label>
-                            <input type="text" name="accounts" id="sourceAccounts" class="form-control" 
+                            <input type="text" name="accounts" id="sourceAccounts" class="form-control"
                                    placeholder="{{ _('e.g., @twitter_handle, facebook.com/page') }}">
                         </div>
-                        
+
                         <div class="col-md-12">
                             <label class="form-label">{{ _('Attachments') }}</label>
-                            <input type="text" name="attachments" id="sourceAttachments" class="form-control" 
+                            <input type="text" name="attachments" id="sourceAttachments" class="form-control"
                                    placeholder="{{ _('e.g., document.pdf, image.jpg') }}">
                         </div>
-                        
+
                         <div class="col-md-12">
                             <label class="form-label">{{ _('Notes') }}</label>
-                            <textarea name="note" id="sourceNote" class="form-control" rows="2" 
+                            <textarea name="note" id="sourceNote" class="form-control" rows="2"
                                       placeholder="{{ _('Additional notes...') }}"></textarea>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label">{{ _('Ownership') }}</label>
                             <select name="ownership" id="sourceOwnership" class="form-control">
@@ -501,7 +491,7 @@
                                 <option value="Other">Other</option>
                             </select>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label">{{ _('Access Status') }}</label>
                             <select name="access_status" id="sourceAccessStatus" class="form-control">
@@ -514,12 +504,12 @@
                                 <option value="Limited">Limited</option>
                             </select>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label">{{ _('Date of Source Discovery') }}</label>
                             <input type="date" name="date_source_discovery" id="sourceDateDiscovery" class="form-control">
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label">{{ _('Category') }}</label>
                             <select name="category_id" id="sourceCategory" class="form-control">
@@ -546,14 +536,14 @@
 <!-- Pagination -->
 {% if cursor_pagination and total_pages >= 1 %}
     {% from "components/unified_pagination.html" import unified_pagination %}
-    {{ unified_pagination(page, total_pages, url_for, 'sources_list', {'search': search, 'limit': limit|default(50)}, show_info=true, show_jump=true, total_items=total_estimated, per_page=limit|default(50), item_label=_('sources')) }}
-    
+    {{ unified_pagination(page, total_pages, url_for, 'sources_list', {'search': search}, show_info=true, show_jump=true) }}
+
     <script>
     // Override pagination navigation for cursor-based pagination
     (function() {
         const paginationContainer = document.querySelector('.unified-pagination-container');
         if (!paginationContainer) return;
-        
+
         // Store cursor data
         const cursorData = {
             next_cursor: {{ next_cursor|default('null') }},
@@ -563,25 +553,25 @@
             current_cursor: {{ request.args.get('cursor', 'null')|tojson }},
             limit: {{ request.args.get('limit', 50)|tojson }}
         };
-        
+
         // Override link clicks to use cursor navigation
         paginationContainer.addEventListener('click', function(e) {
             const link = e.target.closest('.unified-pagination-link');
             if (!link || link.classList.contains('disabled') || link.classList.contains('active')) {
                 return;
             }
-            
+
             e.preventDefault();
             e.stopPropagation();
-            
+
             const href = link.getAttribute('href');
             if (!href || href === '#') return;
-            
+
             // Parse page number from URL
             const url = new URL(href, window.location.origin);
             const targetPage = parseInt(url.searchParams.get('page')) || 1;
             const currentPage = {{ page }};
-            
+
             // Calculate cursor based on page difference
             let targetCursor = null;
             if (targetPage === 1) {
@@ -600,7 +590,7 @@
                     targetCursor = cursorData.prev_cursor;
                 }
             }
-            
+
             // Navigate with cursor
             const navUrl = new URL(window.location.href);
             if (targetCursor !== null) {
@@ -611,22 +601,22 @@
             navUrl.searchParams.delete('page');
             window.location.href = navUrl.toString();
         });
-        
+
         // Handle jump to page input
         const jumpInput = document.getElementById('jumpToPageInput-sources_list');
         const jumpBtn = document.querySelector('.unified-pagination-jump-btn[data-endpoint="sources_list"]');
-        
+
         if (jumpInput && jumpBtn) {
             const handleJump = function() {
                 let targetPage = parseInt(jumpInput.value);
                 const totalPages = parseInt(jumpInput.getAttribute('data-total-pages')) || 1;
-                
+
                 if (isNaN(targetPage) || targetPage < 1) {
                     targetPage = 1;
                 } else if (targetPage > totalPages) {
                     targetPage = totalPages;
                 }
-                
+
                 // For cursor pagination, estimate cursor based on page
                 const navUrl = new URL(window.location.href);
                 if (targetPage === 1) {
@@ -639,7 +629,7 @@
                 navUrl.searchParams.delete('page');
                 window.location.href = navUrl.toString();
             };
-            
+
             jumpBtn.addEventListener('click', handleJump);
             jumpInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
@@ -653,7 +643,7 @@
 
 
 <!-- Toast Container -->
-<div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;" id="toastContainer"></div>
 
 {% endblock %}
 
@@ -688,24 +678,7 @@
         "sourceUpdatedSuccessfully": _('Source updated successfully!'),
         "sourceCreatedSuccessfully": _('Source created successfully!'),
         "error": _('Error'),
-        "errorSavingSource": _('Error saving source'),
-        "view": _('View'),
-        "viewDetails": _('View Details'),
-        "duplicateSource": _('Duplicate Source'),
-        "exportData": _('Export Data'),
-        "viewCategoriesKeywords": _('View Categories & Keywords'),
-        "sourceActions": _('Source actions'),
-        "documents": _('Documents'),
-        "select": _('Select'),
-        "jobType": _('Job/Type'),
-        "location": _('Location'),
-        "importance": _('Importance'),
-        "access": _('Access'),
-        "category": _('Category'),
-        "discovery": _('Discovery'),
-        "source": _('Source'),
-        "actions": _('Actions'),
-        "ownership": _('Ownership')
+        "errorSavingSource": _('Error saving source')
     }
 }|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/sources-list-page.js') }}"></script>
@@ -754,7 +727,7 @@ function createRetryFunction(fnName, maxRetries = 20, delay = 50) {
         'deleteSource',
         'submitSourceForm'
     ];
-    
+
     functionsToSetup.forEach(fnName => {
         const existing = window[fnName];
         // Only set up retry if function doesn't exist or is a retry wrapper

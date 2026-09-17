@@ -2,7 +2,7 @@
  * Content Formatter Module
  * Comprehensive file content formatter with language detection and RTL/LTR support
  * Formats file content based on file type for accurate original-format display
- * 
+ *
  * Features:
  * - Language detection and automatic RTL/LTR direction
  * - Support for all file types (Word, Excel, PDF, PowerPoint, Email, Images, etc.)
@@ -48,7 +48,7 @@ export function setContentFormatterTranslations(translations) {
  */
 function detectTextDirection(text) {
     if (!text || typeof text !== 'string') return 'ltr';
-    
+
     // RTL language patterns (Arabic, Hebrew, Persian, Urdu, etc.)
     const rtlPatterns = [
         /[\u0590-\u05FF]/, // Hebrew
@@ -60,14 +60,14 @@ function detectTextDirection(text) {
         /[\uFB50-\uFDFF]/, // Arabic Presentation Forms-A
         /[\uFE70-\uFEFF]/  // Arabic Presentation Forms-B
     ];
-    
+
     // Check for RTL characters
     for (const pattern of rtlPatterns) {
         if (pattern.test(text)) {
             return 'rtl';
         }
     }
-    
+
     // Default to LTR
     return 'ltr';
 }
@@ -79,14 +79,14 @@ function detectTextDirection(text) {
  */
 function detectLanguage(text) {
     if (!text || typeof text !== 'string') return 'en';
-    
+
     // Simple language detection based on character ranges
     if (/[\u0590-\u05FF]/.test(text)) return 'he'; // Hebrew
     if (/[\u0600-\u06FF]/.test(text)) return 'ar'; // Arabic
     if (/[\u4E00-\u9FFF]/.test(text)) return 'zh'; // Chinese
     if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja'; // Japanese
     if (/[\uAC00-\uD7AF]/.test(text)) return 'ko'; // Korean
-    
+
     return 'en'; // Default to English
 }
 
@@ -97,7 +97,7 @@ function detectLanguage(text) {
  */
 function detectTableHeader(line) {
     if (!line || typeof line !== 'string') return null;
-    
+
     // Pattern: "Table N" or "Table N | Caption: ..." (case-insensitive)
     // Also match "table N" (lowercase)
     const tableMatch = line.match(/^[Tt]able\s+(\d+)(?:\s*\|\s*(.+))?$/i);
@@ -110,7 +110,7 @@ function detectTableHeader(line) {
         console.log('detectTableHeader: Found table header:', result);
         return result;
     }
-    
+
     // Pattern: "Sheet: SheetName | Rows: X | Columns: Y"
     const sheetMatch = line.match(/^Sheet:\s*([^|]+)(?:\s*\|\s*(.+))?$/i);
     if (sheetMatch) {
@@ -124,7 +124,7 @@ function detectTableHeader(line) {
             columns: colsMatch ? parseInt(colsMatch[1]) : null
         };
     }
-    
+
     return null;
 }
 
@@ -135,64 +135,64 @@ function detectTableHeader(line) {
  */
 function isExplanatoryText(line) {
     if (!line || typeof line !== 'string') return false;
-    
+
     const trimmed = line.trim();
-    
+
     // Page markers: "Page N", "Page N | Method: ...", etc.
     if (/^Page\s+\d+(\s*\|\s*.*)?$/i.test(trimmed)) {
         return true;
     }
-    
+
     // Slide markers: "Slide N", "Slide N | ..."
     if (/^Slide\s+\d+(\s*\|\s*.*)?$/i.test(trimmed)) {
         return true;
     }
-    
+
     // Table markers: "Table N", "Table N | Caption: ..."
     if (/^Table\s+\d+(\s*\|\s*(Caption|Title):\s*.*)?$/i.test(trimmed)) {
         return true;
     }
-    
+
     // Sheet markers: "Sheet: ... | Rows: ... | Columns: ..."
     if (/^Sheet:\s*[^|]+(\s*\|\s*(Rows|Columns):\s*\d+.*)?$/i.test(trimmed)) {
         return true;
     }
-    
+
     // Style markers: "[Style: ...]"
     if (/^\[Style:\s*[^\]]+\]\s*$/.test(trimmed)) {
         return true;
     }
-    
+
     // Metadata lines: "Method: ...", "Length: ...", "Rows: ...", "Columns: ..."
     if (/^(Method|Length|Rows|Columns|Total\s+(Pages|Slides|Sheets)):\s*.*$/i.test(trimmed)) {
         return true;
     }
-    
+
     // PDF metadata: "Total Pages: ...", "OCR Used: ...", etc.
     if (/^(Total\s+(Pages|Slides|Sheets)|OCR\s+Used|OCR\s+Languages|Encrypted|Title|Author|Subject|Creator|Producer):\s*.*$/i.test(trimmed)) {
         return true;
     }
-    
+
     // Slides metadata: "Total Slides: ..."
     if (/^Total\s+Slides:\s*\d+$/i.test(trimmed)) {
         return true;
     }
-    
+
     // Image metadata: "Width: ...", "Height: ...", "Format: ...", "GPS: ..."
     if (/^(Width|Height|Format|Mode|GPS|Maps):\s*.*$/i.test(trimmed)) {
         return true;
     }
-    
+
     // Chapter markers: "Chapter ID: ...", "Chapter N"
     if (/^Chapter\s+(ID|Number)?:?\s*.*$/i.test(trimmed)) {
         return true;
     }
-    
+
     // Database metadata: "SQLite Version: ...", "Tables: ..."
     if (/^(SQLite\s+Version|Tables|Table\s+Count):\s*.*$/i.test(trimmed)) {
         return true;
     }
-    
+
     return false;
 }
 
@@ -203,18 +203,18 @@ function isExplanatoryText(line) {
  */
 function removeExplanatoryText(line) {
     if (!line || typeof line !== 'string') return line;
-    
+
     // If entire line is explanatory, return empty
     if (isExplanatoryText(line.trim())) {
         return '';
     }
-    
+
     // Remove style markers from beginning: "[Style: ...] actual text"
     const styleMatch = line.match(/^\[Style:\s*[^\]]+\]\s*(.+)$/);
     if (styleMatch) {
         return styleMatch[1];
     }
-    
+
     // Remove metadata from pipe-separated format: "Page N | Method: ... | actual content"
     // Keep only the actual content part
     if (line.includes('|')) {
@@ -223,12 +223,12 @@ function removeExplanatoryText(line) {
             // Keep parts that don't match explanatory patterns
             return !isExplanatoryText(part);
         });
-        
+
         if (contentParts.length > 0) {
             return contentParts.join(' | ');
         }
     }
-    
+
     return line;
 }
 
@@ -239,20 +239,20 @@ function removeExplanatoryText(line) {
  */
 function detectTableStructure(content) {
     if (!content || typeof content !== 'string') return false;
-    
+
     const lines = content.split('\n').filter(line => line.trim());
     if (lines.length < 2) return false;
-    
+
     // Check for storage format table headers
     for (const line of lines) {
         const header = detectTableHeader(line);
         if (header) return true;
     }
-    
+
     // Check for tab-separated values (common in Word/Excel exports)
     const tabSeparatedLines = lines.filter(line => line.includes('\t')).length;
     if (tabSeparatedLines >= lines.length * 0.3) return true;
-    
+
     // Check for consistent column counts (pipe, comma, or multiple spaces)
     const columnCounts = lines.map(line => {
         if (line.includes('|')) {
@@ -264,15 +264,15 @@ function detectTableStructure(content) {
             return line.split(/\s{2,}/).filter(c => c.trim()).length;
         }
     }).filter(count => count > 1);
-    
+
     if (columnCounts.length < 2) return false;
-    
+
     // Check if most lines have similar column counts
     const avgColumns = columnCounts.reduce((a, b) => a + b, 0) / columnCounts.length;
-    const consistentLines = columnCounts.filter(count => 
+    const consistentLines = columnCounts.filter(count =>
         Math.abs(count - avgColumns) <= 1
     ).length;
-    
+
     return consistentLines >= columnCounts.length * 0.7;
 }
 
@@ -284,23 +284,23 @@ function detectTableStructure(content) {
  */
 function parseTableContent(content, headerInfo = null) {
     if (!content || typeof content !== 'string') return [];
-    
+
     const lines = content.split('\n').filter(line => line.trim());
     if (lines.length === 0) return [];
-    
+
     const rows = [];
     let skipHeader = false;
     let expectedColumns = null;
-    
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        
+
         // Skip table/sheet header lines
         if (detectTableHeader(line)) {
             skipHeader = true;
             continue;
         }
-        
+
         // Skip metadata lines (Rows:, Columns:, etc.)
         if (line.match(/^(Rows|Columns|Sheet):/i)) {
             // Extract column count if available
@@ -310,15 +310,15 @@ function parseTableContent(content, headerInfo = null) {
             }
             continue;
         }
-        
+
         // Skip empty lines after headers
         if (skipHeader && !line.trim()) {
             continue;
         }
         skipHeader = false;
-        
+
         let cells = [];
-        
+
         // Try tab-separated first (most common in Word/Excel storage format)
         if (line.includes('\t')) {
             cells = line.split('\t').map(cell => cell.trim()).filter(cell => cell !== '');
@@ -336,16 +336,16 @@ function parseTableContent(content, headerInfo = null) {
             // For space-separated, we need to be smarter
             // Look for patterns of 2+ spaces that likely separate columns
             // But preserve single spaces within cell content
-            
+
             // First, try splitting on 3+ spaces (more reliable for column separation)
             const tripleSpaceSplit = line.split(/\s{3,}/).map(cell => cell.trim()).filter(cell => cell);
-            
+
             if (tripleSpaceSplit.length > 1) {
                 cells = tripleSpaceSplit;
             } else {
                 // Try 2+ spaces
                 const doubleSpaceSplit = line.split(/\s{2,}/).map(cell => cell.trim()).filter(cell => cell);
-                
+
                 if (doubleSpaceSplit.length > 1) {
                     // Check if this looks like a table row vs. regular text
                     // Table rows typically have consistent column counts
@@ -365,7 +365,7 @@ function parseTableContent(content, headerInfo = null) {
                 }
             }
         }
-        
+
         // Add row if we have cells
         if (cells.length > 1) {
             // Normalize column count - pad or trim to match expected
@@ -392,7 +392,7 @@ function parseTableContent(content, headerInfo = null) {
             rows.push(cells);
         }
     }
-    
+
     return rows;
 }
 
@@ -406,7 +406,7 @@ function parseTableContent(content, headerInfo = null) {
  */
 function parseTableRow(line, expectedColumns = null, previousRows = []) {
     if (!line || !line.trim()) return [];
-    
+
     // If we have tab-separated values, use that (most reliable)
     if (line.includes('\t')) {
         const cells = line.split('\t').map(c => c.trim());
@@ -424,7 +424,7 @@ function parseTableRow(line, expectedColumns = null, previousRows = []) {
         }
         return cells;
     }
-    
+
     // If we have pipe-separated values (but not metadata), use that
     if (line.includes('|') && !line.match(/^(Table|Sheet|Rows|Columns|Page|Slide|Chapter):/i)) {
         const cells = line.split('|').map(c => c.trim()).filter(c => c);
@@ -444,7 +444,7 @@ function parseTableRow(line, expectedColumns = null, previousRows = []) {
             return cells;
         }
     }
-    
+
     // For space-separated values, use intelligent parsing
     // Strategy 1: Look for multiple consecutive spaces (3+ spaces = very likely column separator)
     const tripleSpaceSplit = line.split(/\s{3,}/).map(c => c.trim()).filter(c => c);
@@ -463,7 +463,7 @@ function parseTableRow(line, expectedColumns = null, previousRows = []) {
         }
         return tripleSpaceSplit;
     }
-    
+
     // Strategy 2: Look for 2+ spaces (moderate confidence)
     const doubleSpaceSplit = line.split(/\s{2,}/).map(c => c.trim()).filter(c => c);
     if (doubleSpaceSplit.length > 1) {
@@ -475,7 +475,7 @@ function parseTableRow(line, expectedColumns = null, previousRows = []) {
                 expectedColumns = prevCols;
             }
         }
-        
+
         // Normalize to expected columns
         if (expectedColumns && doubleSpaceSplit.length !== expectedColumns) {
             if (doubleSpaceSplit.length < expectedColumns) {
@@ -490,11 +490,11 @@ function parseTableRow(line, expectedColumns = null, previousRows = []) {
         }
         return doubleSpaceSplit;
     }
-    
+
     // Strategy 3: If we know expected columns, try intelligent token distribution
     if (expectedColumns && expectedColumns > 1) {
         const tokens = line.split(/\s+/);
-        
+
         if (tokens.length >= expectedColumns) {
             // Analyze previous rows to find column boundaries
             if (previousRows.length > 0) {
@@ -503,7 +503,7 @@ function parseTableRow(line, expectedColumns = null, previousRows = []) {
                     const rowText = row.join(' ');
                     return rowText.split(/\s+/).length / row.length;
                 }).reduce((a, b) => a + b, 0) / previousRows.length;
-                
+
                 // Distribute tokens based on average
                 const cells = [];
                 let tokenIndex = 0;
@@ -513,12 +513,12 @@ function parseTableRow(line, expectedColumns = null, previousRows = []) {
                     cells.push(tokens.slice(tokenIndex, endIndex).join(' '));
                     tokenIndex = endIndex;
                 }
-                
+
                 // Add any remaining tokens to last column
                 if (tokenIndex < tokens.length) {
                     cells[expectedColumns - 1] = (cells[expectedColumns - 1] || '') + ' ' + tokens.slice(tokenIndex).join(' ');
                 }
-                
+
                 return cells;
             } else {
                 // First row - distribute evenly
@@ -533,7 +533,7 @@ function parseTableRow(line, expectedColumns = null, previousRows = []) {
             }
         }
     }
-    
+
     // Strategy 4: Single cell (not a table row)
     return [line.trim()];
 }
@@ -551,9 +551,9 @@ function formatAsTable(rows, headerInfo = null, headerRow = null, isNested = fal
     // Determine if we have headers
     const hasExplicitHeader = headerRow && headerRow.length > 0;
     const hasDataRows = rows && rows.length > 0;
-    
+
     if (!hasExplicitHeader && !hasDataRows) return '';
-    
+
     // Determine column count
     let columnCount = 0;
     if (hasExplicitHeader) {
@@ -563,7 +563,7 @@ function formatAsTable(rows, headerInfo = null, headerRow = null, isNested = fal
     } else {
         return '';
     }
-    
+
     // Normalize all rows to have the same column count
     const normalizedRows = [];
     if (hasDataRows) {
@@ -575,7 +575,7 @@ function formatAsTable(rows, headerInfo = null, headerRow = null, isNested = fal
             normalizedRows.push(normalizedRow);
         });
     }
-    
+
     // Normalize header row
     const normalizedHeader = [];
     if (hasExplicitHeader) {
@@ -583,21 +583,21 @@ function formatAsTable(rows, headerInfo = null, headerRow = null, isNested = fal
             normalizedHeader.push(headerRow[i] !== undefined ? String(headerRow[i]).trim() : '');
         }
     }
-    
+
     // Detect language and direction for table
     const tableText = rows.flat().join(' ') + (headerRow ? headerRow.join(' ') : '');
     const direction = detectTextDirection(tableText);
     const lang = detectLanguage(tableText);
-    
+
     const containerClass = isNested ? 'formatted-table-container nested-table' : 'formatted-table-container';
     let html = `<div class="${containerClass}" dir="${direction}" lang="${lang}">`;
-    
+
     // Don't display table/sheet header - it's just explanatory metadata
     // Table numbers and sheet names are used internally for ordering only
     // The headerInfo is still used to track table structure but not displayed
-    
+
     html += '<table class="formatted-content-table">';
-    
+
     // Add header row if available
     if (hasExplicitHeader && normalizedHeader.length > 0) {
         html += '<thead><tr>';
@@ -606,7 +606,7 @@ function formatAsTable(rows, headerInfo = null, headerRow = null, isNested = fal
         });
         html += '</tr></thead>';
     }
-    
+
     // Add data rows
     if (hasDataRows && normalizedRows.length > 0) {
         html += '<tbody>';
@@ -621,7 +621,7 @@ function formatAsTable(rows, headerInfo = null, headerRow = null, isNested = fal
         });
         html += '</tbody>';
     }
-    
+
     html += '</table></div>';
     return html;
 }
@@ -637,11 +637,11 @@ function formatWordContent(content) {
         console.log('formatWordContent: No content provided');
         return '';
     }
-    
+
     // Detect language and direction
     const direction = detectTextDirection(content);
     const lang = detectLanguage(content);
-    
+
     console.log('formatWordContent: Processing content, length:', content.length);
     const lines = content.split('\n');
     console.log('formatWordContent: Total lines:', lines.length);
@@ -653,11 +653,11 @@ function formatWordContent(content) {
     let expectedColumns = null;
     let tableRows = []; // Track previous rows for pattern analysis
     let lastElementType = null; // Track last element type to preserve order
-    
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmedLine = line.trim();
-        
+
         if (!trimmedLine) {
             // Empty line - end current section if we have enough data
             if (inTable && currentTable.length > 0) {
@@ -669,7 +669,7 @@ function formatWordContent(content) {
                         break;
                     }
                 }
-                
+
                 // If next line is not a table row or table header, end current table
                 if (!nextNonEmpty || (!detectTableHeader(nextNonEmpty) && !isLikelyTableRow(nextNonEmpty, expectedColumns, currentTable))) {
                     html += formatAsTable(currentTable, currentTableHeader);
@@ -688,35 +688,35 @@ function formatWordContent(content) {
             }
             continue;
         }
-        
+
         // Skip explanatory text lines (metadata markers)
         if (isExplanatoryText(trimmedLine)) {
             // These are organizational markers - skip them but preserve structure
             continue;
         }
-        
+
         // Check for table header (storage format)
         // Support both "Table N" and "word_table" markers for new ordered format
         const tableHeader = detectTableHeader(trimmedLine);
         const isWordTableMarker = trimmedLine.match(/^word_table/i);
-        
+
         if ((tableHeader && tableHeader.type === 'table') || isWordTableMarker) {
             console.log('formatWordContent: Found table header at line', i, ':', tableHeader || 'word_table marker');
-            
+
             // End any current paragraph to preserve order
             if (currentParagraph.length > 0) {
                 html += formatParagraph(currentParagraph.join(' '));
                 currentParagraph = [];
                 lastElementType = 'paragraph';
             }
-            
+
             // End previous table if any
             if (currentTable.length > 0) {
                 html += formatAsTable(currentTable, currentTableHeader);
                 currentTable = [];
                 tableRows = [];
             }
-            
+
             // Start new table
             if (tableHeader && tableHeader.type === 'table') {
                 currentTableHeader = {
@@ -736,7 +736,7 @@ function formatWordContent(content) {
             lastElementType = 'table';
             continue;
         }
-        
+
         // Check for word_paragraph marker (new ordered format)
         if (trimmedLine.match(/^word_paragraph/i)) {
             // End any current table
@@ -752,22 +752,22 @@ function formatWordContent(content) {
             lastElementType = 'paragraph';
             continue;
         }
-        
+
         // Check if we're in a table section
         if (inTable) {
             // Parse row using enhanced parser with previous rows context
             const cells = parseTableRow(trimmedLine, expectedColumns, currentTable);
-            
+
             // Determine if this is a table row
             const isTableRow = cells.length > 1 || (cells.length === 1 && cells[0].length > 0 && expectedColumns === 1);
-            
+
             if (isTableRow) {
                 // Update expected columns from first row
                 if (expectedColumns === null && currentTable.length === 0) {
                     expectedColumns = cells.length;
                     console.log('Table first row detected with', expectedColumns, 'columns');
                 }
-                
+
                 // Normalize column count if we have expected columns
                 if (expectedColumns && cells.length !== expectedColumns) {
                     if (cells.length < expectedColumns) {
@@ -782,7 +782,7 @@ function formatWordContent(content) {
                         cells[expectedColumns - 1] = (cells[expectedColumns - 1] || '') + ' ' + excess;
                     }
                 }
-                
+
                 currentTable.push(cells);
                 tableRows.push(cells);
                 continue;
@@ -798,11 +798,11 @@ function formatWordContent(content) {
                 // Continue processing this line as regular text
             }
         }
-        
+
         // Handle paragraph text (may include style info)
         // Remove style markers and explanatory text
         const cleanedLine = removeExplanatoryText(trimmedLine);
-        
+
         if (cleanedLine && cleanedLine !== trimmedLine) {
             // Line had style marker or other metadata - use cleaned version
             if (trimmedLine.match(/^\[Style:\s*([^\]]+)\]/)) {
@@ -820,7 +820,7 @@ function formatWordContent(content) {
             currentParagraph.push(cleanedLine.trim());
         }
     }
-    
+
     // Close any remaining sections
     if (inTable && currentTable.length > 0) {
         console.log('Closing remaining table with', currentTable.length, 'rows');
@@ -829,7 +829,7 @@ function formatWordContent(content) {
     if (currentParagraph.length > 0) {
         html += formatParagraph(currentParagraph.join(' '));
     }
-    
+
     html += '</div>';
     console.log('formatWordContent: Final HTML length:', html.length);
     return html;
@@ -844,17 +844,17 @@ function formatWordContent(content) {
  */
 function isLikelyTableRow(line, expectedColumns, previousRows) {
     if (!line || !line.trim()) return false;
-    
+
     // Check for tab-separated values
     if (line.includes('\t')) {
         const cells = line.split('\t').filter(c => c.trim());
         return cells.length > 1;
     }
-    
+
     // Check for multiple spaces (column separators)
     const tripleSpace = line.split(/\s{3,}/).filter(c => c.trim());
     if (tripleSpace.length > 1) return true;
-    
+
     const doubleSpace = line.split(/\s{2,}/).filter(c => c.trim());
     if (doubleSpace.length > 1) {
         // If we have expected columns, check if it matches
@@ -868,7 +868,7 @@ function isLikelyTableRow(line, expectedColumns, previousRows) {
         }
         return true;
     }
-    
+
     return false;
 }
 
@@ -880,14 +880,14 @@ function isLikelyTableRow(line, expectedColumns, previousRows) {
  */
 function formatParagraph(text, style = null) {
     if (!text || !text.trim()) return '';
-    
+
     // Detect language and direction
     const direction = detectTextDirection(text);
     const lang = detectLanguage(text);
-    
+
     let className = 'formatted-paragraph';
     let styleAttr = '';
-    
+
     // Apply style-based formatting
     if (style) {
         const styleLower = style.toLowerCase();
@@ -902,7 +902,7 @@ function formatParagraph(text, style = null) {
             }
         }
     }
-    
+
     return `<p class="${className}" dir="${direction}" lang="${lang}"${styleAttr}>${escapeHtml(text.trim())}</p>`;
 }
 
@@ -1126,35 +1126,35 @@ function renderSheetGrid(sheet) {
  */
 function formatImageContent(filePath, content, fileId = null) {
     if (!filePath && !fileId) return '';
-    
+
     // Detect language and direction from OCR text
     const direction = content ? detectTextDirection(content) : 'ltr';
     const lang = content ? detectLanguage(content) : 'en';
-    
+
     let html = `<div class="formatted-image-content" dir="${direction}" lang="${lang}">`;
-    
+
     // Display image
     html += '<div class="formatted-image-container">';
-    
+
     // Try multiple methods to load the image
     let imageSrc = '';
     let imageSrcSet = [];
-    
+
     if (filePath) {
         // Normalize path for use in URL
         const normalizedPath = filePath.replace(/\\/g, '/');
-        
+
         // Method 1: Try file serving endpoint by path (preferred)
         const serveUrl = `/api/file/serve?path=${encodeURIComponent(filePath)}`;
         imageSrcSet.push(`"${serveUrl}"`);
         imageSrc = serveUrl;
-        
+
         // Method 2: Try file serving endpoint by ID if available
         if (fileId) {
             const fileIdUrl = `/api/file/${fileId}/serve`;
             imageSrcSet.push(`"${fileIdUrl}"`);
         }
-        
+
         // Method 3: Try direct file path as last resort (may work in some contexts)
         // For Windows paths, try file:/// protocol
         if (normalizedPath.match(/^[A-Za-z]:/)) {
@@ -1170,7 +1170,7 @@ function formatImageContent(filePath, content, fileId = null) {
         imageSrc = fileIdUrl;
         imageSrcSet.push(`"${fileIdUrl}"`);
     }
-    
+
     // Build img tag with data attributes for event handling
     // Use data attributes instead of inline handlers for better reliability
     const imageId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1181,19 +1181,19 @@ function formatImageContent(filePath, content, fileId = null) {
     html += `data-file-id="${fileId || ''}" `;
     html += `data-file-path="${filePath ? escapeHtml(filePath) : ''}" `;
     html += `data-current-source-index="0">`;
-    
-    html += '<div class="image-load-error">';
+
+    html += '<div class="image-load-error" style="display: none; padding: 1rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; color: #6c757d;">';
     html += '<i class="bi bi-exclamation-triangle me-2"></i><span class="error-message">Loading image...</span>';
     html += '</div>';
     html += '</div>';
-    
+
     // Display file path info
     if (filePath) {
         html += '<div class="formatted-image-path">';
         html += '<small class="text-muted"><i class="bi bi-folder me-1"></i>Path: <code>' + escapeHtml(filePath) + '</code></small>';
         html += '</div>';
     }
-    
+
     // Display extracted text if available
     if (content && content.trim()) {
         html += '<div class="formatted-image-text">';
@@ -1201,9 +1201,9 @@ function formatImageContent(filePath, content, fileId = null) {
         html += `<pre class="formatted-text">${escapeHtml(content)}</pre>`;
         html += '</div>';
     }
-    
+
     html += '</div>';
-    
+
     // Return HTML - event listeners will be attached by the caller after DOM insertion
     return html;
 }
@@ -1219,35 +1219,35 @@ function organizeContentForDisplay(content, fileType) {
     if (!content || typeof content !== 'string') {
         return content || '';
     }
-    
+
     const fileTypeLower = (fileType || '').toLowerCase();
-    
+
     // For Word/Excel/PDF/PowerPoint files, ensure proper line breaks and structure
     if (fileTypeLower.match(/\.(docx?|docm|rtf|odt|xlsx?|xlsm|xlsb|xltx?|ods|pdf|pptx?|potx?|odp)$/)) {
         // Ensure proper line breaks and structure preservation
         let organized = content;
-        
+
         // Normalize line breaks
         organized = organized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        
+
         // Preserve spatial ordering markers if present (for new ordered format)
         // These markers help maintain the original document structure
         organized = organized.replace(/(word_paragraph|word_table|slide_text|slide_table|slide_image)/gi, '\n$1\n');
-        
+
         // Ensure table headers are on separate lines (both legacy and new format)
         organized = organized.replace(/(Table\s+\d+)/gi, '\n$1\n');
         organized = organized.replace(/(Sheet:\s*[^\n]+)/gi, '\n$1\n');
-        
+
         // Ensure page markers are on separate lines
         organized = organized.replace(/(Page\s+\d+)/gi, '\n$1\n');
         organized = organized.replace(/(Slide\s+\d+)/gi, '\n$1\n');
-        
+
         // Preserve paragraph style markers
         organized = organized.replace(/(\[Style:\s*[^\]]+\])/g, '\n$1\n');
-        
+
         // Clean up excessive newlines (more than 3 consecutive) but preserve structure
         organized = organized.replace(/\n{4,}/g, '\n\n\n');
-        
+
         // Trim each line but preserve structure
         const lines = organized.split('\n');
         const cleanedLines = lines.map((line, index) => {
@@ -1261,10 +1261,10 @@ function organizeContentForDisplay(content, fileType) {
             }
             return line.trim();
         });
-        
+
         return cleanedLines.join('\n');
     }
-    
+
     return content;
 }
 
@@ -1282,7 +1282,7 @@ export function formatContentByType(content, fileType, filePath = '', fileId = n
         console.log('formatContentByType: No content or file path provided');
         return '';
     }
-    
+
     const fileTypeLower = (fileType || '').toLowerCase();
     // Normalize file type - ensure it starts with dot for pattern matching
     const normalizedFileType = fileTypeLower.startsWith('.') ? fileTypeLower : '.' + fileTypeLower;
@@ -1293,16 +1293,16 @@ export function formatContentByType(content, fileType, filePath = '', fileId = n
         hasFilePath: !!filePath,
         fileId: fileId
     });
-    
+
     // Organize content for accurate display
     const organizedContent = organizeContentForDisplay(content || '', fileType);
-    
+
     // Image files
     if (normalizedFileType.match(/\.(jpg|jpeg|png|gif|bmp|tiff|tif|webp|svg)$/)) {
         console.log('Formatting as image');
         return formatImageContent(filePath, organizedContent, fileId);
     }
-    
+
     // Word documents - match both with and without dot
     if (normalizedFileType.match(/\.(docx?|docm|rtf|odt)$/) || fileTypeLower.match(/^(docx?|docm|rtf|odt)$/)) {
         console.log('Formatting as Word document');
@@ -1310,7 +1310,7 @@ export function formatContentByType(content, fileType, filePath = '', fileId = n
         console.log('Word formatting result length:', result.length);
         return result;
     }
-    
+
     // Excel files - match both with and without dot
     if (normalizedFileType.match(/\.(xlsx?|xlsm|xlsb|xltx?|ods|csv)$/) || fileTypeLower.match(/^(xlsx?|xlsm|xlsb|xltx?|ods|csv)$/)) {
         console.log('Formatting as Excel file');
@@ -1318,61 +1318,61 @@ export function formatContentByType(content, fileType, filePath = '', fileId = n
         console.log('Excel formatting result length:', result.length);
         return result;
     }
-    
+
     // PowerPoint files - format as structured content with slides
     if (normalizedFileType.match(/\.(pptx?|potx?|odp)$/) || fileTypeLower.match(/^(pptx?|potx?|odp)$/)) {
         console.log('Formatting as PowerPoint file');
         return formatPowerPointContent(organizedContent);
     }
-    
+
     // PDF files - format as structured content with pages
     if (normalizedFileType === '.pdf' || fileTypeLower === 'pdf') {
         console.log('Formatting as PDF file');
         return formatPDFContent(organizedContent);
     }
-    
+
     // Email files - format as structured email messages
     if (normalizedFileType.match(/\.(eml|msg|mbox|pst)$/) || fileTypeLower.match(/^(eml|msg|mbox|pst)$/)) {
         console.log('Formatting as email file');
         return formatEmailContent(organizedContent);
     }
-    
+
     // HTML files
     if (normalizedFileType.match(/\.(html|htm)$/) || fileTypeLower.match(/^(html|htm)$/)) {
         console.log('Formatting as HTML file');
         return formatHTMLContent(organizedContent);
     }
-    
+
     // JSON files
     if (normalizedFileType === '.json' || fileTypeLower === 'json') {
         console.log('Formatting as JSON file');
         return formatJSONContent(organizedContent);
     }
-    
+
     // XML files
     if (normalizedFileType.match(/\.(xml|xsl|xslt)$/) || fileTypeLower.match(/^(xml|xsl|xslt)$/)) {
         console.log('Formatting as XML file');
         return formatXMLContent(organizedContent);
     }
-    
+
     // Markdown files - rendered Markdown (headings, lists, code, tables)
     if (normalizedFileType.match(/\.(md|markdown|mdown)$/) || fileTypeLower.match(/^(md|markdown|mdown)$/)) {
         console.log('Formatting as Markdown file');
         return formatMarkdownContent(organizedContent);
     }
-    
+
     // Text files with language detection; log files get a line-numbered
     // monospace view
     if (normalizedFileType.match(/\.(txt|text|log)$/) || fileTypeLower.match(/^(txt|text|log)$/)) {
         console.log('Formatting as text file');
         return formatTextContent(organizedContent, fileTypeLower);
     }
-    
+
     // Default: plain text with better formatting and language detection
     if (organizedContent) {
         return formatTextContent(organizedContent);
     }
-    
+
     return '';
 }
 
@@ -1388,11 +1388,11 @@ function formatPowerPointContent(content) {
     if (!content || typeof content !== 'string') {
         return '';
     }
-    
+
     // Detect language and direction
     const direction = detectTextDirection(content);
     const lang = detectLanguage(content);
-    
+
     const lines = content.split('\n');
     let html = `<div class="formatted-powerpoint-content" dir="${direction}" lang="${lang}">`;
     let currentSlide = [];
@@ -1404,11 +1404,11 @@ function formatPowerPointContent(content) {
     let inTable = false;
     let expectedColumns = null;
     const slides = []; // collected slide blocks, rendered with deck navigation
-    
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmedLine = line.trim();
-        
+
         if (!trimmedLine) {
             // Empty line - end current table if in one
             if (inTable && currentTable.length > 0) {
@@ -1424,7 +1424,7 @@ function formatPowerPointContent(content) {
             }
             continue;
         }
-        
+
         // Skip explanatory text lines (metadata markers)
         if (isExplanatoryText(trimmedLine)) {
             // Extract slide number from "Slide N" for structure, but don't display the marker
@@ -1434,7 +1434,7 @@ function formatPowerPointContent(content) {
                     slides.push({ header: currentSlideHeader, content: currentSlide });
                     currentSlide = [];
                 }
-                
+
                 currentSlideHeader = {
                     number: parseInt(slideMatch[1]),
                     title: null  // Don't display metadata titles
@@ -1445,7 +1445,7 @@ function formatPowerPointContent(content) {
             // Skip other metadata lines
             continue;
         }
-        
+
         // Check for slide header (legacy format)
         const slideMatch = trimmedLine.match(/^Slide\s+(\d+)(?:\s*\|\s*(.+))?$/i);
         if (slideMatch) {
@@ -1454,7 +1454,7 @@ function formatPowerPointContent(content) {
                 slides.push({ header: currentSlideHeader, content: currentSlide });
                 currentSlide = [];
             }
-            
+
             currentSlideHeader = {
                 number: parseInt(slideMatch[1]),
                 title: null  // Don't display metadata titles
@@ -1463,12 +1463,12 @@ function formatPowerPointContent(content) {
             inSlide = true;
             continue;
         }
-        
+
         // Check for slide element markers (new ordered format)
         const slideTextMatch = trimmedLine.match(/^slide_text/i);
         const slideTableMatch = trimmedLine.match(/^slide_table/i) || detectTableHeader(trimmedLine);
         const slideImageMatch = trimmedLine.match(/^slide_image/i) || trimmedLine.match(/\[Image:\s*(.+)\]/i);
-        
+
         if (slideTextMatch) {
             // Slide text element - add to current slide
             if (!inSlide) {
@@ -1486,7 +1486,7 @@ function formatPowerPointContent(content) {
                 currentSlideHeader = { number: currentSlideNumber, title: null };
                 inSlide = true;
             }
-            
+
             // Check if this is a table header
             const tableHeader = detectTableHeader(trimmedLine);
             if (tableHeader && tableHeader.type === 'table') {
@@ -1521,13 +1521,13 @@ function formatPowerPointContent(content) {
             });
             continue;
         }
-        
+
         if (inSlide) {
             // Check if we're in a table section
             if (inTable) {
                 const cells = parseTableRow(trimmedLine, expectedColumns, currentTable);
                 const isTableRow = cells.length > 1 || (cells.length === 1 && expectedColumns === 1);
-                
+
                 if (isTableRow) {
                     if (expectedColumns === null && currentTable.length === 0) {
                         expectedColumns = cells.length;
@@ -1577,7 +1577,7 @@ function formatPowerPointContent(content) {
             html += formatParagraph(trimmedLine);
         }
     }
-    
+
     // Close any remaining table
     if (inTable && currentTable.length > 0) {
         currentSlide.push({
@@ -1586,12 +1586,12 @@ function formatPowerPointContent(content) {
             header: currentTableHeader
         });
     }
-    
+
     // Close last slide
     if (inSlide && currentSlide.length > 0) {
         slides.push({ header: currentSlideHeader, content: currentSlide });
     }
-    
+
     // Deck rendering: a navigation bar plus every slide stacked. Slides stay
     // in the DOM so the whole-document search highlighter covers them all;
     // navigation scrolls to a slide and marks it active.
@@ -1601,7 +1601,7 @@ function formatPowerPointContent(content) {
             html += formatSlide(sl.content, sl.header, i === 0);
         });
     }
-    
+
     html += '</div>';
     return html;
 }
@@ -1655,14 +1655,14 @@ function escapeAttrText(text) {
 function formatSlide(slideContent, slideHeader, isActive = false) {
     const number = slideHeader && slideHeader.number ? slideHeader.number : '';
     let html = `<div class="formatted-slide${isActive ? ' slide-active' : ''}" data-slide-number="${escapeAttrText(String(number))}">`;
-    
+
     // Slide number chip - a visible anchor the deck navigation scrolls to
     if (number !== '') {
         html += `<div class="slide-number-chip">${escapeHtml(String(number))}</div>`;
     }
-    
+
     html += '<div class="formatted-slide-content">';
-    
+
     // Check if slideContent is structured (new format) or plain lines (legacy)
     if (slideContent.length > 0 && typeof slideContent[0] === 'object' && slideContent[0].type) {
         // New structured format - process elements in order
@@ -1683,9 +1683,9 @@ function formatSlide(slideContent, slideHeader, isActive = false) {
             }
         });
     }
-    
+
     html += '</div>';
-    
+
     html += '</div>';
     return html;
 }
@@ -1702,21 +1702,21 @@ function formatPDFContent(content) {
     if (!content || typeof content !== 'string') {
         return '';
     }
-    
+
     // Detect language and direction
     const direction = detectTextDirection(content);
     const lang = detectLanguage(content);
-    
+
     const lines = content.split('\n');
     let html = `<div class="formatted-pdf-content" dir="${direction}" lang="${lang}">`;
     let currentPage = [];
     let currentPageHeader = null;
     let inPage = false;
-    
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmedLine = line.trim();
-        
+
         if (!trimmedLine) {
             if (inPage && currentPage.length > 0) {
                 html += formatPage(currentPage, currentPageHeader);
@@ -1726,7 +1726,7 @@ function formatPDFContent(content) {
             }
             continue;
         }
-        
+
         // Skip explanatory text lines (metadata markers)
         if (isExplanatoryText(trimmedLine)) {
             // Extract page number from "Page N" for structure, but don't display the marker
@@ -1736,7 +1736,7 @@ function formatPDFContent(content) {
                     html += formatPage(currentPage, currentPageHeader);
                     currentPage = [];
                 }
-                
+
                 currentPageHeader = {
                     number: parseInt(pageMatch[1]),
                     metadata: null  // Don't display metadata
@@ -1746,7 +1746,7 @@ function formatPDFContent(content) {
             // Skip other metadata lines (Method:, Length:, etc.)
             continue;
         }
-        
+
         // Check for page header
         const pageMatch = trimmedLine.match(/^Page\s+(\d+)(?:\s*\|\s*(.+))?$/i);
         if (pageMatch) {
@@ -1754,7 +1754,7 @@ function formatPDFContent(content) {
                 html += formatPage(currentPage, currentPageHeader);
                 currentPage = [];
             }
-            
+
             currentPageHeader = {
                 number: parseInt(pageMatch[1]),
                 metadata: null  // Don't display metadata
@@ -1762,7 +1762,7 @@ function formatPDFContent(content) {
             inPage = true;
             continue;
         }
-        
+
         if (inPage) {
             // Remove any remaining explanatory text from page content
             const cleanedLine = removeExplanatoryText(trimmedLine);
@@ -1776,11 +1776,11 @@ function formatPDFContent(content) {
             }
         }
     }
-    
+
     if (inPage && currentPage.length > 0) {
         html += formatPage(currentPage, currentPageHeader);
     }
-    
+
     html += '</div>';
     return html;
 }
@@ -1794,12 +1794,12 @@ function formatPDFContent(content) {
 function formatPage(pageContent, pageHeader) {
     const number = pageHeader && pageHeader.number ? pageHeader.number : '';
     let html = '<div class="formatted-page">';
-    
+
     // Visible page divider - mirrors the page structure of the original PDF
     if (number !== '') {
         html += `<div class="page-divider"><span class="page-number-chip">${escapeHtml(String(number))}</span></div>`;
     }
-    
+
     html += '<div class="formatted-page-content">';
     pageContent.forEach(line => {
         if (line.trim()) {
@@ -1807,7 +1807,7 @@ function formatPage(pageContent, pageHeader) {
         }
     });
     html += '</div>';
-    
+
     html += '</div>';
     return html;
 }
@@ -1822,22 +1822,22 @@ function formatEmailContent(content) {
     if (!content || typeof content !== 'string') {
         return '';
     }
-    
+
     // Detect language and direction
     const direction = detectTextDirection(content);
     const lang = detectLanguage(content);
-    
+
     const lines = content.split('\n');
     let html = `<div class="formatted-email-content" dir="${direction}" lang="${lang}">`;
     let currentMessage = [];
     let currentMessageHeader = null;
     let inMessage = false;
     let messageIndex = 0;
-    
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmedLine = line.trim();
-        
+
         if (!trimmedLine) {
             if (inMessage && currentMessage.length > 0) {
                 html += formatEmailMessage(currentMessage, currentMessageHeader, messageIndex);
@@ -1848,12 +1848,12 @@ function formatEmailContent(content) {
             }
             continue;
         }
-        
+
         // Check for message header patterns
         const messageMatch = trimmedLine.match(/^Message\s*#(\d+)/i);
         const fromMatch = trimmedLine.match(/^From:\s*(.+)$/i);
         const subjectMatch = trimmedLine.match(/^Subject:\s*(.+)$/i);
-        
+
         if (messageMatch || (fromMatch && !inMessage)) {
             // Start new message
             if (inMessage && currentMessage.length > 0) {
@@ -1861,24 +1861,24 @@ function formatEmailContent(content) {
                 currentMessage = [];
                 messageIndex++;
             }
-            
+
             currentMessageHeader = {
                 index: messageMatch ? parseInt(messageMatch[1]) : messageIndex + 1
             };
             inMessage = true;
-            
+
             if (fromMatch) {
                 currentMessageHeader.from = fromMatch[1].trim();
             }
             if (subjectMatch) {
                 currentMessageHeader.subject = subjectMatch[1].trim();
             }
-            
+
             // Continue to collect header fields
             currentMessage.push(trimmedLine);
             continue;
         }
-        
+
         // Collect header fields
         if (inMessage) {
             // From/Subject also appear INSIDE a message that started with a
@@ -1891,7 +1891,7 @@ function formatEmailContent(content) {
             const ccMatch = trimmedLine.match(/^CC:\s*(.+)$/i);
             const bccMatch = trimmedLine.match(/^BCC:\s*(.+)$/i);
             const msgIdMatch = trimmedLine.match(/^Message-ID:\s*(.+)$/i);
-            
+
             if (fromFieldMatch) {
                 currentMessageHeader = currentMessageHeader || { index: messageIndex + 1 };
                 currentMessageHeader.from = fromFieldMatch[1].trim();
@@ -1932,11 +1932,11 @@ function formatEmailContent(content) {
             html += formatParagraph(trimmedLine);
         }
     }
-    
+
     if (inMessage && currentMessage.length > 0) {
         html += formatEmailMessage(currentMessage, currentMessageHeader, messageIndex);
     }
-    
+
     html += '</div>';
     return html;
 }
@@ -1961,9 +1961,9 @@ function renderRecipientBadges(value) {
 function formatEmailMessage(messageContent, messageHeader, messageIndex) {
     const direction = detectTextDirection(messageContent.join('\n'));
     const lang = detectLanguage(messageContent.join('\n'));
-    
+
     let html = `<div class="formatted-email-message" dir="${direction}" lang="${lang}">`;
-    
+
     // Message header
     html += '<div class="formatted-email-header">';
     if (messageHeader) {
@@ -1996,7 +1996,7 @@ function formatEmailMessage(messageContent, messageHeader, messageIndex) {
         }
     }
     html += '</div>';
-    
+
     // Message content
     html += '<div class="formatted-email-body">';
     let inContent = false;
@@ -2011,7 +2011,7 @@ function formatEmailMessage(messageContent, messageHeader, messageIndex) {
         }
     });
     html += '</div>';
-    
+
     html += '</div>';
     return html;
 }
@@ -2025,10 +2025,10 @@ function formatHTMLContent(content) {
     if (!content || typeof content !== 'string') {
         return '';
     }
-    
+
     const direction = detectTextDirection(content);
     const lang = detectLanguage(content);
-    
+
     // For HTML, we can display it directly but sanitize it
     // In a real implementation, you might want to use DOMPurify or similar
     let html = `<div class="formatted-html-content" dir="${direction}" lang="${lang}">`;
@@ -2046,12 +2046,12 @@ function formatJSONContent(content) {
     if (!content || typeof content !== 'string') {
         return '';
     }
-    
+
     const direction = detectTextDirection(content);
     const lang = detectLanguage(content);
-    
+
     let html = `<div class="formatted-json-content" dir="${direction}" lang="${lang}">`;
-    
+
     try {
         // Try to parse and pretty-print JSON
         const parsed = JSON.parse(content);
@@ -2061,7 +2061,7 @@ function formatJSONContent(content) {
         // If not valid JSON, display as-is
         html += `<pre class="formatted-text">${escapeHtml(content)}</pre>`;
     }
-    
+
     html += '</div>';
     return html;
 }
@@ -2075,12 +2075,12 @@ function formatXMLContent(content) {
     if (!content || typeof content !== 'string') {
         return '';
     }
-    
+
     const direction = detectTextDirection(content);
     const lang = detectLanguage(content);
-    
+
     let html = `<div class="formatted-xml-content" dir="${direction}" lang="${lang}">`;
-    
+
     // Simple XML formatting (indent based on tags)
     let formatted = content;
     try {
@@ -2099,7 +2099,7 @@ function formatXMLContent(content) {
     } catch (e) {
         formatted = content;
     }
-    
+
     html += `<pre class="formatted-xml"><code>${escapeHtml(formatted)}</code></pre>`;
     html += '</div>';
     return html;
@@ -2114,15 +2114,15 @@ function formatTextContent(content, fileType = '') {
     if (!content || typeof content !== 'string') {
         return '';
     }
-    
+
     const direction = detectTextDirection(content);
     const lang = detectLanguage(content);
-    
+
     const ext = (fileType || '').toLowerCase().replace(/^\./, '');
     if (ext === 'log') {
         return formatLogContent(content, direction, lang);
     }
-    
+
     let html = `<div class="formatted-text-content" dir="${direction}" lang="${lang}">`;
     html += `<pre class="formatted-text">${escapeHtml(content)}</pre>`;
     html += '</div>';

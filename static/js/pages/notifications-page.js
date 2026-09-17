@@ -21,13 +21,11 @@ const notificationsPage = {
         future: { source: '', side: '', search: '', sort_by: 'created_at', sort_order: 'desc', page: 1 }
     },
     searchTimeouts: {},
-    currentNotificationId: null,
-    perPage: 50
+    currentNotificationId: null
 };
 
 // Track if already initialized to prevent double initialization
 let initialized = false;
-let badgeRefreshInterval = null;
 
 // Initialize page function
 function initializeNotificationsPage() {
@@ -36,7 +34,7 @@ function initializeNotificationsPage() {
         return;
     }
     initialized = true;
-    
+
     const pageDataEl = document.getElementById('notifications-page-data');
     if (pageDataEl) {
         try {
@@ -47,12 +45,10 @@ function initializeNotificationsPage() {
             console.error('Error parsing notifications page data:', e);
         }
     }
-    
+
     notificationsPage.loadTabData('all');
     notificationsPage.updateNotificationBadge();
-    if (!badgeRefreshInterval) {
-        badgeRefreshInterval = setInterval(() => notificationsPage.updateNotificationBadge(), 30000);
-    }
+    setInterval(() => notificationsPage.updateNotificationBadge(), 30000);
 }
 
 // Export default init function for universal-initializer.js
@@ -76,15 +72,15 @@ window.scanForNotifications = async function() {
     const scanBtn = document.getElementById('scanBtn');
     const scanBtnText = document.getElementById('scanBtnText');
     const scanSpinner = document.getElementById('scanSpinner');
-    
+
     if (!scanBtn || scanBtn.disabled) return;
-    
+
     // Disable button and show spinner
     scanBtn.disabled = true;
     scanBtn.classList.add('disabled');
     scanSpinner.classList.remove('d-none');
     scanBtnText.textContent = 'Scanning...';
-    
+
     try {
         const response = await fetch('/api/notifications/scan', {
             method: 'POST',
@@ -93,23 +89,23 @@ window.scanForNotifications = async function() {
                 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         if (data.success) {
             // Show success message with details
             const duplicatesMsg = data.duplicates_found > 0 ? `${data.duplicates_found} duplicate file(s)` : '';
             const futureMsg = data.future_dates_found > 0 ? `${data.future_dates_found} future date(s)` : '';
             const createdMsg = data.notifications_created?.length > 0 ? `${data.notifications_created.length} notification(s) created` : 'No new notifications created';
-            
+
             let messageParts = [];
             if (duplicatesMsg) messageParts.push(duplicatesMsg);
             if (futureMsg) messageParts.push(futureMsg);
-            
+
             // Build message
             let message;
             if (messageParts.length > 0) {
@@ -117,38 +113,39 @@ window.scanForNotifications = async function() {
             } else {
                 message = `Scan completed! ${createdMsg}.`;
             }
-            
+
             // Use message system if available
             if (window.showMessage) {
                 window.showMessage(message, 'success');
             } else {
                 alert(message);
             }
-            
-            // Refresh only the relevant tab after the backend finishes. The old
-            // flow loaded all three tabs and then switchTab loaded one of them a
-            // second time, which made scans feel stalled on large notification sets.
-            setTimeout(() => {
-                notificationsPage.updateNotificationBadge();
-                const targetTab = data.duplicates_found > 0
-                    ? 'duplicates'
-                    : data.future_dates_found > 0
-                        ? 'future'
-                        : notificationsPage.currentTab;
 
-                if (targetTab !== notificationsPage.currentTab) {
-                    notificationsPage.switchTab(targetTab);
+            // Refresh notifications after a short delay to allow backend to finish
+            setTimeout(() => {
+                // Force reload all tabs to ensure notifications are visible
+                notificationsPage.loadTabData('all');
+                notificationsPage.loadTabData('duplicates');
+                notificationsPage.loadTabData('future');
+                notificationsPage.updateNotificationBadge();
+
+                // Switch to appropriate tab based on results
+                if (data.duplicates_found > 0) {
+                    notificationsPage.switchTab('duplicates');
+                } else if (data.future_dates_found > 0) {
+                    notificationsPage.switchTab('future');
                 } else {
-                    notificationsPage.loadTabData(targetTab);
+                    // If no specific results, stay on current tab but refresh
+                    notificationsPage.loadTabData(notificationsPage.currentTab);
                 }
-            }, 750);
+            }, 1000); // Increased delay to ensure backend has finished processing
         } else {
             throw new Error(data.error || data.message || 'Scan failed');
         }
     } catch (error) {
         console.error('Error scanning for notifications:', error);
         const errorMsg = `Error scanning: ${error.message}`;
-        
+
         if (window.showMessage) {
             window.showMessage(errorMsg, 'error');
         } else {
@@ -218,7 +215,7 @@ window.dismissNotificationFromDetail = function() {
 // Implementation methods
 notificationsPage.switchTab = function(tab) {
     this.currentTab = tab;
-    
+
     // Update tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
@@ -226,7 +223,7 @@ notificationsPage.switchTab = function(tab) {
             btn.classList.add('active');
         }
     });
-    
+
     // Update tab content
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
@@ -235,21 +232,17 @@ notificationsPage.switchTab = function(tab) {
     if (tabContent) {
         tabContent.classList.add('active');
     }
-    
+
     // Show the active sub-tab for this tab
     this.switchSubTab(tab, this.currentSubTab[tab], false);
-    
+
     // Load data for this tab
     this.loadTabData(tab);
 };
 
 notificationsPage.switchSubTab = function(tab, subTab, loadData = true) {
-    const previousSubTab = this.currentSubTab[tab];
     this.currentSubTab[tab] = subTab;
-    if (previousSubTab !== subTab) {
-        this.filters[tab].page = 1;
-    }
-    
+
     // Update sub-tab buttons for this main tab
     const tabContent = document.getElementById(`tab-${tab}`);
     if (tabContent) {
@@ -259,7 +252,7 @@ notificationsPage.switchSubTab = function(tab, subTab, loadData = true) {
                 btn.classList.add('active');
             }
         });
-        
+
         // Update sub-tab content
         tabContent.querySelectorAll('.sub-tab-content').forEach(content => {
             content.classList.remove('active');
@@ -269,7 +262,7 @@ notificationsPage.switchSubTab = function(tab, subTab, loadData = true) {
             subTabContent.classList.add('active');
         }
     }
-    
+
     // Load data if requested
     if (loadData) {
         this.loadTabData(tab);
@@ -289,7 +282,7 @@ notificationsPage.handleSearch = function(event, tab) {
         this.loadTabData(tab);
         return;
     }
-    
+
     clearTimeout(this.searchTimeouts[tab]);
     this.searchTimeouts[tab] = setTimeout(() => {
         this.filters[tab].search = event.target.value.trim();
@@ -300,18 +293,6 @@ notificationsPage.handleSearch = function(event, tab) {
 
 notificationsPage.refreshAll = function() {
     this.loadTabData(this.currentTab);
-};
-
-notificationsPage.changePage = function(tab, page) {
-    const nextPage = Math.max(1, parseInt(page, 10) || 1);
-    this.filters[tab].page = nextPage;
-    this.loadTabData(tab).then(() => {
-        const activeSubTab = this.currentSubTab[tab] || 'all';
-        const tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
-        const sectionName = activeSubTab.charAt(0).toUpperCase() + activeSubTab.slice(1);
-        const list = document.getElementById(`messages${tabName}${sectionName}`);
-        if (list) list.scrollTop = 0;
-    });
 };
 
 notificationsPage.setSort = function(tab, sortValue) {
@@ -330,7 +311,7 @@ notificationsPage.setSort = function(tab, sortValue) {
         sortBy = parts[0];
         sortOrder = parts[parts.length - 1];
     }
-    
+
     this.filters[tab].sort_by = sortBy;
     this.filters[tab].sort_order = sortOrder;
     this.filters[tab].page = 1;
@@ -338,23 +319,24 @@ notificationsPage.setSort = function(tab, sortValue) {
 };
 
 notificationsPage.loadTabData = async function(tab) {
-    const tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
-    const activeSubTab = this.currentSubTab[tab] || 'all';
-    const sectionName = activeSubTab.charAt(0).toUpperCase() + activeSubTab.slice(1);
-    const activeList = document.getElementById(`messages${tabName}${sectionName}`);
+    const allListId = `messages${tab.charAt(0).toUpperCase() + tab.slice(1)}All`;
+    const unreadListId = `messages${tab.charAt(0).toUpperCase() + tab.slice(1)}Unread`;
+    const readListId = `messages${tab.charAt(0).toUpperCase() + tab.slice(1)}Read`;
+    const allList = document.getElementById(allListId);
+    const unreadList = document.getElementById(unreadListId);
+    const readList = document.getElementById(readListId);
     const loadingText = window.appTranslations?.['Loading...'] || 'Loading...';
 
-    if (activeList) {
-        activeList.innerHTML = `<div class="loading-spinner"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><p>${loadingText}</p></div>`;
-    }
+    if (allList) allList.innerHTML = `<div class="loading-spinner"><i class="bi bi-arrow-repeat"></i><p>${loadingText}</p></div>`;
+    if (unreadList) unreadList.innerHTML = `<div class="loading-spinner"><i class="bi bi-arrow-repeat"></i><p>${loadingText}</p></div>`;
+    if (readList) readList.innerHTML = `<div class="loading-spinner"><i class="bi bi-arrow-repeat"></i><p>${loadingText}</p></div>`;
 
     try {
         const params = new URLSearchParams({
             page: this.filters[tab].page,
-            per_page: this.perPage,
+            per_page: 1000,
             search: this.filters[tab].search || '',
             show_read: 'true',
-            read_status: activeSubTab,
             sort_by: this.filters[tab].sort_by || 'created_at',
             sort_order: this.filters[tab].sort_order || 'desc'
         });
@@ -382,106 +364,59 @@ notificationsPage.loadTabData = async function(tab) {
         const data = await response.json();
 
         if (data.success) {
-            console.log(`Loaded ${data.notifications?.length || 0} notifications for tab: ${tab}/${activeSubTab}`);
+            // Debug logging
+            console.log(`Loaded ${data.notifications?.length || 0} notifications for tab: ${tab}`);
 
-            let notifications = data.notifications || [];
-            notifications = this.sortNotifications(notifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
+            let allNotifications = data.notifications || [];
+            let unreadNotifications = allNotifications.filter(n => !n.read);
+            let readNotifications = allNotifications.filter(n => n.read);
 
-            const summary = data.summary || null;
-            this.updateSubTabCounts(tab, summary);
-            this.renderNotifications(notifications, tab, activeSubTab, data.pagination?.total);
-            this.updateCategoryStats(tab, notifications, summary);
-            this.renderPagination(tab, activeSubTab, data.pagination, summary);
+            allNotifications = this.sortNotifications(allNotifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
+            unreadNotifications = this.sortNotifications(unreadNotifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
+            readNotifications = this.sortNotifications(readNotifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
 
-            const sortSelect = document.getElementById(`sortBy${tabName}`);
+            this.renderNotifications(allNotifications, tab, 'all');
+            this.renderNotifications(unreadNotifications, tab, 'unread');
+            this.renderNotifications(readNotifications, tab, 'read');
+            this.updateCategoryStats(tab, data.notifications);
+
+            const sortSelect = document.getElementById(`sortBy${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
             if (sortSelect) {
                 const sortValue = `${this.filters[tab].sort_by}_${this.filters[tab].sort_order}`;
                 sortSelect.value = sortValue;
             }
         } else {
             const errorMsg = window.appTranslations?.['Error loading notifications'] || 'Error loading notifications';
-            if (activeList) {
-                activeList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><h3>Error</h3><p>${this.escapeHtml(data.error || errorMsg)}</p></div>`;
-            }
+            if (allList) allList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${data.error || errorMsg}</p></div>`;
+            if (unreadList) unreadList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${data.error || errorMsg}</p></div>`;
+            if (readList) readList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${data.error || errorMsg}</p></div>`;
         }
     } catch (error) {
         console.error('Error loading notifications:', error);
         const errorMsg = window.appTranslations?.['Error loading notifications'] || 'Error loading notifications';
-        if (activeList) {
-            activeList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><h3>Error</h3><p>${this.escapeHtml(errorMsg)}</p></div>`;
-        }
+        if (allList) allList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${errorMsg}</p></div>`;
+        if (unreadList) unreadList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${errorMsg}</p></div>`;
+        if (readList) readList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${errorMsg}</p></div>`;
     }
 };
 
-notificationsPage.updateSubTabCounts = function(tab, summary = null) {
-    if (!summary) return;
-    const tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
-    const counts = {
-        all: Number.isFinite(Number(summary.total)) ? Number(summary.total) : 0,
-        unread: Number.isFinite(Number(summary.unread)) ? Number(summary.unread) : 0,
-        read: Number.isFinite(Number(summary.read)) ? Number(summary.read) : 0
-    };
-
-    Object.entries(counts).forEach(([section, value]) => {
-        const id = `${section}Count${tabName}`;
-        const el = document.getElementById(id);
-        if (el) el.textContent = value;
-        const subTabEl = document.querySelector(`#tab-${tab} .sub-tab-btn[data-sub-tab="${section}"] .sub-tab-count`);
-        if (subTabEl) subTabEl.textContent = value;
-    });
-};
-
-notificationsPage.renderPagination = function(tab, section, pagination, summary = null) {
-    const tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
-    const container = document.getElementById(`pagination${tabName}`);
-    if (!container) return;
-
-    const totalPages = Number(pagination?.total_pages || pagination?.pages || 1);
-    if (!pagination || totalPages <= 1) {
-        container.innerHTML = '';
-        return;
-    }
-
-    import('../modules/rendering/unified-pagination.js').then(module => {
-        module.renderUnifiedPagination({
-            currentPage: Number(pagination.page || this.filters[tab].page || 1),
-            totalPages,
-            totalItems: pagination.total,
-            pageSize: pagination.per_page || this.perPage,
-            itemLabel: window.appTranslations?.notifications || 'notifications',
-            containerId: container.id,
-            onPageChange: (page) => this.changePage(tab, page),
-            urlParams: {},
-            showInfo: true,
-            showJump: totalPages > 5,
-            labels: {
-                itemLabel: window.appTranslations?.notifications || 'notifications'
-            }
-        });
-    }).catch(error => {
-        console.error('Error loading pagination renderer:', error);
-        container.innerHTML = '';
-    });
-};
-
-notificationsPage.renderNotifications = function(notifications, tab, section, totalOverride = null) {
+notificationsPage.renderNotifications = function(notifications, tab, section) {
     const listId = `messages${tab.charAt(0).toUpperCase() + tab.slice(1)}${section.charAt(0).toUpperCase() + section.slice(1)}`;
     const messagesList = document.getElementById(listId);
     const countId = `${section}Count${tab.charAt(0).toUpperCase() + tab.slice(1)}`;
     const countElement = document.getElementById(countId);
     const subTabCountElement = document.querySelector(`#tab-${tab} .sub-tab-btn[data-sub-tab="${section}"] .sub-tab-count`);
-    
+
     const markReadTitle = window.appTranslations?.['Mark as Read'] || 'Mark as Read';
     const dismissTitle = window.appTranslations?.['Dismiss'] || 'Dismiss';
-    
-    const displayedCount = Number.isFinite(Number(totalOverride)) ? Number(totalOverride) : notifications.length;
+
     if (countElement) {
-        countElement.textContent = displayedCount;
+        countElement.textContent = notifications.length;
     }
     if (subTabCountElement) {
-        subTabCountElement.textContent = displayedCount;
+        subTabCountElement.textContent = notifications.length;
     }
-    
+
     if (notifications.length === 0) {
         const noNotifications = window.appTranslations?.['No Notifications'] || 'No Notifications';
         const noNotificationsText = window.appTranslations?.['No notifications found matching your criteria.'] || 'No notifications found matching your criteria.';
@@ -496,7 +431,7 @@ notificationsPage.renderNotifications = function(notifications, tab, section, to
         }
         return;
     }
-    
+
     if (messagesList) {
         messagesList.innerHTML = notifications.map(n => {
             const timeAgo = this.formatTime(n.created_at);
@@ -505,7 +440,7 @@ notificationsPage.renderNotifications = function(notifications, tab, section, to
             const priorityLabel = n.priority.charAt(0).toUpperCase() + n.priority.slice(1);
             const preview = n.message.length > 150 ? n.message.substring(0, 150) + '...' : n.message;
             const unreadClass = n.read ? '' : 'unread';
-            
+
             return `
                 <div class="message-card ${unreadClass}" onclick="openMessageDetail(${n.id})" data-id="${n.id}" data-type="${n.type}">
                     <div class="message-header">
@@ -549,7 +484,7 @@ notificationsPage.renderNotifications = function(notifications, tab, section, to
 notificationsPage.sortNotifications = function(notifications, sortBy, sortOrder) {
     const reverse = sortOrder === 'desc';
     const sorted = [...notifications];
-    
+
     if (sortBy === 'priority') {
         const priorityOrder = {'critical': 4, 'high': 3, 'medium': 2, 'low': 1};
         sorted.sort((a, b) => {
@@ -571,20 +506,20 @@ notificationsPage.sortNotifications = function(notifications, sortBy, sortOrder)
             return reverse ? bDate - aDate : aDate - bDate;
         });
     }
-    
+
     return sorted;
 };
 
-notificationsPage.updateCategoryStats = function(tab, notifications, summary = null) {
-    const total = Number.isFinite(Number(summary?.total)) ? Number(summary.total) : notifications.length;
-    const unread = Number.isFinite(Number(summary?.unread)) ? Number(summary.unread) : notifications.filter(n => !n.read).length;
-    const read = Number.isFinite(Number(summary?.read)) ? Number(summary.read) : notifications.filter(n => n.read).length;
-    
+notificationsPage.updateCategoryStats = function(tab, notifications) {
+    const total = notifications.length;
+    const unread = notifications.filter(n => !n.read).length;
+    const read = notifications.filter(n => n.read).length;
+
     if (tab === 'all') {
         const statAllTotal = document.getElementById('statAllTotal');
         const statAllUnread = document.getElementById('statAllUnread');
         const statAllRead = document.getElementById('statAllRead');
-        
+
         if (statAllTotal) statAllTotal.textContent = total;
         if (statAllUnread) statAllUnread.textContent = unread;
         if (statAllRead) statAllRead.textContent = read;
@@ -592,7 +527,7 @@ notificationsPage.updateCategoryStats = function(tab, notifications, summary = n
         const statDuplicatesTotal = document.getElementById('statDuplicatesTotal');
         const statDuplicatesUnread = document.getElementById('statDuplicatesUnread');
         const statDuplicatesRead = document.getElementById('statDuplicatesRead');
-        
+
         if (statDuplicatesTotal) statDuplicatesTotal.textContent = total;
         if (statDuplicatesUnread) statDuplicatesUnread.textContent = unread;
         if (statDuplicatesRead) statDuplicatesRead.textContent = read;
@@ -600,7 +535,7 @@ notificationsPage.updateCategoryStats = function(tab, notifications, summary = n
         const statFutureTotal = document.getElementById('statFutureTotal');
         const statFutureUnread = document.getElementById('statFutureUnread');
         const statFutureRead = document.getElementById('statFutureRead');
-        
+
         if (statFutureTotal) statFutureTotal.textContent = total;
         if (statFutureUnread) statFutureUnread.textContent = unread;
         if (statFutureRead) statFutureRead.textContent = read;
@@ -628,12 +563,12 @@ notificationsPage.formatTime = function(dateString) {
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
-    
+
     const justNow = window.appTranslations?.['Just now'] || 'Just now';
     const mAgo = window.appTranslations?.['m ago'] || 'm ago';
     const hAgo = window.appTranslations?.['h ago'] || 'h ago';
     const dAgo = window.appTranslations?.['d ago'] || 'd ago';
-    
+
     if (minutes < 1) return justNow;
     if (minutes < 60) return `${minutes} ${mAgo}`;
     if (hours < 24) return `${hours} ${hAgo}`;
@@ -656,12 +591,10 @@ notificationsPage.markAsRead = async function(notificationId, reload = true) {
                 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
             }
         });
-        
+
         const data = await response.json();
         if (data.success) {
-            if (reload) {
-                this.loadTabData(this.currentTab);
-            }
+            this.loadTabData(this.currentTab);
             this.updateNotificationBadge();
         }
     } catch (error) {
@@ -674,7 +607,7 @@ notificationsPage.markAllAsRead = async function() {
     if (!confirm(confirmMsg)) {
         return;
     }
-    
+
     try {
         const cards = document.querySelectorAll('.message-card[data-id]');
         const promises = Array.from(cards).map(card => {
@@ -687,7 +620,7 @@ notificationsPage.markAllAsRead = async function() {
                 }
             });
         });
-        
+
         await Promise.all(promises);
         this.loadTabData(this.currentTab);
         this.updateNotificationBadge();
@@ -701,7 +634,7 @@ notificationsPage.dismissNotification = async function(notificationId) {
     if (!confirm(confirmMsg)) {
         return;
     }
-    
+
     try {
         const response = await fetch(`/api/notifications/${notificationId}/dismiss`, {
             method: 'POST',
@@ -710,7 +643,7 @@ notificationsPage.dismissNotification = async function(notificationId) {
                 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
             }
         });
-        
+
         const data = await response.json();
         if (data.success) {
             this.loadTabData(this.currentTab);
@@ -725,7 +658,7 @@ notificationsPage.updateNotificationBadge = async function() {
     try {
         const response = await fetch('/api/notifications/stats');
         const data = await response.json();
-        
+
         if (data.success && data.stats) {
             const badge = document.getElementById('notificationsBadge');
             if (badge) {
@@ -748,7 +681,7 @@ notificationsPage.openMessageDetail = function(notificationId) {
     const modal = document.getElementById('messageDetailModal');
     const detailBody = document.getElementById('detailBody');
     const detailTitle = document.getElementById('detailTitle');
-    
+
     fetch(`/api/notifications/${notificationId}`)
         .then(res => res.json())
         .then(data => {
@@ -758,12 +691,12 @@ notificationsPage.openMessageDetail = function(notificationId) {
                 const priorityValue = n.priority.charAt(0).toUpperCase() + n.priority.slice(1);
                 const createdDate = new Date(n.created_at).toLocaleString();
                 const eventDate = n.event_date ? new Date(n.event_date).toLocaleDateString() : null;
-                
+
                 const sourceName = n.metadata?.source_id ? (this.sources[n.metadata.source_id] || `Source ${n.metadata.source_id}`) : null;
                 const sideName = n.metadata?.side_id ? (this.sides[n.metadata.side_id] || `Side ${n.metadata.side_id}`) : null;
-                
+
                 if (detailTitle) detailTitle.textContent = n.title;
-                
+
                 const msgLabel = window.appTranslations?.['Message'] || 'Message';
                 const typeLabelText = window.appTranslations?.['Type'] || 'Type';
                 const priorityLabelText = window.appTranslations?.['Priority'] || 'Priority';
@@ -774,13 +707,13 @@ notificationsPage.openMessageDetail = function(notificationId) {
                 const sideLabel = window.appTranslations?.['Side'] || 'Side';
                 const filePathLabel = window.appTranslations?.['File Path'] || 'File Path';
                 const additionalInfoLabel = window.appTranslations?.['Additional Information'] || 'Additional Information';
-                
+
                 let detailHtml = `
                     <div class="message-detail-section">
                         <h4>${msgLabel}</h4>
                         <p>${this.escapeHtml(n.message)}</p>
                     </div>
-                    
+
                     <div class="message-detail-info-grid">
                         <div class="message-detail-info-item">
                             <strong>${typeLabelText}</strong>
@@ -795,7 +728,7 @@ notificationsPage.openMessageDetail = function(notificationId) {
                             <span>${createdDate}</span>
                         </div>
                 `;
-                
+
                 if (eventDate) {
                     detailHtml += `
                         <div class="message-detail-info-item">
@@ -804,7 +737,7 @@ notificationsPage.openMessageDetail = function(notificationId) {
                         </div>
                     `;
                 }
-                
+
                 if (n.file_name) {
                     detailHtml += `
                         <div class="message-detail-info-item">
@@ -813,7 +746,7 @@ notificationsPage.openMessageDetail = function(notificationId) {
                         </div>
                     `;
                 }
-                
+
                 if (sourceName) {
                     detailHtml += `
                         <div class="message-detail-info-item">
@@ -822,7 +755,7 @@ notificationsPage.openMessageDetail = function(notificationId) {
                         </div>
                     `;
                 }
-                
+
                 if (sideName) {
                     detailHtml += `
                         <div class="message-detail-info-item">
@@ -831,32 +764,32 @@ notificationsPage.openMessageDetail = function(notificationId) {
                         </div>
                     `;
                 }
-                
+
                 if (n.file_path) {
                     detailHtml += `
-                        <div class="message-detail-info-item message-detail-info-item-full">
+                        <div class="message-detail-info-item" style="grid-column: 1 / -1;">
                             <strong>${filePathLabel}</strong>
-                            <span class="message-detail-path">${this.escapeHtml(n.file_path)}</span>
+                            <span style="word-break: break-all;">${this.escapeHtml(n.file_path)}</span>
                         </div>
                     `;
                 }
-                
+
                 detailHtml += `</div>`;
-                
+
                 if (n.metadata && Object.keys(n.metadata).length > 0) {
                     detailHtml += `
                         <div class="message-detail-section">
                             <h4>${additionalInfoLabel}</h4>
-                            <div class="message-detail-metadata">
-                                <pre>${this.escapeHtml(JSON.stringify(n.metadata, null, 2))}</pre>
+                            <div style="background: var(--bg-section, #f8f9fa); padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.875rem; overflow-x: auto;">
+                                <pre style="margin: 0; white-space: pre-wrap;">${this.escapeHtml(JSON.stringify(n.metadata, null, 2))}</pre>
                             </div>
                         </div>
                     `;
                 }
-                
+
                 if (detailBody) detailBody.innerHTML = detailHtml;
                 if (modal) modal.classList.add('active');
-                
+
                 this.markAsRead(notificationId, false);
             }
         })
@@ -894,9 +827,3 @@ document.addEventListener('keydown', function(e) {
         notificationsPage.closeMessageDetail();
     }
 });
-
-// Direct module fallback: notifications.html includes this module explicitly,
-// and the universal initializer skips explicit scripts to prevent duplicate
-// work. Start the guarded initializer here as well.
-init();
-

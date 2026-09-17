@@ -1,7 +1,7 @@
 /**
  * Settings UI Controller - Frontend
  * File: static/js/settings/settings-ui.js
- * 
+ *
  * Handles all UI interactions for settings page
  * Clean architecture - no legacy code
  */
@@ -13,7 +13,7 @@ class SettingsUI {
         this.state = settingsState;
         this.saveButtons = new Map();
         this.initialized = false;
-        
+
         // Wait for DOM
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
@@ -21,34 +21,34 @@ class SettingsUI {
             this.init();
         }
     }
-    
+
     async init() {
         if (this.initialized) return;
         this.initialized = true;
-        
+
         // Subscribe to state changes
         this.state.subscribe((event, data) => this.handleStateChange(event, data));
-        
+
         // Setup UI elements
         this.setupInputHandlers();
         this.setupSaveButtons();
         this.setupActionButtons();
-        
+
         // Populate form with current values
         await this.populateForm();
-        
+
         // Expose global functions for inline handlers (backward compatibility)
         this.exposeGlobalFunctions();
-        
+
         console.log('✅ Settings UI initialized');
     }
-    
+
     /**
      * Expose global functions for inline event handlers in templates
      */
     exposeGlobalFunctions() {
         const self = this; // Capture 'this' for use in arrow functions
-        
+
         // toggleSystemSetting - for system settings dropdowns and checkboxes
         window.toggleSystemSetting = (key, value) => {
             // Convert value types
@@ -61,12 +61,12 @@ class SettingsUI {
                     value = numValue;
                 }
             }
-            
+
             // Set the setting using dot notation
             self.state.set(`system.${key}`, value);
             self.updateSaveButtons(); // Update save buttons
         };
-        
+
         // toggleUserSetting - for user/display/search/processing/notifications settings
         window.toggleUserSetting = (category, key, value) => {
             // Convert value types
@@ -79,37 +79,37 @@ class SettingsUI {
                     value = numValue;
                 }
             }
-            
+
             // Set the setting using dot notation
             self.state.set(`${category}.${key}`, value);
             self.updateSaveButtons(); // Update save buttons
         };
-        
+
         // updateThemeColor - for theme color pickers
         window.updateThemeColor = (key, value) => {
             // Normalize color value
             if (!value.startsWith('#') && !value.startsWith('rgb')) {
                 value = '#' + value;
             }
-            
+
             // Map kebab-case to snake_case for settings key
             const settingKey = key.replace(/-/g, '_');
-            
+
             // Set theme color
             self.state.set(`theme.${settingKey}`, value);
-            
+
             // Apply live preview
             self.applyLivePreview(`theme.${settingKey}`, value);
-            
+
             // Update save buttons
             self.updateSaveButtons();
         };
-        
+
         // updateColorSwatch - for color swatch updates
         window.updateColorSwatch = (inputId, value) => {
             const colorInput = document.getElementById(inputId);
             const textInput = document.getElementById(inputId + 'Text');
-            
+
             if (colorInput) {
                 colorInput.value = value;
             }
@@ -117,7 +117,7 @@ class SettingsUI {
                 textInput.value = value;
             }
         };
-        
+
         // saveThemeColors - save all theme color changes
         window.saveThemeColors = async () => {
             try {
@@ -135,12 +135,12 @@ class SettingsUI {
                 self.showError(`Failed to save: ${error.message}`);
             }
         };
-        
+
         // resetThemeColor - reset a single theme color to default
         window.resetThemeColor = (key) => {
             // Map kebab-case to snake_case for settings key
             const settingKey = key.replace(/-/g, '_');
-            
+
             // Default values mapping
             const defaults = {
                 'primary_color': '#4f46e5',
@@ -170,17 +170,17 @@ class SettingsUI {
                 'gradient_end': '#06b6d4',
                 'gradient_direction': '135deg'
             };
-            
+
             const defaultValue = defaults[settingKey];
             if (defaultValue) {
                 self.state.set(`theme.${settingKey}`, defaultValue);
                 self.applyLivePreview(`theme.${settingKey}`, defaultValue);
-                
+
                 // Update UI inputs
                 const colorInputId = key.charAt(0).toUpperCase() + key.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase());
                 const colorInput = document.getElementById(colorInputId) || document.getElementById(key.replace(/-/g, ''));
                 const textInput = document.getElementById(colorInputId + 'Text') || document.getElementById(key.replace(/-/g, '') + 'Text');
-                
+
                 if (colorInput) {
                     colorInput.value = defaultValue;
                 }
@@ -189,13 +189,13 @@ class SettingsUI {
                 }
             }
         };
-        
+
         // resetAllThemeColors - reset all theme colors to defaults
         window.resetAllThemeColors = async () => {
             if (!confirm('Are you sure you want to reset all theme colors to defaults?')) {
                 return;
             }
-            
+
             const defaults = {
                 'primary_color': '#4f46e5',
                 'secondary_color': '#06b6d4',
@@ -223,24 +223,24 @@ class SettingsUI {
                 'gradient_end': '#06b6d4',
                 'gradient_direction': '135deg'
             };
-            
+
             // Set all defaults
             for (const [key, value] of Object.entries(defaults)) {
                 self.state.set(`theme.${key}`, value);
                 self.applyLivePreview(`theme.${key}`, value);
             }
-            
+
             // Reload form to update UI
             await self.populateForm();
-            
+
             self.showSuccess('All theme colors reset to defaults');
         };
-        
+
         // previewThemeColors - preview theme colors (already applied live)
         window.previewThemeColors = () => {
             self.showSuccess('Colors are applied in real-time. Scroll to see changes throughout the page.');
         };
-        
+
         // openGlobalCssEditor - open CSS editor modal
         window.openGlobalCssEditor = () => {
             const modal = document.getElementById('globalCssModal');
@@ -249,21 +249,21 @@ class SettingsUI {
                 bsModal.show();
             }
         };
-        
+
         // saveInterfaceSettings - save interface visibility changes
         window.saveInterfaceSettings = async () => {
             try {
                 // Get all interface toggles
                 const toggles = document.querySelectorAll('.interface-toggle');
                 const updates = {};
-                
+
                 toggles.forEach(toggle => {
                     const interfaceId = toggle.dataset.interfaceId;
                     if (interfaceId) {
                         updates[`interfaces.${interfaceId}.enabled`] = toggle.checked;
                     }
                 });
-                
+
                 // Save via batch update
                 const response = await fetch('/api/settings/batch', {
                     method: 'POST',
@@ -273,13 +273,13 @@ class SettingsUI {
                     },
                     body: JSON.stringify({ updates })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // Reload settings state
                     await self.state.load();
-                    
+
                     // Format changes for broadcast (nested structure)
                     const broadcastChanges = {
                         interfaces: {}
@@ -295,10 +295,22 @@ class SettingsUI {
                             broadcastChanges.interfaces[interfaceId][attr] = updates[key];
                         }
                     });
-                    
-                    self.broadcastSettingsChanges(broadcastChanges);
-                    self.applyInterfaceVisibilityEffects(broadcastChanges.interfaces);
-                    self.showSuccess('Interface settings saved successfully. Visible interface controls were updated in place.');
+
+                    // Broadcast changes
+                    if (typeof BroadcastChannel !== 'undefined') {
+                        const channel = new BroadcastChannel('settings_changes');
+                        channel.postMessage({
+                            type: 'settings_saved',
+                            changes: broadcastChanges
+                        });
+                    }
+
+                    self.showSuccess('Interface settings saved successfully. Page will reload to apply changes...');
+
+                    // Reload page after a short delay to apply interface visibility changes
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
                 } else {
                     throw new Error(data.error || 'Failed to save');
                 }
@@ -307,13 +319,13 @@ class SettingsUI {
                 self.showError(`Failed to save: ${error.message}`);
             }
         };
-        
+
         // resetInterfaceSettings - reset all interfaces to defaults
         window.resetInterfaceSettings = async () => {
             if (!confirm('Are you sure you want to reset all interface settings to defaults?')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/settings/interfaces/reset', {
                     method: 'POST',
@@ -321,15 +333,15 @@ class SettingsUI {
                         'X-CSRFToken': self.getCSRFToken()
                     }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
-                    // Reload settings state and repaint the existing settings workspace.
+                    // Reload settings state
                     await self.state.load();
-                    await self.populateForm();
-                    self.applyInterfaceVisibilityEffects();
-                    self.showSuccess('Interface settings reset to defaults. Current controls were refreshed in place.');
+
+                    // Reload page to reflect changes
+                    window.location.reload();
                 } else {
                     throw new Error(data.error || 'Failed to reset');
                 }
@@ -338,13 +350,13 @@ class SettingsUI {
                 self.showError(`Failed to reset: ${error.message}`);
             }
         };
-        
+
         // removeLogo - remove application logo
         window.removeLogo = async () => {
             if (!confirm('Are you sure you want to remove the logo?')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/settings/logo/remove', {
                     method: 'POST',
@@ -352,14 +364,13 @@ class SettingsUI {
                         'X-CSRFToken': self.getCSRFToken()
                     }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
-                    await self.state.load();
-                    self.applyLogoState('');
-                    window.updateAppBrandingPreview?.();
                     self.showSuccess('Logo removed successfully');
+                    // Reload page to show changes
+                    setTimeout(() => window.location.reload(), 1000);
                 } else {
                     throw new Error(data.error || 'Failed to remove logo');
                 }
@@ -368,7 +379,7 @@ class SettingsUI {
                 self.showError(`Failed to remove logo: ${error.message}`);
             }
         };
-        
+
         // openIconPicker - open icon picker
         window.openIconPicker = () => {
             const modal = document.getElementById('iconPickerModal');
@@ -377,7 +388,7 @@ class SettingsUI {
                 bsModal.show();
             }
         };
-        
+
         // selectIcon - select an icon from the picker
         window.selectIcon = (iconClass) => {
             const iconInput = document.getElementById('appIcon');
@@ -385,23 +396,23 @@ class SettingsUI {
                 iconInput.value = iconClass;
                 window.updateAppBranding('app_icon', iconClass);
             }
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('iconPickerModal'));
             if (modal) {
                 modal.hide();
             }
         };
-        
+
         // filterIcons - filter icons in the picker
         window.filterIcons = (searchTerm) => {
             const iconItems = document.querySelectorAll('.icon-item');
             const term = searchTerm.toLowerCase();
-            
+
             iconItems.forEach(item => {
                 const iconName = item.dataset.icon || '';
                 const text = item.textContent.toLowerCase();
-                
+
                 if (iconName.includes(term) || text.includes(term)) {
                     item.style.display = '';
                 } else {
@@ -409,19 +420,19 @@ class SettingsUI {
                 }
             });
         };
-        
+
         // handleLogoUpload - handle logo file upload
         window.handleLogoUpload = async (input) => {
             const file = input.files[0];
             if (!file) return;
-            
+
             // Validate file size (5MB max)
             if (file.size > 5 * 1024 * 1024) {
                 self.showError('File size must be less than 5MB');
                 input.value = '';
                 return;
             }
-            
+
             // Validate file type
             const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/gif', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon'];
             if (!validTypes.includes(file.type)) {
@@ -429,11 +440,11 @@ class SettingsUI {
                 input.value = '';
                 return;
             }
-            
+
             try {
                 const formData = new FormData();
                 formData.append('logo', file);
-                
+
                 const response = await fetch('/api/settings/logo/upload', {
                     method: 'POST',
                     headers: {
@@ -441,13 +452,13 @@ class SettingsUI {
                     },
                     body: formData
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
-                    await self.state.load();
-                    self.applyLogoState(data.logo_url || self.state.get('system.app_logo') || '');
                     self.showSuccess('Logo uploaded successfully');
+                    // Reload page to show new logo
+                    setTimeout(() => window.location.reload(), 1000);
                 } else {
                     throw new Error(data.error || 'Failed to upload logo');
                 }
@@ -457,29 +468,29 @@ class SettingsUI {
                 input.value = '';
             }
         };
-        
+
         // updateThemeSpacing - update theme spacing/typography values
         window.updateThemeSpacing = (key, value) => {
             // Map kebab-case to snake_case for settings key
             const settingKey = key.replace(/-/g, '_');
-            
+
             // Set theme spacing/typography
             self.state.set(`theme.${settingKey}`, value);
-            
+
             // Apply live preview if it's a CSS variable
             const cssVar = key.replace(/_/g, '-');
             document.documentElement.style.setProperty(`--${cssVar}`, value);
-            
+
             // Update save buttons
             self.updateSaveButtons();
         };
-        
+
         // clearSearchCache - clear search cache
         window.clearSearchCache = async () => {
             if (!confirm('Are you sure you want to clear the search cache?')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/cache/clear', {
                     method: 'POST',
@@ -487,9 +498,9 @@ class SettingsUI {
                         'X-CSRFToken': self.getCSRFToken()
                     }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     self.showSuccess('Search cache cleared successfully');
                 } else {
@@ -500,18 +511,18 @@ class SettingsUI {
                 self.showError(`Failed to clear cache: ${error.message}`);
             }
         };
-        
+
         // viewCacheStats - view cache statistics
         window.viewCacheStats = async () => {
             const statsDiv = document.getElementById('cacheStats');
             const contentDiv = document.getElementById('cacheStatsContent');
-            
+
             if (!statsDiv || !contentDiv) return;
-            
+
             try {
                 const response = await fetch('/api/cache/stats');
                 const data = await response.json();
-                
+
                 if (data.success && data.stats) {
                     const stats = data.stats;
                     contentDiv.innerHTML = `
@@ -560,41 +571,36 @@ class SettingsUI {
                 statsDiv.style.display = 'block';
             }
         };
-        
+
         // updateAppBrandingPreview - preview app branding changes
         window.updateAppBrandingPreview = () => {
             const appName = document.getElementById('appName')?.value || '';
             const appIcon = document.getElementById('appIcon')?.value || '';
-            
-            // Update preview and sidebar shell if available
-            const previewName = document.getElementById('appBrandingPreviewName');
-            const sidebarTitle = document.querySelector('.sidebar-logo h4, .sidebar-brand, .app-title');
-            if (previewName && appName) previewName.textContent = appName;
-            if (sidebarTitle && appName) sidebarTitle.textContent = appName;
-            
-            // Update icon if available and no uploaded logo is active
-            const sidebarIcon = document.querySelector('.sidebar-logo i, .sidebar-brand i, .app-icon');
-            const previewIcon = document.getElementById('appBrandingPreviewIcon');
-            const inputPreviewIcon = document.getElementById('appIconPreview');
-            if (appIcon) {
-                const normalizedIcon = appIcon.includes('bi ') ? appIcon : `bi ${appIcon}`;
-                if (sidebarIcon && sidebarIcon.style.display !== 'none') sidebarIcon.className = normalizedIcon;
-                if (previewIcon && previewIcon.style.display !== 'none') previewIcon.className = `${normalizedIcon} branding-preview-icon`;
-                if (inputPreviewIcon) inputPreviewIcon.className = normalizedIcon;
+
+            // Update preview in sidebar if available
+            const sidebarTitle = document.querySelector('.sidebar-brand, .app-title');
+            if (sidebarTitle && appName) {
+                sidebarTitle.textContent = appName;
+            }
+
+            // Update icon if available
+            const sidebarIcon = document.querySelector('.sidebar-brand i, .app-icon');
+            if (sidebarIcon && appIcon) {
+                sidebarIcon.className = `bi ${appIcon}`;
             }
         };
-        
+
         // updateAppBranding - save app branding changes
         window.updateAppBranding = async (key, value) => {
             try {
                 self.state.set(`system.${key}`, value);
-                
+
                 // Apply preview immediately
                 window.updateAppBrandingPreview();
-                
+
                 // Update save buttons
                 self.updateSaveButtons();
-                
+
                 // Auto-save if enabled
                 if (self.state.get('system.auto_save') !== false) {
                     await self.saveSettings();
@@ -603,26 +609,26 @@ class SettingsUI {
                 console.error('Failed to update app branding:', error);
             }
         };
-        
+
         // saveGlobalCss - save global CSS
         window.saveGlobalCss = async () => {
             const textarea = document.getElementById('globalCssTextarea');
             if (!textarea) return;
-            
+
             const css = textarea.value;
-            
+
             try {
                 self.state.set('theme.custom_css', css);
                 await self.saveSettings();
-                
+
                 // Apply CSS immediately
                 const styleEl = document.getElementById('global-custom-css');
                 if (styleEl) {
                     styleEl.textContent = css;
                 }
-                
+
                 self.showSuccess('Global CSS saved successfully');
-                
+
                 // Close modal
                 const modal = bootstrap.Modal.getInstance(document.getElementById('globalCssModal'));
                 if (modal) {
@@ -633,46 +639,46 @@ class SettingsUI {
                 self.showError(`Failed to save: ${error.message}`);
             }
         };
-        
+
         // resetGlobalCss - reset global CSS
         window.resetGlobalCss = () => {
             if (!confirm('Are you sure you want to clear all global CSS?')) {
                 return;
             }
-            
+
             const textarea = document.getElementById('globalCssTextarea');
             if (textarea) {
                 textarea.value = '';
-                
+
                 // Update character count
                 const charCount = document.getElementById('globalCssCharCount');
                 if (charCount) {
                     charCount.textContent = '0';
                 }
-                
+
                 // Clear applied CSS
                 const styleEl = document.getElementById('global-custom-css');
                 if (styleEl) {
                     styleEl.textContent = '';
                 }
-                
+
                 self.showSuccess('Global CSS cleared');
             }
         };
-        
+
         // applyGlobalCssPreview - preview global CSS without saving
         window.applyGlobalCssPreview = () => {
             const textarea = document.getElementById('globalCssTextarea');
             if (!textarea) return;
-            
+
             const css = textarea.value;
-            
+
             // Apply CSS immediately for preview
             const styleEl = document.getElementById('global-custom-css');
             if (styleEl) {
                 styleEl.textContent = css;
             }
-            
+
             self.showSuccess('CSS preview applied (not saved)');
         };
 
@@ -680,7 +686,7 @@ class SettingsUI {
         window.saveDatabaseSettings = async () => {
             try {
                 const data = {};
-                
+
                 // Get all database settings
                 const hostField = document.getElementById('dbHost');
                 const portField = document.getElementById('dbPort');
@@ -693,7 +699,7 @@ class SettingsUI {
                 const queryTimeoutField = document.getElementById('dbQueryTimeout');
                 const batchSizeField = document.getElementById('dbBatchSize');
                 const chunkSizeField = document.getElementById('dbChunkSize');
-                
+
                 if (hostField) data.host = hostField.value;
                 if (portField) data.port = parseInt(portField.value);
                 if (databaseField) data.database = databaseField.value;
@@ -707,7 +713,7 @@ class SettingsUI {
                 if (queryTimeoutField) data.query_timeout = parseInt(queryTimeoutField.value);
                 if (batchSizeField) data.batch_size = parseInt(batchSizeField.value);
                 if (chunkSizeField) data.chunk_size = parseInt(chunkSizeField.value);
-                
+
                 // OPS-02: the backend validates the syntax, opens a real connection
                 // with the proposed credentials and only then persists. Until
                 // it reports success nothing has been saved, so the UI must
@@ -782,7 +788,7 @@ class SettingsUI {
             }
         };
     }
-    
+
     /**
      * Get CSRF token from meta tag
      */
@@ -811,113 +817,6 @@ class SettingsUI {
             .replace(/'/g, '&#39;');
     }
 
-
-    /**
-     * Broadcast setting changes to other open tabs without forcing the current
-     * Settings workspace through a full reload.
-     */
-    broadcastSettingsChanges(changes) {
-        if (typeof BroadcastChannel === 'undefined') return;
-        const channel = new BroadcastChannel('settings_changes');
-        channel.postMessage({
-            type: 'settings_saved',
-            changes
-        });
-        channel.close?.();
-    }
-
-    /**
-     * Keep interface cards, live Page Tips and current-page consumers in sync
-     * after interface settings save. This preserves the backend settings flow
-     * while avoiding expensive reloads for UI state that can update in place.
-     */
-    applyInterfaceVisibilityEffects(changes = null) {
-        const interfaceChanges = changes || Array.from(document.querySelectorAll('.interface-toggle')).reduce((acc, toggle) => {
-            if (toggle.dataset.interfaceId) {
-                acc[toggle.dataset.interfaceId] = { enabled: toggle.checked };
-            }
-            return acc;
-        }, {});
-
-        Object.entries(interfaceChanges).forEach(([interfaceId, config]) => {
-            const enabled = !!config.enabled;
-            const escapedId = window.CSS?.escape ? CSS.escape(interfaceId) : String(interfaceId).replace(/"/g, '\\"');
-            const toggle = document.querySelector(`.interface-toggle[data-interface-id="${escapedId}"]`);
-            if (toggle) {
-                toggle.checked = enabled;
-                this.updateInterfaceCardState(toggle, enabled);
-            }
-
-            if (interfaceId === 'page_tips' && window.pageTipsManager) {
-                window.pageTipsManager.setEnabled(enabled);
-            }
-        });
-
-        document.dispatchEvent(new CustomEvent('settings:interfaces-changed', {
-            detail: { interfaces: interfaceChanges }
-        }));
-    }
-
-    updateInterfaceCardState(toggle, enabled) {
-        const card = toggle?.closest('.interface-card');
-        if (!card) return;
-        card.classList.toggle('disabled', !enabled);
-        card.classList.toggle('border-secondary', !enabled);
-        card.classList.toggle('border-success', enabled);
-        card.dataset.interfaceEnabled = String(enabled);
-    }
-
-
-    applyLogoState(logoUrl = '') {
-        const previewLogo = document.getElementById('appBrandingPreviewLogo');
-        const previewIcon = document.getElementById('appBrandingPreviewIcon');
-        const appIconInput = document.getElementById('appIcon');
-        const iconPickerButton = document.querySelector('button[onclick="openIconPicker()"]');
-        const inputPreviewIcon = document.getElementById('appIconPreview');
-        const sidebarLogo = document.querySelector('.sidebar-logo');
-        const sidebarImg = sidebarLogo?.querySelector('img');
-        const sidebarIcon = sidebarLogo?.querySelector('i');
-
-        if (logoUrl) {
-            if (previewLogo) {
-                previewLogo.src = logoUrl;
-                previewLogo.style.display = '';
-            }
-            if (previewIcon) previewIcon.style.display = 'none';
-            if (inputPreviewIcon) inputPreviewIcon.className = 'bi bi-image';
-            if (appIconInput) appIconInput.disabled = true;
-            if (iconPickerButton) iconPickerButton.disabled = true;
-            if (sidebarImg) {
-                sidebarImg.src = logoUrl;
-                sidebarImg.style.display = '';
-            }
-            if (sidebarIcon) sidebarIcon.style.display = 'none';
-            return;
-        }
-
-        if (previewLogo) {
-            previewLogo.removeAttribute('src');
-            previewLogo.style.display = 'none';
-        }
-        if (appIconInput) {
-            appIconInput.disabled = false;
-            if (!appIconInput.value) appIconInput.value = 'bi-file-earmark-text';
-        }
-        if (iconPickerButton) iconPickerButton.disabled = false;
-        const iconClass = appIconInput?.value || 'bi-file-earmark-text';
-        const normalizedIcon = iconClass.includes('bi ') ? iconClass : `bi ${iconClass}`;
-        if (previewIcon) {
-            previewIcon.className = `${normalizedIcon} branding-preview-icon`;
-            previewIcon.style.display = '';
-        }
-        if (inputPreviewIcon) inputPreviewIcon.className = normalizedIcon;
-        if (sidebarImg) sidebarImg.style.display = 'none';
-        if (sidebarIcon) {
-            sidebarIcon.className = normalizedIcon;
-            sidebarIcon.style.display = '';
-        }
-    }
-    
     /**
      * Handle state changes
      */
@@ -926,27 +825,27 @@ class SettingsUI {
             case 'loaded':
                 this.populateForm();
                 break;
-            
+
             case 'changed':
                 this.updateSaveButtons();
                 this.applyLivePreview(data.key, data.value);
                 break;
-            
+
             case 'saved':
                 this.showSuccess(`Saved ${data.count} setting(s)`);
                 this.updateSaveButtons();
                 break;
-            
+
             case 'cleared':
                 this.updateSaveButtons();
                 break;
-            
+
             case 'error':
                 this.showError(data.error.message);
                 break;
         }
     }
-    
+
     /**
      * Setup input change handlers
      */
@@ -955,47 +854,47 @@ class SettingsUI {
         document.querySelectorAll('input[data-setting]').forEach(input => {
             const key = input.dataset.setting;
             const debounced = this.debounce((e) => {
-                const value = input.type === 'checkbox' ? input.checked : 
+                const value = input.type === 'checkbox' ? input.checked :
                              input.type === 'number' ? parseFloat(input.value) :
                              input.value;
-                
+
                 this.state.set(key, value);
                 this.updateSaveButtons(); // Update save buttons when input changes
             }, 300);
-            
+
             input.addEventListener('change', debounced);
             if (input.type !== 'checkbox') {
                 input.addEventListener('input', debounced);
             }
         });
-        
+
         // Select dropdowns
         document.querySelectorAll('select[data-setting]').forEach(select => {
             const key = select.dataset.setting;
-            
+
             select.addEventListener('change', (e) => {
                 this.state.set(key, select.value);
                 this.updateSaveButtons(); // Update save buttons when select changes
             });
         });
-        
+
         // Color pickers
         document.querySelectorAll('input[type="color"][data-setting]').forEach(input => {
             const key = input.dataset.setting;
-            
+
             input.addEventListener('change', (e) => {
                 this.state.set(key, input.value);
-                
+
                 // Also update text input if exists
                 const textInput = document.getElementById(input.id + 'Text');
                 if (textInput) {
                     textInput.value = input.value;
                 }
-                
+
                 this.updateSaveButtons(); // Update save buttons when color changes
             });
         });
-        
+
         // Handle database password field separately (special handling)
         const dbPasswordField = document.getElementById('dbPassword');
         if (dbPasswordField) {
@@ -1007,27 +906,35 @@ class SettingsUI {
         // Also handle inputs without data-setting (for backward compatibility)
         // These are handled by inline handlers, but we still want to show save buttons
         document.querySelectorAll('input:not([data-setting]), select:not([data-setting])').forEach(element => {
-            if (element.id && (element.id.includes('appName') || element.id.includes('appIcon') || 
+            if (element.id && (element.id.includes('appName') || element.id.includes('appIcon') ||
                 element.id.includes('globalCss'))) {
                 element.addEventListener('change', () => {
                     this.updateSaveButtons();
                 });
             }
         });
-        
+
         // Handle interface toggles - auto-save on change for immediate effect
         const self = this; // Capture 'this' for use in event handler
         document.querySelectorAll('.interface-toggle').forEach(toggle => {
             toggle.addEventListener('change', async (e) => {
                 const interfaceId = toggle.dataset.interfaceId;
                 const enabled = toggle.checked;
-                
+
                 if (!interfaceId) return;
-                
+
                 // Update the card visual state immediately
                 const card = toggle.closest('.interface-card');
-                self.updateInterfaceCardState(toggle, enabled);
-                
+                if (card) {
+                    if (enabled) {
+                        card.classList.remove('disabled', 'border-secondary');
+                        card.classList.add('border-success');
+                    } else {
+                        card.classList.remove('border-success');
+                        card.classList.add('disabled', 'border-secondary');
+                    }
+                }
+
                 // Auto-save the change immediately
                 try {
                     const response = await fetch(`/api/settings/interfaces/${interfaceId}`, {
@@ -1038,38 +945,66 @@ class SettingsUI {
                         },
                         body: JSON.stringify({ enabled: enabled })
                     });
-                    
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         // Get interface name for better message
                         const interfaceName = card ? card.querySelector('.card-title')?.textContent?.trim() || interfaceId : interfaceId;
-                        
-                        const changes = {
-                            interfaces: {
-                                [interfaceId]: { enabled: enabled }
-                            }
-                        };
-                        self.broadcastSettingsChanges(changes);
-                        self.applyInterfaceVisibilityEffects(changes.interfaces);
-                        self.showSuccess(`${interfaceName} ${enabled ? 'enabled' : 'disabled'}. Current page controls were updated in place.`);
+
+                        // Show success message
+                        self.showSuccess(`${interfaceName} ${enabled ? 'enabled' : 'disabled'}. Page will reload to apply changes...`);
+
+                        // Broadcast change to other tabs
+                        if (typeof BroadcastChannel !== 'undefined') {
+                            const channel = new BroadcastChannel('settings_changes');
+                            channel.postMessage({
+                                type: 'settings_saved',
+                                changes: {
+                                    interfaces: {
+                                        [interfaceId]: { enabled: enabled }
+                                    }
+                                }
+                            });
+                        }
+
+                        // Reload page after short delay to apply changes
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
                     } else {
                         // Revert toggle on error
                         toggle.checked = !enabled;
-                        self.updateInterfaceCardState(toggle, !enabled);
+                        if (card) {
+                            if (enabled) {
+                                card.classList.remove('border-success');
+                                card.classList.add('disabled', 'border-secondary');
+                            } else {
+                                card.classList.remove('disabled', 'border-secondary');
+                                card.classList.add('border-success');
+                            }
+                        }
                         self.showError(data.error || 'Failed to update interface setting');
                     }
                 } catch (error) {
                     // Revert toggle on error
                     toggle.checked = !enabled;
-                    self.updateInterfaceCardState(toggle, !enabled);
+                    if (card) {
+                        if (enabled) {
+                            card.classList.remove('border-success');
+                            card.classList.add('disabled', 'border-secondary');
+                        } else {
+                            card.classList.remove('disabled', 'border-secondary');
+                            card.classList.add('border-success');
+                        }
+                    }
                     console.error('Failed to save interface setting:', error);
                     self.showError(`Failed to save: ${error.message}`);
                 }
             });
         });
     }
-    
+
     /**
      * Setup save buttons
      */
@@ -1079,7 +1014,7 @@ class SettingsUI {
             const tabId = button.dataset.saveTab || button.dataset.saveSettings;
             if (tabId) {
                 this.saveButtons.set(tabId, button);
-                
+
                 // Only add event listener if not already added
                 if (!button.hasAttribute('data-handler-attached')) {
                     button.setAttribute('data-handler-attached', 'true');
@@ -1089,14 +1024,14 @@ class SettingsUI {
                 }
             }
         });
-        
+
         // Hide all initially
         this.updateSaveButtons();
-        
+
         // Log for debugging
         console.log(`✅ Save buttons initialized: ${this.saveButtons.size} buttons found`);
     }
-    
+
     /**
      * Setup action buttons (reset, export, etc.)
      */
@@ -1113,7 +1048,7 @@ class SettingsUI {
                 }
             });
         }
-        
+
         // Export button
         const exportBtn = document.querySelector('[data-action="export"]');
         if (exportBtn) {
@@ -1126,7 +1061,7 @@ class SettingsUI {
                 }
             });
         }
-        
+
         // Import button
         const importBtn = document.querySelector('[data-action="import"]');
         if (importBtn) {
@@ -1134,7 +1069,7 @@ class SettingsUI {
                 const input = document.createElement('input');
                 input.type = 'file';
                 input.accept = '.json';
-                
+
                 input.onchange = async (e) => {
                     const file = e.target.files[0];
                     if (file) {
@@ -1146,25 +1081,25 @@ class SettingsUI {
                         }
                     }
                 };
-                
+
                 input.click();
             });
         }
     }
-    
+
     /**
      * Update save button visibility
      */
     updateSaveButtons() {
         const changeCount = this.state.getChangeCount();
-        
+
         // Re-scan for buttons in case they weren't found during init
         document.querySelectorAll('[data-save-settings], [data-save-tab]').forEach(button => {
             const tabId = button.dataset.saveSettings || button.dataset.saveTab;
             if (tabId && !this.saveButtons.has(tabId)) {
                 // Add to map if not already there
                 this.saveButtons.set(tabId, button);
-                
+
                 // Set up click handler if not already set
                 if (!button.hasAttribute('data-handler-attached')) {
                     button.setAttribute('data-handler-attached', 'true');
@@ -1174,7 +1109,7 @@ class SettingsUI {
                 }
             }
         });
-        
+
         // Show all save buttons if there are any changes
         this.saveButtons.forEach((button, tabId) => {
             if (!button || !button.parentElement) {
@@ -1182,7 +1117,7 @@ class SettingsUI {
                 this.saveButtons.delete(tabId);
                 return;
             }
-            
+
             if (changeCount > 0) {
                 button.style.display = '';
                 button.style.visibility = 'visible';
@@ -1204,14 +1139,14 @@ class SettingsUI {
             }
         });
     }
-    
+
     /**
      * Save all pending changes
      */
     async saveSettings() {
         const saveBtn = Array.from(this.saveButtons.values())[0];
         if (!saveBtn) return;
-        
+
         // Check if this is database settings tab - use special handler
         const tabId = saveBtn.dataset.saveSettings || saveBtn.dataset.saveTab;
         if (tabId === 'database') {
@@ -1220,53 +1155,53 @@ class SettingsUI {
             }
             return;
         }
-        
+
         const originalHTML = saveBtn.innerHTML;
-        
+
         try {
             // Show loading
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-            
+
             // Validate first
             const validation = await this.state.validate();
             if (!validation.valid) {
                 throw new Error(`Validation failed:\n${validation.errors.join('\n')}`);
             }
-            
+
             // Save
             await this.state.save();
-            
+
             // Show success
             saveBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Saved!';
             saveBtn.classList.add('btn-success');
             saveBtn.classList.remove('btn-primary');
-            
+
             setTimeout(() => {
                 saveBtn.innerHTML = originalHTML;
                 saveBtn.classList.remove('btn-success');
                 saveBtn.classList.add('btn-primary');
                 saveBtn.disabled = false;
             }, 2000);
-            
+
         } catch (error) {
             this.showError(`Save failed: ${error.message}`);
             saveBtn.innerHTML = originalHTML;
             saveBtn.disabled = false;
         }
     }
-    
+
     /**
      * Populate form with current values
      */
     async populateForm() {
         if (!this.state.current) return;
-        
+
         // Iterate through all inputs with data-setting attribute
         document.querySelectorAll('[data-setting]').forEach(element => {
             const key = element.dataset.setting;
             const value = this.state.get(key);
-            
+
             if (value !== undefined) {
                 if (element.type === 'checkbox') {
                     element.checked = Boolean(value);
@@ -1282,7 +1217,7 @@ class SettingsUI {
                 }
             }
         });
-        
+
         // Map element IDs to setting keys (for elements without data-setting attribute)
         const idToSettingMap = {
             // System settings
@@ -1299,7 +1234,7 @@ class SettingsUI {
             'sortDirection': 'system.sort_direction',
             'appName': 'system.app_name',
             'appIcon': 'system.app_icon',
-            
+
             // Display settings
             'compactView': 'display.compact_view',
             'showFilePreview': 'display.show_file_preview',
@@ -1307,7 +1242,7 @@ class SettingsUI {
             'resultsPerPage': 'display.results_per_page',
             'displayDefaultSort': 'display.default_sort',
             'displaySortDirection': 'display.sort_direction',
-            
+
             // Search settings
             'defaultSearchType': 'search.default_search_type',
             'caseSensitive': 'search.case_sensitive',
@@ -1316,7 +1251,7 @@ class SettingsUI {
             'searchInFilename': 'search.search_in_filename',
             'searchInMetadata': 'search.search_in_metadata',
             'maxResults': 'search.max_results',
-            
+
             // Processing settings
             'autoProcessUploads': 'processing.auto_process_uploads',
             'extractArchives': 'processing.extract_archives',
@@ -1325,7 +1260,7 @@ class SettingsUI {
             'calculateHashes': 'processing.calculate_hashes',
             'extractText': 'processing.extract_text',
             'extractMetadata': 'processing.extract_metadata',
-            
+
             // Notification settings
             'emailNotifications': 'notifications.email_notifications',
             'processingComplete': 'notifications.processing_complete',
@@ -1337,12 +1272,12 @@ class SettingsUI {
             'autoAnalyzeFiles': 'notifications.auto_analyze_files',
             'upcomingEventsDays': 'notifications.upcoming_events_days',
         };
-        
+
         // Populate elements by ID
         for (const [elementId, settingKey] of Object.entries(idToSettingMap)) {
             const element = document.getElementById(elementId);
             if (!element) continue;
-            
+
             const value = this.state.get(settingKey);
             if (value !== undefined) {
                 if (element.type === 'checkbox') {
@@ -1365,7 +1300,7 @@ class SettingsUI {
                 }
             }
         }
-        
+
         // Populate theme color inputs
         const themeColorMap = {
             'primaryColor': 'theme.primary_color',
@@ -1395,12 +1330,12 @@ class SettingsUI {
             'gradientEnd': 'theme.gradient_end',
             'gradientDirection': 'theme.gradient_direction',
         };
-        
+
         for (const [elementId, settingKey] of Object.entries(themeColorMap)) {
             const colorInput = document.getElementById(elementId);
             const textInput = document.getElementById(elementId + 'Text');
             const value = this.state.get(settingKey);
-            
+
             if (value !== undefined) {
                 if (colorInput) {
                     colorInput.value = value;
@@ -1411,7 +1346,7 @@ class SettingsUI {
             }
         }
     }
-    
+
     /**
      * Apply live preview of changes
      */
@@ -1420,7 +1355,7 @@ class SettingsUI {
         const parts = key.split('.');
         const category = parts[0];
         const setting = parts.length > 1 ? parts[parts.length - 1] : '';
-        
+
         // Apply based on category
         if (category === 'theme') {
             this.applyThemePreview(setting, value);
@@ -1433,7 +1368,7 @@ class SettingsUI {
             }
         }
     }
-    
+
     /**
      * Apply theme color preview
      */
@@ -1441,14 +1376,14 @@ class SettingsUI {
         // Convert snake_case to kebab-case for CSS variables
         const cssVar = setting.replace(/_/g, '-');
         document.documentElement.style.setProperty(`--${cssVar}`, value);
-        
+
         // Update color swatch if exists
         const swatch = document.querySelector(`[data-swatch="${setting}"]`);
         if (swatch) {
             swatch.style.backgroundColor = value;
         }
     }
-    
+
     /**
      * Apply system setting preview
      */
@@ -1457,16 +1392,16 @@ class SettingsUI {
             case 'animations_enabled':
                 document.body.classList.toggle('no-animations', !value);
                 break;
-            
+
             case 'compact_mode':
                 document.body.classList.toggle('compact-mode', value);
                 break;
-            
+
             case 'show_breadcrumbs':
                 document.querySelectorAll('.breadcrumb, .page-navigation-bar')
                     .forEach(el => el.style.display = value ? '' : 'none');
                 break;
-            
+
             case 'page_tips':
                 if (window.pageTipsManager && value && typeof value === 'object' && value.enabled !== undefined) {
                     window.pageTipsManager.setEnabled(value.enabled);
@@ -1476,21 +1411,21 @@ class SettingsUI {
                 break;
         }
     }
-    
+
     /**
      * Show success message
      */
     showSuccess(message) {
         this.showNotification(message, 'success');
     }
-    
+
     /**
      * Show error message
      */
     showError(message) {
         this.showNotification(message, 'danger');
     }
-    
+
     /**
      * Show notification
      */
@@ -1500,7 +1435,7 @@ class SettingsUI {
             window.notifications.show(message, type, { duration: 4000 });
             return;
         }
-        
+
         // Fallback: Create toast
         const toast = document.createElement('div');
         toast.className = `alert alert-${type} position-fixed top-0 start-50 translate-middle-x mt-3`;
@@ -1509,14 +1444,14 @@ class SettingsUI {
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.remove();
         }, 4000);
     }
-    
+
     /**
      * Debounce helper
      */
@@ -1541,4 +1476,3 @@ export default settingsUI;
 
 // Global access
 window.settingsUI = settingsUI;
-

@@ -8,7 +8,6 @@ class PageTipsManager {
         this.tipsEnabled = true; // Default to enabled (visible)
         this.tipsVisible = false; // Default to collapsed (closed)
         this.broadcastChannel = null; // Store broadcast channel
-        this.listenersAttached = false;
         this.init();
     }
 
@@ -26,13 +25,13 @@ class PageTipsManager {
     initializeTips() {
         // Check if tips are enabled from settings
         this.loadSettings();
-        
+
         // Set up event listeners
         this.setupEventListeners();
-        
+
         // Apply initial state
         this.applyVisibility();
-        
+
         // Initialize collapsed state (tips start closed by default)
         this.applyCollapsedState();
     }
@@ -43,19 +42,19 @@ class PageTipsManager {
             // The template only renders the container if interfaces.page_tips.enabled is True
             // If container doesn't exist, it means the interface is disabled or page doesn't use the macro
             const tipsContainer = document.getElementById('pageTipsContainer');
-            
+
             if (!tipsContainer) {
                 this.tipsEnabled = false;
                 return;
             }
-            
+
             // Get the value from the data attribute (set by template from JSON)
             const enabledAttr = tipsContainer.getAttribute('data-page-tips-enabled');
-            
+
             if (enabledAttr !== null) {
                 // STRICT: Only 'true' means enabled, everything else is disabled
                 this.tipsEnabled = enabledAttr === 'true';
-                
+
                 // Sync localStorage with server-side setting to keep them in sync
                 try {
                     localStorage.setItem('tips_enabled', this.tipsEnabled.toString());
@@ -64,7 +63,7 @@ class PageTipsManager {
                 }
                 return; // Use server-side setting (source of truth)
             }
-            
+
             // Fallback: Check localStorage (for immediate UI updates during settings changes)
             const stored = localStorage.getItem('tips_enabled');
             if (stored !== null) {
@@ -80,9 +79,6 @@ class PageTipsManager {
     }
 
     setupEventListeners() {
-        if (this.listenersAttached) return;
-        this.listenersAttached = true;
-
         // Listen for settings changes (from broadcast or direct updates)
         document.addEventListener('tipsSettingChanged', (e) => {
             this.tipsEnabled = e.detail.enabled;
@@ -129,30 +125,15 @@ class PageTipsManager {
     applyCollapsedState() {
         const content = document.getElementById('pageTipsContent');
         const icon = document.getElementById('tipsToggleIcon');
-        const toggleBtn = document.getElementById('toggleTipsBtn');
-        
+
         if (!content || !icon) return;
-        
-        const container = document.getElementById('pageTipsContainer');
 
         if (this.tipsVisible) {
             content.classList.remove('collapsed');
-            content.hidden = false;
-            content.setAttribute('aria-hidden', 'false');
             icon.classList.remove('rotated');
-            container?.classList.remove('page-tips-collapsed');
-            container?.setAttribute('data-tips-state', 'expanded');
         } else {
             content.classList.add('collapsed');
-            content.hidden = true;
-            content.setAttribute('aria-hidden', 'true');
             icon.classList.add('rotated');
-            container?.classList.add('page-tips-collapsed');
-            container?.setAttribute('data-tips-state', 'collapsed');
-        }
-
-        if (toggleBtn) {
-            toggleBtn.setAttribute('aria-expanded', String(this.tipsVisible));
         }
     }
 
@@ -162,21 +143,26 @@ class PageTipsManager {
             return;
         }
 
-        // STRICT RULE: If enabled, show; if disabled, hide completely.
-        // The template only renders the component when the server-side
-        // interface setting allows it, so the enabled path must not depend on
-        // JavaScript-only visibility classes.
+        // STRICT RULE: If enabled, show; if disabled, hide completely
         if (this.tipsEnabled) {
+            // ENABLED: Show tips - mark as initialized and remove ALL hiding styles and attributes
             container.classList.add('tips-initialized');
+            container.style.display = '';
+            container.style.visibility = '';
             container.removeAttribute('hidden');
             container.removeAttribute('style');
             container.setAttribute('data-tips-hidden', 'false');
             container.classList.remove('tips-disabled');
         } else {
+            // DISABLED: Hide completely - use multiple methods to ensure it's completely hidden
+            // Don't add tips-initialized class to keep it hidden
+            container.style.display = 'none';
+            container.style.visibility = 'hidden';
             container.setAttribute('hidden', 'true');
             container.setAttribute('data-tips-hidden', 'true');
             container.classList.add('tips-disabled');
             container.classList.remove('tips-initialized');
+            // Also set inline style as final fallback
             container.style.setProperty('display', 'none', 'important');
         }
     }
@@ -189,7 +175,7 @@ class PageTipsManager {
             // Ignore localStorage errors
         }
         this.applyVisibility();
-        
+
         // Dispatch event for other components
         document.dispatchEvent(new CustomEvent('tipsSettingChanged', {
             detail: { enabled: enabled }
@@ -202,20 +188,15 @@ let pageTipsManager;
 
 // Wait for DOM to be ready before initializing
 function initPageTipsManager() {
-    const createManager = () => {
-        if (window.pageTipsManager instanceof PageTipsManager) {
-            pageTipsManager = window.pageTipsManager;
-            return;
-        }
-        pageTipsManager = new PageTipsManager();
-        window.pageTipsManager = pageTipsManager;
-    };
-
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', createManager, { once: true });
+        document.addEventListener('DOMContentLoaded', () => {
+            pageTipsManager = new PageTipsManager();
+            window.pageTipsManager = pageTipsManager;
+        });
     } else {
         // DOM already ready, initialize immediately
-        createManager();
+        pageTipsManager = new PageTipsManager();
+        window.pageTipsManager = pageTipsManager;
     }
 }
 
@@ -226,7 +207,7 @@ initPageTipsManager();
 window.debugPageTips = function() {
     console.log('🔍 [Page Tips] Manual Diagnostic Check');
     console.log('='.repeat(60));
-    
+
     const container = document.getElementById('pageTipsContainer');
     if (!container) {
         console.error('❌ Container NOT FOUND in DOM');
@@ -237,13 +218,13 @@ window.debugPageTips = function() {
         console.log('4. Flask app needs restart: Settings might be cached');
         return;
     }
-    
+
     console.log('✅ Container FOUND in DOM');
     console.log(`   → ID: ${container.id}`);
     console.log(`   → Classes: ${container.className || '(none)'}`);
     console.log(`   → data-page-tips-enabled: ${container.getAttribute('data-page-tips-enabled') || 'NOT SET'}`);
     console.log(`   → data-tips-hidden: ${container.getAttribute('data-tips-hidden') || 'NOT SET'}`);
-    
+
     const computed = window.getComputedStyle(container);
     console.log(`\nCSS Computed Styles:`);
     console.log(`   → display: ${computed.display}`);
@@ -251,20 +232,19 @@ window.debugPageTips = function() {
     console.log(`   → opacity: ${computed.opacity}`);
     console.log(`   → height: ${computed.height}`);
     console.log(`   → width: ${computed.width}`);
-    
+
     console.log(`\nClasses:`);
     console.log(`   → tips-initialized: ${container.classList.contains('tips-initialized')}`);
     console.log(`   → tips-disabled: ${container.classList.contains('tips-disabled')}`);
-    
+
     if (pageTipsManager) {
         console.log(`\nManager State:`);
         console.log(`   → tipsEnabled: ${pageTipsManager.tipsEnabled}`);
         console.log(`   → tipsVisible: ${pageTipsManager.tipsVisible}`);
     }
-    
+
     console.log('='.repeat(60));
 };
 
 // Export for global access
 window.PageTipsManager = PageTipsManager;
-

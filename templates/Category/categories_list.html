@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Categories Management') }}{% endblock %}
-{% block page_type %}categories-list{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/categories-list.css') }}" rel="stylesheet" />
@@ -90,7 +89,7 @@
 <div class="row g-4 mb-2">
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon stat-card-icon-primary">
+            <div class="stat-card-icon" style="background: var(--alert-info-bg); color: var(--primary-color);">
                 <i class="bi bi-tags"></i>
             </div>
             <div class="stat-card-content">
@@ -101,7 +100,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon stat-card-icon-info">
+            <div class="stat-card-icon" style="background: var(--alert-info-bg); color: var(--info-color, #06b6d4);">
                 <i class="bi bi-funnel"></i>
             </div>
             <div class="stat-card-content">
@@ -112,7 +111,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon stat-card-icon-success">
+            <div class="stat-card-icon" style="background: var(--alert-success-bg); color: var(--success-color);">
                 <i class="bi bi-eye"></i>
             </div>
             <div class="stat-card-content">
@@ -123,7 +122,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon stat-card-icon-warning">
+            <div class="stat-card-icon" style="background: var(--alert-warning-bg); color: var(--warning-color);">
                 <i class="bi bi-table"></i>
             </div>
             <div class="stat-card-content">
@@ -143,10 +142,10 @@
                 {{ _('Search Categories') }}
             </label>
             <div class="search-input-wrapper">
-                <input type="text" 
-                       id="categorySearch" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search categories...') }}" 
+                <input type="text"
+                       id="categorySearch"
+                       class="form-control search-input"
+                       placeholder="{{ _('Search categories...') }}"
                        autocomplete="off">
                 <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
                     <i class="bi bi-x"></i>
@@ -221,8 +220,8 @@
     <!-- Grid View (Default) -->
     <div class="view-grid" id="categoriesGrid">
         {% for category in categories %}
-        <div class="category-card category-item" 
-             data-name="{{ category.name|lower }}" 
+        <div class="category-card category-item"
+             data-name="{{ category.name|lower }}"
              data-category-id="{{ category.id }}"
              data-file-count="{{ category.file_count|default(0) }}"
              data-word-count="{{ category.word_count|default(0) }}">
@@ -244,8 +243,8 @@
                 <a href="{{ url_for('category_words', category_id=category.id) }}" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-eye"></i> {{ _('View') }}
                 </a>
-                <button class="btn btn-sm btn-outline-success add-word-btn" 
-                        data-category-id="{{ category.id }}" 
+                <button class="btn btn-sm btn-outline-success add-word-btn"
+                        data-category-id="{{ category.id }}"
                         data-category-name="{{ category.name|tojson }}">
                     <i class="bi bi-plus"></i> {{ _('Add Word') }}
                 </button>
@@ -253,14 +252,14 @@
         </div>
         {% endfor %}
     </div>
-    
+
     <!-- Table View -->
     <div class="view-table">
         <div class="table-wrapper categories-table-wrapper">
-            <table class="table table-hover align-middle categories-table" id="categoriesTable">
+            <table class="table table-hover align-middle categories-table" id="categoriesTable" style="width: 100%;">
                 <thead>
                     <tr>
-                        <th class="col-id">#</th>
+                        <th style="width:70px">#</th>
                         <th>
                             <div class="d-flex align-items-center">
                                 <span>{{ _('Category Name') }}</span>
@@ -269,7 +268,7 @@
                                 </button>
                             </div>
                         </th>
-                        <th class="col-metric">
+                        <th style="width:120px">
                             <div class="d-flex align-items-center">
                                 <span>{{ _('Files') }}</span>
                                 <button class="btn btn-sm btn-link p-0 ms-1" onclick="sortByColumn('files')" title="{{ _('Sort by files') }}" id="sortBtn-files">
@@ -277,7 +276,7 @@
                                 </button>
                             </div>
                         </th>
-                        <th class="col-metric">
+                        <th style="width:120px">
                             <div class="d-flex align-items-center">
                                 <span>{{ _('Words') }}</span>
                                 <button class="btn btn-sm btn-link p-0 ms-1" onclick="sortByColumn('words')" title="{{ _('Sort by words') }}" id="sortBtn-words">
@@ -285,13 +284,13 @@
                                 </button>
                             </div>
                         </th>
-                        <th class="col-actions-wide">{{ _('Actions') }}</th>
+                        <th style="width:250px">{{ _('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody id="categoriesTableBody">
                     {% for category in categories %}
-                    <tr class="category-item" 
-                        data-name="{{ category.name|lower }}" 
+                    <tr class="category-item"
+                        data-name="{{ category.name|lower }}"
                         data-category-id="{{ category.id }}"
                         data-file-count="{{ category.file_count|default(0) }}"
                         data-word-count="{{ category.word_count|default(0) }}">
@@ -308,9 +307,9 @@
                                 <a href="{{ url_for('category_words', category_id=category.id) }}" class="btn btn-outline-primary" title="{{ _('View Words') }}">
                                     <i class="bi bi-eye"></i> {{ _('View') }}
                                 </a>
-                                <button class="btn btn-outline-success add-word-btn" 
-                                        data-category-id="{{ category.id }}" 
-                                        data-category-name="{{ category.name|tojson }}" 
+                                <button class="btn btn-outline-success add-word-btn"
+                                        data-category-id="{{ category.id }}"
+                                        data-category-name="{{ category.name|tojson }}"
                                         title="{{ _('Add Word') }}">
                                     <i class="bi bi-plus"></i> {{ _('Add Word') }}
                                 </button>
@@ -322,13 +321,13 @@
             </table>
         </div>
     </div>
-    
+
     <!-- List View -->
     <div class="view-list">
         <div class="list-group" id="categoriesList">
             {% for category in categories %}
-            <div class="list-group-item d-flex justify-content-between align-items-center category-item" 
-                 data-name="{{ category.name|lower }}" 
+            <div class="list-group-item d-flex justify-content-between align-items-center category-item"
+                 data-name="{{ category.name|lower }}"
                  data-category-id="{{ category.id }}"
                  data-file-count="{{ category.file_count|default(0) }}"
                  data-word-count="{{ category.word_count|default(0) }}">
@@ -346,8 +345,8 @@
                     <a href="{{ url_for('category_words', category_id=category.id) }}" class="btn btn-outline-primary">
                         <i class="bi bi-eye"></i> {{ _('View') }}
                     </a>
-                    <button class="btn btn-outline-success add-word-btn" 
-                            data-category-id="{{ category.id }}" 
+                    <button class="btn btn-outline-success add-word-btn"
+                            data-category-id="{{ category.id }}"
                             data-category-name="{{ category.name|tojson }}">
                         <i class="bi bi-plus"></i> {{ _('Add Word') }}
                     </button>
@@ -356,12 +355,12 @@
             {% endfor %}
         </div>
     </div>
-    
+
     <!-- Compact View -->
     <div class="view-compact" id="categoriesCompact">
         {% for category in categories %}
-        <span class="category-badge category-item" 
-              data-name="{{ category.name|lower }}" 
+        <span class="category-badge category-item"
+              data-name="{{ category.name|lower }}"
               data-category-id="{{ category.id }}"
               data-file-count="{{ category.file_count|default(0) }}"
               data-word-count="{{ category.word_count|default(0) }}">
@@ -375,7 +374,7 @@
         </span>
         {% endfor %}
     </div>
-    
+
     <!-- Empty State -->
     <div id="emptyState" class="empty-state" style="display: none;">
         <div class="empty-state-content">
@@ -430,7 +429,7 @@
                     <input type="hidden" id="targetCategoryId" name="category_id">
                     <div class="mb-3">
                         <label for="wordSelect" class="form-label">{{ _('Select Word') }}</label>
-                        <select class="form-control" id="wordSelect" name="word_id" required>
+                        <select class="form-control" id="wordSelect" name="word_id" style="width: 100%;" required>
                             <option value="">{{ _('Search for a word...') }}</option>
                         </select>
                     </div>
@@ -467,7 +466,7 @@
                     <div id="duplicatesList" class="list-group"></div>
                 </div>
                 <div id="duplicatesEmpty" class="text-center py-4" style="display: none;">
-                    <i class="bi bi-check-circle text-success empty-state-icon"></i>
+                    <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
                     <p class="mt-3 text-muted">{{ _('No duplicate categories found!') }}</p>
                 </div>
             </div>

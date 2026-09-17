@@ -1,232 +1,100 @@
-/* ============================================================================
-   Full Content Reader
-   ============================================================================ */
-
-.full-content-page {
-    display: grid;
-    gap: 0.95rem;
-}
-
-.full-content-page > .page-header,
-.reader-header {
-    align-items: center;
-}
-
-.reader-header-meta,
-.reader-header-actions,
-.reader-toolbar-main,
-.reader-status-row,
-.reader-footer-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.reader-header-meta {
-    color: var(--text-light);
-    font-size: 0.8rem;
-}
-
-.reader-header-meta span {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.28rem;
-    min-width: 0;
-}
-
-.reader-header-actions {
-    justify-content: flex-end;
-}
-
-.reader-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.75rem;
-}
-
-.reader-stat-card,
-.reader-workspace {
-    min-width: 0;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    background: var(--bg-white);
-    box-shadow: var(--shadow-xs);
-}
-
-.reader-stat-card {
-    padding: 0.82rem 0.9rem;
-}
-
-.reader-stat-value {
-    color: var(--text-heading);
-    font-size: 1.18rem;
-    font-weight: 820;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-}
-
-.reader-stat-label {
-    margin-top: 0.22rem;
-    color: var(--text-light);
-    font-size: 0.74rem;
-    font-weight: 720;
-}
-
-.reader-workspace {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    min-height: min(76vh, 62rem);
-    overflow: hidden;
-}
-
-.reader-toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 6;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, 36rem);
-    gap: 0.75rem;
-    align-items: center;
-    padding: 0.72rem 0.85rem;
-    border-bottom: 1px solid var(--border-light);
-    background: color-mix(in srgb, var(--bg-white) 94%, var(--bg-section));
-}
-
-.reader-range-group {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    min-width: 0;
-}
-
-.reader-range-badge {
-    flex: 0 0 auto;
-    font-variant-numeric: tabular-nums;
-}
-
-.range-jump {
-    width: min(18rem, 30vw);
-    min-width: 9rem;
-}
-
-.full-content-search {
-    min-width: 0;
-    max-width: 100%;
-}
-
-.reader-body-shell {
-    min-height: 0;
-    padding: 0;
-}
-
 .reader {
-    position: relative;
-    width: 100%;
-    height: min(68vh, 52rem);
-    min-height: 26rem;
+    max-height: 78vh;
     overflow: auto;
-    background: color-mix(in srgb, var(--bg-section) 64%, var(--bg-white));
-    overscroll-behavior: contain;
+    background: var(--reader-bg, hsl(0, 17%, 92%));
 }
 
-.content-reader-body {
-    width: 100%;
-    min-height: 100%;
-    padding: clamp(0.9rem, 1.8vw, 1.35rem);
-    background: transparent;
-}
-
-.content-text-wrap {
-    width: 100%;
-    white-space: pre-wrap;
-    word-break: normal;
-    overflow-wrap: anywhere;
-}
-
-.reader-sentinel,
-.sentinel {
-    position: relative;
-    padding: 0.9rem;
-    color: var(--text-muted);
-    font-size: 0.82rem;
-    text-align: center;
-}
-
-.reader-footer {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.72rem 0.85rem;
-    border-top: 1px solid var(--border-light);
-    background: var(--bg-white);
-}
-
-.reader-status {
-    color: var(--text-light);
-    font-size: 0.8rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.reader-footer-actions label {
+.content {
     margin: 0;
-    color: var(--text-light);
-    font-size: 0.78rem;
+    padding: 1rem 1.25rem;
+    font-family: 'Courier New', monospace;
+    line-height: 1.6;
+    font-size: 14px;
+    color: var(--reader-fg, #000000);
 }
 
-body.dark .reader,
-body.ia-theme-dark .reader {
-    background: color-mix(in srgb, var(--bg-section) 84%, #020617);
+.pre-wrap {
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
-@media print {
-    .reader-header-actions,
-    .reader-toolbar,
-    .reader-footer,
-    .analyst-classify,
-    .page-tips-container {
-        display: none !important;
-    }
+.pre {
+    white-space: pre;
+}
 
-    .reader-workspace,
+.hl {
+    background: var(--warning-color);
+    padding: 0 2px;
+    border-radius: 2px;
+    opacity: 0.7;
+}
+
+.hl.current {
+    background: var(--warning-color);
+     outline: 2px solid var(--btn-warning);
+}
+
+.dark .reader {
+    background: var(--bg-dark);
+}
+
+.dark .content {
+    color: var(--text-white);
+}
+
+.sentinel {
+    border-top: 1px solid var(--border-light);
+}
+
+@media (max-width: 1199.98px) {
     .reader {
-        height: auto;
-        max-height: none;
-        overflow: visible;
-        border: 0;
-        box-shadow: none;
+        max-height: 75vh;
+    }
+    .content {
+        padding: 0.875rem 1.125rem;
+        font-size: 13px;
     }
 }
 
 @media (max-width: 991.98px) {
-    .reader-toolbar {
-        grid-template-columns: 1fr;
+    .reader {
+        max-height: 70vh;
     }
-
-    .reader-stats-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    .content {
+        padding: 0.75rem 1rem;
+        font-size: 13px;
+        line-height: 1.5;
     }
+}
 
-    .reader-header-actions {
-        width: 100%;
-        justify-content: flex-start;
+@media (max-width: 767.98px) {
+    .reader {
+        max-height: 65vh;
+    }
+    .content {
+        padding: 0.625rem 0.875rem;
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .hl {
+        padding: 0 1px;
     }
 }
 
 @media (max-width: 575.98px) {
-    .reader-stats-grid {
-        grid-template-columns: 1fr;
+    .reader {
+        max-height: 60vh;
     }
-
-    .reader-header-actions > .btn,
-    .reader-header-actions > a,
-    .full-content-search {
-        width: 100%;
+    .content {
+        padding: 0.5rem 0.75rem;
+        font-size: 11px;
+        line-height: 1.4;
     }
-
-    .range-jump {
-        width: 100%;
+    .hl {
+        padding: 0 1px;
+        border-radius: 1px;
+    }
+    .hl.current {
+        outline-width: 1px;
     }
 }

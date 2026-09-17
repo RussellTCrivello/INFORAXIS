@@ -1,4 +1,4 @@
-{%- macro unified_pagination(page, total_pages, url_for_func, endpoint, url_params={}, show_info=true, show_jump=true, total_items=none, per_page=none, item_label=none) -%}
+{%- macro unified_pagination(page, total_pages, url_for_func, endpoint, url_params={}, show_info=true, show_jump=true) -%}
 {#
     Unified Pagination Component
 
@@ -10,43 +10,16 @@
     - url_params: Dictionary of additional URL parameters to preserve (e.g., {'q': 'search term'})
     - show_info: Whether to show pagination info (default: true)
     - show_jump: Whether to show jump to page input (default: true)
-    - total_items/per_page: Optional record-range metadata for governance views
-    - item_label: Optional item label for record-range metadata
 #}
 {% set total_pages = total_pages|default(1)|int %}
 {% set page = page|default(1)|int %}
-{% set per_page_value = per_page|int if per_page is not none else none %}
-{% set total_items_value = total_items|int if total_items is not none else none %}
-{% set item_label_value = item_label if item_label is not none else _('records') %}
 {% if total_pages > 1 %}
-{% set window_size = 5 %}
-{% set half_window = 2 %}
-{% set start_page = [1, page - half_window]|max %}
-{% set end_page = [total_pages, start_page + window_size - 1]|min %}
-{% set start_page = [1, end_page - window_size + 1]|max %}
-{% set has_range = total_items_value is not none and per_page_value is not none and per_page_value > 0 %}
-{% if has_range %}
-    {% if total_items_value > 0 %}
-        {% set first_item = ((page - 1) * per_page_value) + 1 %}
-        {% set last_item = [page * per_page_value, total_items_value]|min %}
-    {% else %}
-        {% set first_item = 0 %}
-        {% set last_item = 0 %}
-    {% endif %}
-{% endif %}
-<div class="unified-pagination-container"
-     data-endpoint="{{ endpoint }}"
-     data-current-page="{{ page }}"
-     data-total-pages="{{ total_pages }}"
-     {% if has_range %}data-total-items="{{ total_items_value }}" data-page-size="{{ per_page_value }}"{% endif %}>
+<div class="unified-pagination-container" data-endpoint="{{ endpoint }}" data-current-page="{{ page }}" data-total-pages="{{ total_pages }}">
     {% if show_info %}
     <div class="unified-pagination-info">
         <span class="pagination-text">
-            <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
-            {{ _('Page') }} <strong>{{ "{:,}".format(page) }}</strong> {{ _('of') }} <strong>{{ "{:,}".format(total_pages) }}</strong>
-            {% if has_range %}
-            <span class="pagination-range"> · {{ _('Showing') }} {{ "{:,}".format(first_item) }}–{{ "{:,}".format(last_item) }} {{ _('of') }} {{ "{:,}".format(total_items_value) }} {{ item_label_value }}</span>
-            {% endif %}
+            <i class="bi bi-info-circle me-1"></i>
+            {{ _('Page') }} {{ page }} {{ _('of') }} {{ total_pages }}
         </span>
     </div>
     {% endif %}
@@ -60,7 +33,7 @@
                        href="{% if page > 1 %}{{ url_for_func(endpoint, page=1, **url_params) }}{% else %}#{% endif %}"
                        aria-label="{{ _('First Page') }}"
                        {% if page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}>
-                        <i class="bi bi-chevron-double-left" aria-hidden="true"></i>
+                        <i class="bi bi-chevron-double-left"></i>
                         <span class="d-none d-sm-inline ms-1">{{ _('First') }}</span>
                     </a>
                 </li>
@@ -71,19 +44,26 @@
                        href="{% if page > 1 %}{{ url_for_func(endpoint, page=page - 1, **url_params) }}{% else %}#{% endif %}"
                        aria-label="{{ _('Previous Page') }}"
                        {% if page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}>
-                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        <i class="bi bi-chevron-left"></i>
                         <span class="d-none d-sm-inline ms-1">{{ _('Previous') }}</span>
                     </a>
                 </li>
 
+                {# Page Numbers #}
+                {% set window_size = 2 %}
+                {% set start_page = [1, page - window_size]|max %}
+                {% set end_page = [total_pages, page + window_size]|min %}
+
                 {# Show first page and ellipsis if needed #}
                 {% if start_page > 1 %}
                     <li class="unified-pagination-item">
-                        <a class="unified-pagination-link" href="{{ url_for_func(endpoint, page=1, **url_params) }}">1</a>
+                        <a class="unified-pagination-link" href="{{ url_for_func(endpoint, page=1, **url_params) }}">
+                            1
+                        </a>
                     </li>
                     {% if start_page > 2 %}
                         <li class="unified-pagination-item disabled">
-                            <span class="unified-pagination-ellipsis" aria-hidden="true">…</span>
+                            <span class="unified-pagination-ellipsis">...</span>
                         </li>
                     {% endif %}
                 {% endif %}
@@ -94,7 +74,9 @@
                         {% if p == page %}
                             <span class="unified-pagination-link active" aria-current="page">{{ p }}</span>
                         {% else %}
-                            <a class="unified-pagination-link" href="{{ url_for_func(endpoint, page=p, **url_params) }}">{{ p }}</a>
+                            <a class="unified-pagination-link" href="{{ url_for_func(endpoint, page=p, **url_params) }}">
+                                {{ p }}
+                            </a>
                         {% endif %}
                     </li>
                 {% endfor %}
@@ -103,11 +85,13 @@
                 {% if end_page < total_pages %}
                     {% if end_page < total_pages - 1 %}
                         <li class="unified-pagination-item disabled">
-                            <span class="unified-pagination-ellipsis" aria-hidden="true">…</span>
+                            <span class="unified-pagination-ellipsis">...</span>
                         </li>
                     {% endif %}
                     <li class="unified-pagination-item">
-                        <a class="unified-pagination-link" href="{{ url_for_func(endpoint, page=total_pages, **url_params) }}">{{ total_pages }}</a>
+                        <a class="unified-pagination-link" href="{{ url_for_func(endpoint, page=total_pages, **url_params) }}">
+                            {{ total_pages }}
+                        </a>
                     </li>
                 {% endif %}
 
@@ -118,7 +102,7 @@
                        aria-label="{{ _('Next Page') }}"
                        {% if page >= total_pages %}aria-disabled="true" tabindex="-1"{% endif %}>
                         <span class="d-none d-sm-inline me-1">{{ _('Next') }}</span>
-                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
 
@@ -129,7 +113,7 @@
                        aria-label="{{ _('Last Page') }}"
                        {% if page >= total_pages %}aria-disabled="true" tabindex="-1"{% endif %}>
                         <span class="d-none d-sm-inline me-1">{{ _('Last') }}</span>
-                        <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+                        <i class="bi bi-chevron-double-right"></i>
                     </a>
                 </li>
             </ul>
@@ -148,13 +132,14 @@
                    placeholder="{{ _('Page') }}"
                    data-endpoint="{{ endpoint }}"
                    data-total-pages="{{ total_pages }}"
-                   data-url-params='{{ url_params|tojson }}'>
+                   data-url-params="{{ url_params|tojson }}"
+                   style="width: 70px;">
             <button type="button"
                     class="btn btn-sm btn-outline-primary unified-pagination-jump-btn"
                     data-endpoint="{{ endpoint }}"
-                    data-url-params='{{ url_params|tojson }}'
+                    data-url-params="{{ url_params|tojson }}"
                     aria-label="{{ _('Go to page') }}">
-                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                <i class="bi bi-arrow-right"></i>
             </button>
         </div>
         {% endif %}
@@ -167,8 +152,7 @@
     const jumpInput = document.getElementById('jumpToPageInput-{{ endpoint }}');
     const jumpBtn = document.querySelector('.unified-pagination-jump-btn[data-endpoint="{{ endpoint }}"]');
 
-    if (jumpInput && jumpBtn && jumpBtn.dataset.paginationJumpBound !== 'true') {
-        jumpBtn.dataset.paginationJumpBound = 'true';
+    if (jumpInput && jumpBtn) {
         const handleJump = function() {
             let targetPage = parseInt(jumpInput.value);
             const totalPages = parseInt(jumpInput.getAttribute('data-total-pages')) || 1;

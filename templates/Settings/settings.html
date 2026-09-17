@@ -2,7 +2,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Settings') }}{% endblock %}
-{% block page_type %}settings{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/Settings.css') }}" rel="stylesheet">
@@ -154,7 +153,7 @@
                                         <label class="form-label small text-muted">{{ _('Or Use Bootstrap Icon') }}</label>
                                         <div class="input-group">
                                             <span class="input-group-text">
-                                                <i id="appIconPreview" class="bi {{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }}"></i>
+                                                <i id="appIconPreview" class="{{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }}"></i>
                                             </span>
                                             <input type="text" class="form-control"
                                                    id="appIcon"
@@ -180,14 +179,14 @@
                                     <img id="appBrandingPreviewLogo"
                                          src="{{ user_settings.get('system', 'app_logo') }}"
                                          alt="Logo"
-                                         class="branding-preview-logo">
-                                    <i id="appBrandingPreviewIcon" class="bi {{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }} branding-preview-icon" style="display: none;"></i>
+                                         style="max-width: 48px; max-height: 48px; object-fit: contain;">
+                                    <i id="appBrandingPreviewIcon" class="{{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }}" style="font-size: 2rem; display: none;"></i>
                                     {% else %}
                                     <img id="appBrandingPreviewLogo"
                                          src=""
                                          alt="Logo"
-                                         class="branding-preview-logo" style="display: none;">
-                                    <i id="appBrandingPreviewIcon" class="bi {{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }} branding-preview-icon"></i>
+                                         style="max-width: 48px; max-height: 48px; object-fit: contain; display: none;">
+                                    <i id="appBrandingPreviewIcon" class="{{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }}" style="font-size: 2rem;"></i>
                                     {% endif %}
                                 </div>
                                 <div>
@@ -250,7 +249,7 @@
                 <div class="setting-item">
                     <div class="setting-label">
                         <strong>{{ _('Timezone') }}</strong>
-                        <select class="form-select form-select-sm"
+                        <select class="form-select form-select-sm" style="width: auto;"
                                 onchange="toggleSystemSetting('timezone', this.value)">
                             <option value="UTC" {% if user_settings.get('system', 'timezone', 'UTC') == 'UTC' %}selected{% endif %}>UTC</option>
                             <option value="America/New_York" {% if user_settings.get('system', 'timezone', 'UTC') == 'America/New_York' %}selected{% endif %}>America/New_York</option>
@@ -266,7 +265,7 @@
                 <div class="setting-item">
                     <div class="setting-label">
                         <strong>{{ _('Date Format') }}</strong>
-                        <select class="form-select form-select-sm"
+                        <select class="form-select form-select-sm" style="width: auto;"
                                 onchange="toggleSystemSetting('date_format', this.value)">
                             <option value="YYYY-MM-DD" {% if user_settings.get('system', 'date_format', 'YYYY-MM-DD') == 'YYYY-MM-DD' %}selected{% endif %}>YYYY-MM-DD</option>
                             <option value="MM/DD/YYYY" {% if user_settings.get('system', 'date_format', 'YYYY-MM-DD') == 'MM/DD/YYYY' %}selected{% endif %}>MM/DD/YYYY</option>
@@ -281,7 +280,7 @@
                 <div class="setting-item">
                     <div class="setting-label">
                         <strong>{{ _('Time Format') }}</strong>
-                        <select class="form-select form-select-sm"
+                        <select class="form-select form-select-sm" style="width: auto;"
                                 onchange="toggleSystemSetting('time_format', this.value)">
                             <option value="24h" {% if user_settings.get('system', 'time_format', '24h') == '24h' %}selected{% endif %}>24-hour</option>
                             <option value="12h" {% if user_settings.get('system', 'time_format', '24h') == '12h' %}selected{% endif %}>12-hour (AM/PM)</option>
@@ -635,7 +634,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-3">
-                                                <div class="color-swatch color-swatch-lg me-3" style="background-color: {{ user_settings.get('theme', 'primary_color', '#4f46e5') }};"></div>
+                                                <div class="color-swatch me-3" style="width: 48px; height: 48px; border-radius: 8px; background-color: {{ user_settings.get('theme', 'primary_color', '#4f46e5') }}; border: 2px solid var(--border-color);"></div>
                                                 <div class="flex-grow-1">
                                                     <label class="form-label fw-semibold mb-1">{{ _('Primary Color') }}</label>
                                                     <small class="text-muted d-block">{{ _('Main brand color') }}</small>
@@ -646,7 +645,7 @@
                                                        id="primaryColor"
                                                        value="{{ user_settings.get('theme', 'primary_color', '#4f46e5') }}"
                                                        onchange="updateThemeColor('primary-color', this.value); updateColorSwatch('primaryColor', this.value)"
-                                                       >
+                                                       style="width: 60px; height: 40px;">
                                                 <input type="text" class="form-control"
                                                        id="primaryColorText"
                                                        value="{{ user_settings.get('theme', 'primary_color', '#4f46e5') }}"
@@ -663,7 +662,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-3">
-                                                <div class="color-swatch color-swatch-lg me-3" style="background-color: {{ user_settings.get('theme', 'secondary_color', '#06b6d4') }};"></div>
+                                                <div class="color-swatch me-3" style="width: 48px; height: 48px; border-radius: 8px; background-color: {{ user_settings.get('theme', 'secondary_color', '#06b6d4') }}; border: 2px solid var(--border-color);"></div>
                                                 <div class="flex-grow-1">
                                                     <label class="form-label fw-semibold mb-1">{{ _('Secondary Color') }}</label>
                                                     <small class="text-muted d-block">{{ _('Accent color') }}</small>
@@ -674,7 +673,7 @@
                                                        id="secondaryColor"
                                                        value="{{ user_settings.get('theme', 'secondary_color', '#06b6d4') }}"
                                                        onchange="updateThemeColor('secondary-color', this.value); updateColorSwatch('secondaryColor', this.value)"
-                                                       >
+                                                       style="width: 60px; height: 40px;">
                                                 <input type="text" class="form-control"
                                                        id="secondaryColorText"
                                                        value="{{ user_settings.get('theme', 'secondary_color', '#06b6d4') }}"
@@ -691,7 +690,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-3">
-                                                <div class="color-swatch color-swatch-md me-3" style="background-color: {{ user_settings.get('theme', 'success_color', '#10b981') }};"></div>
+                                                <div class="color-swatch me-3" style="width: 40px; height: 40px; border-radius: 8px; background-color: {{ user_settings.get('theme', 'success_color', '#10b981') }}; border: 2px solid var(--border-color);"></div>
                                                 <div class="flex-grow-1">
                                                     <label class="form-label fw-semibold mb-1 small">{{ _('Success') }}</label>
                                                 </div>
@@ -701,7 +700,7 @@
                                                        id="successColor"
                                                        value="{{ user_settings.get('theme', 'success_color', '#10b981') }}"
                                                        onchange="updateThemeColor('success-color', this.value); updateColorSwatch('successColor', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="successColorText"
                                                        value="{{ user_settings.get('theme', 'success_color', '#10b981') }}"
@@ -718,7 +717,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-3">
-                                                <div class="color-swatch color-swatch-md me-3" style="background-color: {{ user_settings.get('theme', 'danger_color', '#ef4444') }};"></div>
+                                                <div class="color-swatch me-3" style="width: 40px; height: 40px; border-radius: 8px; background-color: {{ user_settings.get('theme', 'danger_color', '#ef4444') }}; border: 2px solid var(--border-color);"></div>
                                                 <div class="flex-grow-1">
                                                     <label class="form-label fw-semibold mb-1 small">{{ _('Danger') }}</label>
                                                 </div>
@@ -728,7 +727,7 @@
                                                        id="dangerColor"
                                                        value="{{ user_settings.get('theme', 'danger_color', '#ef4444') }}"
                                                        onchange="updateThemeColor('danger-color', this.value); updateColorSwatch('dangerColor', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="dangerColorText"
                                                        value="{{ user_settings.get('theme', 'danger_color', '#ef4444') }}"
@@ -745,7 +744,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-3">
-                                                <div class="color-swatch color-swatch-md me-3" style="background-color: {{ user_settings.get('theme', 'warning_color', '#f59e0b') }};"></div>
+                                                <div class="color-swatch me-3" style="width: 40px; height: 40px; border-radius: 8px; background-color: {{ user_settings.get('theme', 'warning_color', '#f59e0b') }}; border: 2px solid var(--border-color);"></div>
                                                 <div class="flex-grow-1">
                                                     <label class="form-label fw-semibold mb-1 small">{{ _('Warning') }}</label>
                                                 </div>
@@ -755,7 +754,7 @@
                                                        id="warningColor"
                                                        value="{{ user_settings.get('theme', 'warning_color', '#f59e0b') }}"
                                                        onchange="updateThemeColor('warning-color', this.value); updateColorSwatch('warningColor', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="warningColorText"
                                                        value="{{ user_settings.get('theme', 'warning_color', '#f59e0b') }}"
@@ -790,7 +789,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'bg_light', '#f8fafc') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'bg_light', '#f8fafc') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Background Light') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -798,7 +797,7 @@
                                                        id="bgLight"
                                                        value="{{ user_settings.get('theme', 'bg_light', '#f8fafc') }}"
                                                        onchange="updateThemeColor('bg-light', this.value); updateColorSwatch('bgLight', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="bgLightText"
                                                        value="{{ user_settings.get('theme', 'bg_light', '#f8fafc') }}"
@@ -815,7 +814,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'bg_white', '#ffffff') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'bg_white', '#ffffff') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Background White') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -823,7 +822,7 @@
                                                        id="bgWhite"
                                                        value="{{ user_settings.get('theme', 'bg_white', '#ffffff') }}"
                                                        onchange="updateThemeColor('bg-white', this.value); updateColorSwatch('bgWhite', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="bgWhiteText"
                                                        value="{{ user_settings.get('theme', 'bg_white', '#ffffff') }}"
@@ -840,7 +839,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'bg_section', '#f8fafc') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'bg_section', '#f8fafc') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Section Background') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -848,7 +847,7 @@
                                                        id="bgSection"
                                                        value="{{ user_settings.get('theme', 'bg_section', '#f8fafc') }}"
                                                        onchange="updateThemeColor('bg-section', this.value); updateColorSwatch('bgSection', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="bgSectionText"
                                                        value="{{ user_settings.get('theme', 'bg_section', '#f8fafc') }}"
@@ -865,7 +864,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'text_dark', '#1e293b') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'text_dark', '#1e293b') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Text Dark') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -873,7 +872,7 @@
                                                        id="textDark"
                                                        value="{{ user_settings.get('theme', 'text_dark', '#1e293b') }}"
                                                        onchange="updateThemeColor('text-dark', this.value); updateColorSwatch('textDark', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="textDarkText"
                                                        value="{{ user_settings.get('theme', 'text_dark', '#1e293b') }}"
@@ -890,7 +889,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'text_light', '#64748b') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'text_light', '#64748b') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Text Light') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -898,7 +897,7 @@
                                                        id="textLight"
                                                        value="{{ user_settings.get('theme', 'text_light', '#64748b') }}"
                                                        onchange="updateThemeColor('text-light', this.value); updateColorSwatch('textLight', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="textLightText"
                                                        value="{{ user_settings.get('theme', 'text_light', '#64748b') }}"
@@ -915,7 +914,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'text_muted', '#94a3b8') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'text_muted', '#94a3b8') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Text Muted') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -923,7 +922,7 @@
                                                        id="textMuted"
                                                        value="{{ user_settings.get('theme', 'text_muted', '#94a3b8') }}"
                                                        onchange="updateThemeColor('text-muted', this.value); updateColorSwatch('textMuted', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="textMutedText"
                                                        value="{{ user_settings.get('theme', 'text_muted', '#94a3b8') }}"
@@ -940,7 +939,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'border_color', '#e2e8f0') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'border_color', '#e2e8f0') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Border Color') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -948,7 +947,7 @@
                                                        id="borderColor"
                                                        value="{{ user_settings.get('theme', 'border_color', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('border-color', this.value); updateColorSwatch('borderColor', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="borderColorText"
                                                        value="{{ user_settings.get('theme', 'border_color', '#e2e8f0') }}"
@@ -965,7 +964,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'border_light', '#f1f5f9') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'border_light', '#f1f5f9') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Border Light') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -973,7 +972,7 @@
                                                        id="borderLight"
                                                        value="{{ user_settings.get('theme', 'border_light', '#f1f5f9') }}"
                                                        onchange="updateThemeColor('border-light', this.value); updateColorSwatch('borderLight', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="borderLightText"
                                                        value="{{ user_settings.get('theme', 'border_light', '#f1f5f9') }}"
@@ -990,7 +989,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'border_dark', '#cbd5e1') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'border_dark', '#cbd5e1') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Border Dark') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -998,7 +997,7 @@
                                                        id="borderDark"
                                                        value="{{ user_settings.get('theme', 'border_dark', '#cbd5e1') }}"
                                                        onchange="updateThemeColor('border-dark', this.value); updateColorSwatch('borderDark', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="borderDarkText"
                                                        value="{{ user_settings.get('theme', 'border_dark', '#cbd5e1') }}"
@@ -1038,7 +1037,7 @@
                                                        id="gradientStart"
                                                        value="{{ user_settings.get('theme', 'gradient_start', '#4f46e5') }}"
                                                        onchange="updateThemeColor('gradient-start', this.value)"
-                                                       >
+                                                       style="width: 60px; height: 40px;">
                                                 <input type="text" class="form-control"
                                                        id="gradientStartText"
                                                        value="{{ user_settings.get('theme', 'gradient_start', '#4f46e5') }}"
@@ -1060,7 +1059,7 @@
                                                        id="gradientEnd"
                                                        value="{{ user_settings.get('theme', 'gradient_end', '#06b6d4') }}"
                                                        onchange="updateThemeColor('gradient-end', this.value)"
-                                                       >
+                                                       style="width: 60px; height: 40px;">
                                                 <input type="text" class="form-control"
                                                        id="gradientEndText"
                                                        value="{{ user_settings.get('theme', 'gradient_end', '#06b6d4') }}"
@@ -1097,7 +1096,7 @@
                             <div class="card border-0 bg-light">
                                 <div class="card-body p-4">
                                     <label class="form-label fw-semibold mb-2">{{ _('Live Preview') }}</label>
-                                    <div class="rounded p-4 gradient-preview-panel" id="gradientPreview">
+                                    <div class="rounded p-4" id="gradientPreview" style="background: var(--gradient-bg); min-height: 120px; border: 2px solid var(--border-color); display: flex; align-items: center; justify-content: center;">
                                         <p class="text-white mb-0 fw-bold">{{ _('Gradient Preview') }}</p>
                                     </div>
                                 </div>
@@ -1123,7 +1122,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'sidebar_bg', '#1e293b') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'sidebar_bg', '#1e293b') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Background') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1131,7 +1130,7 @@
                                                        id="sidebarBg"
                                                        value="{{ user_settings.get('theme', 'sidebar_bg', '#1e293b') }}"
                                                        onchange="updateThemeColor('sidebar-bg', this.value); updateColorSwatch('sidebarBg', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="sidebarBgText"
                                                        value="{{ user_settings.get('theme', 'sidebar_bg', '#1e293b') }}"
@@ -1148,7 +1147,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'sidebar_text', '#e2e8f0') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'sidebar_text', '#e2e8f0') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Text Color') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1156,7 +1155,7 @@
                                                        id="sidebarText"
                                                        value="{{ user_settings.get('theme', 'sidebar_text', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('sidebar-text', this.value); updateColorSwatch('sidebarText', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="sidebarTextText"
                                                        value="{{ user_settings.get('theme', 'sidebar_text', '#e2e8f0') }}"
@@ -1173,7 +1172,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'sidebar_active', '#4f46e5') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'sidebar_active', '#4f46e5') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Active State') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1181,7 +1180,7 @@
                                                        id="sidebarActive"
                                                        value="{{ user_settings.get('theme', 'sidebar_active', '#4f46e5') }}"
                                                        onchange="updateThemeColor('sidebar-active', this.value); updateColorSwatch('sidebarActive', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="sidebarActiveText"
                                                        value="{{ user_settings.get('theme', 'sidebar_active', '#4f46e5') }}"
@@ -1198,7 +1197,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'sidebar_hover', '#334155') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'sidebar_hover', '#334155') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Hover State') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1206,7 +1205,7 @@
                                                        id="sidebarHover"
                                                        value="{{ user_settings.get('theme', 'sidebar_hover', '#334155') }}"
                                                        onchange="updateThemeColor('sidebar-hover', this.value); updateColorSwatch('sidebarHover', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="sidebarHoverText"
                                                        value="{{ user_settings.get('theme', 'sidebar_hover', '#334155') }}"
@@ -1241,7 +1240,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'btn_primary', '#4f46e5') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'btn_primary', '#4f46e5') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Primary Button') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1249,7 +1248,7 @@
                                                        id="btnPrimary"
                                                        value="{{ user_settings.get('theme', 'btn_primary', '#4f46e5') }}"
                                                        onchange="updateThemeColor('btn-primary', this.value); updateColorSwatch('btnPrimary', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="btnPrimaryText"
                                                        value="{{ user_settings.get('theme', 'btn_primary', '#4f46e5') }}"
@@ -1266,7 +1265,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'btn_primary_hover', '#4338ca') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'btn_primary_hover', '#4338ca') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Primary Hover') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1274,7 +1273,7 @@
                                                        id="btnPrimaryHover"
                                                        value="{{ user_settings.get('theme', 'btn_primary_hover', '#4338ca') }}"
                                                        onchange="updateThemeColor('btn-primary-hover', this.value); updateColorSwatch('btnPrimaryHover', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="btnPrimaryHoverText"
                                                        value="{{ user_settings.get('theme', 'btn_primary_hover', '#4338ca') }}"
@@ -1291,7 +1290,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'btn_secondary', '#06b6d4') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'btn_secondary', '#06b6d4') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Secondary Button') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1299,7 +1298,7 @@
                                                        id="btnSecondary"
                                                        value="{{ user_settings.get('theme', 'btn_secondary', '#06b6d4') }}"
                                                        onchange="updateThemeColor('btn-secondary', this.value); updateColorSwatch('btnSecondary', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="btnSecondaryText"
                                                        value="{{ user_settings.get('theme', 'btn_secondary', '#06b6d4') }}"
@@ -1316,7 +1315,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'btn_secondary_hover', '#0891b2') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'btn_secondary_hover', '#0891b2') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Secondary Hover') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1324,7 +1323,7 @@
                                                        id="btnSecondaryHover"
                                                        value="{{ user_settings.get('theme', 'btn_secondary_hover', '#0891b2') }}"
                                                        onchange="updateThemeColor('btn-secondary-hover', this.value); updateColorSwatch('btnSecondaryHover', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="btnSecondaryHoverText"
                                                        value="{{ user_settings.get('theme', 'btn_secondary_hover', '#0891b2') }}"
@@ -1360,7 +1359,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body p-2">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2 flex-shrink-0" style="background-color: {{ user_settings.get('theme', 'chart_color_' ~ i, ['#667eea', '#764ba2', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'][i-1]) }};"></div>
+                                                <div class="color-swatch me-2 flex-shrink-0" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'chart_color_' ~ i, ['#667eea', '#764ba2', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'][i-1]) }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small flex-grow-1">{{ _('Color') }} {{ i }}</label>
                                             </div>
                                             <div class="d-flex gap-1">
@@ -1368,14 +1367,14 @@
                                                        id="chartColor{{ i }}"
                                                        value="{{ user_settings.get('theme', 'chart_color_' ~ i, ['#667eea', '#764ba2', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'][i-1]) }}"
                                                        onchange="updateThemeColor('chart-color-{{ i }}', this.value); updateColorSwatch('chartColor{{ i }}', this.value)"
-                                                       >
+                                                       style="width: 40px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="chartColor{{ i }}Text"
                                                        value="{{ user_settings.get('theme', 'chart_color_' ~ i, ['#667eea', '#764ba2', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'][i-1]) }}"
                                                        onchange="updateThemeColor('chart-color-{{ i }}', this.value); updateColorSwatch('chartColor{{ i }}', this.value)"
                                                        placeholder="#667eea">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('chart-color-{{ i }}')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('chart-color-{{ i }}')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1634,7 +1633,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'info_color', '#3b82f6') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'info_color', '#3b82f6') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Info Color') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1642,7 +1641,7 @@
                                                        id="infoColor"
                                                        value="{{ user_settings.get('theme', 'info_color', '#3b82f6') }}"
                                                        onchange="updateThemeColor('info-color', this.value); updateColorSwatch('infoColor', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="infoColorText"
                                                        value="{{ user_settings.get('theme', 'info_color', '#3b82f6') }}"
@@ -1659,7 +1658,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-sm me-2" style="background-color: {{ user_settings.get('theme', 'link_color', '#4f46e5') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 32px; height: 32px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'link_color', '#4f46e5') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Link Color') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1667,7 +1666,7 @@
                                                        id="linkColor"
                                                        value="{{ user_settings.get('theme', 'link_color', '#4f46e5') }}"
                                                        onchange="updateThemeColor('link-color', this.value); updateColorSwatch('linkColor', this.value)"
-                                                       >
+                                                       style="width: 50px; height: 36px;">
                                                 <input type="text" class="form-control form-control-sm"
                                                        id="linkColorText"
                                                        value="{{ user_settings.get('theme', 'link_color', '#4f46e5') }}"
@@ -1702,7 +1701,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'section_bg', '#ffffff') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'section_bg', '#ffffff') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Section BG') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1710,14 +1709,14 @@
                                                        id="sectionBg"
                                                        value="{{ user_settings.get('theme', 'section_bg', '#ffffff') }}"
                                                        onchange="updateThemeColor('section-bg', this.value); updateColorSwatch('sectionBg', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="sectionBgText"
                                                        value="{{ user_settings.get('theme', 'section_bg', '#ffffff') }}"
                                                        onchange="updateThemeColor('section-bg', this.value); updateColorSwatch('sectionBg', this.value)"
                                                        placeholder="#ffffff">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('section-bg')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('section-bg')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1727,7 +1726,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'card_bg', '#ffffff') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'card_bg', '#ffffff') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Card BG') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1735,14 +1734,14 @@
                                                        id="cardBg"
                                                        value="{{ user_settings.get('theme', 'card_bg', '#ffffff') }}"
                                                        onchange="updateThemeColor('card-bg', this.value); updateColorSwatch('cardBg', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="cardBgText"
                                                        value="{{ user_settings.get('theme', 'card_bg', '#ffffff') }}"
                                                        onchange="updateThemeColor('card-bg', this.value); updateColorSwatch('cardBg', this.value)"
                                                        placeholder="#ffffff">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('card-bg')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('card-bg')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1752,7 +1751,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'section_border', '#e2e8f0') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'section_border', '#e2e8f0') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Section Border') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1760,14 +1759,14 @@
                                                        id="sectionBorder"
                                                        value="{{ user_settings.get('theme', 'section_border', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('section-border', this.value); updateColorSwatch('sectionBorder', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="sectionBorderText"
                                                        value="{{ user_settings.get('theme', 'section_border', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('section-border', this.value); updateColorSwatch('sectionBorder', this.value)"
                                                        placeholder="#e2e8f0">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('section-border')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('section-border')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1777,7 +1776,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'card_border', '#e2e8f0') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'card_border', '#e2e8f0') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Card Border') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1785,14 +1784,14 @@
                                                        id="cardBorder"
                                                        value="{{ user_settings.get('theme', 'card_border', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('card-border', this.value); updateColorSwatch('cardBorder', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="cardBorderText"
                                                        value="{{ user_settings.get('theme', 'card_border', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('card-border', this.value); updateColorSwatch('cardBorder', this.value)"
                                                        placeholder="#e2e8f0">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('card-border')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('card-border')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1820,7 +1819,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'table_header_bg', '#f8fafc') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'table_header_bg', '#f8fafc') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Header BG') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1828,14 +1827,14 @@
                                                        id="tableHeaderBg"
                                                        value="{{ user_settings.get('theme', 'table_header_bg', '#f8fafc') }}"
                                                        onchange="updateThemeColor('table-header-bg', this.value); updateColorSwatch('tableHeaderBg', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="tableHeaderBgText"
                                                        value="{{ user_settings.get('theme', 'table_header_bg', '#f8fafc') }}"
                                                        onchange="updateThemeColor('table-header-bg', this.value); updateColorSwatch('tableHeaderBg', this.value)"
                                                        placeholder="#f8fafc">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('table-header-bg')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('table-header-bg')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1845,7 +1844,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'table_row_hover', '#f8fafc') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'table_row_hover', '#f8fafc') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Row Hover') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1853,14 +1852,14 @@
                                                        id="tableRowHover"
                                                        value="{{ user_settings.get('theme', 'table_row_hover', '#f8fafc') }}"
                                                        onchange="updateThemeColor('table-row-hover', this.value); updateColorSwatch('tableRowHover', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="tableRowHoverText"
                                                        value="{{ user_settings.get('theme', 'table_row_hover', '#f8fafc') }}"
                                                        onchange="updateThemeColor('table-row-hover', this.value); updateColorSwatch('tableRowHover', this.value)"
                                                        placeholder="#f8fafc">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('table-row-hover')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('table-row-hover')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1870,7 +1869,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'table_border', '#e2e8f0') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'table_border', '#e2e8f0') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Border') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1878,14 +1877,14 @@
                                                        id="tableBorder"
                                                        value="{{ user_settings.get('theme', 'table_border', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('table-border', this.value); updateColorSwatch('tableBorder', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="tableBorderText"
                                                        value="{{ user_settings.get('theme', 'table_border', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('table-border', this.value); updateColorSwatch('tableBorder', this.value)"
                                                        placeholder="#e2e8f0">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('table-border')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('table-border')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1913,7 +1912,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'input_bg', '#ffffff') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'input_bg', '#ffffff') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Input BG') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1921,14 +1920,14 @@
                                                        id="inputBg"
                                                        value="{{ user_settings.get('theme', 'input_bg', '#ffffff') }}"
                                                        onchange="updateThemeColor('input-bg', this.value); updateColorSwatch('inputBg', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="inputBgText"
                                                        value="{{ user_settings.get('theme', 'input_bg', '#ffffff') }}"
                                                        onchange="updateThemeColor('input-bg', this.value); updateColorSwatch('inputBg', this.value)"
                                                        placeholder="#ffffff">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('input-bg')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('input-bg')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1938,7 +1937,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'input_border', '#e2e8f0') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'input_border', '#e2e8f0') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Input Border') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1946,14 +1945,14 @@
                                                        id="inputBorder"
                                                        value="{{ user_settings.get('theme', 'input_border', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('input-border', this.value); updateColorSwatch('inputBorder', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="inputBorderText"
                                                        value="{{ user_settings.get('theme', 'input_border', '#e2e8f0') }}"
                                                        onchange="updateThemeColor('input-border', this.value); updateColorSwatch('inputBorder', this.value)"
                                                        placeholder="#e2e8f0">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('input-border')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('input-border')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -1963,7 +1962,7 @@
                                     <div class="card border h-100">
                                         <div class="card-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <div class="color-swatch color-swatch-xs me-2" style="background-color: {{ user_settings.get('theme', 'input_focus', '#4f46e5') }};"></div>
+                                                <div class="color-swatch me-2" style="width: 28px; height: 28px; border-radius: 6px; background-color: {{ user_settings.get('theme', 'input_focus', '#4f46e5') }}; border: 2px solid var(--border-color);"></div>
                                                 <label class="form-label fw-semibold mb-0 small">{{ _('Focus Color') }}</label>
                                             </div>
                                             <div class="d-flex gap-2">
@@ -1971,14 +1970,14 @@
                                                        id="inputFocus"
                                                        value="{{ user_settings.get('theme', 'input_focus', '#4f46e5') }}"
                                                        onchange="updateThemeColor('input-focus', this.value); updateColorSwatch('inputFocus', this.value)"
-                                                       >
+                                                       style="width: 45px; height: 32px;">
                                                 <input type="text" class="form-control form-control-sm flex-grow-1"
                                                        id="inputFocusText"
                                                        value="{{ user_settings.get('theme', 'input_focus', '#4f46e5') }}"
                                                        onchange="updateThemeColor('input-focus', this.value); updateColorSwatch('inputFocus', this.value)"
                                                        placeholder="#4f46e5">
-                                                <button class="btn btn-sm btn-outline-secondary p-1 reset-color-btn" onclick="resetThemeColor('input-focus')" title="{{ _('Reset') }}">
-                                                    <i class="bi bi-arrow-counterclockwise reset-color-icon"></i>
+                                                <button class="btn btn-sm btn-outline-secondary p-1" onclick="resetThemeColor('input-focus')" title="{{ _('Reset') }}" style="width: 28px; height: 28px; padding: 0;">
+                                                    <i class="bi bi-arrow-counterclockwise" style="font-size: 0.75rem;"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -2075,107 +2074,122 @@
                         <div class="mb-3">
                             <input type="text" class="form-control" id="iconSearch" placeholder="{{ _('Search icons...') }}" onkeyup="filterIcons(this.value)">
                         </div>
+                            <style>
+                                .icon-item .card {
+                                    transition: all 0.2s ease;
+                                    cursor: pointer;
+                                }
+                                .icon-item .card:hover {
+                                    background-color: var(--bg-section, #f8fafc);
+                                    border-color: var(--primary-color, #4f46e5);
+                                    transform: translateY(-2px);
+                                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                                }
+                                .icon-item .card i {
+                                    color: var(--primary-color, #4f46e5);
+                                }
+                            </style>
                             <div class="row g-2" id="iconGrid">
                             <!-- Popular icons -->
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-file-earmark-text" onclick="selectIcon('bi-file-earmark-text')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-file-earmark-text"></i>
+                                    <i class="bi bi-file-earmark-text" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">file-text</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-app" onclick="selectIcon('bi-app')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-app"></i>
+                                    <i class="bi bi-app" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">app</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-folder" onclick="selectIcon('bi-folder')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-folder"></i>
+                                    <i class="bi bi-folder" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">folder</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-database" onclick="selectIcon('bi-database')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-database"></i>
+                                    <i class="bi bi-database" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">database</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-graph-up" onclick="selectIcon('bi-graph-up')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-graph-up"></i>
+                                    <i class="bi bi-graph-up" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">graph-up</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-file-earmark-code" onclick="selectIcon('bi-file-earmark-code')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-file-earmark-code"></i>
+                                    <i class="bi bi-file-earmark-code" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">code</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-box" onclick="selectIcon('bi-box')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-box"></i>
+                                    <i class="bi bi-box" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">box</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-gear" onclick="selectIcon('bi-gear')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-gear"></i>
+                                    <i class="bi bi-gear" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">gear</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-layers" onclick="selectIcon('bi-layers')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-layers"></i>
+                                    <i class="bi bi-layers" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">layers</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-grid" onclick="selectIcon('bi-grid')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-grid"></i>
+                                    <i class="bi bi-grid" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">grid</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-stack" onclick="selectIcon('bi-stack')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-stack"></i>
+                                    <i class="bi bi-stack" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">stack</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-archive" onclick="selectIcon('bi-archive')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-archive"></i>
+                                    <i class="bi bi-archive" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">archive</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-files" onclick="selectIcon('bi-files')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-files"></i>
+                                    <i class="bi bi-files" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">files</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-folder2-open" onclick="selectIcon('bi-folder2-open')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-folder2-open"></i>
+                                    <i class="bi bi-folder2-open" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">folder-open</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-briefcase" onclick="selectIcon('bi-briefcase')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-briefcase"></i>
+                                    <i class="bi bi-briefcase" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">briefcase</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-cpu" onclick="selectIcon('bi-cpu')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-cpu"></i>
+                                    <i class="bi bi-cpu" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">cpu</small>
                                 </div>
                             </div>
                             <div class="col-3 col-md-2 icon-item" data-icon="bi-diagram-3" onclick="selectIcon('bi-diagram-3')">
                                 <div class="card border text-center p-2">
-                                    <i class="bi bi-diagram-3"></i>
+                                    <i class="bi bi-diagram-3" style="font-size: 1.5rem;"></i>
                                     <small class="d-block mt-1">diagram</small>
                                 </div>
                             </div>
@@ -2694,7 +2708,7 @@
                 {% if interfaces_by_category %}
                     {% for category, interfaces in interfaces_by_category.items() %}
                         <div class="mb-4">
-                            <h6 class="text-capitalize mb-3 interface-card-title">
+                            <h6 class="text-capitalize mb-3" style="color: var(--text-dark); font-size: 1rem;">
                                 <i class="bi bi-{% if category == 'main' %}house{% elif category == 'analysis' %}graph-up{% elif category == 'search' %}search{% elif category == 'management' %}folder{% else %}gear{% endif %} me-2"></i>
                                 {{ _(category|replace('_', ' ')|title) }}
                             </h6>
@@ -2704,7 +2718,7 @@
                                         <div class="card interface-card {% if not interface.enabled %}disabled border-secondary{% else %}border-success{% endif %}">
                                             <div class="card-body">
                                                 <div class="d-flex justify-content-between align-items-start mb-2">
-                                                    <div class="interface-card-body">
+                                                    <div style="flex: 1;">
                                                         <h6 class="card-title mb-1">
                                                             <i class="bi {{ interface.icon|default('bi-gear') }} me-2"></i>
                                                             {{ _(interface.name|default(interface_id|replace('_', ' ')|title)) }}
@@ -2724,7 +2738,7 @@
                                                 <div class="mt-2">
                                                     <small class="text-muted">
                                                         <i class="bi bi-link-45deg me-1"></i>
-                                                        <code class="settings-code-small">{{ interface.endpoint|default(interface_id) }}</code>
+                                                        <code style="font-size: 0.75rem;">{{ interface.endpoint|default(interface_id) }}</code>
                                                     </small>
                                                 </div>
                                             </div>
@@ -3238,22 +3252,22 @@
                     <div class="info-card">
                         <h6>{{ _('Application Version') }}</h6>
                         <div class="value">{% if version %}{{ version }}{% else %}2.0.0{% endif %}</div>
-                        <small class="system-info-note">{{ _('Modernized') }}</small>
+                        <small style="color: rgba(255,255,255,0.8);">{{ _('Modernized') }}</small>
                     </div>
                     <div class="info-card">
                         <h6>{{ _('Database') }}</h6>
                         <div class="value">PostgreSQL</div>
-                        <small class="system-info-note">{{ _('Production Ready') }}</small>
+                        <small style="color: rgba(255,255,255,0.8);">{{ _('Production Ready') }}</small>
                     </div>
                     <div class="info-card">
                         <h6>{{ _('Processing Engine') }}</h6>
                         <div class="value">{{ _('Modern') }}</div>
-                        <small class="system-info-note">{{ _('File Processor') }}</small>
+                        <small style="color: rgba(255,255,255,0.8);">{{ _('File Processor') }}</small>
                     </div>
                     <div class="info-card">
                         <h6>{{ _('Performance Monitoring') }}</h6>
                         <div class="value">{{ _('Enabled') }}</div>
-                        <small class="system-info-note">{{ _('Real-time') }}</small>
+                        <small style="color: rgba(255,255,255,0.8);">{{ _('Real-time') }}</small>
                     </div>
                 </div>
             </div>

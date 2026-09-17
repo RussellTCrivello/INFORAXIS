@@ -47,20 +47,67 @@ function createAutocompleteContainer() {
     const container = document.createElement('div');
     container.id = 'autocompleteContainer';
     container.className = 'autocomplete-container position-relative';
-    
+
     const dropdown = document.createElement('div');
     dropdown.id = 'autocompleteDropdown';
     dropdown.className = 'autocomplete-dropdown list-group position-absolute w-100';
     dropdown.style.display = 'none';
     dropdown.setAttribute('role', 'listbox');
-    
+
     container.appendChild(dropdown);
-    
+
     // Insert after search input
     const parent = searchInput.parentElement;
     parent.appendChild(container);
-    
 
+    // Add CSS if not already added
+    if (!document.getElementById('autocompleteStyles')) {
+        const style = document.createElement('style');
+        style.id = 'autocompleteStyles';
+        style.textContent = `
+            .autocomplete-container {
+                position: relative;
+            }
+            .autocomplete-dropdown {
+                z-index: 1000;
+                max-height: 300px;
+                overflow-y: auto;
+                border: 1px solid #dee2e6;
+                border-radius: 0.375rem;
+                background: white;
+                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+                margin-top: 2px;
+            }
+            .autocomplete-item {
+                cursor: pointer;
+                padding: 0.5rem 1rem;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            .autocomplete-item:hover,
+            .autocomplete-item.active {
+                background-color: #f8f9fa;
+            }
+            .autocomplete-item:last-child {
+                border-bottom: none;
+            }
+            .autocomplete-item-type {
+                font-size: 0.75rem;
+                color: #6c757d;
+                margin-left: 0.5rem;
+            }
+            .autocomplete-item-count {
+                font-size: 0.75rem;
+                color: #6c757d;
+                float: right;
+            }
+            .search-highlight {
+                background-color: #fff3cd;
+                padding: 0.1rem 0.2rem;
+                border-radius: 0.2rem;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 }
 
 /**
@@ -72,12 +119,12 @@ function setupAutocomplete(searchInput) {
     // Debounced input handler
     searchInput.addEventListener('input', function() {
         const query = this.value.trim();
-        
+
         // Clear previous timeout
         if (autocompleteTimeout) {
             clearTimeout(autocompleteTimeout);
         }
-        
+
         // Cancel previous request
         if (autocompleteController) {
             autocompleteController.abort();
@@ -130,15 +177,15 @@ async function fetchAutocompleteSuggestions(query) {
 
         const url = `/api/search/autocomplete?query=${encodeURIComponent(query)}&limit=10`;
         const response = await fetch(url, { signal });
-        
+
         if (!response.ok) throw new Error('Autocomplete request failed');
-        
+
         const data = await response.json();
         currentSuggestions = data.suggestions || [];
-        
+
         // Show suggestions
         showAutocomplete(currentSuggestions);
-        
+
     } catch (error) {
         if (error.name === 'AbortError') {
             return; // Request was cancelled
@@ -166,10 +213,10 @@ function showAutocomplete(suggestions) {
         const highlightedText = highlightQuery(suggestion.text, document.getElementById('searchQuery')?.value || '');
         const typeIcon = getTypeIcon(suggestion.type);
         const typeLabel = getTypeLabel(suggestion.type);
-        
+
         html += `
-            <div class="autocomplete-item list-group-item list-group-item-action" 
-                 data-index="${index}" 
+            <div class="autocomplete-item list-group-item list-group-item-action"
+                 data-index="${index}"
                  data-value="${escapeHtml(suggestion.text)}"
                  role="option"
                  tabindex="0">
@@ -216,7 +263,7 @@ function selectSuggestion(value) {
     if (searchInput) {
         searchInput.value = value;
         hideAutocomplete();
-        
+
         // Trigger search if form exists
         const form = document.getElementById('enhancedSearchForm');
         if (form) {
@@ -230,11 +277,11 @@ function selectSuggestion(value) {
  */
 function highlightQuery(text, query) {
     if (!query) return escapeHtml(text);
-    
+
     const escapedText = escapeHtml(text);
     const escapedQuery = escapeHtml(query);
     const regex = new RegExp(`(${escapedQuery})`, 'gi');
-    
+
     return escapedText.replace(regex, '<span class="search-highlight">$1</span>');
 }
 
@@ -342,9 +389,9 @@ function addAdvancedSearchOptions() {
     optionsContainer.innerHTML = `
         <div class="card">
             <div class="card-header py-2">
-                <button class="btn btn-link p-0 text-decoration-none w-100 text-start" 
-                        type="button" 
-                        data-bs-toggle="collapse" 
+                <button class="btn btn-link p-0 text-decoration-none w-100 text-start"
+                        type="button"
+                        data-bs-toggle="collapse"
                         data-bs-target="#advancedOptionsCollapse"
                         aria-expanded="false">
                     <i class="bi bi-gear me-2"></i>
@@ -450,7 +497,7 @@ export function formatSearchResult(result, query) {
 
     const fileName = escapeHtml(result.file_name || 'Unknown');
     const highlightedName = highlightQuery(fileName, query);
-    
+
     let html = `
         <div class="search-result-item mb-3 p-3 border rounded">
             <div class="d-flex justify-content-between align-items-start">
@@ -514,4 +561,3 @@ export default {
     fetchAutocompleteSuggestions,
     hideAutocomplete
 };
-

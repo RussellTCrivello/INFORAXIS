@@ -216,7 +216,7 @@
         </ul>
     </div>
 {% endcall %}
-    
+
     <!-- Analysis View Navigation -->
     <div class="analysis-view-navigation">
             <div class="d-flex gap-2 flex-wrap">
@@ -235,7 +235,7 @@
             </div>
         </div>
 
-            
+
 
         <!-- Advanced Filters Panel -->
         <div class="section filters-panel" id="filtersPanel" style="display: none;">
@@ -303,19 +303,19 @@
                     <span class="breadcrumb-link" onclick="navigateToRoot()">{{ _('Home') }}</span>
                 </div>
             </div>
-            <div class="search-bar fmas-global-search-bar">
-                <div class="fmas-search-control">
+            <div class="search-bar" style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+                <div style="position: relative; flex: 1;">
                     <label for="globalSearch" class="sr-only">{{ _('Search') }}</label>
-                    <input type="text" id="globalSearch" class="fmas-search-input" placeholder="{{ _('Search all data: files, categories, keywords, sources, sides, words, titles...') }}" oninput="handleGlobalSearch(this.value)" title="{{ _('Search all data in database') }}" aria-label="{{ _('Search all data in database') }}">
-                    <i class="bi bi-search fmas-search-icon" aria-hidden="true"></i>
+                    <input type="text" id="globalSearch" placeholder="{{ _('Search all data: files, categories, keywords, sources, sides, words, titles...') }}" oninput="handleGlobalSearch(this.value)" title="{{ _('Search all data in database') }}" aria-label="{{ _('Search all data in database') }}" style="width: 100%;">
+                    <i class="bi bi-search" style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;" aria-hidden="true"></i>
                 </div>
             </div>
-            <div class="nav-item-count" id="navItemCount" style="display: none;">
+            <div class="nav-item-count" id="navItemCount" style="display: none; font-size: 0.875rem; color: var(--text-light); white-space: nowrap; margin-right: 0.5rem;">
                 <span id="navItemCountText"></span>
             </div>
-            <div class="sort-control">
+            <div class="sort-control" style="display: flex; align-items: center; gap: 0.5rem; margin-right: 0.5rem;">
                 <label for="sortBy" class="sr-only">{{ _('Sort By') }}</label>
-                <select id="sortBy" class="form-select form-select-sm sort-select" onchange="handleSortChange()" title="{{ _('Sort By') }}" aria-label="{{ _('Sort By') }}">
+                <select id="sortBy" class="form-select form-select-sm" style="min-width: 150px; font-size: 0.875rem;" onchange="handleSortChange()" title="{{ _('Sort By') }}" aria-label="{{ _('Sort By') }}">
                     <option value="id_asc">{{ _('ID (Ascending)') }}</option>
                     <option value="id_desc">{{ _('ID (Descending)') }}</option>
                     <option value="name_asc">{{ _('Name (A-Z)') }}</option>
@@ -324,10 +324,10 @@
                     <option value="file_count_asc">{{ _('File Count (Low to High)') }}</option>
                 </select>
             </div>
-            <div class="per-page-control">
+            <div class="per-page-control" style="display: flex; align-items: center; gap: 0.5rem; margin-right: 0.5rem;">
                 <label for="perPageSection" class="sr-only">{{ _('Per Page') }}</label>
-                <label for="perPageSection" class="per-page-label">{{ _('Per Page:') }}</label>
-                <select id="perPageSection" class="form-select form-select-sm per-page-select" onchange="handlePerPageChange()" title="{{ _('Items Per Page') }}" aria-label="{{ _('Items Per Page') }}">
+                <label for="perPageSection" style="font-size: 0.875rem; color: var(--text-light); white-space: nowrap; margin-right: 0.25rem;">{{ _('Per Page:') }}</label>
+                <select id="perPageSection" class="form-select form-select-sm" style="min-width: 80px; font-size: 0.875rem;" onchange="handlePerPageChange()" title="{{ _('Items Per Page') }}" aria-label="{{ _('Items Per Page') }}">
                     <option value="10">10</option>
                     <option value="25">25</option>
                     <option value="50" selected>50</option>
@@ -610,10 +610,10 @@
                         <div class="mb-3">
                             <label for="keywordWordInput" class="form-label">{{ _('Select or Create Words') }} *</label>
                             <div class="position-relative">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="keywordWordInput" 
-                                       name="word_text" 
+                                <input type="text"
+                                       class="form-control"
+                                       id="keywordWordInput"
+                                       name="word_text"
                                        autocomplete="off"
                                        placeholder="{{ _('Type to search or create a new word...') }}">
                                 <div id="keywordWordSearchResults" class="word-search-results" style="display: none;"></div>
@@ -626,10 +626,10 @@
                         <div class="mb-3">
                             <label for="keywordCategoryInput" class="form-label">{{ _('Category (from Categories table)') }}</label>
                             <div class="position-relative">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="keywordCategoryInput" 
-                                       name="category_text" 
+                                <input type="text"
+                                       class="form-control"
+                                       id="keywordCategoryInput"
+                                       name="category_text"
                                        autocomplete="off"
                                        placeholder="{{ _('Type to search for a category...') }}">
                                 <div id="keywordCategorySearchResults" class="word-search-results" style="display: none;"></div>
@@ -660,10 +660,10 @@
                         <div class="mb-3">
                             <label for="categoryWordInput" class="form-label">{{ _('Select or Create Word') }} *</label>
                             <div class="position-relative">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="categoryWordInput" 
-                                       name="word_text" 
+                                <input type="text"
+                                       class="form-control"
+                                       id="categoryWordInput"
+                                       name="word_text"
                                        autocomplete="off"
                                        placeholder="{{ _('Type to search or create a new word...') }}"
                                        required>
@@ -696,10 +696,10 @@
                         <div class="mb-3">
                             <label for="wordsCategorysWordInput" class="form-label">{{ _('Select or Create Word') }} *</label>
                             <div class="position-relative">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="wordsCategorysWordInput" 
-                                       name="word_text" 
+                                <input type="text"
+                                       class="form-control"
+                                       id="wordsCategorysWordInput"
+                                       name="word_text"
                                        autocomplete="off"
                                        placeholder="{{ _('Type to search or create a new word...') }}"
                                        required>
@@ -710,10 +710,10 @@
                         <div class="mb-3">
                             <label for="wordsCategorysCategoryInput" class="form-label">{{ _('Select or Create Category') }} *</label>
                             <div class="position-relative">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="wordsCategorysCategoryInput" 
-                                       name="category_text" 
+                                <input type="text"
+                                       class="form-control"
+                                       id="wordsCategorysCategoryInput"
+                                       name="category_text"
                                        autocomplete="off"
                                        placeholder="{{ _('Type to search for a category...') }}"
                                        required>
@@ -757,7 +757,7 @@
                     <div class="file-details-content-section">
                         <div class="file-details-section-header">
                             <h3><i class="bi bi-file-text"></i> {{ _('File Content') }}</h3>
-                            <div class="file-content-actions">
+                            <div class="file-content-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                                 <button class="btn btn-sm btn-outline-primary" onclick="copyModalContent()" title="{{ _('Copy Content') }}">
                                     <i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}
                                 </button>
@@ -769,14 +769,14 @@
                                 </button>
                             </div>
                         </div>
-                        
+
                         <!-- Search Controls -->
-                        <div class="file-content-search">
-                            <div class="modal-search-row">
-                                <div class="modal-search-input-wrap">
-                                    <div class="modal-search-input-group">
-                                        <input type="text" id="modalSearchInput" class="form-control form-control-sm" 
-                                               placeholder="{{ _('Search in document...') }}" 
+                        <div class="file-content-search" style="padding: 1rem; background: var(--bg-section); border-bottom: 1px solid var(--border-color);">
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 200px;">
+                                    <div style="display: flex; gap: 0.25rem;">
+                                        <input type="text" id="modalSearchInput" class="form-control form-control-sm"
+                                               placeholder="{{ _('Search in document...') }}"
                                                onkeypress="if(event.key==='Enter') performModalSearch()">
                                         <button class="btn btn-sm btn-primary" onclick="performModalSearch()">
                                             <i class="bi bi-search"></i>
@@ -786,25 +786,25 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div class="modal-search-options">
-                                    <div class="form-check modal-search-check">
+                                <div style="display: flex; gap: 1rem; align-items: center;">
+                                    <div class="form-check" style="margin: 0;">
                                         <input class="form-check-input" type="checkbox" id="modalCaseSensitive">
-                                        <label class="form-check-label modal-search-label" for="modalCaseSensitive">
+                                        <label class="form-check-label" for="modalCaseSensitive" style="font-size: 0.875rem;">
                                             {{ _('Case Sensitive') }}
                                         </label>
                                     </div>
-                                    <div class="form-check modal-search-check">
+                                    <div class="form-check" style="margin: 0;">
                                         <input class="form-check-input" type="checkbox" id="modalWholeWord">
-                                        <label class="form-check-label modal-search-label" for="modalWholeWord">
+                                        <label class="form-check-label" for="modalWholeWord" style="font-size: 0.875rem;">
                                             {{ _('Whole Word') }}
                                         </label>
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <!-- Search Results -->
-                            <div id="modalSearchResults" class="modal-search-results" hidden>
-                                <div class="modal-search-results-row">
+                            <div id="modalSearchResults" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div>
                                         <span class="badge bg-primary" id="modalResultCount">{{ _('0 results') }}</span>
                                         <span class="badge bg-info ms-2" id="modalCurrentMatch">{{ _('Match 0 of 0') }}</span>
@@ -820,12 +820,12 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="file-details-content-view file-content-scroll" id="fileContentSection">
+
+                        <div class="file-details-content-view" id="fileContentSection" style="position: relative; overflow-y: auto; overflow-x: auto; max-height: calc(100vh - 400px); width: 100%; word-wrap: break-word; overflow-wrap: break-word;">
                             <div class="content-loading">{{ _('Loading content...') }}</div>
                         </div>
                     </div>
-                    
+
                     <!-- Right Section: Analysis/Classification -->
                     <div class="file-details-analysis-section">
                         <div class="file-details-section-header">
@@ -835,7 +835,7 @@
                             <div class="content-loading">{{ _('Loading analysis...') }}</div>
                         </div>
                     </div>
-                    
+
                     <!-- Bottom Section: Metadata -->
                     <div class="file-details-metadata-section">
                         <div class="file-details-section-header">
@@ -853,6 +853,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Chart.js for charts -->
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
 <!-- Chart export functionality -->
 <script type="module" src="{{ url_for('static', filename='js/modules/charts/chart-export.js') }}"></script>
 

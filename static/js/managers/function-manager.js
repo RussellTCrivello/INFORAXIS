@@ -97,7 +97,7 @@ const FunctionManager = {
         systemSettings,
         translations: translationHelper
     },
-    
+
     // Navigation
     navigation: {
         ...navigation,
@@ -105,7 +105,7 @@ const FunctionManager = {
         history,
         eventDelegation
     },
-    
+
     // Views
     views: {
         root: rootView,
@@ -113,7 +113,7 @@ const FunctionManager = {
         item: itemView,
         file: fileView
     },
-    
+
     // Rendering
     rendering: {
         grid: gridRenderer,
@@ -121,7 +121,7 @@ const FunctionManager = {
         pagination,
         cursorPagination: CursorPaginator
     },
-    
+
     // Messages
     messages: {
         system: MessageSystem,
@@ -129,7 +129,7 @@ const FunctionManager = {
         formatter: MessageFormatter,
         interface: InterfaceMessages
     },
-    
+
     // File operations
     fileOperations: {
         details: fileDetails,
@@ -138,20 +138,20 @@ const FunctionManager = {
         selection: fileSelection,
         management: fileManagement
     },
-    
+
     // Modals
     modals: {
         manager: modalManager,
         select2: select2Initializers,
         closeFileModal: fileDetails.closeFileModal
     },
-    
+
     // Search
     search: {
         modal: modalSearch,
         global: globalSearch
     },
-    
+
     // Charts
     charts: {
         classification: classificationCharts,
@@ -159,7 +159,7 @@ const FunctionManager = {
         export: chartExport,
         responsive: chartResponsive
     },
-    
+
     // UI
     ui: {
         notifications: notificationSystem,
@@ -168,19 +168,19 @@ const FunctionManager = {
         viewMode,
         theme: themeManager
     },
-    
+
     // Upload
     upload: {
         chunked: ChunkedUploadClient,
         chunkedUI: ChunkedUploadUI
     },
-    
+
     // API
     api: {
         client: apiClient,
         endpoints
     },
-    
+
     // Utils
     utils: {
         keywordAssociations
@@ -193,7 +193,7 @@ export default FunctionManager;
 // Also expose on window for global access and backward compatibility
 if (typeof window !== 'undefined') {
     window.fms = FunctionManager;
-    
+
     // Expose commonly used functions globally for backward compatibility
     window.navigateToRoot = navigation.navigateToRoot;
     window.navigateToSection = navigation.navigateToSection;
@@ -201,7 +201,7 @@ if (typeof window !== 'undefined') {
     window.navigateBack = history.navigateBack;
     window.navigateForward = history.navigateForward;
     window.handleSortChange = navigation.handleSortChange;
-    
+
     // File operations
     window.showFileDetails = fileDetails.showFileDetails;
     window.closeFileModal = fileDetails.closeFileModal;
@@ -216,13 +216,13 @@ if (typeof window !== 'undefined') {
     window.deselectAllFiles = fileSelection.deselectAllFiles;
     window.exportSelectedFiles = fileSelection.exportSelectedFiles;
     window.filterDisplayedFiles = fileSelection.filterDisplayedFiles;
-    
+
     // Modal search
     window.performModalSearch = modalSearch.performModalSearch;
     window.findModalNext = modalSearch.findModalNext;
     window.findModalPrevious = modalSearch.findModalPrevious;
     window.clearModalSearch = modalSearch.clearModalSearch;
-    
+
     // Modal manager
     window.openAddItemModal = modalManager.openAddItemModal;
     window.closeAddItemModal = modalManager.closeAddItemModal;
@@ -232,24 +232,24 @@ if (typeof window !== 'undefined') {
     window.submitSourceForm = () => modalManager.submitAddItem('source');
     window.submitAddWordsCategorys = modalManager.submitAddWordsCategorys;
     window.searchCategoryWords = modalManager.searchCategoryWords;
-    
+
     // Charts
     window.loadClassificationCharts = classificationCharts.loadClassificationCharts;
     window.switchDataType = classificationCharts.switchDataType;
     window.switchChartType = classificationCharts.switchChartType;
     window.filterChartData = classificationCharts.filterChartData;
-    
+
     // Notification shortcuts
     window.showSuccess = (msg) => notificationSystem.success(msg);
     window.showError = (msg) => notificationSystem.error(msg);
     window.showWarning = (msg) => notificationSystem.warning(msg);
     window.showInfo = (msg) => notificationSystem.info(msg);
-    
+
     // View functions
     window.loadSectionPage = sectionView.loadSectionPage;
     window.loadFilePage = itemView.loadFilePage;
     window.toggleSimilarTitles = itemView.toggleSimilarTitles;
-    
+
     // Global search (backward compatibility with enhanced-search.js)
     window.enhancedSearch = {
         performSearch: globalSearch.performSearch,
@@ -262,33 +262,33 @@ if (typeof window !== 'undefined') {
         saveSearch: globalSearch.saveSearch,
         showSaveSearchModal: globalSearch.showSaveSearchModal
     };
-    
+
     // Utility functions
     window.updateKeywordAssociations = keywordAssociations.updateKeywordAssociations;
-    
+
     // Select2 initialization functions (backward compatibility)
     window.initializeCategoryWordSelect = select2Initializers.initializeCategoryWordSelect;
     window.initializeKeywordWordsSelect = select2Initializers.initializeKeywordWordsSelect;
     window.initializeKeywordCategorySelect = select2Initializers.initializeKeywordCategorySelect;
     window.initializeWordsCategorysWordSelect = select2Initializers.initializeWordsCategorysWordSelect;
     window.initializeWordsCategorysCategorySelect = select2Initializers.initializeWordsCategorysCategorySelect;
-    
+
     // Filters
     window.handleGlobalSearch = filters.handleGlobalSearch;
     window.applyFilters = filters.applyFilters;
     window.resetFilters = filters.resetFilters;
     window.hideFilters = filters.hideFilters;
     window.showFilters = filters.showFilters;
-    
+
     // View mode
     window.setViewMode = viewMode.setViewMode;
     window.setFileViewMode = viewMode.setFileViewMode;
-    
+
     // Initialize file view mode from localStorage
     if (viewMode.initializeFileViewMode) {
         viewMode.initializeFileViewMode();
     }
-    
+
     // File Management functions (from files-management.js)
     window.selectAllFiles = fileManagement.selectAllFiles.bind(fileManagement);
     window.deselectAllFiles = fileManagement.deselectAllFiles.bind(fileManagement);
@@ -304,39 +304,36 @@ if (typeof window !== 'undefined') {
     // Expose applyFilters for files list page (override the generic one from filters module)
     window.applyFileFilters = fileManagement.applyFilters.bind(fileManagement);
     window.navigateToPage = fileManagement.navigateToPage.bind(fileManagement);
-    
+
     // Upload functions
     window.ChunkedUploadClient = ChunkedUploadClient;
     window.ChunkedUploadUI = ChunkedUploadUI;
-    
+
     // Theme Manager
     window.ThemeManager = themeManager;
     window.themeManager = themeManager;
-    
+
     // System Settings
     window.systemSettings = systemSettings;
-    
+
     // Translations
     window.TranslationHelper = translationHelper;
     window.t = (key, params) => translationHelper.translate(key, params);
     window.translate = (key, params) => translationHelper.translate(key, params);
-    
+
     // Chart utilities
     window.ChartColors = chartColors;
     // Don't override window.ChartExport - it's already set by the IIFE in chart-export.js
     // The module export is for ES6 imports only, window.ChartExport should be the actual object
     // window.ChartExport = chartExport; // REMOVED: Causes infinite recursion
-    if (!window.ChartResponsive?.init) {
-        window.ChartResponsive = chartResponsive;
-    }
-    
+    window.ChartResponsive = chartResponsive;
+
     // Message system (already exposed globally by modules, but ensure availability)
     window.MessageSystem = MessageSystem;
     window.MessageRouter = MessageRouter;
     window.MessageFormatter = MessageFormatter;
     window.InterfaceMessages = InterfaceMessages;
-    
+
     // Cursor pagination
     window.CursorPaginator = CursorPaginator;
 }
-

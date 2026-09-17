@@ -7,7 +7,7 @@
 class CursorPaginator {
     /**
      * Initialize cursor-based paginator
-     * 
+     *
      * @param {Object} options Configuration options
      * @param {string} options.table - Table name
      * @param {string} options.table_alias - Table alias (optional)
@@ -30,34 +30,34 @@ class CursorPaginator {
         this.select_columns = options.select_columns || null;
         this.sort_column = options.sort_column || null;
         this.sort_direction = options.sort_direction || 'ASC';
-        
+
         this.onPageLoad = options.onPageLoad || (() => {});
         this.onProgress = options.onProgress || (() => {});
         this.onError = options.onError || (() => {});
-        
+
         // State
         this.currentCursor = null;
         this.nextCursor = null;
         this.prevCursor = null;
         this.hasNext = false;
-        this.hasPrev = false;
+        this.hasNext = false;
         this.currentData = [];
         this.totalEstimated = null;
         this.queryTimeMs = null;
         this.loading = false;
-        
+
         // SSE connection for streaming
         this.eventSource = null;
         this.streaming = false;
-        
+
         // Background prefetching
         this.prefetchEnabled = options.prefetchEnabled !== false;
         this.prefetchQueue = [];
     }
-    
+
     /**
      * Load a page
-     * 
+     *
      * @param {number|null} cursor - Cursor value (null for first page)
      * @returns {Promise<Object>} Page data
      */
@@ -66,55 +66,55 @@ class CursorPaginator {
             console.warn('Page load already in progress');
             return Promise.resolve(this.currentData);
         }
-        
+
         this.loading = true;
         this.currentCursor = cursor;
-        
+
         try {
             // Build query parameters
             const params = new URLSearchParams({
                 table: this.table,
                 limit: this.limit.toString()
             });
-            
+
             if (cursor !== null) {
                 params.append('cursor', cursor.toString());
             }
-            
+
             if (this.sort_column) {
                 params.append('sort_column', this.sort_column);
                 params.append('sort_direction', this.sort_direction);
             }
-            
+
             if (Object.keys(this.filters).length > 0) {
                 params.append('filters', JSON.stringify(this.filters));
             }
-            
+
             if (this.joins.length > 0) {
                 params.append('joins', JSON.stringify(this.joins));
             }
-            
+
             if (this.select_columns) {
                 params.append('select_columns', JSON.stringify(this.select_columns));
             }
-            
+
             if (this.table_alias) {
                 params.append('table_alias', this.table_alias);
             }
-            
+
             // Make request
             const response = await fetch(`/api/query/cursor?${params.toString()}`);
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
+
             const result = await response.json();
-            
+
             if (!result.success) {
                 throw new Error(result.error || 'Unknown error');
             }
-            
+
             // Update state
             this.currentData = result.data || [];
             this.nextCursor = result.next_cursor;
@@ -123,12 +123,12 @@ class CursorPaginator {
             this.hasPrev = result.has_prev;
             this.totalEstimated = result.total_estimated;
             this.queryTimeMs = result.query_time_ms;
-            
+
             // Prefetch next page in background
             if (this.prefetchEnabled && this.hasNext) {
                 this._prefetchNextPage();
             }
-            
+
             // Call callback
             this.onPageLoad({
                 data: this.currentData,
@@ -140,9 +140,9 @@ class CursorPaginator {
                 totalEstimated: this.totalEstimated,
                 queryTimeMs: this.queryTimeMs
             });
-            
+
             return result;
-        
+
         } catch (error) {
             console.error('Error loading page:', error);
             this.onError(error);
@@ -151,7 +151,7 @@ class CursorPaginator {
             this.loading = false;
         }
     }
-    
+
     /**
      * Load next page
      */
@@ -161,7 +161,7 @@ class CursorPaginator {
         }
         return await this.loadPage(this.nextCursor);
     }
-    
+
     /**
      * Load previous page
      */
@@ -171,10 +171,10 @@ class CursorPaginator {
         }
         return await this.loadPage(this.prevCursor);
     }
-    
+
     /**
      * Stream all records using Server-Sent Events
-     * 
+     *
      * @param {Function} onData - Callback for each batch of data
      * @param {Function} onComplete - Callback when streaming completes
      * @param {number} batchSize - Records per batch (default: 50)
@@ -184,42 +184,42 @@ class CursorPaginator {
             console.warn('Streaming already in progress');
             return;
         }
-        
+
         this.streaming = true;
-        
+
         // Build query parameters
         const params = new URLSearchParams({
             table: this.table,
             limit: '10000',  // Large limit for streaming
             batch_size: batchSize.toString()
         });
-        
+
         if (Object.keys(this.filters).length > 0) {
             params.append('filters', JSON.stringify(this.filters));
         }
-        
+
         if (this.joins.length > 0) {
             params.append('joins', JSON.stringify(this.joins));
         }
-        
+
         if (this.select_columns) {
             params.append('select_columns', JSON.stringify(this.select_columns));
         }
-        
+
         if (this.table_alias) {
             params.append('table_alias', this.table_alias);
         }
-        
+
         // Create EventSource for SSE
         const url = `/api/query/stream?${params.toString()}`;
         this.eventSource = new EventSource(url);
-        
+
         let totalRecords = 0;
-        
+
         this.eventSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                
+
                 if (data.type === 'start') {
                     this.onProgress({
                         type: 'start',
@@ -232,7 +232,7 @@ class CursorPaginator {
                         totalSoFar: totalRecords,
                         hasMore: data.has_more
                     });
-                    
+
                     this.onProgress({
                         type: 'progress',
                         totalSoFar: totalRecords,
@@ -245,7 +245,7 @@ class CursorPaginator {
                         elapsedTime: data.elapsed_time,
                         recordsPerSecond: data.records_per_second
                     });
-                    
+
                     if (onComplete) {
                         onComplete({
                             totalRecords: data.total_records,
@@ -253,7 +253,7 @@ class CursorPaginator {
                             recordsPerSecond: data.records_per_second
                         });
                     }
-                    
+
                     this.eventSource.close();
                     this.streaming = false;
                 } else if (data.type === 'error') {
@@ -267,7 +267,7 @@ class CursorPaginator {
                 this.onError(error);
             }
         };
-        
+
         this.eventSource.onerror = (error) => {
             console.error('SSE connection error:', error);
             this.onError(new Error('SSE connection failed'));
@@ -275,7 +275,7 @@ class CursorPaginator {
             this.streaming = false;
         };
     }
-    
+
     /**
      * Stop streaming
      */
@@ -286,10 +286,10 @@ class CursorPaginator {
             this.streaming = false;
         }
     }
-    
+
     /**
      * Check query integrity
-     * 
+     *
      * @param {number} cursor - Cursor value to check
      * @param {number} expectedCount - Expected record count
      * @returns {Promise<Object>} Integrity check results
@@ -301,21 +301,21 @@ class CursorPaginator {
                 cursor: cursor.toString(),
                 expected_count: expectedCount.toString()
             });
-            
+
             if (Object.keys(this.filters).length > 0) {
                 params.append('filters', JSON.stringify(this.filters));
             }
-            
+
             const response = await fetch(`/api/query/integrity?${params.toString()}`);
             const result = await response.json();
-            
+
             return result;
         } catch (error) {
             console.error('Integrity check error:', error);
             throw error;
         }
     }
-    
+
     /**
      * Prefetch next page in background
      * @private
@@ -324,9 +324,9 @@ class CursorPaginator {
         if (!this.nextCursor || this.prefetchQueue.includes(this.nextCursor)) {
             return;
         }
-        
+
         this.prefetchQueue.push(this.nextCursor);
-        
+
         // Prefetch asynchronously (don't await)
         this.loadPage(this.nextCursor).then(() => {
             const index = this.prefetchQueue.indexOf(this.nextCursor);
@@ -341,7 +341,7 @@ class CursorPaginator {
             }
         });
     }
-    
+
     /**
      * Update filters and reload
      */
@@ -352,7 +352,7 @@ class CursorPaginator {
         this.prevCursor = null;
         return await this.loadPage(null);
     }
-    
+
     /**
      * Reset to first page
      */
@@ -378,4 +378,3 @@ if (typeof module !== 'undefined' && module.exports) {
 // Export for ES modules
 export { CursorPaginator };
 export default CursorPaginator;
-

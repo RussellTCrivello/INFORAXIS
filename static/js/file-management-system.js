@@ -1,7 +1,7 @@
 /**
  * File Management System - Main Entry Point
  * Main entry point that imports from function-manager.js
- * 
+ *
  * This initializes all modules and makes them available via window.fms.* and window.*
  */
 
@@ -12,27 +12,17 @@ if (typeof window !== 'undefined') {
     window.FunctionManager = FunctionManager;
 }
 
-let modulesInitialized = false;
-
 // Initialize all modules when DOM is ready
 function initializeModules() {
-    if (modulesInitialized || window.__fileManagementSystemInitialized) {
-        console.debug('File Management System: duplicate initialization skipped');
-        return;
-    }
-    modulesInitialized = true;
-    if (typeof window !== 'undefined') {
-        window.__fileManagementSystemInitialized = true;
-    }
     console.log('File Management System: Initializing modules...');
     console.log('File Management System: FunctionManager available:', !!FunctionManager);
     console.log('File Management System: Navigation available:', !!FunctionManager?.navigation);
     console.log('File Management System: initNavigation available:', !!FunctionManager?.navigation?.initNavigation);
-    
+
     // Check if we're on the archives page (has unifiedContentView)
     const isArchivesPage = document.getElementById('unifiedContentView') !== null;
     console.log('File Management System: Is archives page:', isArchivesPage);
-    
+
     // Initialize navigation only on archives page (where unifiedContentView exists)
     if (isArchivesPage && FunctionManager && FunctionManager.navigation && FunctionManager.navigation.initNavigation) {
         console.log('File Management System: Initializing navigation...');
@@ -53,17 +43,17 @@ function initializeModules() {
             hasInitNavigation: !!FunctionManager?.navigation?.initNavigation
         });
     }
-    
+
     // Initialize sidebar
     if (FunctionManager.ui?.sidebar?.setupSidebarKeyboardNavigation) {
         FunctionManager.ui.sidebar.setupSidebarKeyboardNavigation();
     }
-    
+
     // Initialize file selection
     if (FunctionManager.fileOperations?.selection?.initializeFileSelection) {
         FunctionManager.fileOperations.selection.initializeFileSelection();
     }
-    
+
     // Initialize file management (if on files page)
     // Check if we're on the files list page by looking for specific elements
     if (FunctionManager.fileOperations?.management?.init) {
@@ -73,7 +63,7 @@ function initializeModules() {
             FunctionManager.fileOperations.management.init();
         }
     }
-    
+
     console.log('File Management System: Modules initialized');
 }
 
@@ -86,4 +76,3 @@ if (document.readyState === 'loading') {
 
 // Export for use in other scripts
 export default FunctionManager;
-

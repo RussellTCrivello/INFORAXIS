@@ -1,132 +1,66 @@
-/* Words data-management workbench. Shared components provide the base table,
-   modal and form styling; this file only governs Words-specific density and
-   layout so it stays consistent with Keywords/Email management screens. */
-
-.words-page {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-}
-
-body[data-page-type="words-list"] .words-page-header,
-.words-header-actions,
-.words-results-toolbar,
-.words-page-size-control {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.55rem;
-}
-
-body[data-page-type="words-list"] .words-page-header {
-    justify-content: space-between;
-}
-
-.words-header-actions,
-.words-page-size-control {
-    justify-content: flex-end;
-}
-
-.words-summary-grid {
-    margin-bottom: 0.85rem !important;
-}
-
-.words-filter-surface {
-    margin-bottom: 0.75rem;
-}
-
-.words-results-toolbar {
-    justify-content: space-between;
-    margin-bottom: 0.55rem;
-    padding: 0.62rem 0.72rem;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    background: var(--bg-white);
-    box-shadow: var(--shadow-xs);
-}
-
-.words-workbench {
-    display: grid;
-    gap: 0;
-    width: 100%;
-    overflow: hidden;
-}
-
-.words-table-wrapper {
-    max-height: var(--ia-data-scroll-max-block, min(68vh, 48rem));
-    overflow: auto;
-    border-bottom: 1px solid var(--border-light);
-}
-
 #wordsTable {
-    width: 100%;
-    min-width: 48rem;
-    margin-bottom: 0;
+    width: 100% !important;
     table-layout: auto;
 }
 
-#wordsTable thead th {
-    position: sticky;
-    top: 0;
-    z-index: 4;
+.stat-card:has(#wordsTable) {
+    display: block !important;
+    width: 100%;
 }
 
-#wordsTable .col-select { width: 2.75rem; }
-#wordsTable .col-id { width: 4.5rem; }
-#wordsTable .col-metric { width: 8rem; }
-#wordsTable .col-actions { width: 8.5rem; }
-
-#wordsTable th > .d-flex,
-#wordsTable td > .d-flex {
-    min-width: 0;
+@media (max-width: 1199.98px) {
+    #wordsTable {
+        font-size: 0.9375rem;
+    }
 }
 
-.word-text,
-#wordsTable strong {
-    display: inline-flex;
-    min-width: 0;
-    max-width: min(36rem, 48vw);
-    overflow: hidden;
-    color: var(--text-heading);
-    font-weight: 730;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.word-checkbox {
-    cursor: pointer;
-}
-
-#wordsTable .btn-group {
-    opacity: 0.82;
-    transition: opacity var(--motion-fast) var(--ease-out);
-}
-
-#wordsTable tr:hover .btn-group,
-#wordsTable tr:focus-within .btn-group {
-    opacity: 1;
-}
-
-body[data-page-type="words-list"] .modal.ia-modal .modal-body {
-    max-height: min(62vh, 34rem);
-    overflow: auto;
+@media (max-width: 991.98px) {
+    #wordsTable {
+        font-size: 0.875rem;
+    }
+    .stat-card .table-wrapper {
+        max-height: 55vh;
+    }
+    .filter-controls-grid {
+        grid-template-columns: 1fr;
+        gap: 0.875rem;
+    }
+    .action-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.875rem;
+    }
 }
 
 @media (max-width: 767.98px) {
-    .words-header-actions,
-    .words-page-size-control,
-    .words-results-toolbar {
-        align-items: stretch;
+    #wordsTable {
+        font-size: 0.8125rem;
     }
-
-    .words-header-actions > .btn,
-    .words-page-size-control .per-page-select {
+    .stat-card .table-wrapper {
+        max-height: 50vh;
+    }
+    .filter-controls-grid {
+        gap: 0.75rem;
+    }
+    .action-bar {
+        gap: 0.75rem;
+    }
+    .action-bar .btn {
         width: 100%;
     }
 }
 
-.words-pagination {
-    padding: 0.65rem 0.85rem;
-    border-top: 1px solid var(--border-light);
-    background: var(--bg-white);
+@media (max-width: 575.98px) {
+    #wordsTable {
+        font-size: 0.75rem;
+    }
+    .stat-card .table-wrapper {
+        max-height: 45vh;
+    }
+    .filter-controls-grid {
+        gap: 0.625rem;
+    }
+    .action-bar {
+        gap: 0.625rem;
+    }
 }

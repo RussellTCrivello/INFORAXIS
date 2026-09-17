@@ -1,96 +1,64 @@
 /**
  * Keyword Detail Page JavaScript
- * Handles record-level keyword actions without inline event handlers.
+ * Extracted from Keyword/keyword_detail.html
  */
 
-let pageData = {};
+// Load translations from JSON script tag
 let translations = {};
-let initialized = false;
 
-function readPageData() {
+document.addEventListener('DOMContentLoaded', function() {
+    // Load translations from JSON script tag
     const pageDataEl = document.getElementById('keyword-detail-page-data');
-    if (!pageDataEl) return {};
-    try {
-        return JSON.parse(pageDataEl.textContent || '{}');
-    } catch (error) {
-        console.error('Error parsing keyword detail page data:', error);
-        return {};
+    if (pageDataEl) {
+        try {
+            const data = JSON.parse(pageDataEl.textContent);
+            translations = data.translations || {};
+        } catch (e) {
+            console.error('Error parsing keyword detail page data:', e);
+        }
     }
-}
 
+    console.log('Keyword detail page loaded');
+});
+
+// ✅ SECURITY: Helper function to get CSRF token
 function getCSRFToken() {
     const metaTag = document.querySelector('meta[name="csrf-token"]');
     return metaTag ? metaTag.getAttribute('content') : '';
 }
 
-function notify(message, type = 'error') {
-    if (type === 'success' && window.showSuccess) {
-        window.showSuccess(message);
-        return;
-    }
-    if (type === 'error' && window.showError) {
-        window.showError(message);
-        return;
-    }
-    console[type === 'error' ? 'error' : 'log'](message);
-}
-
-async function confirmRecordDelete(message) {
-    if (window.showConfirm) {
-        return window.showConfirm(message, {
-            title: translations.deleteConfirm || 'Delete keyword',
-            confirmLabel: translations.delete || 'Delete',
-            type: 'danger'
-        });
-    }
-    const originalConfirm = window.__originalConfirm || window.confirm;
-    return originalConfirm(message);
-}
-
-async function deleteKeyword(id) {
-    if (!(await confirmRecordDelete(translations.deleteConfirm || 'Are you sure you want to delete this keyword?'))) return;
-
-    try {
-        const response = await fetch(`/api/keywords/${id}`, {
+function deleteKeyword(id) {
+    if (confirm(translations.deleteConfirm)) {
+        fetch(`/api/keywords/${id}`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             }
-        });
-        const data = await response.json().catch(() => ({}));
-        if (response.ok && data.success) {
-            notify(translations.keywordDeletedSuccessfully || 'Keyword deleted successfully!', 'success');
-            window.location.href = pageData.keywords_list_url || '/keywords';
-            return;
-        }
-        notify(`${translations.error || 'Error'}: ${data.error || response.statusText}`, 'error');
-    } catch (error) {
-        notify(`${translations.error || 'Error'}: ${error.message}`, 'error');
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert(translations.keywordDeletedSuccessfully);
+                    // Get URL from page data or use default
+                    const pageDataEl = document.getElementById('keyword-detail-page-data');
+                    let redirectUrl = '/keywords';
+                    if (pageDataEl) {
+                        try {
+                            const data = JSON.parse(pageDataEl.textContent);
+                            redirectUrl = data.keywords_list_url || '/keywords';
+                        } catch (e) {
+                            console.warn('Error parsing page data, using default URL');
+                        }
+                    }
+                    window.location.href = redirectUrl;
+                } else {
+                    alert(translations.error + ': ' + data.error);
+                }
+            })
+            .catch(e => alert(translations.error + ': ' + e.message));
     }
 }
-
-function initKeywordDetailPage() {
-    if (initialized) return;
-    initialized = true;
-    pageData = readPageData();
-    translations = pageData.translations || {};
-    window.translations = window.translations || {};
-    Object.assign(window.translations, translations);
-
-    document.querySelectorAll('[data-keyword-delete]').forEach((button) => {
-        button.addEventListener('click', () => deleteKeyword(button.dataset.keywordId));
-    });
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initKeywordDetailPage);
-} else {
-    initKeywordDetailPage();
-}
-
+// DETL-01: referenced by the template's inline onclick handler; this module is
+// loaded as ES module, so top-level functions are module-scoped by default.
 window.deleteKeyword = deleteKeyword;
-
-export default function init() {
-    initKeywordDetailPage();
-}

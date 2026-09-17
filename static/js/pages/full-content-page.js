@@ -26,7 +26,7 @@ let elRange, elChunkSize, optCase, optWhole;
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Full content page loaded');
-    
+
     // Load page data from JSON script tag
     const pageDataEl = document.getElementById('full-content-page-data');
     if (pageDataEl) {
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error parsing full content page data:', e);
         }
     }
-    
+
     // Initialize DOM elements
     elReader = document.getElementById('reader');
     elContent = document.getElementById('content');
@@ -61,13 +61,13 @@ document.addEventListener('DOMContentLoaded', function() {
     elChunkSize = document.getElementById('chunkSize');
     optCase = document.getElementById('optCase');
     optWhole = document.getElementById('optWhole');
-    
+
     if (!fileId) {
         console.error('File ID not found');
         if (elStatus) elStatus.textContent = 'Error: File ID not found';
         return;
     }
-    
+
     // Initialize all functionality
     initializeReader();
 });
@@ -83,7 +83,7 @@ async function renderBuffer() {
     if (!elContent) return;
     buffer.sort((a, b) => a.offset - b.offset);
     const text = buffer.map(c => c.data).join('');
-    
+
     // Format content based on file type
     const reader = document.getElementById('reader');
     if (reader) {
@@ -91,7 +91,7 @@ async function renderBuffer() {
         const filePath = reader.getAttribute('data-file-path') || '';
         const fileIdAttr = reader.getAttribute('data-file-id');
         const fileId = fileIdAttr ? parseInt(fileIdAttr, 10) : null;
-        
+
         try {
             const formatter = await import('../modules/content-formatter.js');
             // Localize accessibility labels before the first render
@@ -101,7 +101,11 @@ async function renderBuffer() {
             const formatted = formatter.formatContentByType(text, fileType, filePath, fileId);
             if (formatted) {
                 elContent.innerHTML = formatted;
-                elContent.dataset.formatted = 'true';
+                // Ensure proper styling for readability
+                elContent.style.width = '100%';
+                elContent.style.wordWrap = 'break-word';
+                elContent.style.overflowWrap = 'break-word';
+                elContent.style.whiteSpace = 'pre-wrap';
                 // Attach image error handlers after DOM insertion
                 setTimeout(() => {
                     if (window.attachImageErrorHandlers && elContent) {
@@ -115,11 +119,13 @@ async function renderBuffer() {
             console.error('Error formatting content:', err);
         }
     }
-    
-    // Fallback to plain text; layout is governed by full-content.css and
-    // formatted-content.css so this never blows out the reader viewport.
-    elContent.textContent = text;
-    elContent.dataset.formatted = 'true';
+
+    // Fallback to plain text with proper formatting
+    elContent.innerHTML = escapeHtml(text);
+    elContent.style.width = '100%';
+    elContent.style.wordWrap = 'break-word';
+    elContent.style.overflowWrap = 'break-word';
+    elContent.style.whiteSpace = 'pre-wrap';
     applyHighlights();
 }
 
@@ -163,11 +169,9 @@ async function ensureNext() {
     }
 }
 
-// Infinite scroll via IntersectionObserver. Initialized after DOM nodes exist.
+// Infinite scroll via IntersectionObserver
 let io = null;
-function setupInfiniteScroll() {
-    if (!elReader || !elSentinel) return;
-    if (io) io.disconnect();
+if (elReader && elSentinel) {
     io = new IntersectionObserver((entries) => {
         for (const e of entries) {
             if (e.isIntersecting) {
@@ -184,7 +188,7 @@ function initializeReader() {
     const pageDataEl = document.getElementById('full-content-page-data');
     let initialContent = '';
     let startChar = 0;
-    
+
     let searchQuery = '';
     let caseSensitive = false;
     let wholeWord = false;
@@ -200,22 +204,21 @@ function initializeReader() {
             console.error('Error parsing initial content:', e);
         }
     }
-    
+
     // Bootstrap initial content
     if (initialContent && initialContent.length) {
         buffer.push({ offset: startChar, data: initialContent });
         renderBuffer();
     }
-    
+
     const chunkSize = parseInt(elChunkSize ? elChunkSize.value : '50000', 10);
     if (!initialContent || initialContent.length < chunkSize) {
         ensureNext();
     }
-    
-    // Setup fixed controls and the governed scroll viewport.
+
+    // Setup event listeners
     setupEventListeners();
-    setupInfiniteScroll();
-    
+
     // A search carried in from another interface (?q=) is located on open.
     restoreSearchState(searchQuery, caseSensitive, wholeWord);
 }
@@ -419,7 +422,7 @@ function setupEventListeners() {
             }
         });
     }
-    
+
     if (elNext) elNext.addEventListener('click', () => gotoMatch(currentDocMatch + 1));
     if (elPrev) elPrev.addEventListener('click', () => gotoMatch(currentDocMatch - 1));
     if (elClear) {
@@ -433,7 +436,7 @@ function setupEventListeners() {
     }
     if (optCase) optCase.addEventListener('change', () => runSearch());
     if (optWhole) optWhole.addEventListener('change', () => runSearch());
-    
+
     // --- Controls ---
     if (elWrap) {
         elWrap.addEventListener('click', () => {
@@ -460,22 +463,22 @@ function setupEventListeners() {
         elTheme.addEventListener('click', () => {
             themeDark = !themeDark;
             document.body.classList.toggle('dark', themeDark);
-            elTheme.innerHTML = themeDark 
-                ? '<i class="bi bi-brightness-high me-1"></i>Light' 
+            elTheme.innerHTML = themeDark
+                ? '<i class="bi bi-brightness-high me-1"></i>Light'
                 : '<i class="bi bi-moon me-1"></i>Dark';
         });
     }
-    
+
     const btnTop = document.getElementById('btnTop');
     if (btnTop && elReader) {
         btnTop.addEventListener('click', () => elReader.scrollTo({ top: 0, behavior: 'smooth' }));
     }
-    
+
     const btnBottom = document.getElementById('btnBottom');
     if (btnBottom && elReader) {
         btnBottom.addEventListener('click', () => elReader.scrollTo({ top: elReader.scrollHeight, behavior: 'smooth' }));
     }
-    
+
     if (elRange && elChunkSize) {
         elRange.addEventListener('input', async (e) => {
             const target = parseInt(e.target.value || '0', 10);
@@ -492,7 +495,7 @@ function setupEventListeners() {
             if (elReader) elReader.scrollTop = 0;
         });
     }
-    
+
     // Copy/Download/Print
     if (elCopy) {
         elCopy.addEventListener('click', async () => {
@@ -504,7 +507,7 @@ function setupEventListeners() {
             setStatus('Copied to clipboard');
         });
     }
-    
+
     if (elDownload) {
         elDownload.addEventListener('click', async () => {
             setStatus('Preparing download…');
@@ -519,7 +522,7 @@ function setupEventListeners() {
             setStatus('Download started');
         });
     }
-    
+
     if (elPrint) {
         elPrint.addEventListener('click', async () => {
             const text = await getFullText();

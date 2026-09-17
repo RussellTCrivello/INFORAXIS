@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-container email-words-page">
+<div class="page-container">
 <div class="page-header">
     <div>
         <h1 class="page-title">
@@ -66,10 +66,10 @@
 {% endcall %}
 
 <!-- Filters Section - Using unified file-filters-section -->
-<div class="file-filters-section email-words-filters ia-fixed-control-surface" data-ia-role="controls">
+<div class="file-filters-section">
     <form id="emailFiltersForm" method="get" action="{{ url_for('email_words') }}">
         <input type="hidden" name="page" value="1">
-        
+
         <div class="filter-controls-grid">
             <div class="filter-group filter-group-search">
                 <label for="searchInput" class="filter-label">
@@ -77,9 +77,9 @@
                     {{ _('Search') }}
                 </label>
                 <div class="search-input-wrapper">
-                    <input type="text" 
-                           id="searchInput" 
-                           name="q" 
+                    <input type="text"
+                           id="searchInput"
+                           name="q"
                            class="form-control search-input"
                            value="{{ search_term|default('') }}"
                            placeholder="{{ _('Search email-like words...') }}">
@@ -95,9 +95,9 @@
                     <i class="bi bi-globe2"></i>
                     {{ _('Domain') }}
                 </label>
-                <input type="text" 
-                       id="domainInput" 
-                       name="domain" 
+                <input type="text"
+                       id="domainInput"
+                       name="domain"
                        class="form-control"
                        value="{{ domain|default('') }}"
                        placeholder="{{ _('e.g. gmail.com') }}">
@@ -161,7 +161,7 @@
         </div>
     </form>
 </div>
-<div class="row g-3 email-summary-grid">
+<div class="row g-4">
     <!-- Statistics Card -->
     <div class="col-lg-3">
         <div class="stat-card">
@@ -176,7 +176,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Current Page Card -->
     <div class="col-lg-3">
         <div class="stat-card">
@@ -191,7 +191,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Page Info Card -->
     <div class="col-lg-3">
         <div class="stat-card">
@@ -206,7 +206,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Total Pages Card -->
     <div class="col-lg-3">
         <div class="stat-card">
@@ -224,15 +224,15 @@
 </div>
 
 <!-- Email Words Table -->
-<div class="row email-table-section">
+<div class="row mt-4">
     <div class="col-12">
-        <div class="stat-card email-workbench ia-table-workbench">
-            <div class="email-results-toolbar ia-fixed-control-surface" data-ia-role="controls">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="mb-0">{{ _('Email-like Words Found') }}</h5>
                 <div class="d-flex align-items-center gap-3">
                     <div class="d-flex align-items-center gap-2">
                         <label for="perPageSelect" class="small text-muted mb-0">{{ _('Per Page') }}:</label>
-                        <select id="perPageSelect" class="form-select form-select-sm per-page-select" onchange="changePerPage(this.value)">
+                        <select id="perPageSelect" class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
                             <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                             <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                             <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -245,24 +245,24 @@
                     </small>
                 </div>
             </div>
-            
+
             {% if email_words %}
-            <div class="table-wrapper email-table-wrapper ia-table-scroll ia-data-scroll-region" data-ia-scroll="true">
-                <table class="table table-hover table-striped mb-0 ia-table">
-                    <thead class="table-light sticky-top email-table-head">
+            <div class="table-wrapper" style="max-height: 75vh; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-light sticky-top" style="z-index: 10; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);">
                         <tr>
-                            <th class="email-col-index">#</th>
-                            <th class="sortable email-col-address" data-sort="word" title="{{ _('Click to sort') }}">
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 35%;" class="sortable" data-sort="word" title="{{ _('Click to sort') }}">
                                 {{ _('Email Address') }}
                                 <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
                             </th>
-                            <th class="sortable email-col-usage" data-sort="usage_count" title="{{ _('Click to sort') }}">
+                            <th style="width: 10%;" class="sortable" data-sort="usage_count" title="{{ _('Click to sort') }}">
                                 {{ _('Usage Count') }}
                                 <i class="bi bi-arrow-down-up ms-1 sort-icon"></i>
                             </th>
-                            <th class="email-col-validation">{{ _('Validation') }}</th>
-                            <th class="email-col-domain">{{ _('Domain') }}</th>
-                            <th class="email-col-actions">{{ _('Actions') }}</th>
+                            <th style="width: 15%;">{{ _('Validation') }}</th>
+                            <th style="width: 15%;">{{ _('Domain') }}</th>
+                            <th style="width: 20%;">{{ _('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody id="emailTableBody">
@@ -275,7 +275,8 @@
                             <td>
                                 <div class="d-flex align-items-center">
                                     <i class="bi bi-envelope-at me-2 text-primary"></i>
-                                    <span class="email-address fw-medium email-drilldown-link"
+                                    <span class="email-address fw-medium"
+                                          style="cursor: pointer; color: var(--primary-color); text-decoration: underline;"
                                           onclick='showEmailFiles({{ word|tojson }})'
                                           title="{{ _('Click to view files containing this email') }}">
                                         {{ word }}
@@ -297,7 +298,8 @@
                                 {% set d = word.split('@')[1] if '@' in word else '' %}
                                 {% if d %}
                                     <button type="button"
-                                            class="badge bg-info border-0 domain-pill interactive-chip"
+                                            class="badge bg-info border-0 domain-pill"
+                                            style="cursor: pointer;"
                                             data-domain="{{ d }}"
                                             title="{{ _('Filter by this domain') }}">
                                         {{ d }}
@@ -308,11 +310,14 @@
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary" onclick='copyEmail({{ word|tojson }})' title="{{ _('Copy') }}">
+                                    <button class="btn btn-outline-primary" onclick="copyEmail('{{ word }}')" title="{{ _('Copy') }}">
                                         <i class="bi bi-clipboard"></i>
                                     </button>
-                                    <button class="btn btn-outline-secondary" onclick='searchInFiles({{ word|tojson }})' title="{{ _('Search in Files') }}">
+                                    <button class="btn btn-outline-secondary" onclick="searchInFiles('{{ word }}')" title="{{ _('Search in Files') }}">
                                         <i class="bi bi-search"></i>
+                                    </button>
+                                    <button class="btn btn-outline-success" onclick="addToContacts('{{ word }}')" title="{{ _('Add to Contacts') }}">
+                                        <i class="bi bi-person-plus"></i>
                                     </button>
                                 </div>
                             </td>
@@ -321,8 +326,8 @@
                     </tbody>
                 </table>
             </div>
-            
-            <div class="email-table-footer">
+
+            <div class="mt-3 d-flex justify-content-between align-items-center">
                 <small class="text-muted">
                     <i class="bi bi-info-circle me-1"></i>
                     {{ _('Showing') }} {{ email_words|length }} {{ _('of') }} {{ total_words|number_format }} {{ _('email-like words') }} ({{ _('Page') }} {{ page }} {{ _('of') }} {{ total_pages }})
@@ -336,11 +341,11 @@
                     </button>
                 </div>
             </div>
-            
+
             <!-- Pagination -->
             {% if total_pages > 1 %}
                 {% from "components/unified_pagination.html" import unified_pagination %}
-                {{ unified_pagination(page, total_pages, url_for, 'email_words', {'q': search_term, 'domain': domain, 'domain_mode': domain_mode, 'per_page': per_page, 'sort_by': sort_by, 'sort_order': sort_order}, total_items=total_words, per_page=per_page, item_label=_('email-like words')) }}
+                {{ unified_pagination(page, total_pages, url_for, 'email_words', {'q': search_term, 'domain': domain, 'domain_mode': domain_mode, 'per_page': per_page, 'sort_by': sort_by, 'sort_order': sort_order}) }}
             {% endif %}
 
 
@@ -354,7 +359,7 @@
                         <i class="bi bi-arrow-clockwise me-1"></i> {{ _('Refresh') }}
                     </button>
                     <button class="btn btn-outline-secondary" onclick="window.location.href='/dashboard'">
-                        <i class="bi bi-house me-1"></i> {{ _('Go to Dashboard') }} 
+                        <i class="bi bi-house me-1"></i> {{ _('Go to Dashboard') }}
                     </button>
                 </div>
             </div>
@@ -365,7 +370,7 @@
 </div>
 
 <!-- Email Files Modal -->
-<div class="modal fade ia-modal" id="emailFilesModal" tabindex="-1" aria-labelledby="emailFilesModalLabel" aria-hidden="true">
+<div class="modal fade" id="emailFilesModal" tabindex="-1" aria-labelledby="emailFilesModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">

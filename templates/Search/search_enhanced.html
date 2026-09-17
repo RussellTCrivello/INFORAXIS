@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Enhanced Search') }}{% endblock %}
-{% block page_type %}search-enhanced{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/search-enhanced.css') }}" rel="stylesheet">
@@ -83,13 +82,13 @@
                     <label for="searchQuery" class="form-label fw-bold">
                         <i class="bi bi-search me-1"></i>{{ _('Search Query') }}
                     </label>
-                    <input type="text" 
-                           class="form-control" 
-                           id="searchQuery" 
+                    <input type="text"
+                           class="form-control"
+                           id="searchQuery"
                            placeholder="{{ _('Enter search terms...') }}"
                            autocomplete="off">
                 </div>
-                
+
                 <!--  NEW: Comprehensive Search Option -->
                 <div class="mb-3">
                     <div class="form-check">
@@ -97,7 +96,7 @@
                         <label class="form-check-label" for="searchAllData">
                             <i class="bi bi-database me-1"></i>
                             <strong>{{ _('Search All Data') }}</strong>
-                            <small class="d-block text-muted helper-text-xs">
+                            <small class="d-block text-muted" style="font-size: 0.75rem;">
                                 {{ _('Search files, categories, keywords, sources, sides, words, and titles') }}
                             </small>
                         </label>
@@ -125,7 +124,7 @@
                             {{ _('Analyst-Categorized Files Only') }}
                         </option>
                     </select>
-                    <small class="text-muted d-block mt-1 helper-text-xs">
+                    <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
                         {{ _('By analyst categorization status - independent of smart categorization') }}
                     </small>
                 </div>
@@ -154,7 +153,7 @@
             <!-- Filters -->
             <div class="filter-section">
                 <h6><i class="bi bi-funnel me-1"></i>{{ _('Filters') }}</h6>
-                
+
                 <div class="mb-2">
                     <label class="form-label small">{{ _('File Type') }}</label>
                     <select class="form-select form-select-sm search-filter" id="filterFileType">
@@ -277,4 +276,3 @@
 <!-- Search Enhanced Page JavaScript - External file -->
 <script type="module" src="{{ url_for('static', filename='js/pages/search-enhanced-page.js') }}"></script>
 {% endblock %}
-

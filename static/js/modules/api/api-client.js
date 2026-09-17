@@ -15,13 +15,13 @@ import { getCSRFToken, getCSRFTokenAsync } from '../core/utils.js';
 export async function apiRequest(url, options = {}, timeout = 30000) {
     const method = (options.method || 'GET').toUpperCase();
     const needsCSRF = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
-    
+
     // Get CSRF token - always fetch async for POST/PUT/DELETE to ensure it's fresh
     let csrfToken = '';
     if (needsCSRF) {
         // Try sync first for speed
         csrfToken = getCSRFToken();
-        
+
         // If no token or empty, fetch it async
         if (!csrfToken || csrfToken.trim() === '') {
             try {
@@ -32,54 +32,54 @@ export async function apiRequest(url, options = {}, timeout = 30000) {
                 csrfToken = getCSRFToken();
             }
         }
-        
+
         // If still no token, throw error
         if (!csrfToken || csrfToken.trim() === '') {
             throw new Error('CSRF token is required but could not be obtained. Please refresh the page.');
         }
     }
-    
+
     const defaultOptions = {
         headers: {
             'Content-Type': 'application/json',
             ...(needsCSRF && csrfToken ? { 'X-CSRFToken': csrfToken } : {})
         }
     };
-    
+
     // Merge headers - ensure CSRF token is not overwritten
     const headers = {
         ...defaultOptions.headers,
         ...(options.headers || {})
     };
-    
+
     // Ensure CSRF token is set if needed
     if (needsCSRF && csrfToken && !headers['X-CSRFToken']) {
         headers['X-CSRFToken'] = csrfToken;
     }
-    
+
     const mergedOptions = {
         ...defaultOptions,
         ...options,
         headers
     };
-    
+
     // PERFORMANCE FIX: Add request timeout to prevent hanging requests
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
+
     // Add signal to options if not already present
     if (!mergedOptions.signal) {
         mergedOptions.signal = controller.signal;
     }
-    
+
     try {
         const response = await fetch(url, mergedOptions);
         clearTimeout(timeoutId);
-        
+
         // Handle non-OK responses
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            
+
             // If CSRF error, try to refresh token and retry once
             if (response.status === 400 && errorData.error && errorData.error.includes('CSRF')) {
                 console.warn('CSRF token invalid, attempting to refresh...');
@@ -90,8 +90,8 @@ export async function apiRequest(url, options = {}, timeout = 30000) {
                         const retryController = new AbortController();
                         const retryTimeoutId = setTimeout(() => retryController.abort(), timeout);
                         headers['X-CSRFToken'] = newToken;
-                        const retryResponse = await fetch(url, { 
-                            ...mergedOptions, 
+                        const retryResponse = await fetch(url, {
+                            ...mergedOptions,
                             headers,
                             signal: retryController.signal
                         });
@@ -104,10 +104,10 @@ export async function apiRequest(url, options = {}, timeout = 30000) {
                     console.error('Failed to refresh CSRF token:', retryError);
                 }
             }
-            
+
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
-        
+
         return response;
     } catch (error) {
         clearTimeout(timeoutId);
@@ -140,15 +140,15 @@ export async function apiGet(url, params = {}, options = {}) {
             urlObj.searchParams.set(key, value);
         }
     });
-    
+
     const response = await apiRequest(urlObj.toString(), { method: 'GET', ...options });
     const data = await response.json();
-    
+
     // Handle error responses
     if (!data.success && data.error) {
         throw new Error(data.error);
     }
-    
+
     return data;
 }
 
@@ -157,15 +157,14 @@ export async function apiGet(url, params = {}, options = {}) {
  * @param {string} url - API endpoint URL
  * @param {Object} data - Request body data
  * @param {Object} options - Additional fetch options
- * @param {number} timeout - Optional request timeout in milliseconds
  * @returns {Promise<Object>} JSON response data
  */
-export async function apiPost(url, data = {}, options = {}, timeout) {
+export async function apiPost(url, data = {}, options = {}) {
     const response = await apiRequest(url, {
         method: 'POST',
         body: JSON.stringify(data),
         ...options
-    }, timeout);
+    });
     return response.json();
 }
 
@@ -198,4 +197,3 @@ export async function apiPut(url, data = {}, options = {}) {
     });
     return response.json();
 }
-

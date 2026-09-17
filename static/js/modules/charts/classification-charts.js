@@ -29,52 +29,50 @@ const chartColors = [
 export function loadClassificationCharts(fileId) {
     const analysisSection = document.getElementById('fileAnalysisSection');
     if (!analysisSection) return;
-    
-    // Show loading state using the shared analytical panel classes. Controls
-    // remain fixed while the chart and backing data table use their own bounded
-    // scroll regions.
+
+    // Show loading state
     analysisSection.innerHTML = `
         <div class="classification-charts-container">
-            <div class="classification-charts-controls ia-fixed-control-surface" data-ia-role="controls">
-                <div class="data-type-tabs" role="tablist" aria-label="${translations.analysis || 'Analysis'}">
-                    <button type="button" class="data-type-tab active" data-type="categories" onclick="switchDataType('categories')">
-                        <i class="bi bi-tags" aria-hidden="true"></i> ${translations.categories || 'Categories'}
+            <div class="classification-charts-controls">
+                <div class="data-type-tabs">
+                    <button class="data-type-tab active" data-type="categories" onclick="switchDataType('categories')">
+                        <i class="bi bi-tags"></i> ${translations.categories || 'Categories'}
                     </button>
-                    <button type="button" class="data-type-tab" data-type="words" onclick="switchDataType('words')">
-                        <i class="bi bi-file-text" aria-hidden="true"></i> ${translations.words || 'Words'}
+                    <button class="data-type-tab" data-type="words" onclick="switchDataType('words')">
+                        <i class="bi bi-file-text"></i> ${translations.words || 'Words'}
                     </button>
-                    <button type="button" class="data-type-tab" data-type="keywords" onclick="switchDataType('keywords')">
-                        <i class="bi bi-key" aria-hidden="true"></i> ${translations.keywords || 'Keywords'}
+                    <button class="data-type-tab" data-type="keywords" onclick="switchDataType('keywords')">
+                        <i class="bi bi-key"></i> ${translations.keywords || 'Keywords'}
                     </button>
                 </div>
-                <div class="chart-filter-container">
-                    <label class="visually-hidden" for="chartFilterInput">${translations.filterData || 'Filter data'}</label>
-                    <input type="text" id="chartFilterInput" class="form-control form-control-sm"
-                           placeholder="${translations.filterData || 'Filter...'}"
-                           oninput="filterChartData(this.value)">
-                </div>
+
+            <div class="chart-filter-container" style="margin-top: 0.75rem;">
+                <input type="text" id="chartFilterInput"
+                       placeholder="${translations.filterData || 'Filter...'}"
+                       oninput="filterChartData(this.value)"
+                       style="width: 100%; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 0.875rem;">
             </div>
-            <div class="chart-and-table-container">
-                <div class="chart-container classification-chart-panel">
+            <div class="chart-and-table-container" style="display: flex; gap: 1rem; margin-top: 1rem;">
+                <div class="chart-container" style="flex: 1; position: relative; height: 300px; min-width: 0;">
                     <canvas id="classificationChart"></canvas>
                 </div>
-                <div class="chart-data-table-container ia-data-scroll-region" data-ia-scroll="true">
-                    <div id="chartDataTable" class="chart-data-table">
-                        <div class="chart-data-table-title">
+                <div class="chart-data-table-container" style="flex: 0 0 300px; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; background: #ffffff;">
+                    <div id="chartDataTable" style="padding: 0.5rem;">
+                        <div style="font-size: 0.75rem; color: #64748b; padding: 0.5rem; border-bottom: 1px solid #e2e8f0; font-weight: 600;">
                             ${translations.dataTable || 'Data Table'}
                         </div>
-                        <div class="table-loading chart-table-state">
+                        <div class="table-loading" style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.875rem;">
                             ${translations.loadingAnalysis || 'Loading...'}
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="chart-loading chart-state">
+            <div class="chart-loading" style="text-align: center; padding: 2rem; color: #64748b;">
                 ${translations.loadingAnalysis || 'Loading analysis...'}
             </div>
-        </div>
+
     `;
-    
+
     // Fetch chart data
     fetch(`/file/${fileId}/chart-data`)
         .then(response => {
@@ -87,7 +85,7 @@ export function loadClassificationCharts(fileId) {
             if (!result.success || !result.data) {
                 throw new Error(result.error || 'Failed to load chart data');
             }
-            
+
             classificationChartState.chartData = result.data;
             renderClassificationChart();
             renderChartDataTable();
@@ -97,7 +95,7 @@ export function loadClassificationCharts(fileId) {
             console.error('Error loading classification charts:', error);
             const chartContainer = analysisSection.querySelector('.chart-container');
             if (chartContainer) {
-                chartContainer.innerHTML = `<div class="empty-state chart-state chart-state-error">
+                chartContainer.innerHTML = `<div class="empty-state" style="text-align: center; padding: 2rem; color: #ef4444;">
                     ${translations.errorLoadingAnalysis || 'Error loading analysis'}: ${escapeHtml(error.message)}
                 </div>`;
             }
@@ -110,7 +108,7 @@ export function loadClassificationCharts(fileId) {
 export function switchDataType(dataType) {
     classificationChartState.currentDataType = dataType;
     classificationChartState.filterValue = '';
-    
+
     // Update active tab
     document.querySelectorAll('.data-type-tab').forEach(tab => {
         tab.classList.remove('active');
@@ -118,13 +116,13 @@ export function switchDataType(dataType) {
             tab.classList.add('active');
         }
     });
-    
+
     // Clear filter
     const filterInput = document.getElementById('chartFilterInput');
     if (filterInput) {
         filterInput.value = '';
     }
-    
+
     renderClassificationChart();
     renderChartDataTable();
 }
@@ -153,12 +151,12 @@ export function renderClassificationChart() {
     if (!classificationChartState.chartData) {
         return;
     }
-    
+
     const canvas = document.getElementById('classificationChart');
     if (!canvas) {
         return;
     }
-    
+
     // Get data based on current data type
     let rawData = [];
     switch (classificationChartState.currentDataType) {
@@ -172,30 +170,31 @@ export function renderClassificationChart() {
             rawData = classificationChartState.chartData.keywords || [];
             break;
     }
-    
+
     // Apply filter
     let filteredData = rawData;
     if (classificationChartState.filterValue) {
-        filteredData = rawData.filter(item => 
+        filteredData = rawData.filter(item =>
             item.name && item.name.toLowerCase().includes(classificationChartState.filterValue)
         );
     }
-    
+
     // Limit to top 20 items for better visualization
     filteredData = filteredData.slice(0, 20);
-    
+
     // Check if we have data
     if (!filteredData || filteredData.length === 0) {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
+
         // Show empty state
         const container = canvas.parentElement;
         if (container) {
             const emptyDiv = document.createElement('div');
-            emptyDiv.className = 'empty-state chart-state';
+            emptyDiv.className = 'empty-state';
+            emptyDiv.style.cssText = 'text-align: center; padding: 2rem; color: #64748b;';
             emptyDiv.textContent = translations.noCategoriesAssigned || 'No data available';
-            
+
             // Remove existing empty state if any
             const existingEmpty = container.querySelector('.empty-state');
             if (existingEmpty) {
@@ -203,7 +202,7 @@ export function renderClassificationChart() {
             }
             container.appendChild(emptyDiv);
         }
-        
+
         // Destroy existing chart - check both our state and Chart.js registry
         if (classificationChartState.currentChart) {
             try {
@@ -213,7 +212,7 @@ export function renderClassificationChart() {
             }
             classificationChartState.currentChart = null;
         }
-        
+
         // Also check if Chart.js has a chart registered on this canvas
         if (typeof Chart !== 'undefined' && Chart.getChart) {
             const existingChart = Chart.getChart(canvas);
@@ -225,10 +224,10 @@ export function renderClassificationChart() {
                 }
             }
         }
-        
+
         return;
     }
-    
+
     // Remove empty state if exists
     const container = canvas.parentElement;
     if (container) {
@@ -237,19 +236,19 @@ export function renderClassificationChart() {
             emptyState.remove();
         }
     }
-    
+
     // Prepare chart data
     const labels = filteredData.map(item => {
         const name = item.name || 'Unknown';
         return name.length > 30 ? name.substring(0, 27) + '...' : name;
     });
-    
+
     const dataValues = filteredData.map(item => item.count || 0);
     const fullLabels = filteredData.map(item => item.name || 'Unknown');
-    
+
     // Generate colors
     const colors = chartColors.slice(0, filteredData.length);
-    
+
     // Destroy existing chart - check both our state and Chart.js registry
     if (classificationChartState.currentChart) {
         try {
@@ -259,7 +258,7 @@ export function renderClassificationChart() {
         }
         classificationChartState.currentChart = null;
     }
-    
+
     // Also check if Chart.js has a chart registered on this canvas
     if (typeof Chart !== 'undefined' && Chart.getChart) {
         const existingChart = Chart.getChart(canvas);
@@ -271,18 +270,18 @@ export function renderClassificationChart() {
             }
         }
     }
-    
+
     // Clear the canvas
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const chartType = classificationChartState.currentChartType;
-    
+
     const chartConfig = {
         type: chartType,
         data: {
             labels: labels,
             datasets: [{
-                label: classificationChartState.currentDataType.charAt(0).toUpperCase() + 
+                label: classificationChartState.currentDataType.charAt(0).toUpperCase() +
                        classificationChartState.currentDataType.slice(1),
                 data: dataValues,
                 backgroundColor: chartType === 'line' ? chartColors[0] : colors,
@@ -311,8 +310,8 @@ export function renderClassificationChart() {
                             const index = context.dataIndex;
                             const fullLabel = fullLabels[index];
                             const value = context.parsed.y || context.parsed;
-                            const percentage = classificationChartState.currentDataType === 'categories' && 
-                                filteredData[index].percentage ? 
+                            const percentage = classificationChartState.currentDataType === 'categories' &&
+                                filteredData[index].percentage ?
                                 ` (${filteredData[index].percentage.toFixed(1)}%)` : '';
                             return `${fullLabel}: ${value}${percentage}`;
                         }
@@ -343,7 +342,7 @@ export function renderClassificationChart() {
             } : {}
         }
     };
-    
+
     // Special handling for horizontal bar chart
     if (chartType === 'bar' && filteredData.length > 10) {
         chartConfig.options.indexAxis = 'y';
@@ -365,13 +364,13 @@ export function renderClassificationChart() {
             }
         };
     }
-    
+
     // Require Chart global
     if (typeof Chart === 'undefined') {
         console.error('Chart.js not loaded. Please include chart.js before using classification charts.');
         return;
     }
-    
+
     // Double-check that no chart exists on the canvas before creating new one
     // This prevents "Canvas is already in use" errors
     if (Chart.getChart) {
@@ -384,7 +383,7 @@ export function renderClassificationChart() {
             }
         }
     }
-    
+
     // Create new chart
     try {
         classificationChartState.currentChart = new Chart(ctx, chartConfig);
@@ -416,14 +415,14 @@ export function renderClassificationChart() {
         }, 50);
         return; // Early return if we're retrying
     }
-    
+
     // Force update to ensure chart is fully initialized
     setTimeout(() => {
         if (classificationChartState.currentChart) {
             classificationChartState.currentChart.update('none');
         }
     }, 50);
-    
+
     // Attach export buttons - wait for ChartExport to be available with retry logic
     function attachClassificationControls() {
         if (window.ChartExport && window.ChartExport.attachExportButtonsToCharts) {
@@ -452,7 +451,7 @@ export function renderClassificationChart() {
                         attempts++;
                     }
                 }
-                
+
                 if (chartContainer) {
                     window.ChartExport.attachExportButtonsToCharts(chartContainer);
                 } else {
@@ -469,11 +468,11 @@ export function renderClassificationChart() {
         }
     }
     setTimeout(attachClassificationControls, 150);
-    
+
     // Hide loading indicator
     const loadingDiv = document.querySelector('.chart-loading');
     if (loadingDiv) {
-        loadingDiv.hidden = true;
+        loadingDiv.style.display = 'none';
     }
 }
 
@@ -484,12 +483,12 @@ export function renderChartDataTable() {
     if (!classificationChartState.chartData) {
         return;
     }
-    
+
     const tableContainer = document.getElementById('chartDataTable');
     if (!tableContainer) {
         return;
     }
-    
+
     // Get data based on current data type
     let rawData = [];
     switch (classificationChartState.currentDataType) {
@@ -503,66 +502,86 @@ export function renderChartDataTable() {
             rawData = classificationChartState.chartData.keywords || [];
             break;
     }
-    
+
     // Apply filter
     let filteredData = rawData;
     if (classificationChartState.filterValue) {
-        filteredData = rawData.filter(item => 
+        filteredData = rawData.filter(item =>
             item.name && item.name.toLowerCase().includes(classificationChartState.filterValue)
         );
     }
-    
+
     // Limit to top 20 items
     filteredData = filteredData.slice(0, 20);
-    
+
     // Remove loading indicator
     const loadingDiv = tableContainer.querySelector('.table-loading');
     if (loadingDiv) {
         loadingDiv.remove();
     }
-    
-    const currentLabel = classificationChartState.currentDataType === 'categories'
-        ? (translations.category || 'Category')
-        : classificationChartState.currentDataType === 'words'
-            ? (translations.word || 'Word')
-            : (translations.keyword || 'Keyword');
 
     if (!filteredData || filteredData.length === 0) {
         tableContainer.innerHTML = `
-            <div class="chart-data-table-title">${translations.dataTable || 'Data Table'}</div>
-            <div class="chart-table-state">${translations.noDataAvailable || 'No data available'}</div>
+            <div style="font-size: 0.75rem; color: #64748b; padding: 0.5rem; border-bottom: 1px solid #e2e8f0; font-weight: 600;">
+                ${translations.dataTable || 'Data Table'}
+            </div>
+            <div style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.875rem;">
+                ${translations.noDataAvailable || 'No data available'}
+            </div>
         `;
         return;
     }
-    
+
+    // Build table HTML
     let tableHtml = `
-        <div class="chart-data-table-title">${translations.dataTable || 'Data Table'} (${filteredData.length})</div>
-        <table class="chart-data-table-grid">
+        <div style="font-size: 0.75rem; color: #64748b; padding: 0.5rem; border-bottom: 1px solid #e2e8f0; font-weight: 600; position: sticky; top: 0; background: #ffffff; z-index: 10;">
+            ${translations.dataTable || 'Data Table'} (${filteredData.length})
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
             <thead>
-                <tr>
-                    <th>${currentLabel}</th>
-                    <th class="text-end">${translations.count || 'Count'}</th>
-                    ${classificationChartState.currentDataType === 'categories' ? `<th class="text-end">${translations.percentage || '%'}</th>` : ''}
+                <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                    <th style="padding: 0.5rem; text-align: left; font-weight: 600; color: #475569; position: sticky; top: 32px; background: #f8fafc; z-index: 9;">
+                        ${classificationChartState.currentDataType === 'categories' ? (translations.category || 'Category') :
+                          classificationChartState.currentDataType === 'words' ? (translations.word || 'Word') :
+                          (translations.keyword || 'Keyword')}
+                    </th>
+                    <th style="padding: 0.5rem; text-align: right; font-weight: 600; color: #475569; position: sticky; top: 32px; background: #f8fafc; z-index: 9;">
+                        ${translations.count || 'Count'}
+                    </th>
+                    ${classificationChartState.currentDataType === 'categories' ? `
+                    <th style="padding: 0.5rem; text-align: right; font-weight: 600; color: #475569; position: sticky; top: 32px; background: #f8fafc; z-index: 9;">
+                        ${translations.percentage || '%'}
+                    </th>
+                    ` : ''}
                 </tr>
             </thead>
             <tbody>
     `;
-    
-    filteredData.forEach((item) => {
+
+    filteredData.forEach((item, index) => {
+        const rowColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
         tableHtml += `
-            <tr>
-                <td class="chart-data-name" title="${escapeHtml(item.name || 'Unknown')}">
+            <tr style="background: ${rowColor}; border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 0.5rem; color: #1e293b; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item.name || 'Unknown')}">
                     ${escapeHtml(item.name || 'Unknown')}
                 </td>
-                <td class="text-end chart-data-count">${(item.count || 0).toLocaleString()}</td>
+                <td style="padding: 0.5rem; text-align: right; color: #475569; font-weight: 500;">
+                    ${(item.count || 0).toLocaleString()}
+                </td>
                 ${classificationChartState.currentDataType === 'categories' ? `
-                    <td class="text-end chart-data-percent">${item.percentage ? item.percentage.toFixed(1) + '%' : '-'}</td>
+                <td style="padding: 0.5rem; text-align: right; color: #64748b; font-size: 0.7rem;">
+                    ${item.percentage ? item.percentage.toFixed(1) + '%' : '-'}
+                </td>
                 ` : ''}
             </tr>
         `;
     });
-    
-    tableHtml += `</tbody></table>`;
+
+    tableHtml += `
+            </tbody>
+        </table>
+    `;
+
     tableContainer.innerHTML = tableHtml;
 }
 
@@ -573,62 +592,83 @@ export function renderDuplicateWords() {
     if (!classificationChartState.chartData) {
         return;
     }
-    
+
     const container = document.getElementById('duplicateWordsContainer');
     const countSpan = document.getElementById('duplicateWordsCount');
     if (!container) {
         return;
     }
-    
+
     const repeatedElements = classificationChartState.chartData.repeated_elements || [];
-    
+
     if (countSpan) {
         countSpan.textContent = `(${repeatedElements.length})`;
     }
-    
+
     const loadingDiv = container.querySelector('.duplicate-words-loading');
     if (loadingDiv) {
         loadingDiv.remove();
     }
-    
+
     if (!repeatedElements || repeatedElements.length === 0) {
         container.innerHTML = `
-            <div class="chart-table-state">
+            <div style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.875rem;">
                 ${translations.noDuplicateWords || 'No duplicate words found'}
             </div>
         `;
         return;
     }
-    
+
     let html = `
-        <table class="chart-data-table-grid duplicate-words-grid">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
             <thead>
-                <tr>
-                    <th>${translations.word || 'Word'}</th>
-                    <th class="text-end">${translations.count || 'Count'}</th>
-                    <th class="text-end">${translations.categories || 'Categories'}</th>
-                    <th>${translations.categoryList || 'Category List'}</th>
+                <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 10;">
+                    <th style="padding: 0.5rem; text-align: left; font-weight: 600; color: #475569;">
+                        ${translations.word || 'Word'}
+                    </th>
+                    <th style="padding: 0.5rem; text-align: right; font-weight: 600; color: #475569;">
+                        ${translations.count || 'Count'}
+                    </th>
+                    <th style="padding: 0.5rem; text-align: right; font-weight: 600; color: #475569;">
+                        ${translations.categories || 'Categories'}
+                    </th>
+                    <th style="padding: 0.5rem; text-align: left; font-weight: 600; color: #475569;">
+                        ${translations.categoryList || 'Category List'}
+                    </th>
                 </tr>
             </thead>
             <tbody>
     `;
-    
-    repeatedElements.forEach((item) => {
-        const categoriesList = item.categories && item.categories.length > 0 
-            ? item.categories.join(', ') 
+
+    repeatedElements.forEach((item, index) => {
+        const rowColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+        const categoriesList = item.categories && item.categories.length > 0
+            ? item.categories.join(', ')
             : translations.noCategories || 'None';
-        
+
         html += `
-            <tr>
-                <td class="chart-data-name">${escapeHtml(item.word || 'Unknown')}</td>
-                <td class="text-end chart-data-count">${(item.count || 0).toLocaleString()}</td>
-                <td class="text-end chart-data-count">${item.category_count || 0}</td>
-                <td class="chart-data-name" title="${escapeHtml(categoriesList)}">${escapeHtml(categoriesList)}</td>
+            <tr style="background: ${rowColor}; border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 0.5rem; color: #1e293b; font-weight: 500;">
+                    ${escapeHtml(item.word || 'Unknown')}
+                </td>
+                <td style="padding: 0.5rem; text-align: right; color: #475569;">
+                    ${(item.count || 0).toLocaleString()}
+                </td>
+                <td style="padding: 0.5rem; text-align: right; color: #667eea; font-weight: 600;">
+                    ${item.category_count || 0}
+                </td>
+                <td style="padding: 0.5rem; color: #64748b; font-size: 0.7rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(categoriesList)}">
+                    ${escapeHtml(categoriesList)}
+                </td>
             </tr>
         `;
     });
-    
-    html += `</tbody></table>`;
+
+    html += `
+            </tbody>
+        </table>
+    `;
+
     container.innerHTML = html;
 }
 
@@ -649,4 +689,3 @@ export default {
     renderChartDataTable,
     renderDuplicateWords
 };
-

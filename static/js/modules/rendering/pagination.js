@@ -12,11 +12,11 @@ import { renderUnifiedPagination } from './unified-pagination.js';
 export function updateNavItemCount(startItem, endItem, total) {
     const navItemCount = document.getElementById('navItemCount');
     const navItemCountText = document.getElementById('navItemCountText');
-    
+
     // Update the text element if it exists, otherwise update the container
     const targetElement = navItemCountText || navItemCount;
     if (!targetElement) return;
-    
+
     // Format the count display accurately
     if (total === 0) {
         targetElement.textContent = '0 / 0';
@@ -25,7 +25,7 @@ export function updateNavItemCount(startItem, endItem, total) {
     } else {
         targetElement.textContent = `${startItem}-${endItem} / ${total}`;
     }
-    
+
     // Show the count container if it was hidden
     if (navItemCount && navItemCount.style.display === 'none') {
         navItemCount.style.display = '';
@@ -34,10 +34,10 @@ export function updateNavItemCount(startItem, endItem, total) {
 
 export function renderSectionPaginationControls(section) {
     const pag = navigationState.sectionPagination;
-    
+
     // Hide pagination if no items or only one page
     if (!pag.total || pag.total === 0 || pag.totalPages <= 1) return '';
-    
+
     // Return a container div that will be used to render pagination after DOM insertion
     const containerId = `section-pagination-${section}`;
     return `<div id="${containerId}" class="section-pagination-container"></div>`;
@@ -49,21 +49,18 @@ export function renderSectionPaginationControls(section) {
  */
 export function initializeSectionPaginationControls(section) {
     const pag = navigationState.sectionPagination;
-    
+
     // Hide pagination if no items or only one page
     if (!pag.total || pag.total === 0 || pag.totalPages <= 1) return;
-    
+
     const containerId = `section-pagination-${section}`;
     const container = document.getElementById(containerId);
     if (!container) return;
-    
+
     // Render unified pagination directly into the container
     renderUnifiedPagination({
         currentPage: pag.currentPage,
         totalPages: pag.totalPages,
-        totalItems: pag.total,
-        pageSize: pag.perPage,
-        itemLabel: translations.items || 'items',
         containerId: containerId,
         onPageChange: (targetPage) => {
             if (typeof window.loadSectionPage === 'function') {
@@ -105,7 +102,7 @@ export function initializeFilePaginationControls() {
 
     const containerId = 'file-pagination-container';
     const container = document.getElementById(containerId);
-    
+
     // If no container, pagination wasn't rendered (only one page or no files)
     if (!container) {
         console.debug('File pagination container not found - may have only one page');
@@ -117,15 +114,12 @@ export function initializeFilePaginationControls() {
         container.innerHTML = '';
         return;
     }
-    
+
     // Render unified pagination directly into the container
     try {
         renderUnifiedPagination({
             currentPage: pag.currentPage,
             totalPages: pag.totalPages,
-            totalItems: pag.total,
-            pageSize: pag.perPage,
-            itemLabel: translations.files || 'files',
             containerId: containerId,
             onPageChange: (targetPage) => {
                 if (typeof window.loadFilePage === 'function') {
@@ -141,4 +135,3 @@ export function initializeFilePaginationControls() {
         console.error('Error rendering file pagination:', error);
     }
 }
-

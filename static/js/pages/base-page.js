@@ -6,7 +6,7 @@
 // Get current endpoint from data attribute or meta tag
 function getCurrentEndpoint() {
     const body = document.body;
-    const endpoint = body.getAttribute('data-current-endpoint') || 
+    const endpoint = body.getAttribute('data-current-endpoint') ||
                      body.getAttribute('data-endpoint') ||
                      (document.querySelector('meta[name="current-endpoint"]')?.getAttribute('content') || '');
     return endpoint;
@@ -20,14 +20,11 @@ function getHomeUrl() {
 
 // Initialize base page functionality
 document.addEventListener('DOMContentLoaded', function() {
-    if (document.body?.dataset.iaBasePageInitialized === 'true') return;
-    if (document.body) document.body.dataset.iaBasePageInitialized = 'true';
-
     // Mobile menu toggle with backdrop
     const menuToggle = document.getElementById('menuToggle');
     const sidebar = document.getElementById('sidebar');
     const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    
+
     function toggleSidebar() {
         if (sidebar) {
             const isOpen = sidebar.classList.contains('show');
@@ -48,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     function closeSidebar() {
         if (sidebar) {
             sidebar.classList.remove('show');
@@ -58,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.overflow = '';
         }
     }
-    
+
     // Toggle sidebar on menu button click
     if (menuToggle && sidebar) {
         menuToggle.addEventListener('click', function(e) {
@@ -66,14 +63,14 @@ document.addEventListener('DOMContentLoaded', function() {
             toggleSidebar();
         });
     }
-    
+
     // Close sidebar when backdrop is clicked
     if (sidebarBackdrop) {
         sidebarBackdrop.addEventListener('click', function() {
             closeSidebar();
         });
     }
-    
+
     // Close sidebar when clicking on a sidebar link (mobile)
     if (sidebar) {
         const sidebarLinks = sidebar.querySelectorAll('.sidebar-nav-link');
@@ -86,7 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-    
+
     // Close sidebar on window resize if it becomes desktop size
     let resizeTimeout;
     window.addEventListener('resize', function() {
@@ -97,23 +94,23 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 250);
     });
-    
+
     // Close sidebar on Escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && sidebar && sidebar.classList.contains('show')) {
             closeSidebar();
         }
     });
-    
+
     // Maintain sidebar active state
     function updateSidebarActiveState() {
         const currentPath = window.location.pathname;
         const currentEndpoint = getCurrentEndpoint();
         const sidebarLinks = document.querySelectorAll('.sidebar-nav-link:not(.language-switcher .sidebar-nav-link)');
-        
+
         // Check if server already set an active state correctly
         const serverActiveLink = document.querySelector('.sidebar-nav-link.active:not(.language-switcher .sidebar-nav-link)');
-        
+
         // If server set an active state and it matches current endpoint, trust it
         if (serverActiveLink && currentEndpoint) {
             const activeEndpoint = serverActiveLink.getAttribute('data-endpoint');
@@ -122,10 +119,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
         }
-        
+
         // Otherwise, find and set the correct active state
         let foundActive = false;
-        
+
         // Priority 1: Match by endpoint name (most reliable)
         if (currentEndpoint) {
             sidebarLinks.forEach(link => {
@@ -138,7 +135,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        
+
         // Priority 2: Match by URL path (fallback)
         if (!foundActive) {
             sidebarLinks.forEach(link => {
@@ -146,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (href) {
                     try {
                         const hrefPath = new URL(href, window.location.origin).pathname;
-                        if (currentPath === hrefPath || 
+                        if (currentPath === hrefPath ||
                             (hrefPath !== '/' && currentPath.startsWith(hrefPath + '/'))) {
                             // Remove active from all other links
                             sidebarLinks.forEach(l => l.classList.remove('active'));
@@ -165,7 +162,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     // Immediately set clicked link as active and persist it
     const sidebarNav = document.querySelector('.sidebar-nav');
     if (sidebarNav) {
@@ -176,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const allLinks = document.querySelectorAll('.sidebar-nav-link:not(.language-switcher .sidebar-nav-link)');
                 allLinks.forEach(l => l.classList.remove('active'));
                 link.classList.add('active');
-                
+
                 // Store the clicked link's endpoint for after page reload
                 const endpoint = link.getAttribute('data-endpoint');
                 if (endpoint) {
@@ -185,7 +182,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // On page load, ensure the correct button is active
     window.addEventListener('load', function() {
         // First, let server-side template set active state
@@ -193,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(function() {
             const storedEndpoint = sessionStorage.getItem('activeSidebarEndpoint');
             const currentEndpoint = getCurrentEndpoint();
-            
+
             // If we have a stored endpoint and it matches current, ensure it's active
             if (storedEndpoint && storedEndpoint === currentEndpoint) {
                 const sidebarLinks = document.querySelectorAll('.sidebar-nav-link:not(.language-switcher .sidebar-nav-link)');
@@ -212,12 +209,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 50);
     });
-    
+
     // Also update on popstate (back/forward navigation)
     window.addEventListener('popstate', function() {
         setTimeout(updateSidebarActiveState, 50);
     });
-    
+
     // Auto-hide alerts after 5 seconds
     // ALERT-01: only true flash messages auto-dismiss. The previous selector
     // closed every `.alert` on the page — including hidden error boxes inside
@@ -239,7 +236,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 5000);
         });
     }
-    
+
     // Smooth scroll for anchor links
     const anchorLinks = document.querySelectorAll('a[href^="#"]');
     if (anchorLinks.length > 0) {
@@ -259,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-    
+
     // Initialize tooltips - only if Bootstrap is loaded
     if (typeof bootstrap !== 'undefined') {
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
@@ -269,28 +266,28 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     // Navigation Bar Functionality
     const navBackBtn = document.getElementById('navBackBtn');
     const navForwardBtn = document.getElementById('navForwardBtn');
     const navRefreshBtn = document.getElementById('navRefreshBtn');
-    
+
     // Track navigation state
     let canGoBack = false;
     let canGoForward = false;
-    
+
     // Check if we can navigate back/forward
     function updateNavigationButtons() {
         // Check if we can go back (if history.length > 1, we likely can)
         canGoBack = window.history.length > 1;
         canGoForward = false; // We can't reliably detect forward state
-        
+
         // Try to detect if we came from another page
         if (document.referrer && document.referrer !== window.location.href) {
             canGoBack = true;
         }
     }
-    
+
     // Enhanced back button with fallback
     if (navBackBtn) {
         navBackBtn.addEventListener('click', function(e) {
@@ -303,7 +300,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Enhanced forward button
     if (navForwardBtn) {
         navForwardBtn.addEventListener('click', function(e) {
@@ -311,43 +308,43 @@ document.addEventListener('DOMContentLoaded', function() {
             window.history.forward();
         });
     }
-    
+
     // Enhanced refresh button with confirmation on forms
     if (navRefreshBtn) {
         navRefreshBtn.addEventListener('click', function(e) {
             // Check if there are unsaved form changes (basic check)
             const forms = document.querySelectorAll('form');
             let hasChanges = false;
-            
+
             forms.forEach(form => {
                 if (form.querySelector('input:not([type="hidden"]):not([readonly]), textarea:not([readonly]), select:not([readonly])')) {
                     hasChanges = true;
                 }
             });
-            
+
             if (hasChanges) {
                 // Get refresh confirmation message from translations
-                const refreshConfirmMsg = window.appTranslations?.['Are you sure you want to refresh? Unsaved changes may be lost.'] || 
+                const refreshConfirmMsg = window.appTranslations?.['Are you sure you want to refresh? Unsaved changes may be lost.'] ||
                                          'Are you sure you want to refresh? Unsaved changes may be lost.';
                 if (!confirm(refreshConfirmMsg)) {
                     return;
                 }
             }
-            
+
             location.reload();
         });
     }
-    
+
     // Update on page load
     updateNavigationButtons();
-    
+
     // Update on popstate (back/forward navigation) - debounced
     let popstateTimeout;
     window.addEventListener('popstate', function() {
         clearTimeout(popstateTimeout);
         popstateTimeout = setTimeout(updateNavigationButtons, 100);
     });
-    
+
     // Keyboard shortcuts for navigation
     document.addEventListener('keydown', function(e) {
         // Alt+Left Arrow: Go back
@@ -365,8 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Allow default behavior, but our refresh button handler will catch it if needed
         }
     });
-    
+
     // Language Switcher is now handled by LanguageSwitcher module
     // The module provides seamless AJAX-based language switching
 });
-

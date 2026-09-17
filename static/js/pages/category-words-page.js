@@ -32,7 +32,7 @@ function initializeCategoryWordsPage() {
         return;
     }
     isInitialized = true;
-    
+
     // Load translations from JSON script tag
     const pageDataEl = document.getElementById('category-words-page-data');
     if (pageDataEl) {
@@ -42,7 +42,7 @@ function initializeCategoryWordsPage() {
                 console.warn('Category words page data is empty');
                 return;
             }
-            
+
             // Try to parse JSON
             const data = JSON.parse(jsonText);
             const pageTranslations = data.translations || {};
@@ -56,29 +56,22 @@ function initializeCategoryWordsPage() {
             translations = window.translations || {};
         }
     }
-    
+
     // Initialize words data from DOM
     initializeWordsData();
-    
+
     // Initialize event listeners
     initializeEventListeners();
-    
-    // Set initial display format, preserving the analyst's density preference
+
+    // Set initial display format
     const formatSelect = document.getElementById('displayFormat');
     if (formatSelect) {
-        let savedFormat = null;
-        try { savedFormat = window.localStorage?.getItem('inforaxis.categoryWords.displayFormat'); } catch (e) { savedFormat = null; }
-        if (savedFormat && Array.from(formatSelect.options).some(option => option.value === savedFormat)) {
-            currentFormat = savedFormat;
-            formatSelect.value = savedFormat;
-        } else {
-            currentFormat = formatSelect.value || 'table';
-        }
+        currentFormat = formatSelect.value || 'table';
     }
-    
+
     // Initial render
     applyFiltersAndRender();
-    
+
     console.log('Category words page loaded');
 }
 
@@ -112,7 +105,7 @@ function initializeWordsData() {
     // Only read from the table view to avoid duplicates from multiple view modes
     const tableBody = document.getElementById('categoryWordsTableBody');
     const wordItems = tableBody ? tableBody.querySelectorAll('.word-item') : [];
-    
+
     // Use a Map to deduplicate by word ID
     const wordMap = new Map();
     Array.from(wordItems).forEach((item) => {
@@ -123,7 +116,7 @@ function initializeWordsData() {
             wordMap.set(id, { id, word, element: item });
         }
     });
-    
+
     allWords = Array.from(wordMap.values()).map((item, index) => ({
         ...item,
         index: index + 1
@@ -140,7 +133,7 @@ function initializeEventListeners() {
             applyFiltersAndRender();
         }, 300));
     }
-    
+
     // Sort dropdown
     const sortBy = document.getElementById('sortBy');
     if (sortBy) {
@@ -152,7 +145,7 @@ function initializeEventListeners() {
             applyFiltersAndRender();
         });
     }
-    
+
     // Display format dropdown
     const displayFormat = document.getElementById('displayFormat');
     if (displayFormat) {
@@ -163,7 +156,7 @@ function initializeEventListeners() {
         // Set initial format
         currentFormat = displayFormat.value || 'table';
     }
-    
+
     // Items per page dropdown
     const itemsPerPageSelect = document.getElementById('itemsPerPage');
     if (itemsPerPageSelect) {
@@ -173,7 +166,7 @@ function initializeEventListeners() {
             applyFiltersAndRender();
         });
     }
-    
+
     // Event delegation for remove word buttons
     document.addEventListener('click', function(e) {
         const removeBtn = e.target.closest('.remove-word-btn');
@@ -182,7 +175,7 @@ function initializeEventListeners() {
             const categoryId = parseInt(removeBtn.getAttribute('data-category-id'));
             const wordId = parseInt(removeBtn.getAttribute('data-word-id'));
             let wordName = removeBtn.getAttribute('data-word-name');
-            
+
             // Parse JSON string if needed
             try {
                 if (wordName && (wordName.startsWith('"') || wordName.startsWith("'"))) {
@@ -191,7 +184,7 @@ function initializeEventListeners() {
             } catch (e) {
                 // Use as-is if parsing fails
             }
-            
+
             removeWordFromCategory(categoryId, wordId, wordName);
         }
     });
@@ -213,22 +206,22 @@ function debounce(func, wait) {
 // Apply filters and render
 function applyFiltersAndRender() {
     const searchTerm = (document.getElementById('wordSearch')?.value || '').toLowerCase().trim();
-    
+
     // Filter words
     filteredWords = allWords.filter(word => {
         const wordText = word.word.toLowerCase();
         return wordText.includes(searchTerm);
     });
-    
+
     // Sort words
     sortWords(filteredWords);
-    
+
     // Update counts
     updateCounts();
-    
+
     // Render words
     renderWords();
-    
+
     // Render pagination
     renderPagination();
 }
@@ -237,7 +230,7 @@ function applyFiltersAndRender() {
 function sortWords(words) {
     words.sort((a, b) => {
         let aVal, bVal;
-        
+
         if (sortColumn === 'word') {
             aVal = a.word.toLowerCase();
             bVal = b.word.toLowerCase();
@@ -245,7 +238,7 @@ function sortWords(words) {
             aVal = a.id;
             bVal = b.id;
         }
-        
+
         if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
         return 0;
@@ -260,18 +253,18 @@ function updateCounts() {
     const endIndex = Math.min(startIndex + itemsPerPage, filteredCount);
     const visibleCount = Math.max(0, endIndex - startIndex);
     const totalPages = Math.ceil(filteredCount / itemsPerPage);
-    
+
     const totalEl = document.getElementById('totalWordsCount');
     const filteredEl = document.getElementById('filteredWordsCount');
     const visibleEl = document.getElementById('visibleWordsCount');
     const pageEl = document.getElementById('currentPageInfo');
     const resultsInfo = document.getElementById('searchResultsInfo');
-    
+
     if (totalEl) totalEl.textContent = totalCount.toLocaleString();
     if (filteredEl) filteredEl.textContent = filteredCount.toLocaleString();
     if (visibleEl) visibleEl.textContent = visibleCount.toLocaleString();
     if (pageEl) pageEl.textContent = `${currentPage} / ${totalPages || 1}`;
-    
+
     if (resultsInfo) {
         if (filteredCount === totalCount) {
             resultsInfo.textContent = `${translations.showing || 'Showing'} ${startIndex + 1}-${endIndex} ${translations.of || 'of'} ${totalCount.toLocaleString()} ${translations.words || 'words'}`;
@@ -285,18 +278,18 @@ function updateCounts() {
 function renderWords() {
     const container = document.getElementById('wordsDisplayContainer');
     if (!container) return;
-    
+
     // Calculate pagination
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const wordsToShow = filteredWords.slice(startIndex, endIndex);
-    
+
     // Show/hide empty state
     const emptyState = document.getElementById('emptyState');
     if (emptyState) {
         emptyState.style.display = wordsToShow.length === 0 ? 'block' : 'none';
     }
-    
+
     if (wordsToShow.length === 0) {
         // Hide all views
         ['table', 'list', 'grid', 'compact'].forEach(view => {
@@ -305,7 +298,7 @@ function renderWords() {
         });
         return;
     }
-    
+
     // Render based on format
     switch (currentFormat) {
         case 'table':
@@ -329,9 +322,9 @@ function renderWords() {
 function renderTableView(words, startIndex) {
     const tbody = document.getElementById('categoryWordsTableBody');
     if (!tbody) return;
-    
+
     tbody.innerHTML = '';
-    
+
     words.forEach((word, idx) => {
         const globalIndex = startIndex + idx + 1;
         const tr = document.createElement('tr');
@@ -339,30 +332,30 @@ function renderTableView(words, startIndex) {
         tr.setAttribute('data-word', word.word.toLowerCase());
         tr.setAttribute('data-word-id', word.id);
         tr.setAttribute('data-word-text', word.word);
-        
+
         // Ensure proper table cell structure
         const td1 = document.createElement('td');
         td1.innerHTML = `<span class="badge bg-secondary">${word.id}</span>`;
-        
+
         const td2 = document.createElement('td');
         td2.innerHTML = `<span class="word-text"><strong>${escapeHtml(word.word)}</strong></span>`;
-        
+
         const td3 = document.createElement('td');
         td3.className = 'text-end';
         td3.innerHTML = `
-            <button class="btn btn-outline-danger btn-sm remove-word-btn" 
-                    data-category-id="${getCategoryId()}" 
-                    data-word-id="${word.id}" 
-                    data-word-name='${JSON.stringify(word.word)}' 
+            <button class="btn btn-outline-danger btn-sm remove-word-btn"
+                    data-category-id="${getCategoryId()}"
+                    data-word-id="${word.id}"
+                    data-word-name='${JSON.stringify(word.word)}'
                     title="${translations.remove || 'Remove'}">
                 <i class="bi bi-trash"></i> ${translations.remove || 'Remove'}
             </button>
         `;
-        
+
         tr.appendChild(td1);
         tr.appendChild(td2);
         tr.appendChild(td3);
-        
+
         tbody.appendChild(tr);
     });
 }
@@ -371,29 +364,29 @@ function renderTableView(words, startIndex) {
 function renderListView(words) {
     const listContainer = document.getElementById('wordsList');
     if (!listContainer) return;
-    
+
     listContainer.innerHTML = '';
-    
+
     words.forEach(word => {
         const item = document.createElement('div');
         item.className = 'list-group-item d-flex justify-content-between align-items-center word-item';
         item.setAttribute('data-word', word.word.toLowerCase());
         item.setAttribute('data-word-id', word.id);
         item.setAttribute('data-word-text', word.word);
-        
+
         item.innerHTML = `
             <div class="d-flex align-items-center gap-2">
                 <span class="badge bg-secondary">#${word.id}</span>
                 <span class="word-text"><strong>${escapeHtml(word.word)}</strong></span>
             </div>
-            <button class="btn btn-sm btn-outline-danger remove-word-btn" 
-                    data-category-id="${getCategoryId()}" 
-                    data-word-id="${word.id}" 
+            <button class="btn btn-sm btn-outline-danger remove-word-btn"
+                    data-category-id="${getCategoryId()}"
+                    data-word-id="${word.id}"
                     data-word-name='${JSON.stringify(word.word)}'>
                 <i class="bi bi-trash me-1"></i>${translations.remove || 'Remove'}
             </button>
         `;
-        
+
         listContainer.appendChild(item);
     });
 }
@@ -402,29 +395,29 @@ function renderListView(words) {
 function renderGridView(words) {
     const gridContainer = document.getElementById('wordsGrid');
     if (!gridContainer) return;
-    
+
     gridContainer.innerHTML = '';
-    
+
     words.forEach(word => {
         const card = document.createElement('div');
         card.className = 'word-card word-item';
         card.setAttribute('data-word', word.word.toLowerCase());
         card.setAttribute('data-word-id', word.id);
         card.setAttribute('data-word-text', word.word);
-        
+
         card.innerHTML = `
             <div class="d-flex justify-content-between align-items-start mb-2">
                 <span class="badge bg-secondary">#${word.id}</span>
             </div>
             <h6 class="word-text mb-3"><strong>${escapeHtml(word.word)}</strong></h6>
-            <button class="btn btn-sm btn-outline-danger w-100 remove-word-btn" 
-                    data-category-id="${getCategoryId()}" 
-                    data-word-id="${word.id}" 
+            <button class="btn btn-sm btn-outline-danger w-100 remove-word-btn"
+                    data-category-id="${getCategoryId()}"
+                    data-word-id="${word.id}"
                     data-word-name='${JSON.stringify(word.word)}'>
                 <i class="bi bi-trash"></i> ${translations.remove || 'Remove'}
             </button>
         `;
-        
+
         gridContainer.appendChild(card);
     });
 }
@@ -433,26 +426,26 @@ function renderGridView(words) {
 function renderCompactView(words) {
     const compactContainer = document.getElementById('wordsCompact');
     if (!compactContainer) return;
-    
+
     compactContainer.innerHTML = '';
-    
+
     words.forEach(word => {
         const badge = document.createElement('span');
         badge.className = 'word-badge word-item';
         badge.setAttribute('data-word', word.word.toLowerCase());
         badge.setAttribute('data-word-id', word.id);
         badge.setAttribute('data-word-text', word.word);
-        
+
         badge.innerHTML = `
             <span class="badge bg-secondary">#${word.id}</span>
             <span class="word-text">${escapeHtml(word.word)}</span>
-            <button type="button" class="btn-close btn-close-sm remove-word-btn" 
-                    data-category-id="${getCategoryId()}" 
-                    data-word-id="${word.id}" 
-                    data-word-name='${JSON.stringify(word.word)}' 
+            <button type="button" class="btn-close btn-close-sm remove-word-btn"
+                    data-category-id="${getCategoryId()}"
+                    data-word-id="${word.id}"
+                    data-word-name='${JSON.stringify(word.word)}'
                     aria-label="${translations.remove || 'Remove'}"></button>
         `;
-        
+
         compactContainer.appendChild(badge);
     });
 }
@@ -461,20 +454,19 @@ function renderCompactView(words) {
 function changeDisplayFormat() {
     const container = document.getElementById('wordsDisplayContainer');
     if (!container) return;
-    
+
     // Get the selected format from dropdown if not already set
     const formatSelect = document.getElementById('displayFormat');
     if (formatSelect && formatSelect.value) {
         currentFormat = formatSelect.value;
-        try { window.localStorage?.setItem('inforaxis.categoryWords.displayFormat', currentFormat); } catch (e) { /* ignore */ }
     }
-    
+
     // Remove all view mode classes
     container.classList.remove('view-mode-table', 'view-mode-list', 'view-mode-grid', 'view-mode-compact');
-    
+
     // Add current view mode class
     container.classList.add(`view-mode-${currentFormat}`);
-    
+
     // Re-render
     applyFiltersAndRender();
 }
@@ -483,29 +475,26 @@ function changeDisplayFormat() {
 function renderPagination() {
     const paginationContainer = document.getElementById('pagination');
     if (!paginationContainer) return;
-    
+
     // Ensure container has an ID
     if (!paginationContainer.id) {
         paginationContainer.id = 'pagination';
     }
-    
+
     const totalPages = Math.ceil(filteredWords.length / itemsPerPage);
     const totalItems = filteredWords.length;
-    
+
     if (totalPages <= 1 && totalItems === 0) {
         paginationContainer.innerHTML = '';
         return;
     }
-    
+
     // Try to use unified pagination if available
     if (window.renderUnifiedPagination && typeof window.renderUnifiedPagination === 'function') {
         try {
             window.renderUnifiedPagination({
                 currentPage: currentPage,
                 totalPages: totalPages,
-                totalItems: totalItems,
-                pageSize: itemsPerPage,
-                itemLabel: translations.words || 'words',
                 containerId: paginationContainer.id,
                 onPageChange: (targetPage) => {
                     changePage(targetPage);
@@ -520,16 +509,13 @@ function renderPagination() {
             console.error('Error rendering unified pagination:', err);
         }
     }
-    
+
     // Try dynamic import as fallback
     import('../modules/rendering/unified-pagination.js').then(module => {
         if (module && module.renderUnifiedPagination) {
             module.renderUnifiedPagination({
                 currentPage: currentPage,
                 totalPages: totalPages,
-                totalItems: totalItems,
-                pageSize: itemsPerPage,
-                itemLabel: translations.words || 'words',
                 containerId: paginationContainer.id,
                 onPageChange: (targetPage) => {
                     changePage(targetPage);
@@ -553,62 +539,62 @@ function renderPagination() {
 function renderOldPagination() {
     const paginationContainer = document.getElementById('pagination');
     if (!paginationContainer) return;
-    
+
     const totalPages = Math.ceil(filteredWords.length / itemsPerPage);
     const totalItems = filteredWords.length;
     const startItem = totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
     const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-    
+
     if (totalPages <= 1 && totalItems === 0) {
         paginationContainer.innerHTML = '';
         return;
     }
-    
+
     // Use event delegation instead of inline onclick for better reliability
     let html = '<div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">';
     html += `<div class="small text-muted pagination-info">${translations.showing || 'Showing'} ${startItem}-${endItem} ${translations.of || 'of'} ${totalItems}</div>`;
     html += '<div class="pagination-page-numbers d-flex align-items-center gap-1">';
-    
+
     // Previous button
     html += `<button class="pagination-btn" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button>`;
-    
+
     const maxVisible = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage < maxVisible - 1) {
         startPage = Math.max(1, endPage - maxVisible + 1);
     }
-    
+
     if (startPage > 1) {
         html += `<button class="pagination-btn" data-page="1">1</button>`;
         if (startPage > 2) html += `<span class="pagination-ellipsis">...</span>`;
     }
-    
+
     for (let i = startPage; i <= endPage; i++) {
         html += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
     }
-    
+
     if (endPage < totalPages) {
         if (endPage < totalPages - 1) html += `<span class="pagination-ellipsis">...</span>`;
         html += `<button class="pagination-btn" data-page="${totalPages}">${totalPages}</button>`;
     }
-    
+
     // Next button
     html += `<button class="pagination-btn" data-page="${currentPage + 1}" ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button>`;
     html += '</div></div>';
     paginationContainer.innerHTML = html;
-    
+
     // Attach event listeners using event delegation
     // Remove old listener if it exists to avoid duplicates
     if (paginationContainer._paginationClickHandler) {
         paginationContainer.removeEventListener('click', paginationContainer._paginationClickHandler);
     }
-    
+
     // Create new handler
     paginationContainer._paginationClickHandler = function(e) {
         const btn = e.target.closest('.pagination-btn');
         if (!btn || btn.disabled) return;
-        
+
         const page = parseInt(btn.getAttribute('data-page'));
         if (!isNaN(page) && page >= 1) {
             const currentTotalPages = Math.ceil(filteredWords.length / itemsPerPage);
@@ -617,7 +603,7 @@ function renderOldPagination() {
             }
         }
     };
-    
+
     paginationContainer.addEventListener('click', paginationContainer._paginationClickHandler);
 }
 
@@ -644,13 +630,13 @@ function sortByColumn(column) {
         sortColumn = column;
         sortDirection = 'asc';
     }
-    
+
     currentSort = `${sortColumn}-${sortDirection}`;
     const sortSelect = document.getElementById('sortBy');
     if (sortSelect) {
         sortSelect.value = currentSort;
     }
-    
+
     applyFiltersAndRender();
 }
 
@@ -669,14 +655,14 @@ function clearAllFilters() {
     document.getElementById('sortBy').value = 'word-asc';
     document.getElementById('displayFormat').value = 'table';
     document.getElementById('itemsPerPage').value = '10';
-    
+
     currentPage = 1;
     itemsPerPage = 10;
     currentSort = 'word-asc';
     currentFormat = 'table';
     sortColumn = 'word';
     sortDirection = 'asc';
-    
+
     changeDisplayFormat();
 }
 
@@ -684,16 +670,16 @@ function clearAllFilters() {
 function exportWordsToCSV() {
     const headers = ['ID', 'Word'];
     const rows = filteredWords.map(word => [word.id, word.word]);
-    
+
     const csvContent = [
         headers.join(','),
         ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', `category-words-${Date.now()}.csv`);
     link.style.visibility = 'hidden';
@@ -728,7 +714,7 @@ async function getCSRFTokenAsync() {
         const token = metaToken.getAttribute('content');
         if (token) return token;
     }
-    
+
     try {
         const response = await fetch('/api/csrf-token');
         if (!response.ok) {
@@ -753,7 +739,7 @@ function showToast(message, type = 'info', duration = 4000) {
         toastContainer.style.zIndex = '9999';
         document.body.appendChild(toastContainer);
     }
-    
+
     const toastId = 'toast-' + Date.now();
     const icons = {
         success: 'check-circle-fill',
@@ -761,14 +747,14 @@ function showToast(message, type = 'info', duration = 4000) {
         warning: 'exclamation-triangle-fill',
         info: 'info-circle-fill'
     };
-    
+
     const bgColors = {
         success: 'success',
         error: 'danger',
         warning: 'warning',
         info: 'info'
     };
-    
+
     const toastHtml = `
         <div id="${toastId}" class="toast align-items-center text-white bg-${bgColors[type]} border-0" role="alert">
             <div class="d-flex">
@@ -780,12 +766,12 @@ function showToast(message, type = 'info', duration = 4000) {
             </div>
         </div>
     `;
-    
+
     toastContainer.insertAdjacentHTML('beforeend', toastHtml);
     const toastElement = document.getElementById(toastId);
     const toast = new bootstrap.Toast(toastElement, { delay: duration });
     toast.show();
-    
+
     toastElement.addEventListener('hidden.bs.toast', () => {
         toastElement.remove();
     });
@@ -802,22 +788,22 @@ async function removeWordFromCategory(categoryId, wordId, wordName) {
     } catch (e) {
         displayName = wordName;
     }
-    
+
     if (!confirm(translations.confirmRemove || `Are you sure you want to remove "${displayName}" from this category?`)) {
         return;
     }
-    
+
     // Get CSRF token
     let csrfToken = getCSRFToken();
     if (!csrfToken) {
         csrfToken = await getCSRFTokenAsync();
     }
-    
+
     if (!csrfToken) {
         showToast('Unable to obtain CSRF token. Please refresh the page.', 'error');
         return;
     }
-    
+
     fetch(`/api/categories/${categoryId}/words/${wordId}`, {
         method: 'DELETE',
         headers: {
@@ -860,19 +846,19 @@ function openAddWordModal() {
         console.error('Add word modal not found');
         return;
     }
-    
+
     const modal = new bootstrap.Modal(modalElement);
     const modalTitle = document.getElementById('addWordToCategoryModalLabel');
     const categoryIdInput = document.getElementById('targetCategoryId');
     const wordInput = document.getElementById('wordInput');
     const wordResults = document.getElementById('wordSearchResults');
     const selectedWordIdInput = document.getElementById('selectedWordId');
-    
+
     if (!categoryIdInput || !wordInput || !wordResults || !selectedWordIdInput) {
         console.error('Required modal elements not found');
         return;
     }
-    
+
     // Clean up any existing handlers first
     if (clickOutsideHandler) {
         document.removeEventListener('click', clickOutsideHandler, true);
@@ -890,7 +876,7 @@ function openAddWordModal() {
         clearTimeout(wordSearchTimeout);
         wordSearchTimeout = null;
     }
-    
+
     // Reset state
     selectedWordId = null;
     selectedWordText = null;
@@ -899,7 +885,7 @@ function openAddWordModal() {
     selectedWordIdInput.value = '';
     wordResults.style.display = 'none';
     wordResults.innerHTML = '';
-    
+
     // Update modal title with category name
     const pageDataEl = document.getElementById('category-words-page-data');
     if (pageDataEl && modalTitle) {
@@ -911,7 +897,7 @@ function openAddWordModal() {
             console.error('Error parsing category name:', e);
         }
     }
-    
+
     // Initialize word search functionality
     function initializeWordSearch() {
         // Clear any existing timeouts
@@ -919,7 +905,7 @@ function openAddWordModal() {
             clearTimeout(wordSearchTimeout);
             wordSearchTimeout = null;
         }
-        
+
         // Remove existing listeners if any
         if (inputHandler) {
             wordInput.removeEventListener('input', inputHandler);
@@ -927,34 +913,34 @@ function openAddWordModal() {
         if (keydownHandler) {
             wordInput.removeEventListener('keydown', keydownHandler);
         }
-        
+
         // Handle input changes
         inputHandler = function(e) {
             const searchTerm = e.target.value.trim();
-            
+
             // Clear previous timeout
             if (wordSearchTimeout) {
                 clearTimeout(wordSearchTimeout);
             }
-            
+
             // Reset selection
             selectedWordId = null;
             selectedWordText = null;
             selectedWordIdInput.value = '';
-            
+
             if (searchTerm.length === 0) {
                 wordResults.style.display = 'none';
                 wordResults.innerHTML = '';
                 return;
             }
-            
+
             // Debounce search
             wordSearchTimeout = setTimeout(() => {
                 searchWords(searchTerm);
             }, 300);
         };
         wordInput.addEventListener('input', inputHandler);
-        
+
         // Handle keyboard navigation
         keydownHandler = function(e) {
             if (e.key === 'ArrowDown') {
@@ -972,20 +958,20 @@ function openAddWordModal() {
             }
         };
         wordInput.addEventListener('keydown', keydownHandler);
-        
+
         // Focus input when modal opens
         setTimeout(() => {
             wordInput.focus();
         }, 300);
     }
-    
+
     // Search words function
     async function searchWords(searchTerm) {
         if (!searchTerm || searchTerm.length === 0) {
             wordResults.style.display = 'none';
             return;
         }
-        
+
         try {
             const categoryId = getCategoryId();
             const params = new URLSearchParams({
@@ -993,14 +979,14 @@ function openAddWordModal() {
                 page: 1,
                 per_page: 20
             });
-            
+
             if (categoryId) {
                 params.append('exclude_category_id', categoryId);
             }
-            
+
             const response = await fetch(`/api/words/search?${params.toString()}`);
             const data = await response.json();
-            
+
             if (data.results && data.results.length > 0) {
                 currentWordSearchResults = data.results;
                 renderWordResults(data.results, searchTerm);
@@ -1013,23 +999,23 @@ function openAddWordModal() {
             wordResults.style.display = 'none';
         }
     }
-    
+
     // Render search results
     function renderWordResults(results, searchTerm) {
         wordResults.innerHTML = '';
-        
+
         if (results.length > 0) {
             results.forEach((item, index) => {
                 const wordId = item.id || item.word_id;
                 const wordText = item.text || item.word || '';
                 const usageCount = item.usage_count || 0;
-                
+
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'word-result-item';
                 itemDiv.tabIndex = 0;
                 itemDiv.setAttribute('data-word-id', wordId);
                 itemDiv.setAttribute('data-word-text', wordText);
-                
+
                 itemDiv.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="bi bi-check-circle me-2 text-primary"></i>
@@ -1037,11 +1023,11 @@ function openAddWordModal() {
                         ${usageCount > 0 ? `<small class="text-muted ms-2">(${usageCount} files)</small>` : ''}
                     </div>
                 `;
-                
+
                 itemDiv.addEventListener('click', function() {
                     selectWord(wordId, wordText);
                 });
-                
+
                 itemDiv.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
@@ -1068,24 +1054,24 @@ function openAddWordModal() {
                         }
                     }
                 });
-                
+
                 wordResults.appendChild(itemDiv);
             });
         }
-        
+
         // Always show option to create new word if search term doesn't match exactly
         const exactMatch = results.some(item => {
             const wordText = (item.text || item.word || '').toLowerCase();
             return wordText === searchTerm.toLowerCase();
         });
-        
+
         if (!exactMatch && searchTerm.length > 0 && !searchTerm.match(/^\d+$/)) {
             const createDiv = document.createElement('div');
             createDiv.className = 'word-result-item word-result-create';
             createDiv.tabIndex = 0;
             createDiv.setAttribute('data-word-id', 'new');
             createDiv.setAttribute('data-word-text', searchTerm);
-            
+
             createDiv.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-plus-circle me-2 text-success"></i>
@@ -1093,29 +1079,29 @@ function openAddWordModal() {
                     <small class="text-muted ms-2">(create new)</small>
                 </div>
             `;
-            
+
             createDiv.addEventListener('click', function() {
                 selectWord('new', searchTerm);
             });
-            
+
             createDiv.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     selectWord('new', searchTerm);
                 }
             });
-            
+
             wordResults.appendChild(createDiv);
         }
-        
+
         wordResults.style.display = 'block';
     }
-    
+
     // Select word function
     function selectWord(wordId, wordText) {
         selectedWordId = wordId;
         selectedWordText = wordText;
-        
+
         if (wordId === 'new') {
             selectedWordIdInput.value = '';
             wordInput.value = wordText;
@@ -1123,25 +1109,25 @@ function openAddWordModal() {
             selectedWordIdInput.value = wordId;
             wordInput.value = wordText;
         }
-        
+
         wordResults.style.display = 'none';
         wordInput.focus();
     }
-    
+
     // Show modal and initialize
     modal.show();
-    
+
     // Wait for modal to be fully shown
     modalElement.addEventListener('shown.bs.modal', function onShown() {
         modalElement.removeEventListener('shown.bs.modal', onShown);
         initializeWordSearch();
-        
+
         // Add click outside handler after initialization
         const inputContainer = wordInput.closest('.position-relative') || wordInput.parentElement;
         clickOutsideHandler = function(e) {
             const target = e.target;
-            if (inputContainer && wordResults && 
-                !inputContainer.contains(target) && 
+            if (inputContainer && wordResults &&
+                !inputContainer.contains(target) &&
                 !wordResults.contains(target)) {
                 wordResults.style.display = 'none';
             }
@@ -1151,7 +1137,7 @@ function openAddWordModal() {
             document.addEventListener('click', clickOutsideHandler, true);
         }, 100);
     }, { once: true });
-    
+
     // Clean up when modal is hidden
     modalElement.addEventListener('hidden.bs.modal', function onHidden() {
         // Clean up event listeners
@@ -1159,13 +1145,13 @@ function openAddWordModal() {
             document.removeEventListener('click', clickOutsideHandler, true);
             clickOutsideHandler = null;
         }
-        
+
         // Clear search timeout
         if (wordSearchTimeout) {
             clearTimeout(wordSearchTimeout);
             wordSearchTimeout = null;
         }
-        
+
         // Remove input event listeners
         if (inputHandler && wordInput) {
             wordInput.removeEventListener('input', inputHandler);
@@ -1175,7 +1161,7 @@ function openAddWordModal() {
             wordInput.removeEventListener('keydown', keydownHandler);
             keydownHandler = null;
         }
-        
+
         // Reset form
         if (wordInput) wordInput.value = '';
         if (selectedWordIdInput) selectedWordIdInput.value = '';
@@ -1183,7 +1169,7 @@ function openAddWordModal() {
             wordResults.style.display = 'none';
             wordResults.innerHTML = '';
         }
-        
+
         // Reset state
         selectedWordId = null;
         selectedWordText = null;
@@ -1197,7 +1183,7 @@ async function createNewWord(wordText) {
     if (!csrfToken) {
         throw new Error('Unable to obtain CSRF token');
     }
-    
+
     const response = await fetch('/api/words', {
         method: 'POST',
         headers: {
@@ -1209,7 +1195,7 @@ async function createNewWord(wordText) {
             csrf_token: csrfToken
         })
     });
-    
+
     const data = await response.json();
     if (data.success) {
         return data.id;
@@ -1223,24 +1209,24 @@ async function saveWordToCategory() {
     const categoryIdInput = document.getElementById('targetCategoryId');
     const wordInput = document.getElementById('wordInput');
     const selectedWordIdInput = document.getElementById('selectedWordId');
-    
+
     if (!categoryIdInput || !wordInput || !selectedWordIdInput) {
         showToast('Form elements not found', 'error');
         return;
     }
-    
+
     const categoryId = categoryIdInput.value;
     const wordText = wordInput.value.trim();
-    
+
     if (!wordText) {
         showToast('Please enter or select a word', 'warning');
         return;
     }
-    
+
     // Get word ID - either from selection or create new
     let wordId;
     const selectedId = selectedWordIdInput.value;
-    
+
     if (selectedId === 'new' || (!selectedId && wordText)) {
         // This is a new word, create it first
         try {
@@ -1278,18 +1264,18 @@ async function saveWordToCategory() {
             return;
         }
     }
-    
+
     // Get CSRF token
     let csrfToken = getCSRFToken();
     if (!csrfToken) {
         csrfToken = await getCSRFTokenAsync();
     }
-    
+
     if (!csrfToken) {
         showToast('Unable to obtain CSRF token. Please refresh the page.', 'error');
         return;
     }
-    
+
     fetch('/api/words-categorys/add', {
         method: 'POST',
         headers: {
@@ -1306,7 +1292,7 @@ async function saveWordToCategory() {
     .then(async data => {
         if (data.success) {
             showToast(data.message || translations.wordAdded || 'Word added to category successfully', 'success');
-            
+
             // Clean up modal and event listeners first
             const modalElement = document.getElementById('addWordToCategoryModal');
             if (modalElement) {
@@ -1321,7 +1307,7 @@ async function saveWordToCategory() {
                         clearTimeout(wordSearchTimeout);
                         wordSearchTimeout = null;
                     }
-                    
+
                     // Clear form
                     const wordInput = document.getElementById('wordInput');
                     const selectedWordIdInput = document.getElementById('selectedWordId');
@@ -1337,12 +1323,12 @@ async function saveWordToCategory() {
                         wordResults.style.display = 'none';
                         wordResults.innerHTML = '';
                     }
-                    
+
                     // Hide modal
                     modal.hide();
                 }
             }
-            
+
             // Add word to list immediately without reload
             try {
                 await addWordToList(wordId, wordText);
@@ -1372,10 +1358,10 @@ async function addWordToList(wordId, wordText) {
             word: wordText,
             index: allWords.length + 1
         };
-        
+
         // Add to allWords array
         allWords.push(newWord);
-        
+
         // Update filtered words if they match current filter
         const searchTerm = (document.getElementById('wordSearch')?.value || '').toLowerCase().trim();
         if (!searchTerm || wordText.toLowerCase().includes(searchTerm)) {
@@ -1383,16 +1369,16 @@ async function addWordToList(wordId, wordText) {
             // Re-sort
             sortWords(filteredWords);
         }
-        
+
         // Update counts
         updateCounts();
-        
+
         // Re-render the display
         renderWords();
-        
+
         // Update pagination
         renderPagination();
-        
+
         console.log('Word added to list:', newWord);
     } catch (error) {
         console.error('Error in addWordToList:', error);

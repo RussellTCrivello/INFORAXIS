@@ -1,128 +1,93 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('User Management') }}{% endblock %}
-{% block page_type %}users-workspace{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/users-workspace.css') }}">
-{% endblock %}
 
 {% block content %}
-<div class="users-workspace">
-    <section class="section-card users-hero" aria-labelledby="usersWorkspaceTitle">
-        <div>
-            <span class="users-eyebrow">{{ _('Administration workspace') }}</span>
-            <h1 id="usersWorkspaceTitle">{{ _('User Management') }}</h1>
-            <p>{{ _('Manage accounts, roles, access state, and temporary credentials from a compact governance workbench.') }}</p>
-        </div>
-        <button type="button" class="btn btn-primary" id="createUserTrigger">
-            <i class="bi bi-person-plus me-2" aria-hidden="true"></i>
-            {{ _('Add User') }}
-        </button>
-    </section>
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-people me-2"></i>
+        {{ _('User Management') }}
+    </h1>
+    <button type="button" class="btn btn-primary" onclick="window.showCreateUserModal()">
+        <i class="bi bi-person-plus me-2"></i>
+        {{ _('Add User') }}
+    </button>
+</div>
 
-    <section class="section-card users-control-surface ia-control-surface" data-ia-role="controls" aria-label="{{ _('User filters') }}">
-        <div class="users-search-field">
-            <i class="bi bi-search" aria-hidden="true"></i>
-            <input type="search" class="form-control form-control-sm" id="userSearchFilter" placeholder="{{ _('Search users') }}" autocomplete="off">
+<!-- Users Table -->
+<div class="section-card">
+    <div class="section-header">
+        <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i>{{ _('Accounts') }}</h5>
+        <span class="badge bg-secondary" id="usersCount">0</span>
+    </div>
+    <div class="section-content">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle" id="usersTable">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _('ID') }}</th>
+                        <th scope="col">{{ _('Username') }}</th>
+                        <th scope="col">{{ _('Role') }}</th>
+                        <th scope="col">{{ _('Status') }}</th>
+                        <th scope="col">{{ _('Created') }}</th>
+                        <th scope="col" class="text-end">{{ _('Actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr><td colspan="6" class="text-center py-4 text-muted">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>{{ _('Loading users...') }}
+                    </td></tr>
+                </tbody>
+            </table>
         </div>
-        <select class="form-select form-select-sm" id="userRoleFilter" aria-label="{{ _('Filter by role') }}">
-            <option value="all">{{ _('All roles') }}</option>
-            <option value="admin">{{ _('Admin') }}</option>
-            <option value="analyst">{{ _('Analyst') }}</option>
-            <option value="viewer">{{ _('Viewer') }}</option>
-        </select>
-        <select class="form-select form-select-sm" id="userStatusFilter" aria-label="{{ _('Filter by status') }}">
-            <option value="all">{{ _('All statuses') }}</option>
-            <option value="active">{{ _('Active') }}</option>
-            <option value="inactive">{{ _('Inactive') }}</option>
-            <option value="temporary">{{ _('Temporary password') }}</option>
-        </select>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshUsers">
-            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-            {{ _('Refresh') }}
-        </button>
-    </section>
+    </div>
+</div>
 
-    <section class="section-card users-table-workbench ia-scroll-framed-section" aria-labelledby="accountsTitle">
-        <div class="section-header users-section-header ia-control-surface" data-ia-role="controls">
-            <div>
-                <span class="users-eyebrow">{{ _('Accounts') }}</span>
-                <h2 id="accountsTitle"><i class="bi bi-person-badge me-2" aria-hidden="true"></i>{{ _('Accounts') }}</h2>
-            </div>
-            <span class="users-count-pill" id="usersCount">0</span>
+<!-- Role Capability Matrix -->
+<div class="section-card mt-4">
+    <div class="section-header">
+        <h5 class="mb-0"><i class="bi bi-shield-lock me-2"></i>{{ _('Role Capability Matrix') }}</h5>
+    </div>
+    <div class="section-content">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ _('Capability') }}</th>
+                        <th scope="col" class="text-center">{{ _('Admin') }}</th>
+                        <th scope="col" class="text-center">{{ _('Analyst') }}</th>
+                        <th scope="col" class="text-center">{{ _('Viewer') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ _('Browse and search files, words, keywords, categories') }}</td>
+                        <td class="text-center text-success"><i class="bi bi-check-circle"></i></td>
+                        <td class="text-center text-success"><i class="bi bi-check-circle"></i></td>
+                        <td class="text-center text-success"><i class="bi bi-check-circle"></i></td>
+                    </tr>
+                    <tr>
+                        <td>{{ _('Manage sources, sides, words, keywords, categories') }}</td>
+                        <td class="text-center text-success"><i class="bi bi-check-circle"></i></td>
+                        <td class="text-center text-success"><i class="bi bi-check-circle"></i></td>
+                        <td class="text-center text-danger"><i class="bi bi-x-circle"></i></td>
+                    </tr>
+                    <tr>
+                        <td>{{ _('Run analyses, ingest files, operate jobs and imports') }}</td>
+                        <td class="text-center text-success"><i class="bi bi-check-circle"></i></td>
+                        <td class="text-center text-success"><i class="bi bi-check-circle"></i></td>
+                        <td class="text-center text-danger"><i class="bi bi-x-circle"></i></td>
+                    </tr>
+                    <tr>
+                        <td>{{ _('System settings, backup import/restore, user administration') }}</td>
+                        <td class="text-center text-success"><i class="bi bi-check-circle"></i></td>
+                        <td class="text-center text-danger"><i class="bi bi-x-circle"></i></td>
+                        <td class="text-center text-danger"><i class="bi bi-x-circle"></i></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
-        <div class="section-content users-table-region ia-scroll-body" data-ia-role="data-region">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle users-table" id="usersTable" data-ia-table-id="users-admin">
-                    <thead>
-                        <tr>
-                            <th scope="col">{{ _('ID') }}</th>
-                            <th scope="col">{{ _('Username') }}</th>
-                            <th scope="col">{{ _('Role') }}</th>
-                            <th scope="col">{{ _('Status') }}</th>
-                            <th scope="col">{{ _('Created') }}</th>
-                            <th scope="col" class="text-end">{{ _('Actions') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <tr><td colspan="6" class="text-center py-4 text-muted">
-                            <div class="spinner-border spinner-border-sm me-2" role="status"></div>{{ _('Loading users...') }}
-                        </td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <section class="section-card users-capability-workbench ia-scroll-framed-section" aria-labelledby="roleMatrixTitle">
-        <div class="section-header users-section-header ia-control-surface" data-ia-role="controls">
-            <div>
-                <span class="users-eyebrow">{{ _('Access model') }}</span>
-                <h2 id="roleMatrixTitle"><i class="bi bi-shield-lock me-2" aria-hidden="true"></i>{{ _('Role Capability Matrix') }}</h2>
-            </div>
-        </div>
-        <div class="section-content users-table-region ia-scroll-body" data-ia-role="data-region">
-            <div class="table-responsive">
-                <table class="table table-sm users-capability-table" data-ia-enhance="false">
-                    <thead>
-                        <tr>
-                            <th scope="col">{{ _('Capability') }}</th>
-                            <th scope="col" class="text-center">{{ _('Admin') }}</th>
-                            <th scope="col" class="text-center">{{ _('Analyst') }}</th>
-                            <th scope="col" class="text-center">{{ _('Viewer') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>{{ _('Browse and search files, words, keywords, categories') }}</td>
-                            <td class="text-center"><span class="users-capability yes"><i class="bi bi-check-circle" aria-hidden="true"></i></span></td>
-                            <td class="text-center"><span class="users-capability yes"><i class="bi bi-check-circle" aria-hidden="true"></i></span></td>
-                            <td class="text-center"><span class="users-capability yes"><i class="bi bi-check-circle" aria-hidden="true"></i></span></td>
-                        </tr>
-                        <tr>
-                            <td>{{ _('Manage sources, sides, words, keywords, categories') }}</td>
-                            <td class="text-center"><span class="users-capability yes"><i class="bi bi-check-circle" aria-hidden="true"></i></span></td>
-                            <td class="text-center"><span class="users-capability yes"><i class="bi bi-check-circle" aria-hidden="true"></i></span></td>
-                            <td class="text-center"><span class="users-capability no"><i class="bi bi-x-circle" aria-hidden="true"></i></span></td>
-                        </tr>
-                        <tr>
-                            <td>{{ _('Run analyses, ingest files, operate jobs and imports') }}</td>
-                            <td class="text-center"><span class="users-capability yes"><i class="bi bi-check-circle" aria-hidden="true"></i></span></td>
-                            <td class="text-center"><span class="users-capability yes"><i class="bi bi-check-circle" aria-hidden="true"></i></span></td>
-                            <td class="text-center"><span class="users-capability no"><i class="bi bi-x-circle" aria-hidden="true"></i></span></td>
-                        </tr>
-                        <tr>
-                            <td>{{ _('System settings, backup import/restore, user administration') }}</td>
-                            <td class="text-center"><span class="users-capability yes"><i class="bi bi-check-circle" aria-hidden="true"></i></span></td>
-                            <td class="text-center"><span class="users-capability no"><i class="bi bi-x-circle" aria-hidden="true"></i></span></td>
-                            <td class="text-center"><span class="users-capability no"><i class="bi bi-x-circle" aria-hidden="true"></i></span></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
+    </div>
 </div>
 
 <!-- Create User Modal -->
@@ -226,27 +191,10 @@
         "unknownError": _('Unknown error'),
         "userCreated": _('User created successfully'),
         "cannotChangeSelf": _('You cannot change your own role or status.'),
-        "confirmReset": _('Generate a new temporary password for this user? Their current sessions will be revoked.'),
-        "noUsers": _('No users found.'),
-        "you": _('You'),
-        "temporaryPassword": _('temp pw'),
-        "resetPassword": _('Reset PW'),
-        "deleteUser": _('Delete user'),
-        "roleFor": _('Role for'),
-        "activeStatusFor": _('Active status for'),
-        "failedDelete": _('Failed to delete user.'),
-        "usernamePasswordRequired": _('Username and password are required.'),
-        "passwordTooShort": _('Password must be at least 12 characters.'),
-        "creating": _('Creating'),
-        "failedCreate": _('Failed to create user.'),
-        "all": _('all'),
-        "admin": _('Admin'),
-        "analyst": _('Analyst'),
-        "viewer": _('Viewer'),
-        "active": _('Active'),
-        "inactive": _('Inactive')
+        "confirmReset": _('Generate a new temporary password for this user? Their current sessions will be revoked.')
     },
     "currentUserId": current_user.id if current_user else None,
     "currentUsername": current_user.username if current_user else None
 }|tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/pages/users-page.js') }}"></script>
 {% endblock %}

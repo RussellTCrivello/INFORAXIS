@@ -7,20 +7,20 @@ import { getPageData } from './data-helper.js';
 
 export default async function initArchivesPage() {
     console.log('Archives page: Initializing...');
-    
+
     // Get page data from JSON script tag
     const data = getPageData('page-data');
-    
+
     // Fallback to window.appData for backward compatibility
     const appData = data || window.appData || {};
     console.log('Archives page: Page data loaded', appData);
-    
+
     // Load Select2 dynamically if needed
     loadSelect2();
-    
+
     // Initialize any page-specific functionality
     initializePageFeatures();
-    
+
     // Ensure navigation is initialized - don't wait for file-management-system
     // The file-management-system.js should handle this, but we'll ensure it happens
     ensureNavigationInitialized();
@@ -57,19 +57,15 @@ function initializePageFeatures() {
  */
 function ensureNavigationInitialized() {
     console.log('Archives page: Ensuring navigation is initialized...');
-    if (window.__fmsNavigationInitialized) {
-        console.debug('Archives page: navigation already initialized by file-management-system');
-        return;
-    }
-    
+
     // Wait for file-management-system to be ready, then ensure navigation is initialized
     let attempts = 0;
     const maxAttempts = 20; // Try for 2 seconds (20 * 100ms)
-    
+
     const checkAndInit = () => {
         attempts++;
         console.log(`Archives page: Checking for navigation (attempt ${attempts}/${maxAttempts})...`);
-        
+
         if (window.fms && window.fms.navigation && window.fms.navigation.initNavigation) {
             console.log('Archives page: File management system ready, initializing navigation...');
             try {
@@ -100,8 +96,7 @@ function ensureNavigationInitialized() {
             }
         }
     };
-    
+
     // Start checking after a short delay to allow modules to load
     setTimeout(checkAndInit, 300);
 }
-

@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error parsing keywords list page data:', e);
         }
     }
-    
+
     console.log('Keywords list page loaded');
 });
 
@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(loadSelect2, 50);
             }
         }
-        
+
         // Start checking when DOM is ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', loadSelect2);
@@ -78,7 +78,7 @@ if (typeof window.translations === 'undefined') {
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
-    
+
     let currentPage = 1;
     let currentPerPage = 10;
     let currentSort = 'usage_count';
@@ -93,12 +93,12 @@ if (typeof window.translations === 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         const pageFromUrl = parseInt(urlParams.get('page')) || 1;
         currentPage = pageFromUrl;
-        
+
         // ✅ FIXED: Initialize currentPerPage from select element
         if (perPageSelect) {
             currentPerPage = parseInt(perPageSelect.value) || 10;
         }
-        
+
         // ✅ FIXED: Initialize sort dropdowns with current values
         if (sortBySelect) {
             sortBySelect.value = currentSort;
@@ -106,25 +106,25 @@ if (typeof window.translations === 'undefined') {
         if (sortOrderSelect) {
             sortOrderSelect.value = currentOrder;
         }
-        
+
         // ✅ FIXED: Update sort icons to reflect current sort state
         updateSortIcons();
-        
+
         // ✅ FIXED: Create pagination container on init to ensure it's always visible
         createPaginationContainer();
-        
+
         loadCategories();
         fetchPage(pageFromUrl);
         setupEventListeners();
     }
-    
+
     // Update sort icons to reflect current sort state
     function updateSortIcons() {
         // Reset all icons to default
         document.querySelectorAll('[id^="sortIcon-"]').forEach(icon => {
             icon.className = 'bi bi-arrow-down-up';
         });
-        
+
         // Update the active sort icon
         const activeIcon = document.getElementById(`sortIcon-${currentSort}`);
         if (activeIcon) {
@@ -139,24 +139,20 @@ if (typeof window.translations === 'undefined') {
     function setupEventListeners() {
         // Search with debounce
         let searchTimeout;
-        if (searchInput) {
-            searchInput.addEventListener('input', () => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    currentPage = 1;
-                    fetchPage(1);
-                }, 300);
-            });
-        }
-
-        // Page size change
-        if (perPageSelect) {
-            perPageSelect.addEventListener('change', () => {
-                currentPerPage = parseInt(perPageSelect.value, 10) || currentPerPage || 10;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
                 currentPage = 1;
                 fetchPage(1);
-            });
-        }
+            }, 300);
+        });
+
+        // Page size change
+        perPageSelect.addEventListener('change', () => {
+            currentPerPage = parseInt(perPageSelect.value);
+            currentPage = 1;
+            fetchPage(1);
+        });
     }
 
     function loadCategories() {
@@ -169,7 +165,6 @@ if (typeof window.translations === 'undefined') {
             })
             .then(data => {
                 categories = data || [];
-                if (!categoryFilter) return;
                 categoryFilter.innerHTML = `<option value="">${translations.allCategories || 'All Categories'}</option>`;
                 if (Array.isArray(data)) {
                     data.forEach(cat => {
@@ -184,12 +179,10 @@ if (typeof window.translations === 'undefined') {
                 console.error('Error loading categories:', error);
                 categories = [];
                 // ✅ FIXED: Show user-friendly error message
-                if (categoryFilter) {
-                    categoryFilter.innerHTML = `
-                        <option value="">${translations.allCategories || 'All Categories'}</option>
-                        <option value="" disabled>Error loading categories</option>
-                    `;
-                }
+                categoryFilter.innerHTML = `
+                    <option value="">${translations.allCategories || 'All Categories'}</option>
+                    <option value="" disabled>Error loading categories</option>
+                `;
                 // Show toast notification if available
                 if (typeof showToast === 'function') {
                     showToast('Failed to load categories. Please refresh the page.', 'error');
@@ -199,20 +192,20 @@ if (typeof window.translations === 'undefined') {
 
     function renderRows(items, page) {
         console.log(`renderRows called with ${items?.length || 0} items, page ${page}`);
-        
+
         // ✅ FIXED: Check if tableBody exists
         if (!tableBody) {
             console.error('tableBody element not found!');
             return;
         }
-        
+
         tableBody.innerHTML = '';
-        
+
         if (!items || items.length === 0) {
             console.log('No items to render, showing empty state');
             const query = searchInput?.value?.trim() || '';
-            const message = query ? 
-                `${translations.noKeywordsFoundMatching} "${query}". ${translations.tryDifferentSearchTerm}` : 
+            const message = query ?
+                `${translations.noKeywordsFoundMatching} "${query}". ${translations.tryDifferentSearchTerm}` :
                 translations.noKeywordsYet;
             const icon = query ? 'bi-search' : 'bi-key';
             // Get keywords add URL from page data
@@ -227,7 +220,7 @@ if (typeof window.translations === 'undefined') {
                 }
             }
             const action = query ? '' : ` — <a href="${keywordsAddUrl}">${translations.addYourFirstKeyword}</a>`;
-            
+
             tableBody.innerHTML = `
                 <tr><td colspan="7" class="text-center py-5 text-muted">
                     <i class="bi ${icon} display-4 mb-3"></i>
@@ -235,9 +228,9 @@ if (typeof window.translations === 'undefined') {
                 </td></tr>`;
             return;
         }
-        
+
         console.log(`Rendering ${items.length} items`);
-        
+
         // ✅ DEBUG: Validate item structure
         if (items.length > 0) {
             const firstItem = items[0];
@@ -250,7 +243,7 @@ if (typeof window.translations === 'undefined') {
                 usage_count: firstItem.usage_count
             });
         }
-        
+
         // Detect duplicates
         const keywordCounts = {};
         const duplicates = new Set();
@@ -266,7 +259,7 @@ if (typeof window.translations === 'undefined') {
                 keywordCounts[text] = 1;
             }
         });
-        
+
         // Update duplicate count
         const duplicateCountEl = document.getElementById('duplicateCount');
         if (duplicateCountEl) {
@@ -283,21 +276,22 @@ if (typeof window.translations === 'undefined') {
             const tr = document.createElement('tr');
             const keywordText = (kw.text || '').toLowerCase().trim();
             const isDuplicate = kw.is_duplicate || duplicates.has(keywordText);
-            
+
             tr.dataset.keywordId = kw.id;
             tr.dataset.keyword = keywordText;
             if (isDuplicate) {
-                tr.classList.add('table-warning', 'keyword-row-merge-candidate');
+                tr.classList.add('table-warning');
+                tr.style.borderLeft = '4px solid #f59e0b';
             }
-            
+
             // ✅ FIXED: Use proper HTML escaping to prevent XSS
             const escapedText = escapeHtml(kw.text || '');
             const escapedCategoryName = escapeHtml(kw.category_name || translations.uncategorized || 'Uncategorized');
             const escapedKeywordText = escapeHtml(keywordText);
-            
+
             tr.innerHTML = `
                 <td>
-                    <input type="checkbox" class="form-check-input keyword-checkbox" 
+                    <input type="checkbox" class="form-check-input keyword-checkbox"
                            value="${kw.id}" onchange="updateBulkButtons()">
                 </td>
                 <td><span class="badge bg-secondary">${globalIndex}</span></td>
@@ -334,7 +328,7 @@ if (typeof window.translations === 'undefined') {
 
     function renderPaginator(page, total_pages) {
         console.log(`renderPaginator called: page=${page}, total_pages=${total_pages}`);
-        
+
         // ✅ FIXED: Validate pagination inputs
         if (total_pages < 1) {
             total_pages = 1;
@@ -345,45 +339,45 @@ if (typeof window.translations === 'undefined') {
         if (page > total_pages) {
             page = total_pages;
         }
-        
+
         // Don't render if only one page
         if (total_pages <= 1) {
-            const paginationContainer = document.querySelector('.unified-pagination-container') || 
+            const paginationContainer = document.querySelector('.unified-pagination-container') ||
                                        document.querySelector('.pagination-container');
             if (paginationContainer) {
                 paginationContainer.innerHTML = '';
             }
             return;
         }
-        
+
         // First, check for existing unified-pagination-container from template
         let paginationContainer = document.querySelector('.unified-pagination-container');
         console.log('Found existing unified-pagination-container:', !!paginationContainer);
-        
+
         // If no unified container exists, check for old pagination-container
         if (!paginationContainer) {
             paginationContainer = document.querySelector('.pagination-container');
             console.log('Found existing pagination-container:', !!paginationContainer);
         }
-        
+
         // If still no container, create one
         if (!paginationContainer) {
             console.log('Creating new pagination container');
             paginationContainer = createPaginationContainer();
         }
-        
+
         if (!paginationContainer) {
             console.error('Could not create pagination container');
             return;
         }
-        
+
         console.log('Using pagination container:', paginationContainer.id || paginationContainer.className);
-        
+
         // Ensure the container has an ID for the unified pagination module
         if (!paginationContainer.id) {
             paginationContainer.id = 'paginationContainer';
         }
-        
+
         // Get URL parameters to preserve
         const urlParams = {};
         const currentParams = new URLSearchParams(window.location.search);
@@ -392,7 +386,7 @@ if (typeof window.translations === 'undefined') {
                 urlParams[key] = value;
             }
         });
-        
+
         // Use unified pagination
         import('../modules/rendering/unified-pagination.js').then(module => {
             console.log('Calling renderUnifiedPagination with container:', paginationContainer.id);
@@ -420,20 +414,20 @@ if (typeof window.translations === 'undefined') {
             renderOldPaginator(page, total_pages, paginationContainer);
         });
     }
-    
+
     // Fallback old pagination renderer
     function renderOldPaginator(page, total_pages, paginationContainer) {
         paginationContainer.innerHTML = '';
-        
+
         const pageInfo = document.createElement('div');
         pageInfo.className = 'small text-muted pagination-info';
         pageInfo.textContent = `${translations.page || 'Page'} ${page} ${translations.of || 'of'} ${total_pages}`;
         paginationContainer.appendChild(pageInfo);
-        
+
         const pagContainer = document.createElement('ul');
         pagContainer.className = 'pagination pagination-sm mb-0';
         paginationContainer.appendChild(pagContainer);
-        
+
         const windowSize = 2;
         const start = Math.max(1, page - windowSize);
         const end = Math.min(total_pages, page + windowSize);
@@ -462,9 +456,9 @@ if (typeof window.translations === 'undefined') {
 
         if (start > 1) addItem('1', 1);
         if (start > 2) {
-            const li = document.createElement('li'); 
+            const li = document.createElement('li');
             li.className='page-item disabled';
-            li.innerHTML = '<span class="page-link">…</span>'; 
+            li.innerHTML = '<span class="page-link">…</span>';
             pagContainer.appendChild(li);
         }
 
@@ -473,9 +467,9 @@ if (typeof window.translations === 'undefined') {
         }
 
         if (end < total_pages - 1) {
-            const li = document.createElement('li'); 
+            const li = document.createElement('li');
             li.className='page-item disabled';
-            li.innerHTML = '<span class="page-link">…</span>'; 
+            li.innerHTML = '<span class="page-link">…</span>';
             pagContainer.appendChild(li);
         }
         if (end < total_pages) addItem(String(total_pages), total_pages);
@@ -491,32 +485,34 @@ if (typeof window.translations === 'undefined') {
             console.error('keywordsTable element not found');
             return null;
         }
-        
+
         // Find the stat-card that contains the table
         const statCard = keywordsTable.closest('.stat-card');
         if (!statCard) {
             console.error('stat-card containing keywordsTable not found');
             return null;
         }
-        
+
         // Check if pagination container already exists (check both unified and old style)
-        let container = statCard.querySelector('.unified-pagination-container') || 
-                       statCard.querySelector('.pagination-container') || 
+        let container = statCard.querySelector('.unified-pagination-container') ||
+                       statCard.querySelector('.pagination-container') ||
                        statCard.querySelector('#paginationContainer');
         if (container) {
             if (!container.id) container.id = 'paginationContainer';
             return container;
         }
-        
+
         // Find the table-wrapper or table-responsive div and insert pagination directly after it
         const tableWrapper = statCard.querySelector('.table-wrapper');
         const tableResponsive = statCard.querySelector('.table-responsive');
         const insertAfter = tableWrapper || tableResponsive || keywordsTable;
-        
+
         container = document.createElement('div');
         container.id = 'paginationContainer';
-        container.className = 'unified-pagination-container keywords-pagination';
-        
+        container.className = 'unified-pagination-container'; // Use unified class to match template
+        container.style.width = '100%'; // Full width
+        container.style.clear = 'both'; // Ensure it's on a new line
+
         if (insertAfter && insertAfter.parentNode) {
             // Insert directly after the table wrapper/responsive/table
             insertAfter.parentNode.insertBefore(container, insertAfter.nextSibling);
@@ -524,7 +520,7 @@ if (typeof window.translations === 'undefined') {
             // Fallback: append to stat-card
             statCard.appendChild(container);
         }
-        
+
         return container;
     }
 
@@ -536,11 +532,11 @@ if (typeof window.translations === 'undefined') {
 
     let pendingFetch = null;
     let requestSequence = 0;  // ✅ FIXED: Track request sequence to prevent race conditions
-    
+
     function fetchPage(page=1) {
         currentPage = page;
         const sequence = ++requestSequence;  // ✅ FIXED: Increment sequence for each request
-        
+
         if (pendingFetch) {
             pendingFetch.abort();
         }
@@ -575,15 +571,15 @@ if (typeof window.translations === 'undefined') {
         url.searchParams.set('per_page', currentPerPage);
         url.searchParams.set('sort', currentSort);
         url.searchParams.set('order', currentOrder);
-        
-        if (searchInput?.value?.trim()) url.searchParams.set('q', searchInput.value.trim());
-        if (statusFilter?.value) url.searchParams.set('status', statusFilter.value);
-        if (categoryFilter?.value) url.searchParams.set('category', categoryFilter.value);
+
+        if (searchInput.value.trim()) url.searchParams.set('q', searchInput.value.trim());
+        if (statusFilter.value) url.searchParams.set('status', statusFilter.value);
+        if (categoryFilter.value) url.searchParams.set('category', categoryFilter.value);
 
         // Add cache-busting parameter to ensure fresh data
         url.searchParams.set('_t', Date.now());
-        
-        fetch(url.toString(), { 
+
+        fetch(url.toString(), {
             signal: controller.signal,
             cache: 'no-cache',
             headers: {
@@ -603,7 +599,7 @@ if (typeof window.translations === 'undefined') {
                     console.log(`Ignoring stale request ${sequence}, current is ${requestSequence}`);
                     return;
                 }
-                
+
                 // ✅ DEBUG: Log the API response
                 console.log('API Response:', {
                     success: json?.success,
@@ -613,7 +609,7 @@ if (typeof window.translations === 'undefined') {
                     total_pages: json?.total_pages,
                     hasKeywords: !!json?.keywords
                 });
-                
+
                 // ✅ FIXED: Handle both success:true and direct keywords array responses
                 if (!json || typeof json !== 'object') {
                     console.error('API returned null/undefined or invalid format');
@@ -627,7 +623,7 @@ if (typeof window.translations === 'undefined') {
                     }
                     return;
                 }
-                
+
                 // Check if response has error (success: false)
                 if (json.success === false) {
                     console.error('API error', json);
@@ -642,7 +638,7 @@ if (typeof window.translations === 'undefined') {
                     }
                     return;
                 }
-                
+
                 // ✅ FIXED: Validate required fields
                 if (!Array.isArray(json.keywords) && !Array.isArray(json.results) && !Array.isArray(json.items)) {
                     console.error('API response missing keywords array', json);
@@ -656,7 +652,7 @@ if (typeof window.translations === 'undefined') {
                     }
                     return;
                 }
-                
+
                 // ✅ FIXED: Update currentPerPage from API response to keep in sync
                 if (json.per_page) {
                     currentPerPage = json.per_page;
@@ -664,7 +660,7 @@ if (typeof window.translations === 'undefined') {
                         perPageSelect.value = json.per_page;
                     }
                 }
-                
+
                 // ✅ FIXED: Sync sort state from API response
                 if (json.sort_by) {
                     currentSort = json.sort_by;
@@ -679,15 +675,15 @@ if (typeof window.translations === 'undefined') {
                     }
                 }
                 updateSortIcons();
-                
+
                 // Get keywords array - handle both success:true and direct array responses
                 const keywords = json.keywords || json.results || json.items || [];
                 const pageNum = json.page || 1;
                 const totalPages = json.total_pages || 1;
-                
+
                 console.log(`Rendering ${keywords.length} keywords for page ${pageNum}`);
                 console.log('First keyword sample:', keywords.length > 0 ? keywords[0] : 'No keywords');
-                
+
                 // ✅ DEBUG: Log full response if no keywords
                 if (keywords.length === 0) {
                     console.warn('⚠️ No keywords in response! Full response:', json);
@@ -695,7 +691,7 @@ if (typeof window.translations === 'undefined') {
                     console.warn('Response.success:', json.success);
                     console.warn('Response.keywords type:', typeof json.keywords, Array.isArray(json.keywords));
                 }
-                
+
                 // ✅ FIXED: Wrap in try-catch to catch any rendering errors
                 try {
                     // Double-check sequence before rendering (race condition protection)
@@ -703,7 +699,7 @@ if (typeof window.translations === 'undefined') {
                         console.log(`Skipping render for stale request ${sequence}`);
                         return;
                     }
-                    
+
                     // Force clear table first to ensure fresh render
                     if (tableBody) {
                         tableBody.innerHTML = '';
@@ -719,7 +715,7 @@ if (typeof window.translations === 'undefined') {
                     if (totalStat && typeof json.total === 'number') {
                         totalStat.textContent = json.total;
                     }
-                    
+
                     // Force a reflow to ensure DOM updates are visible
                     if (tableBody) {
                         void tableBody.offsetWidth;
@@ -758,8 +754,8 @@ if (typeof window.translations === 'undefined') {
             const start = ((json.page - 1) * json.per_page) + 1;
             const end = start + ((json.keywords || []).length) - 1;
             const total = json.total || 0;
-            const query = searchInput?.value?.trim() || '';
-            
+            const query = searchInput.value.trim();
+
             if (query) {
                 infoEl.textContent = `Found ${total} result${total !== 1 ? 's' : ''} for "${query}" (${start}–${end})`;
             } else {
@@ -773,11 +769,11 @@ if (typeof window.translations === 'undefined') {
         const checkboxes = document.querySelectorAll('.keyword-checkbox:checked');
         selectedKeywords.clear();
         checkboxes.forEach(cb => selectedKeywords.add(parseInt(cb.value)));
-        
+
         const hasSelection = selectedKeywords.size > 0;
         if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
         if (bulkUpdateBtn) bulkUpdateBtn.disabled = !hasSelection;
-        
+
         // Update select all checkbox
         const allCheckboxes = document.querySelectorAll('.keyword-checkbox');
         if (selectAllCheckbox) {
@@ -785,17 +781,17 @@ if (typeof window.translations === 'undefined') {
             selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
         }
     }
-    
+
     // ✅ FIXED: Add missing updateBulkButtons function
     function updateBulkButtons() {
         const checkboxes = document.querySelectorAll('.keyword-checkbox:checked');
         const hasSelection = checkboxes.length > 0;
         const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
         const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
-        
+
         if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
         if (bulkUpdateBtn) bulkUpdateBtn.disabled = !hasSelection;
-        
+
         // Update select-all checkbox state
         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
         const allCheckboxes = document.querySelectorAll('.keyword-checkbox');
@@ -803,14 +799,14 @@ if (typeof window.translations === 'undefined') {
             selectAllCheckbox.checked = checkboxes.length === allCheckboxes.length;
             selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
         }
-        
+
         // Also update the selection set
         selectedKeywords.clear();
         checkboxes.forEach(cb => selectedKeywords.add(parseInt(cb.value)));
     }
 
     function toggleSelectAll() {
-        const isChecked = Boolean(selectAllCheckbox?.checked);
+        const isChecked = selectAllCheckbox.checked;
         document.querySelectorAll('.keyword-checkbox').forEach(cb => {
             cb.checked = isChecked;
         });
@@ -834,26 +830,26 @@ if (typeof window.translations === 'undefined') {
     // Filter and sort functions
     function applyFilters() {
         currentFilters = {
-            status: statusFilter?.value || '',
-            category: categoryFilter?.value || ''
+            status: statusFilter.value,
+            category: categoryFilter.value
         };
         currentPage = 1;
-        
+
         // ✅ FIXED: Update URL to persist filters
         const url = new URL(window.location);
-        if (statusFilter?.value) {
+        if (statusFilter.value) {
             url.searchParams.set('status', statusFilter.value);
         } else {
             url.searchParams.delete('status');
         }
-        if (categoryFilter?.value) {
+        if (categoryFilter.value) {
             url.searchParams.set('category', categoryFilter.value);
         } else {
             url.searchParams.delete('category');
         }
         url.searchParams.set('page', '1');
         window.history.pushState({}, '', url);
-        
+
         fetchPage(1);
     }
 
@@ -864,28 +860,28 @@ if (typeof window.translations === 'undefined') {
             currentSort = field;
             currentOrder = 'asc';
         }
-        if (sortBySelect) sortBySelect.value = currentSort;
-        if (sortOrderSelect) sortOrderSelect.value = currentOrder;
+        sortBySelect.value = currentSort;
+        sortOrderSelect.value = currentOrder;
         updateSortIcons();
         fetchPage(currentPage);
     }
-    
+
     function applySorting() {
-        currentSort = sortBySelect?.value || currentSort;
-        currentOrder = sortOrderSelect?.value || currentOrder;
+        currentSort = sortBySelect.value;
+        currentOrder = sortOrderSelect.value;
         currentPage = 1;
         updateSortIcons();
         fetchPage(1);
     }
 
     function changePageSize() {
-        currentPerPage = parseInt(perPageSelect?.value || currentPerPage || 10, 10);
+        currentPerPage = parseInt(perPageSelect.value);
         currentPage = 1;
         fetchPage(1);
     }
 
     function clearSearch() {
-        if (searchInput) searchInput.value = '';
+        searchInput.value = '';
         currentPage = 1;
         fetchPage(1);
     }
@@ -895,9 +891,9 @@ if (typeof window.translations === 'undefined') {
     // Bulk operations
     function bulkDelete() {
         if (selectedKeywords.size === 0) return;
-        
+
         if (!confirm(`${selectedKeywords.size} ${translations.deleteSelectedKeywords || 'Delete selected keywords?'}`)) return;
-        
+
         // ✅ FIXED: Add loading state
         const btn = document.getElementById('bulkDeleteBtn');
         const originalHTML = btn ? btn.innerHTML : '';
@@ -905,7 +901,7 @@ if (typeof window.translations === 'undefined') {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Deleting...';
         }
-        
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         fetch('/api/keywords/bulk-delete', {
             method: 'POST',
@@ -953,38 +949,38 @@ if (typeof window.translations === 'undefined') {
             modal.removeAttribute('data-edit-mode');
             modal.removeAttribute('data-keyword-id');
         }
-        
+
         // Reset modal header
         const modalHeader = document.querySelector('#addKeywordModal .add-item-modal-header h3');
         if (modalHeader) {
             modalHeader.innerHTML = `<i class="bi bi-key"></i> ${translations.addKeyword || 'Add Keyword'}`;
         }
-        
+
         // Reset submit button
         const submitBtn = document.querySelector('#addKeywordModal .add-item-btn-submit');
         if (submitBtn) {
             submitBtn.textContent = translations.addKeyword || 'Add Keyword';
             submitBtn.removeAttribute('data-keyword-id');
-            submitBtn.onclick = function() { 
+            submitBtn.onclick = function() {
                 if (typeof window.submitAddItem === 'function') {
                     window.submitAddItem('keyword');
                 }
             };
         }
-        
+
         // Clear Select2 fields
         const wordsSelect = document.getElementById('keywordWords');
         const categorySelect = document.getElementById('keywordCategory');
-        
+
         if (wordsSelect && typeof jQuery !== 'undefined' && jQuery(wordsSelect).data('select2')) {
             jQuery(wordsSelect).val(null).trigger('change');
         }
-        
+
         if (categorySelect && typeof jQuery !== 'undefined' && jQuery(categorySelect).data('select2')) {
             jQuery(categorySelect).val(null).trigger('change');
         }
     }
-    
+
     // Edit keyword in modal
     function editKeywordInModal(keywordId) {
         // Fetch keyword data
@@ -995,9 +991,9 @@ if (typeof window.translations === 'undefined') {
                     alert(translations.errorLoadingData || 'Error loading keyword data');
                     return;
                 }
-                
+
                 const keyword = data.keyword;
-                
+
                 // Open the modal
                 if (typeof window.openAddItemModal === 'function') {
                     window.openAddItemModal('addKeywordModal', 'keyword');
@@ -1010,7 +1006,7 @@ if (typeof window.translations === 'undefined') {
                         document.body.style.overflow = 'hidden';
                     }
                 }
-                
+
                 // Wait for modal to be ready, then populate fields
                 setTimeout(() => {
                     populateKeywordModalForEdit(keyword);
@@ -1021,14 +1017,14 @@ if (typeof window.translations === 'undefined') {
                 alert(translations.errorLoadingData || 'Error loading keyword data');
             });
     }
-    
+
     function populateKeywordModalForEdit(keyword) {
         // Update modal header
         const modalHeader = document.querySelector('#addKeywordModal .add-item-modal-header h3');
         if (modalHeader) {
             modalHeader.innerHTML = `<i class="bi bi-pencil"></i> ${translations.editKeyword || 'Edit Keyword'}`;
         }
-        
+
         // Update submit button
         const submitBtn = document.querySelector('#addKeywordModal .add-item-btn-submit');
         if (submitBtn) {
@@ -1036,14 +1032,14 @@ if (typeof window.translations === 'undefined') {
             submitBtn.setAttribute('data-keyword-id', keyword.id);
             submitBtn.onclick = function() { submitUpdateKeyword(keyword.id); };
         }
-        
+
         // Store edit mode flag
         const modal = document.getElementById('addKeywordModal');
         if (modal) {
             modal.setAttribute('data-edit-mode', 'true');
             modal.setAttribute('data-keyword-id', keyword.id);
         }
-        
+
         // Populate word IDs in Select2
         const wordsSelect = document.getElementById('keywordWords');
         if (wordsSelect && keyword.word_ids && keyword.word_ids.length > 0 && keyword.text) {
@@ -1052,7 +1048,7 @@ if (typeof window.translations === 'undefined') {
                 if (typeof jQuery !== 'undefined' && jQuery(wordsSelect).data('select2')) {
                     // Split keyword text into words and match with word_ids
                     const wordTexts = keyword.text.split(/\s+/).filter(w => w.trim());
-                    
+
                     // Create options for Select2
                     jQuery(wordsSelect).empty();
                     wordTexts.forEach((wordText, index) => {
@@ -1069,7 +1065,7 @@ if (typeof window.translations === 'undefined') {
                 }
             }, 500);
         }
-        
+
         // Populate category
         const categorySelect = document.getElementById('keywordCategory');
         if (categorySelect && keyword.category_id) {
@@ -1090,12 +1086,12 @@ if (typeof window.translations === 'undefined') {
             }, 500);
         }
     }
-    
+
     function fetchWordTextsForIds(wordIds) {
         if (!wordIds || wordIds.length === 0) {
             return Promise.resolve([]);
         }
-        
+
         // Use the keyword text we already have and split it
         // But we need to match word IDs to words - let's create an API call
         const placeholders = wordIds.map(() => '?').join(',');
@@ -1117,12 +1113,12 @@ if (typeof window.translations === 'undefined') {
                 return [];
             });
     }
-    
+
     function fetchCategoryNameForId(categoryId) {
         if (!categoryId) {
             return Promise.resolve(null);
         }
-        
+
         // Use the categories list we already loaded
         if (categories && categories.length > 0) {
             const category = categories.find(c => c.id === categoryId);
@@ -1130,7 +1126,7 @@ if (typeof window.translations === 'undefined') {
                 return Promise.resolve(category.name);
             }
         }
-        
+
         // Fallback: fetch from API
         return fetch(`/api/categories/${categoryId}`)
             .then(response => response.json())
@@ -1142,27 +1138,27 @@ if (typeof window.translations === 'undefined') {
             })
             .catch(() => null);
     }
-    
+
     function submitUpdateKeyword(keywordId) {
         const wordsSelect = document.getElementById('keywordWords');
         const categorySelect = document.getElementById('keywordCategory');
-        
+
         if (!wordsSelect) {
             alert(translations.errorLoadingData || 'Words select not found');
             return;
         }
-        
+
         // Get selected word IDs from Select2
         const selectedWordIds = jQuery(wordsSelect).val() || [];
         const categoryId = jQuery(categorySelect).val() || null;
-        
+
         if (selectedWordIds.length < 2) {
             alert(translations.mustSelectAtLeastTwoWords || 'You must select at least 2 words');
             return;
         }
-        
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-        
+
         fetch(`/api/keywords/${keywordId}`, {
             method: 'PUT',
             headers: {
@@ -1182,17 +1178,17 @@ if (typeof window.translations === 'undefined') {
                     window.closeAddItemModal('addKeywordModal');
                 }
                 resetKeywordModalToAdd(); // Reset modal state
-                
+
                 // Clear selections
                 selectedKeywords.clear();
                 updateSelection();
-                
+
                 // Refresh data immediately with cache-busting
                 // Use a small delay to ensure modal is closed before refresh
                 setTimeout(() => {
                     fetchPage(currentPage);
                 }, 50);
-                
+
                 // Show success message after refresh starts (non-blocking)
                 setTimeout(() => {
                     alert(translations.keywordUpdatedSuccessfully || 'Keyword updated successfully');
@@ -1206,17 +1202,17 @@ if (typeof window.translations === 'undefined') {
             alert(translations.errorUpdatingKeyword);
         });
     }
-    
+
     function bulkUpdate() {
         if (selectedKeywords.size === 0) return;
-        
+
         // If only one keyword selected, open edit modal
         if (selectedKeywords.size === 1) {
             const keywordId = Array.from(selectedKeywords)[0];
             editKeywordInModal(keywordId);
             return;
         }
-        
+
         // For multiple keywords, show a message and edit the first one
         if (confirm(`${translations.multipleKeywordsSelected || 'Multiple keywords selected'}. ${translations.editFirstKeyword || 'Edit the first keyword?'}`)) {
             const keywordId = Array.from(selectedKeywords)[0];
@@ -1232,19 +1228,19 @@ if (typeof window.translations === 'undefined') {
         if (selectedIds.length > 0) {
             selectedIds.forEach(id => url.searchParams.append('ids', id));
         }
-        
+
         window.open(url.toString(), '_blank');
     }
 
     function mergeAllDuplicates() {
         if (!confirm(translations.mergeAllDuplicatesConfirm + '\n\n' + translations.mergeAllDuplicatesDetails)) return;
-        
+
         // Show loading indicator
         const btn = event.target.closest('button');
         const originalHTML = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + translations.merging;
-        
+
         fetch('/api/keywords/merge-all-duplicates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1253,7 +1249,7 @@ if (typeof window.translations === 'undefined') {
         .then(data => {
             btn.disabled = false;
             btn.innerHTML = originalHTML;
-            
+
             if (data.success) {
                 alert(`✅ ${translations.successfullyMergedAll}\n\n${translations.merged}: ${data.merged_count} ${translations.keywords}\n${translations.duplicateSets}: ${data.duplicate_sets}\n\n${translations.refreshingPage}`);
                 // ✅ Complete page reload with cache-busting
@@ -1271,15 +1267,15 @@ if (typeof window.translations === 'undefined') {
     }
 
     // Global functions for template buttons
-    window.viewKeyword = function(id){ 
+    window.viewKeyword = function(id){
         window.location.href = `/keywords/${id}`;
     };
-    
+
     window.editKeyword = function(id) {
         // Use the modal edit function instead of redirecting
         editKeywordInModal(id);
     };
-    
+
     window.deleteKeyword = function(id){
         if (!confirm(translations.deleteKeywordConfirm + id + '?')) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -1300,25 +1296,25 @@ if (typeof window.translations === 'undefined') {
                 }
             }).catch(e=>alert(translations.error + ': ' + e.message));
     };
-    
+
     // ✅ NEW: Update keyword associations for all files
     window.updateKeywordAssociations = function() {
         const btn = document.getElementById('updateKeywordsBtn');
         if (!btn) return;
-        
+
         // Confirm action
-        if (!confirm(translations.updateKeywordAssociationsConfirm || 
+        if (!confirm(translations.updateKeywordAssociationsConfirm ||
                     'This will scan all files in the database and update keyword associations. This may take a while. Continue?')) {
             return;
         }
-        
+
         // Disable button and show loading state
         const originalHTML = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> ' + (translations.updating || 'Updating...');
-        
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-        
+
         fetch('/api/keywords/update-associations', {
             method: 'POST',
             headers: {
@@ -1335,20 +1331,20 @@ if (typeof window.translations === 'undefined') {
                     throw new Error(`Server returned non-JSON response (${response.status}): ${text.substring(0, 100)}`);
                 });
             }
-            
+
             // Check if response is OK
             if (!response.ok) {
                 return response.json().then(data => {
                     throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
                 });
             }
-            
+
             return response.json();
         })
         .then(data => {
             btn.disabled = false;
             btn.innerHTML = originalHTML;
-            
+
             if (data.success) {
                 let message = (translations.keywordAssociationsUpdated || 'Keyword associations updated successfully!') + '\n\n' +
                     (translations.filesProcessed || 'Files processed') + ': ' + data.files_processed + ' / ' + data.total_files + '\n' +
@@ -1371,10 +1367,10 @@ if (typeof window.translations === 'undefined') {
             alert('❌ ' + (translations.error || 'Error') + ': ' + error.message);
         });
     };
-    
+
     window.mergeDuplicates = function(keywordText){
         if (!confirm(`${translations.mergeAllDuplicatesConfirm || 'Merge all duplicates of'} "${escapeHtml(keywordText)}"? This will combine usage counts and keep the first occurrence.`)) return;
-        
+
         // ✅ FIXED: Add loading state - find button by keyword text
         const btn = document.querySelector(`button[onclick*="mergeDuplicates('${keywordText.replace(/'/g, "\\'")}')"]`) ||
                    document.querySelector(`button[onclick*='mergeDuplicates("${keywordText.replace(/"/g, '\\"')}")']`);
@@ -1383,11 +1379,11 @@ if (typeof window.translations === 'undefined') {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Merging...';
         }
-        
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         fetch('/api/keywords/merge-duplicates', {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
@@ -1444,7 +1440,7 @@ if (typeof window.translations === 'undefined') {
             const token = metaToken.getAttribute('content');
             if (token) return token;
         }
-        
+
         try {
             const response = await fetch('/api/csrf-token');
             if (!response.ok) {
@@ -1468,7 +1464,7 @@ if (typeof window.translations === 'undefined') {
             toastContainer.style.zIndex = '9999';
             document.body.appendChild(toastContainer);
         }
-        
+
         const toastId = 'toast-' + Date.now();
         const icons = {
             success: 'check-circle-fill',
@@ -1476,14 +1472,14 @@ if (typeof window.translations === 'undefined') {
             warning: 'exclamation-triangle-fill',
             info: 'info-circle-fill'
         };
-        
+
         const bgColors = {
             success: 'success',
             error: 'danger',
             warning: 'warning',
             info: 'info'
         };
-        
+
         const toastHtml = `
             <div id="${toastId}" class="toast align-items-center text-white bg-${bgColors[type]} border-0" role="alert">
                 <div class="d-flex">
@@ -1495,13 +1491,13 @@ if (typeof window.translations === 'undefined') {
                 </div>
             </div>
         `;
-        
+
         toastContainer.insertAdjacentHTML('beforeend', toastHtml);
         const toastElement = document.getElementById(toastId);
         if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
             const toast = new bootstrap.Toast(toastElement, { delay: duration });
             toast.show();
-            
+
             toastElement.addEventListener('hidden.bs.toast', () => {
                 toastElement.remove();
             });
@@ -1530,7 +1526,7 @@ if (typeof window.translations === 'undefined') {
             console.error('Add keyword modal not found');
             return;
         }
-        
+
         const modal = new bootstrap.Modal(modalElement);
         const wordInput = document.getElementById('keywordWordInput');
         const categoryInput = document.getElementById('keywordCategoryInput');
@@ -1539,12 +1535,12 @@ if (typeof window.translations === 'undefined') {
         const selectedWordsContainer = document.getElementById('selectedWordsContainer');
         const selectedWordsList = document.getElementById('selectedWordsList');
         const selectedCategoryIdInput = document.getElementById('selectedCategoryId');
-        
+
         if (!wordInput || !categoryInput || !wordResults || !categoryResults || !selectedWordsList) {
             console.error('Required modal elements not found');
             return;
         }
-        
+
         // Clean up any existing handlers
         if (keywordClickOutsideHandler) {
             document.removeEventListener('click', keywordClickOutsideHandler, true);
@@ -1574,7 +1570,7 @@ if (typeof window.translations === 'undefined') {
             clearTimeout(keywordCategorySearchTimeout);
             keywordCategorySearchTimeout = null;
         }
-        
+
         // Reset state
         selectedWords = [];
         selectedCategoryId = null;
@@ -1582,46 +1578,46 @@ if (typeof window.translations === 'undefined') {
         wordInput.value = '';
         categoryInput.value = '';
         if (selectedCategoryIdInput) selectedCategoryIdInput.value = '';
-        wordResults.hidden = true;
+        wordResults.style.display = 'none';
         wordResults.innerHTML = '';
-        categoryResults.hidden = true;
+        categoryResults.style.display = 'none';
         categoryResults.innerHTML = '';
-        selectedWordsContainer.hidden = true;
+        selectedWordsContainer.style.display = 'none';
         selectedWordsList.innerHTML = '';
-        
+
         // Initialize word search
         function initializeWordSearch() {
             if (keywordWordSearchTimeout) {
                 clearTimeout(keywordWordSearchTimeout);
                 keywordWordSearchTimeout = null;
             }
-            
+
             if (keywordWordInputHandler) {
                 wordInput.removeEventListener('input', keywordWordInputHandler);
             }
             if (keywordWordKeydownHandler) {
                 wordInput.removeEventListener('keydown', keywordWordKeydownHandler);
             }
-            
+
             keywordWordInputHandler = function(e) {
                 const searchTerm = e.target.value.trim();
-                
+
                 if (keywordWordSearchTimeout) {
                     clearTimeout(keywordWordSearchTimeout);
                 }
-                
+
                 if (searchTerm.length === 0) {
-                    wordResults.hidden = true;
+                    wordResults.style.display = 'none';
                     wordResults.innerHTML = '';
                     return;
                 }
-                
+
                 keywordWordSearchTimeout = setTimeout(() => {
                     searchWordsForKeyword(searchTerm);
                 }, 300);
             };
             wordInput.addEventListener('input', keywordWordInputHandler);
-            
+
             keywordWordKeydownHandler = function(e) {
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
@@ -1631,49 +1627,49 @@ if (typeof window.translations === 'undefined') {
                         firstItem.classList.add('active');
                     }
                 } else if (e.key === 'Escape') {
-                    wordResults.hidden = true;
+                    wordResults.style.display = 'none';
                 }
             };
             wordInput.addEventListener('keydown', keywordWordKeydownHandler);
-            
+
             setTimeout(() => {
                 wordInput.focus();
             }, 300);
         }
-        
+
         // Initialize category search
         function initializeCategorySearch() {
             if (keywordCategorySearchTimeout) {
                 clearTimeout(keywordCategorySearchTimeout);
                 keywordCategorySearchTimeout = null;
             }
-            
+
             if (keywordCategoryInputHandler) {
                 categoryInput.removeEventListener('input', keywordCategoryInputHandler);
             }
             if (keywordCategoryKeydownHandler) {
                 categoryInput.removeEventListener('keydown', keywordCategoryKeydownHandler);
             }
-            
+
             keywordCategoryInputHandler = function(e) {
                 const searchTerm = e.target.value.trim();
-                
+
                 if (keywordCategorySearchTimeout) {
                     clearTimeout(keywordCategorySearchTimeout);
                 }
-                
+
                 if (searchTerm.length === 0) {
-                    categoryResults.hidden = true;
+                    categoryResults.style.display = 'none';
                     categoryResults.innerHTML = '';
                     return;
                 }
-                
+
                 keywordCategorySearchTimeout = setTimeout(() => {
                     searchCategoriesForKeyword(searchTerm);
                 }, 300);
             };
             categoryInput.addEventListener('input', keywordCategoryInputHandler);
-            
+
             keywordCategoryKeydownHandler = function(e) {
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
@@ -1683,29 +1679,29 @@ if (typeof window.translations === 'undefined') {
                         firstItem.classList.add('active');
                     }
                 } else if (e.key === 'Escape') {
-                    categoryResults.hidden = true;
+                    categoryResults.style.display = 'none';
                 }
             };
             categoryInput.addEventListener('keydown', keywordCategoryKeydownHandler);
         }
-        
+
         // Search words function
         async function searchWordsForKeyword(searchTerm) {
             if (!searchTerm || searchTerm.length === 0) {
-                wordResults.hidden = true;
+                wordResults.style.display = 'none';
                 return;
             }
-            
+
             try {
                 const params = new URLSearchParams({
                     q: searchTerm,
                     page: 1,
                     per_page: 20
                 });
-                
+
                 const response = await fetch(`/api/words/search?${params.toString()}`);
                 const data = await response.json();
-                
+
                 if (data.results && data.results.length > 0) {
                     renderWordResultsForKeyword(data.results, searchTerm);
                 } else {
@@ -1713,31 +1709,31 @@ if (typeof window.translations === 'undefined') {
                 }
             } catch (error) {
                 console.error('Error searching words:', error);
-                wordResults.hidden = true;
+                wordResults.style.display = 'none';
             }
         }
-        
+
         // Render word results
         function renderWordResultsForKeyword(results, searchTerm) {
             wordResults.innerHTML = '';
-            
+
             if (results.length > 0) {
                 results.forEach((item, index) => {
                     const wordId = item.id || item.word_id;
                     const wordText = item.text || item.word || '';
                     const usageCount = item.usage_count || 0;
-                    
+
                     // Skip if already selected
                     if (selectedWords.some(w => w.text === wordText)) {
                         return;
                     }
-                    
+
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'word-result-item';
                     itemDiv.tabIndex = 0;
                     itemDiv.setAttribute('data-word-id', wordId);
                     itemDiv.setAttribute('data-word-text', wordText);
-                    
+
                     itemDiv.innerHTML = `
                         <div class="d-flex align-items-center">
                             <i class="bi bi-check-circle me-2 text-primary"></i>
@@ -1745,11 +1741,11 @@ if (typeof window.translations === 'undefined') {
                             ${usageCount > 0 ? `<small class="text-muted ms-2">(${usageCount} files)</small>` : ''}
                         </div>
                     `;
-                    
+
                     itemDiv.addEventListener('click', function() {
                         selectWordForKeyword(wordId, wordText);
                     });
-                    
+
                     itemDiv.addEventListener('keydown', function(e) {
                         if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
@@ -1776,24 +1772,24 @@ if (typeof window.translations === 'undefined') {
                             }
                         }
                     });
-                    
+
                     wordResults.appendChild(itemDiv);
                 });
             }
-            
+
             // Show option to create new word if search term doesn't match exactly
             const exactMatch = results.some(item => {
                 const wordText = (item.text || item.word || '').toLowerCase();
                 return wordText === searchTerm.toLowerCase();
             });
-            
+
             if (!exactMatch && searchTerm.length > 0 && !searchTerm.match(/^\d+$/)) {
                 const createDiv = document.createElement('div');
                 createDiv.className = 'word-result-item word-result-create';
                 createDiv.tabIndex = 0;
                 createDiv.setAttribute('data-word-id', 'new');
                 createDiv.setAttribute('data-word-text', searchTerm);
-                
+
                 createDiv.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="bi bi-plus-circle me-2 text-success"></i>
@@ -1801,24 +1797,24 @@ if (typeof window.translations === 'undefined') {
                         <small class="text-muted ms-2">(create new)</small>
                     </div>
                 `;
-                
+
                 createDiv.addEventListener('click', function() {
                     selectWordForKeyword('new', searchTerm);
                 });
-                
+
                 createDiv.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         selectWordForKeyword('new', searchTerm);
                     }
                 });
-                
+
                 wordResults.appendChild(createDiv);
             }
-            
-            wordResults.hidden = false;
+
+            wordResults.style.display = 'block';
         }
-        
+
         // Select word function
         async function selectWordForKeyword(wordId, wordText) {
             if (wordId === 'new') {
@@ -1837,7 +1833,7 @@ if (typeof window.translations === 'undefined') {
                             csrf_token: csrfToken
                         })
                     });
-                    
+
                     const data = await response.json();
                     if (data.success) {
                         showToast('Word created successfully', 'success');
@@ -1851,63 +1847,63 @@ if (typeof window.translations === 'undefined') {
                     return;
                 }
             }
-            
+
             // Add to selected words
             if (!selectedWords.some(w => w.text === wordText)) {
                 selectedWords.push({ id: wordId, text: wordText });
                 updateSelectedWordsDisplay();
             }
-            
+
             wordInput.value = '';
-            wordResults.hidden = true;
+            wordResults.style.display = 'none';
             wordInput.focus();
         }
-        
+
         // Update selected words display
         function updateSelectedWordsDisplay() {
             const selectedWordsList = document.getElementById('selectedWordsList');
             const selectedWordsContainer = document.getElementById('selectedWordsContainer');
-            
+
             if (!selectedWordsList || !selectedWordsContainer) return;
-            
+
             if (selectedWords.length === 0) {
-                selectedWordsContainer.hidden = true;
+                selectedWordsContainer.style.display = 'none';
                 selectedWordsList.innerHTML = '';
                 return;
             }
-            
-            selectedWordsContainer.hidden = false;
+
+            selectedWordsContainer.style.display = 'block';
             selectedWordsList.innerHTML = selectedWords.map((word, index) => `
-                <span class="badge bg-primary d-flex align-items-center gap-1 archives-selected-word-badge">
+                <span class="badge bg-primary d-flex align-items-center gap-1" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">
                     ${escapeHtml(word.text)}
-                    <button type="button" class="btn-close btn-close-white archives-selected-word-remove" onclick="removeSelectedWord(${index})" aria-label="Remove"></button>
+                    <button type="button" class="btn-close btn-close-white" style="font-size: 0.6rem;" onclick="removeSelectedWord(${index})" aria-label="Remove"></button>
                 </span>
             `).join('');
         }
-        
+
         // Remove selected word
         window.removeSelectedWord = function(index) {
             selectedWords.splice(index, 1);
             updateSelectedWordsDisplay();
         };
-        
+
         // Search categories function
         async function searchCategoriesForKeyword(searchTerm) {
             if (!searchTerm || searchTerm.length === 0) {
-                categoryResults.hidden = true;
+                categoryResults.style.display = 'none';
                 return;
             }
-            
+
             try {
                 const params = new URLSearchParams({
                     q: searchTerm,
                     page: 1,
                     per_page: 20
                 });
-                
+
                 const response = await fetch(`/api/categories/search?${params.toString()}`);
                 const data = await response.json();
-                
+
                 if (data.results && data.results.length > 0) {
                     renderCategoryResultsForKeyword(data.results, searchTerm);
                 } else {
@@ -1915,26 +1911,26 @@ if (typeof window.translations === 'undefined') {
                 }
             } catch (error) {
                 console.error('Error searching categories:', error);
-                categoryResults.hidden = true;
+                categoryResults.style.display = 'none';
             }
         }
-        
+
         // Render category results
         function renderCategoryResultsForKeyword(results, searchTerm) {
             categoryResults.innerHTML = '';
-            
+
             if (results.length > 0) {
                 results.forEach((item, index) => {
                     const categoryId = item.id;
                     const categoryName = item.name || '';
                     const fileCount = item.file_count || 0;
-                    
+
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'word-result-item';
                     itemDiv.tabIndex = 0;
                     itemDiv.setAttribute('data-category-id', categoryId);
                     itemDiv.setAttribute('data-category-name', categoryName);
-                    
+
                     itemDiv.innerHTML = `
                         <div class="d-flex align-items-center">
                             <i class="bi bi-check-circle me-2 text-primary"></i>
@@ -1942,11 +1938,11 @@ if (typeof window.translations === 'undefined') {
                             ${fileCount > 0 ? `<small class="text-muted ms-2">(${fileCount} files)</small>` : ''}
                         </div>
                     `;
-                    
+
                     itemDiv.addEventListener('click', function() {
                         selectCategoryForKeyword(categoryId, categoryName);
                     });
-                    
+
                     itemDiv.addEventListener('keydown', function(e) {
                         if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
@@ -1973,24 +1969,24 @@ if (typeof window.translations === 'undefined') {
                             }
                         }
                     });
-                    
+
                     categoryResults.appendChild(itemDiv);
                 });
             }
-            
+
             // Show option to create new category if search term doesn't match exactly
             const exactMatch = results.some(item => {
                 const categoryName = (item.name || '').toLowerCase();
                 return categoryName === searchTerm.toLowerCase();
             });
-            
+
             if (!exactMatch && searchTerm.length > 0 && !searchTerm.match(/^\d+$/)) {
                 const createDiv = document.createElement('div');
                 createDiv.className = 'word-result-item word-result-create';
                 createDiv.tabIndex = 0;
                 createDiv.setAttribute('data-category-id', 'new');
                 createDiv.setAttribute('data-category-name', searchTerm);
-                
+
                 createDiv.innerHTML = `
                     <div class="d-flex align-items-center">
                         <i class="bi bi-plus-circle me-2 text-success"></i>
@@ -1998,24 +1994,24 @@ if (typeof window.translations === 'undefined') {
                         <small class="text-muted ms-2">(create new)</small>
                     </div>
                 `;
-                
+
                 createDiv.addEventListener('click', function() {
                     selectCategoryForKeyword('new', searchTerm);
                 });
-                
+
                 createDiv.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         selectCategoryForKeyword('new', searchTerm);
                     }
                 });
-                
+
                 categoryResults.appendChild(createDiv);
             }
-            
-            categoryResults.hidden = false;
+
+            categoryResults.style.display = 'block';
         }
-        
+
         // Select category function
         async function selectCategoryForKeyword(categoryId, categoryName) {
             if (categoryId === 'new') {
@@ -2034,7 +2030,7 @@ if (typeof window.translations === 'undefined') {
                             csrf_token: csrfToken
                         })
                     });
-                    
+
                     const data = await response.json();
                     if (data.success) {
                         showToast('Category created successfully', 'success');
@@ -2048,57 +2044,57 @@ if (typeof window.translations === 'undefined') {
                     return;
                 }
             }
-            
+
             selectedCategoryId = categoryId;
             selectedCategoryText = categoryName;
             categoryInput.value = categoryName;
             if (selectedCategoryIdInput) selectedCategoryIdInput.value = categoryId;
-            categoryResults.hidden = true;
+            categoryResults.style.display = 'none';
             categoryInput.focus();
         }
-        
+
         // Show modal and initialize
         modal.show();
-        
+
         // Wait for modal to be fully shown
         modalElement.addEventListener('shown.bs.modal', function onShown() {
             modalElement.removeEventListener('shown.bs.modal', onShown);
             initializeWordSearch();
             initializeCategorySearch();
-            
+
             // Add click outside handler
             const wordInputContainer = wordInput.closest('.position-relative') || wordInput.parentElement;
             const categoryInputContainer = categoryInput.closest('.position-relative') || categoryInput.parentElement;
-            
+
             keywordClickOutsideHandler = function(e) {
                 const target = e.target;
-                if (wordInputContainer && wordResults && 
-                    !wordInputContainer.contains(target) && 
+                if (wordInputContainer && wordResults &&
+                    !wordInputContainer.contains(target) &&
                     !wordResults.contains(target)) {
-                    wordResults.hidden = true;
+                    wordResults.style.display = 'none';
                 }
-                if (categoryInputContainer && categoryResults && 
-                    !categoryInputContainer.contains(target) && 
+                if (categoryInputContainer && categoryResults &&
+                    !categoryInputContainer.contains(target) &&
                     !categoryResults.contains(target)) {
-                    categoryResults.hidden = true;
+                    categoryResults.style.display = 'none';
                 }
             };
             setTimeout(() => {
                 document.addEventListener('click', keywordClickOutsideHandler, true);
             }, 100);
         }, { once: true });
-        
+
         // Clean up when modal is hidden
         modalElement.addEventListener('hidden.bs.modal', function onHidden() {
             // ✅ FIXED: Reset modal to "Add" mode when closed/cancelled
             resetKeywordModalToAdd();
-            
+
             // Clean up event listeners
             if (keywordClickOutsideHandler) {
                 document.removeEventListener('click', keywordClickOutsideHandler, true);
                 keywordClickOutsideHandler = null;
             }
-            
+
             // Clear search timeouts
             if (keywordWordSearchTimeout) {
                 clearTimeout(keywordWordSearchTimeout);
@@ -2108,7 +2104,7 @@ if (typeof window.translations === 'undefined') {
                 clearTimeout(keywordCategorySearchTimeout);
                 keywordCategorySearchTimeout = null;
             }
-            
+
             // Remove input event listeners
             if (keywordWordInputHandler && wordInput) {
                 wordInput.removeEventListener('input', keywordWordInputHandler);
@@ -2126,44 +2122,44 @@ if (typeof window.translations === 'undefined') {
                 categoryInput.removeEventListener('keydown', keywordCategoryKeydownHandler);
                 keywordCategoryKeydownHandler = null;
             }
-            
+
             // Reset form
             if (wordInput) wordInput.value = '';
             if (categoryInput) categoryInput.value = '';
             if (selectedCategoryIdInput) selectedCategoryIdInput.value = '';
             if (wordResults) {
-                wordResults.hidden = true;
+                wordResults.style.display = 'none';
                 wordResults.innerHTML = '';
             }
             if (categoryResults) {
-                categoryResults.hidden = true;
+                categoryResults.style.display = 'none';
                 categoryResults.innerHTML = '';
             }
             if (selectedWordsList) selectedWordsList.innerHTML = '';
-            if (selectedWordsContainer) selectedWordsContainer.hidden = true;
-            
+            if (selectedWordsContainer) selectedWordsContainer.style.display = 'none';
+
             // Reset state
             selectedWords = [];
             selectedCategoryId = null;
             selectedCategoryText = null;
         }, { once: true });
     }
-    
+
     // Save keyword function
     async function saveKeyword() {
         if (selectedWords.length === 0) {
             showToast(translations.atLeastOneWordRequired || 'At least one word is required', 'warning');
             return;
         }
-        
+
         if (selectedWords.length < 2) {
             showToast(translations.keywordRequiresMultipleWords || 'Keywords must contain at least 2 words. Please select multiple words to create a keyword phrase.', 'warning');
             return;
         }
-        
+
         const keywordPhrase = selectedWords.map(w => w.text).join(' ');
         const categoryId = selectedCategoryId || '1';
-        
+
         // Check for duplicate
         try {
             const csrfToken = getCSRFToken() || await getCSRFTokenAsync();
@@ -2178,7 +2174,7 @@ if (typeof window.translations === 'undefined') {
                     category_id: categoryId
                 })
             });
-            
+
             const checkData = await checkResponse.json();
             if (checkData.exists) {
                 showToast(checkData.message || `Keyword "${keywordPhrase}" already exists in this category`, 'error');
@@ -2187,7 +2183,7 @@ if (typeof window.translations === 'undefined') {
         } catch (error) {
             console.warn('Error checking keyword duplicate:', error);
         }
-        
+
         // Submit keyword
         try {
             showToast('Adding keyword...', 'info');
@@ -2195,7 +2191,7 @@ if (typeof window.translations === 'undefined') {
             const formData = new FormData();
             formData.append('keywords_text', keywordPhrase);
             formData.append('category_id', categoryId);
-            
+
             const response = await fetch('/keywords/add', {
                 method: 'POST',
                 headers: {
@@ -2205,10 +2201,10 @@ if (typeof window.translations === 'undefined') {
                 body: formData,
                 redirect: 'follow'
             });
-            
+
             // Check response content type
             const contentType = response.headers.get('content-type') || '';
-            
+
             let data;
             if (contentType.includes('application/json')) {
                 // JSON response
@@ -2220,7 +2216,7 @@ if (typeof window.translations === 'undefined') {
             }
             if (data.success) {
                 showToast(translations.keywordAddedSuccessfully || 'Keyword added successfully', 'success');
-                
+
                 // Close modal
                 const modalElement = document.getElementById('addKeywordModal');
                 if (modalElement) {
@@ -2229,7 +2225,7 @@ if (typeof window.translations === 'undefined') {
                         modal.hide();
                     }
                 }
-                
+
                 // Refresh page
                 setTimeout(() => {
                     fetchPage(currentPage);

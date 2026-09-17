@@ -5,12 +5,9 @@
 
 // Load translations from JSON script tag
 let translations = {};
-let chartsDashboardInitialized = false;
 
-function initializeChartsDashboard() {
-    if (chartsDashboardInitialized) return;
-    chartsDashboardInitialized = true;
-
+document.addEventListener('DOMContentLoaded', function() {
+    // Load translations from JSON script tag
     const pageDataEl = document.getElementById('charts-dashboard-page-data');
     if (pageDataEl) {
         try {
@@ -22,23 +19,7 @@ function initializeChartsDashboard() {
     }
 
     console.log('Charts dashboard page loaded');
-    console.log('Initializing charts dashboard...');
-
-    // Load filter options first
-    loadFilterOptions().then(() => {
-        console.log('Filter options loaded, loading initial data...');
-        // Load all sections on page load because this dashboard intentionally
-        // displays all chart sections in one view.
-        loadDataForSection('files', 'charts');
-        loadDataForSection('categories', 'charts');
-        loadDataForSection('keywords', 'charts');
-        loadDataForSection('sources', 'charts');
-        loadDataForSection('sides', 'charts');
-        loadDataForSection('words', 'charts');
-    }).catch(error => {
-        console.error('Error during initialization:', error);
-    });
-}
+});
 
 
 // ===== GLOBAL STATE =====
@@ -58,7 +39,7 @@ const state = {
 const CONFIG = {
     colors: {
         get primary() {
-            return window.ChartColors ? window.ChartColors.getChartColors(10) : 
+            return window.ChartColors ? window.ChartColors.getChartColors(10) :
                    ['#667eea', '#764ba2', '#10b981', '#f59e0b', '#ef4444',
                     '#06b6d4', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'];
         },
@@ -161,52 +142,66 @@ const CONFIG = {
     },
     filterMappings: {
         files: {
-            charts: { 
-                category: 'files-filter-category', 
-                source: 'files-filter-source', 
-                side: 'files-filter-side', 
-                keyword: 'files-filter-keyword' 
+            charts: {
+                category: 'files-filter-category',
+                source: 'files-filter-source',
+                side: 'files-filter-side',
+                keyword: 'files-filter-keyword'
             }
         },
         categories: {
-            charts: { 
-                source: 'categories-filter-source', 
-                side: 'categories-filter-side' 
+            charts: {
+                source: 'categories-filter-source',
+                side: 'categories-filter-side'
             }
         },
         keywords: {
-            charts: { 
-                category: 'keywords-filter-category', 
-                source: 'keywords-filter-source', 
-                side: 'keywords-filter-side' 
+            charts: {
+                category: 'keywords-filter-category',
+                source: 'keywords-filter-source',
+                side: 'keywords-filter-side'
             }
         },
         sources: {
-            charts: { 
-                filetype: 'sources-filter-filetype', 
-                side: 'sources-filter-side', 
-                keyword: 'sources-filter-keyword' 
+            charts: {
+                filetype: 'sources-filter-filetype',
+                side: 'sources-filter-side',
+                keyword: 'sources-filter-keyword'
             }
         },
         sides: {
-            charts: { 
-                filetype: 'sides-filter-filetype', 
+            charts: {
+                filetype: 'sides-filter-filetype',
                 category: 'sides-filter-category',
-                keyword: 'sides-filter-keyword' 
+                keyword: 'sides-filter-keyword'
             }
         },
         words: {
-            charts: { 
-                category: 'words-filter-category' 
+            charts: {
+                category: 'words-filter-category'
             }
         }
     }
 };
 
 // ===== INITIALIZATION =====
-// See direct module fallback at the bottom of the file. Keeping the actual
-// start after all module constants/functions are initialized prevents temporal
-// dead-zone failures when this module is dynamically imported after DOM ready.
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing charts dashboard...');
+
+    // Load filter options first
+    loadFilterOptions().then(() => {
+        console.log('Filter options loaded, loading initial data...');
+        // Load all sections on page load
+        loadDataForSection('files', 'charts');
+        loadDataForSection('categories', 'charts');
+        loadDataForSection('keywords', 'charts');
+        loadDataForSection('sources', 'charts');
+        loadDataForSection('sides', 'charts');
+        loadDataForSection('words', 'charts');
+    }).catch(error => {
+        console.error('Error during initialization:', error);
+    });
+});
 
 // ===== FILTER OPTIONS LOADING =====
 async function loadFilterOptions() {
@@ -229,14 +224,14 @@ async function loadCategories() {
     try {
         const response = await fetch('/api/categories');
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
+
         const data = await response.json();
         state.filterData.categories = Array.isArray(data) ? data : [];
-        
+
         const selects = [
-            'files-filter-category', 
+            'files-filter-category',
             'keywords-filter-category',
-            'words-filter-category', 
+            'words-filter-category',
             'sides-filter-category'
         ];
         selects.forEach(id => populateSelect(id, state.filterData.categories));
@@ -251,12 +246,12 @@ async function loadSources() {
     try {
         const response = await fetch('/api/sources');
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
+
         const data = await response.json();
         state.filterData.sources = Array.isArray(data) ? data : [];
-        
+
         const selects = [
-            'files-filter-source', 
+            'files-filter-source',
             'categories-filter-source',
             'keywords-filter-source'
         ];
@@ -272,14 +267,14 @@ async function loadSides() {
     try {
         const response = await fetch('/api/sides');
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
+
         const data = await response.json();
         state.filterData.sides = Array.isArray(data) ? data : [];
-        
+
         const selects = [
-            'files-filter-side', 
+            'files-filter-side',
             'categories-filter-side',
-            'keywords-filter-side', 
+            'keywords-filter-side',
             'sources-filter-side'
             // Note: the Sides section intentionally has no "Side" filter — it
             // would be self-referential (CHART-01: previously listed the
@@ -297,14 +292,14 @@ async function loadKeywords() {
     try {
         const response = await fetch('/api/keywords?per_page=100&page=1');
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
+
         const data = await response.json();
-        
+
         if (data.success && Array.isArray(data.keywords)) {
             state.filterData.keywords = data.keywords;
-            
+
             const selects = [
-                'files-filter-keyword', 
+                'files-filter-keyword',
                 'sources-filter-keyword',
                 'sides-filter-keyword'
             ];
@@ -323,14 +318,14 @@ async function loadFileTypes() {
     try {
         const response = await fetch('/api/analytics/file-type-distribution');
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
+
         const data = await response.json();
-        
+
         if (data.types && Array.isArray(data.types)) {
             state.filterData.fileTypes = data.types;
-            
+
             const selects = [
-                'sources-filter-filetype', 
+                'sources-filter-filetype',
                 'sides-filter-filetype'
             ];
             selects.forEach(id => populateSelect(id, state.filterData.fileTypes, 'type', 'type'));
@@ -350,12 +345,12 @@ function populateSelect(selectId, data, valueKey = 'id', textKey = 'name') {
         console.warn(`Select element '${selectId}' not found`);
         return;
     }
-    
+
     // Preserve the first option (typically "All ...")
     const firstOption = select.options[0];
     select.innerHTML = '';
     if (firstOption) select.appendChild(firstOption);
-    
+
     // Populate with data
     if (Array.isArray(data)) {
         data.forEach(item => {
@@ -375,7 +370,7 @@ function applyFilters(section, mode) {
 
 function resetFilters(section, mode) {
     console.log(`Resetting filters for section: ${section}, mode: ${mode}`);
-    
+
     const filterIds = CONFIG.filterMappings[section]?.[mode];
     if (filterIds) {
         Object.values(filterIds).forEach(id => {
@@ -385,7 +380,7 @@ function resetFilters(section, mode) {
             }
         });
     }
-    
+
     loadDataForSection(section, mode);
 }
 
@@ -395,14 +390,14 @@ function getFilterParams(section, mode) {
         console.warn(`No filter mappings found for section: ${section}, mode: ${mode}`);
         return new URLSearchParams();
     }
-    
+
     const params = new URLSearchParams();
-    
+
     Object.entries(filterIds).forEach(([key, id]) => {
         const element = document.getElementById(id);
         if (element && element.value && element.value.trim() !== '') {
             // Map filter keys to API parameter names
-            const paramName = key === 'filetype' ? 'file_type' : 
+            const paramName = key === 'filetype' ? 'file_type' :
                             key === 'keyword' ? 'keyword_id' :
                             key === 'category' ? 'category_id' :
                             key === 'source' ? 'source_id' :
@@ -410,7 +405,7 @@ function getFilterParams(section, mode) {
             params.append(paramName, element.value.trim());
         }
     });
-    
+
     console.log(`Filter params for ${section}:`, params.toString());
     return params;
 }
@@ -423,31 +418,31 @@ async function loadDataForSection(section, mode) {
         console.log(`Already loading ${section}, skipping...`);
         return;
     }
-    
+
     state.loadingStates[loadKey] = true;
     const params = getFilterParams(section, mode);
     let apiEndpoint;
-    
+
     // Construct API endpoint based on section
     if (section === 'words') {
         apiEndpoint = `/api/dashboard/words?${params}`;
     } else {
         apiEndpoint = `/api/dashboard/${section}-filtered?${params}`;
     }
-    
+
     console.log(`Loading data for ${section} from: ${apiEndpoint}`);
     setLoadingState(section, true);
-    
+
     try {
         const response = await fetch(apiEndpoint);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
         console.log(`Received data for ${section}:`, data);
-        
+
         if (data.success) {
             renderData(section, mode, data);
         } else {
@@ -473,7 +468,7 @@ function setLoadingState(section, isLoading) {
         'sides': ['sides-chart-count'],
         'words': ['words-chart-count']
     };
-    
+
     const ids = countIds[section] || [];
     ids.forEach(countId => {
         const countElement = document.getElementById(countId);
@@ -492,12 +487,12 @@ function showError(section, message) {
         'sides': ['sides-chart'],
         'words': ['words-chart']
     };
-    
+
     const ids = chartIds[section] || [];
     ids.forEach(chartId => {
         showEmptyChartState(chartId, message);
     });
-    
+
     // Reset counts
     setLoadingState(section, false);
 }
@@ -505,7 +500,7 @@ function showError(section, message) {
 // ===== DATA RENDERING =====
 function renderData(section, mode, data) {
     console.log(`Rendering ${section} data:`, data);
-    
+
     switch(section) {
         case 'files':
             renderFiles(data);
@@ -536,10 +531,10 @@ function renderFiles(data) {
         document.getElementById('files-chart-count').textContent = '0 ' + (translations.fileTypesLabel || 'file types');
         return;
     }
-    
+
     const count = data.file_types.length;
     document.getElementById('files-chart-count').textContent = `${count} ${translations.fileTypesLabel || 'file types'}`;
-    
+
     renderBarChart('files-chart', data.file_types.slice(0, 10), {
         labelKey: 'type',
         valueKey: 'count',
@@ -561,31 +556,31 @@ function renderCategories(data) {
         document.getElementById('categories-chart-count').textContent = '0 ' + (translations.categoriesLabel || 'categories');
         return;
     }
-    
+
     // Filter out categories without files (file_count = 0 or null/undefined)
-    const validCategories = data.categories.filter(cat => 
-        cat && 
+    const validCategories = data.categories.filter(cat =>
+        cat &&
         (cat.name !== undefined && cat.name !== null) &&
         (cat.file_count !== undefined && cat.file_count !== null) &&
         (cat.file_count > 0)  // Only show categories that have files
     );
-    
+
     if (validCategories.length === 0) {
         showEmptyChartState('categories-chart', translations.noCategoriesFound || 'No categories found');
         document.getElementById('categories-chart-count').textContent = '0 ' + (translations.categoriesLabel || 'categories');
         return;
     }
-    
+
     // Sort all categories by file_count descending (largest first)
     const sortedCategories = [...validCategories].sort((a, b) => {
         const fileCountA = a.file_count || 0;
         const fileCountB = b.file_count || 0;
         return fileCountB - fileCountA;  // Descending order
     });
-    
+
     const count = sortedCategories.length;
     document.getElementById('categories-chart-count').textContent = `${count} ${translations.categoriesLabel || 'categories'}`;
-    
+
     // Render chart with ALL sorted categories (no limit)
     renderBarChart('categories-chart', sortedCategories, {
         labelKey: 'name',
@@ -610,31 +605,31 @@ function renderKeywords(data) {
         document.getElementById('keywords-chart-count').textContent = '0 ' + (translations.keywordsLabel || 'keywords');
         return;
     }
-    
+
     // Filter out invalid keywords and keywords without files
     // Only include keywords that have file_count > 0
-    const validKeywords = data.keywords.filter(kw => 
-        kw && 
-        (kw.text !== undefined && kw.text !== null) && 
+    const validKeywords = data.keywords.filter(kw =>
+        kw &&
+        (kw.text !== undefined && kw.text !== null) &&
         (kw.file_count !== undefined && kw.file_count !== null) &&
         (kw.file_count > 0)  // Only show keywords that have files
     );
-    
+
     if (validKeywords.length === 0) {
         showEmptyChartState('keywords-chart', translations.noKeywordsFound || 'No keywords found');
         document.getElementById('keywords-chart-count').textContent = '0 ' + (translations.keywordsLabel || 'keywords');
         return;
     }
-    
+
     // Sort all keywords by file_count descending (largest first)
     const sortedKeywords = [...validKeywords].sort((a, b) => {
         const fileCountA = a.file_count || 0;
         const fileCountB = b.file_count || 0;
         return fileCountB - fileCountA;  // Descending order
     });
-    
+
     document.getElementById('keywords-chart-count').textContent = `${sortedKeywords.length} ${translations.keywordsLabel || 'keywords'}`;
-    
+
     // Render chart with ALL sorted keywords (no limit)
     renderBarChart('keywords-chart', sortedKeywords, {
         labelKey: 'text',
@@ -664,13 +659,13 @@ function renderSources(data) {
         });
         return;
     }
-    
+
     const count = data.sources.length;
     const label = translations.sourcesLabel || 'sources';
     document.getElementById('sources-count-chart-count').textContent = `${count} ${label}`;
     document.getElementById('sources-size-chart-count').textContent = `${count} ${label}`;
     document.getElementById('sources-rate-chart-count').textContent = `${count} ${label}`;
-    
+
     // File Count Chart
     renderBarChart('sources-chart-count', data.sources.slice(0, 15), {
         labelKey: 'name',
@@ -685,7 +680,7 @@ function renderSources(data) {
             ];
         }
     });
-    
+
     // Size Distribution Chart (Doughnut)
     renderDoughnutChart('sources-chart-size', data.sources.slice(0, 10), {
         labelKey: 'name',
@@ -700,7 +695,7 @@ function renderSources(data) {
             ];
         }
     });
-    
+
     // Processing Rate Chart
     const sources = data.sources.slice(0, 15);
     const colors = sources.map(s => {
@@ -708,7 +703,7 @@ function renderSources(data) {
         return rate >= 90 ? CONFIG.colors.success :
                rate >= 70 ? CONFIG.colors.warning : CONFIG.colors.danger;
     });
-    
+
     renderBarChart('sources-chart-rate', sources, {
         labelKey: 'name',
         valueKey: 'processing_rate',
@@ -733,10 +728,10 @@ function renderSides(data) {
         document.getElementById('sides-chart-count').textContent = '0 ' + (translations.sidesLabel || 'sides');
         return;
     }
-    
+
     const count = data.sides.length;
     document.getElementById('sides-chart-count').textContent = `${count} ${translations.sidesLabel || 'sides'}`;
-    
+
     renderBarChart('sides-chart', data.sides.slice(0, 15), {
         labelKey: 'name',
         valueKey: 'file_count',
@@ -760,16 +755,16 @@ function renderWords(data) {
         document.getElementById('words-chart-count').textContent = '0 ' + (translations.itemsLabel || 'items');
         return;
     }
-    
+
     // Get selected category name if available
     const categorySelect = document.getElementById('words-filter-category');
     const selectedCategoryId = categorySelect ? categorySelect.value : '';
     let categoryName = '';
-    
+
     if (selectedCategoryId && data.words.length > 0 && data.words[0].category) {
         categoryName = data.words[0].category;
     }
-    
+
     // Update chart header to show category if selected
     const chartHeader = document.querySelector('#section-words .chart-header h3');
     if (chartHeader) {
@@ -779,10 +774,10 @@ function renderWords(data) {
             chartHeader.textContent = translations.wordsDistribution || 'Words Distribution';
         }
     }
-    
+
     const count = data.words.length;
     document.getElementById('words-chart-count').textContent = `${count} ${translations.itemsLabel || 'items'}`;
-    
+
     renderBarChart('words-chart', data.words.slice(0, 20), {
         labelKey: 'word',
         valueKey: 'file_count',
@@ -790,7 +785,7 @@ function renderWords(data) {
             const word = data.words[index];
             if (!word) return [];
             const tooltip = [
-                `${translations.word || 'Word'}: ${word.word || 'Unknown'}`, 
+                `${translations.word || 'Word'}: ${word.word || 'Unknown'}`,
                 `${translations.files || 'Files'}: ${(word.file_count || 0).toLocaleString()}`
             ];
             if (word.category) {
@@ -816,7 +811,7 @@ function destroyChartInstance(canvasId) {
         }
         delete state.charts[canvasId];
     }
-    
+
     // Also check Chart.js internal registry and destroy if exists
     const canvas = document.getElementById(canvasId);
     if (canvas && typeof Chart !== 'undefined') {
@@ -851,21 +846,21 @@ function renderBarChart(canvasId, data, options = {}) {
         maxLabelLength = 20,
         tooltipCallback = null
     } = options;
-    
+
     // Destroy existing chart properly
     destroyChartInstance(canvasId);
-    
+
     const ctx = document.getElementById(canvasId);
     if (!ctx) {
         console.warn(`Canvas element with id '${canvasId}' not found`);
         return;
     }
-    
+
     if (!data || !Array.isArray(data) || data.length === 0) {
         showEmptyChartState(canvasId, translations.noDataAvailable || 'No data available');
         return;
     }
-    
+
     // Show canvas and remove empty state
     ctx.style.display = '';
     const chartContainer = ctx.closest('.chart-container-layout');
@@ -873,26 +868,26 @@ function renderBarChart(canvasId, data, options = {}) {
         const emptyStates = chartContainer.querySelectorAll('.empty-state');
         emptyStates.forEach(state => state.remove());
     }
-    
+
     // Check if visible
-    const isVisible = chartContainer && 
+    const isVisible = chartContainer &&
                      window.getComputedStyle(chartContainer).display !== 'none' &&
                      window.getComputedStyle(ctx).display !== 'none';
-    
+
     if (!isVisible) {
         requestAnimationFrame(() => {
             renderBarChart(canvasId, data, options);
         });
         return;
     }
-    
+
     if (ctx.offsetWidth === 0 || ctx.offsetHeight === 0) {
         setTimeout(() => {
             renderBarChart(canvasId, data, options);
         }, 100);
         return;
     }
-    
+
     // Prepare data
     const labels = data.map(item => truncateLabel(item[labelKey], maxLabelLength));
     const values = data.map(item => {
@@ -902,7 +897,7 @@ function renderBarChart(canvasId, data, options = {}) {
         return isNaN(numVal) ? 0 : numVal;
     });
     const colors = customColors || CONFIG.colors.primary.slice(0, data.length);
-    
+
     try {
         state.charts[canvasId] = new Chart(ctx, {
             type: 'bar',
@@ -962,7 +957,7 @@ function renderBarChart(canvasId, data, options = {}) {
                 }
             }
         });
-        
+
         // Force resize and update
         requestAnimationFrame(() => {
             if (state.charts[canvasId]) {
@@ -974,7 +969,7 @@ function renderBarChart(canvasId, data, options = {}) {
                 }
             }
         });
-        
+
         setTimeout(() => {
             if (state.charts[canvasId]) {
                 try {
@@ -996,21 +991,21 @@ function renderDoughnutChart(canvasId, data, options = {}) {
         valueKey = 'value',
         tooltipCallback = null
     } = options;
-    
+
     // Destroy existing chart properly
     destroyChartInstance(canvasId);
-    
+
     const ctx = document.getElementById(canvasId);
     if (!ctx) {
         console.warn(`Canvas element with id '${canvasId}' not found`);
         return;
     }
-    
+
     if (!data || !Array.isArray(data) || data.length === 0) {
         showEmptyChartState(canvasId, translations.noDataAvailable || 'No data available');
         return;
     }
-    
+
     // Show canvas and remove empty state
     ctx.style.display = '';
     const chartContainer = ctx.closest('.chart-container-layout');
@@ -1018,30 +1013,30 @@ function renderDoughnutChart(canvasId, data, options = {}) {
         const emptyStates = chartContainer.querySelectorAll('.empty-state');
         emptyStates.forEach(state => state.remove());
     }
-    
+
     // Check if visible
-    const isVisible = chartContainer && 
+    const isVisible = chartContainer &&
                      window.getComputedStyle(chartContainer).display !== 'none' &&
                      window.getComputedStyle(ctx).display !== 'none';
-    
+
     if (!isVisible) {
         requestAnimationFrame(() => {
             renderDoughnutChart(canvasId, data, options);
         });
         return;
     }
-    
+
     if (ctx.offsetWidth === 0 || ctx.offsetHeight === 0) {
         setTimeout(() => {
             renderDoughnutChart(canvasId, data, options);
         }, 100);
         return;
     }
-    
+
     // Prepare data
     const labels = data.map(item => item[labelKey] || 'Unknown');
     const values = data.map(item => item[valueKey] || 0);
-    
+
     try {
         state.charts[canvasId] = new Chart(ctx, {
             type: 'doughnut',
@@ -1085,7 +1080,7 @@ function renderDoughnutChart(canvasId, data, options = {}) {
                 }
             }
         });
-        
+
         setTimeout(() => {
             if (state.charts[canvasId]) {
                 try {
@@ -1125,13 +1120,13 @@ function showEmptyChartState(canvasId, message) {
         }
         delete state.charts[canvasId];
     }
-    
+
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    
+
     const chartContainer = canvas.closest('.chart-container-layout');
     if (!chartContainer) return;
-    
+
     // Check if empty state already exists
     const existingEmptyState = chartContainer.querySelector('.empty-state');
     if (existingEmptyState) {
@@ -1141,31 +1136,22 @@ function showEmptyChartState(canvasId, message) {
         }
         return;
     }
-    
+
     // Hide canvas
     canvas.style.display = 'none';
-    
-    // Create empty state using the shared chart workspace surface.
+
+    // Create empty state
     const emptyStateDiv = document.createElement('div');
-    emptyStateDiv.className = 'empty-state chart-empty-state';
+    emptyStateDiv.className = 'empty-state';
+    emptyStateDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 500px; padding: 2rem;';
     emptyStateDiv.innerHTML = `
-        <i class="bi bi-inbox" aria-hidden="true"></i>
-        <p>${message || translations.noDataAvailable || 'No data available'}</p>
+        <i class="bi bi-inbox" style="font-size: 3rem; color: var(--text-muted); margin-bottom: 1rem;" aria-hidden="true"></i>
+        <p style="color: var(--text-light); font-size: 1.1rem; margin: 0;">${message || translations.noDataAvailable || 'No data available'}</p>
     `;
-    
+
     chartContainer.appendChild(emptyStateDiv);
 }
 
 // Make functions globally available
 window.applyFilters = applyFilters;
 window.resetFilters = resetFilters;
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeChartsDashboard, { once: true });
-} else {
-    initializeChartsDashboard();
-}
-
-export default function init() {
-    initializeChartsDashboard();
-}

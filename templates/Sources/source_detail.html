@@ -1,11 +1,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Source Details') }}{% endblock %}
-{% block page_type %}source-detail{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/entity-detail.css') }}">
-{% endblock %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item">
@@ -24,180 +19,183 @@
 {% endblock %}
 
 {% block content %}
-<div class="entity-workspace entity-source-detail">
-    <section class="section-card entity-hero" aria-labelledby="sourceDetailTitle">
-        <div>
-            <span class="entity-eyebrow">{{ _('Source record') }}</span>
-            <h1 id="sourceDetailTitle"><i class="bi bi-building me-2" aria-hidden="true"></i>{{ source.name }}</h1>
-            <p>{{ _('Review source metadata, provenance, data volume, and related analytical actions without leaving the record context.') }}</p>
-        </div>
-        <div class="entity-hero-actions ia-control-surface" data-ia-role="controls">
-            <a href="{{ url_for('sources_list') }}" class="btn btn-sm btn-outline-primary">
-                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ _('Back to Sources') }}
-            </a>
-            <a href="{{ url_for('sources_list') }}?edit={{ source.id }}" class="btn btn-sm btn-success">
-                <i class="bi bi-pencil me-1" aria-hidden="true"></i>{{ _('Edit Source') }}
-            </a>
-        </div>
-    </section>
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-building me-2"></i>
+        {{ _('Source Details') }}
+    </h1>
+</div>
 
-    {% from 'components/page_tips.html' import page_tips %}
+<!-- Page Tips -->
+{% from 'components/page_tips.html' import page_tips %}
     {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
-    <div class="tips-section">
-        <div class="tips-section-title">
-            <i class="bi bi-building"></i>
-            {{ _('Source Details Overview') }}
-        </div>
-        <ul class="tips-list">
-            <li>{{ _('View comprehensive information about this source including statistics and metadata') }}</li>
-            <li>{{ _('See document count, file types, total size, and other key metrics') }}</li>
-            <li>{{ _('Explore files, categories, and keywords associated with this source') }}</li>
-            <li>{{ _('Edit source information or manage associations from this page') }}</li>
-        </ul>
-    </div>
-    <div class="tips-section">
-        <div class="tips-section-title">
-            <i class="bi bi-file-text"></i>
-            {{ _('Source Information') }}
-        </div>
-        <ul class="tips-list">
-            <li>{{ _('View source metadata including country, city, ownership, and access status') }}</li>
-            <li>{{ _('See all files originating from this source') }}</li>
-            <li>{{ _('Review categories and keywords most commonly associated with this source') }}</li>
-            <li>{{ _('Use this information to understand the origin and characteristics of your files') }}</li>
-        </ul>
-    </div>
-    {% endcall %}
 
-    <section class="entity-metric-strip" aria-label="{{ _('Source metrics') }}">
-        <div class="entity-metric-card">
-            <span class="entity-metric-value">{{ source.doc_count|default(0) }}</span>
-            <span class="entity-metric-label">{{ _('Documents') }}</span>
-        </div>
-        <div class="entity-metric-card">
-            <span class="entity-metric-value">{{ source.file_types|default(0) }}</span>
-            <span class="entity-metric-label">{{ _('File Types') }}</span>
-        </div>
-        <div class="entity-metric-card">
-            <span class="entity-metric-value">
-                {% if source.total_size %}
-                    {% if source.total_size > 1073741824 %}
-                        {{ (source.total_size / 1073741824)|round(1) }} {{ _('GB') }}
-                    {% else %}
-                        {{ (source.total_size / 1048576)|round(1) }} {{ _('MB') }}
-                    {% endif %}
-                {% else %}
-                    0 {{ _('MB') }}
-                {% endif %}
-            </span>
-            <span class="entity-metric-label">{{ _('Total Size') }}</span>
-        </div>
-        <div class="entity-metric-card">
-            <span class="entity-metric-value">{{ ((source.importance|default(0, true)) * 100)|round|int }}%</span>
-            <span class="entity-metric-label">{{ _('Importance') }}</span>
-        </div>
-    </section>
-
-    <div class="entity-detail-layout">
-        <main class="entity-detail-main">
-            <section class="section-card entity-info-panel" aria-labelledby="sourceInfoTitle">
-                <div class="entity-panel-header ia-control-surface" data-ia-role="controls">
-                    <div>
-                        <span class="entity-eyebrow">{{ _('Profile') }}</span>
-                        <h2 id="sourceInfoTitle">{{ _('Source Information') }}</h2>
-                    </div>
-                </div>
-                <dl class="entity-field-grid ia-scroll-body" data-ia-role="data-region">
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('Source Name') }}</dt>
-                        <dd class="entity-field-value primary">{{ source.name }}</dd>
-                    </div>
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('Job/Type') }}</dt>
-                        <dd class="entity-field-value">{{ source.job or _('N/A') }}</dd>
-                    </div>
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('Country') }}</dt>
-                        <dd class="entity-field-value">{{ source.country or _('N/A') }}</dd>
-                    </div>
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('City') }}</dt>
-                        <dd class="entity-field-value">{{ source.city or _('N/A') }}</dd>
-                    </div>
-                    {% if source.description %}
-                    <div class="entity-field full">
-                        <dt class="entity-field-label">{{ _('Description') }}</dt>
-                        <dd class="entity-field-value">{{ source.description }}</dd>
-                    </div>
-                    {% endif %}
-                    {% if source.accounts %}
-                    <div class="entity-field full">
-                        <dt class="entity-field-label">{{ _('Social Media Accounts') }}</dt>
-                        <dd class="entity-field-value">{{ source.accounts }}</dd>
-                    </div>
-                    {% endif %}
-                    {% if source.attachments %}
-                    <div class="entity-field full">
-                        <dt class="entity-field-label">{{ _('Attachments') }}</dt>
-                        <dd class="entity-field-value">{{ source.attachments }}</dd>
-                    </div>
-                    {% endif %}
-                    {% if source.note %}
-                    <div class="entity-field full">
-                        <dt class="entity-field-label">{{ _('Notes') }}</dt>
-                        <dd class="entity-field-value">{{ source.note }}</dd>
-                    </div>
-                    {% endif %}
-                    {% if source.date_creation %}
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('Created') }}</dt>
-                        <dd class="entity-field-value">{{ source.date_creation.strftime('%Y-%m-%d %H:%M') }}</dd>
-                    </div>
-                    {% endif %}
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('Ownership') }}</dt>
-                        <dd class="entity-field-value">{{ source.ownership or _('N/A') }}</dd>
-                    </div>
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('Access Status') }}</dt>
-                        <dd class="entity-field-value">{{ source.access_status or _('N/A') }}</dd>
-                    </div>
-                    {% if source.date_source_discovery %}
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('Date of Source Discovery') }}</dt>
-                        <dd class="entity-field-value">{{ source.date_source_discovery.strftime('%Y-%m-%d') }}</dd>
-                    </div>
-                    {% endif %}
-                    {% if source.category_name %}
-                    <div class="entity-field">
-                        <dt class="entity-field-label">{{ _('Category') }}</dt>
-                        <dd class="entity-field-value">{{ source.category_name }}</dd>
-                    </div>
-                    {% endif %}
-                </dl>
-            </section>
-        </main>
-        <aside class="entity-detail-aside">
-            <section class="section-card entity-action-card ia-control-surface" data-ia-role="controls" aria-labelledby="sourceActionsTitle">
-                <div>
-                    <span class="entity-eyebrow">{{ _('Record actions') }}</span>
-                    <h2 id="sourceActionsTitle">{{ _('Actions') }}</h2>
-                    <p>{{ _('Navigate to related analytical context or manage this source record.') }}</p>
-                </div>
-                <div class="entity-action-list">
-                    <a href="{{ url_for('source_categories_keywords', source_id=source.id) }}" class="btn btn-primary">
-                        <i class="bi bi-tags me-2" aria-hidden="true"></i>{{ _('View Categories & Keywords') }}
-                    </a>
-                    <a href="{{ url_for('sources_list') }}?edit={{ source.id }}" class="btn btn-success">
-                        <i class="bi bi-pencil me-2" aria-hidden="true"></i>{{ _('Edit Source') }}
-                    </a>
-                    <button type="button" class="btn btn-outline-danger" data-source-delete data-source-id="{{ source.id }}" data-source-name="{{ source.name }}">
-                        <i class="bi bi-trash me-2" aria-hidden="true"></i>{{ _('Delete Source') }}
-                    </button>
-                </div>
-            </section>
-        </aside>
+<div class="tips-section">
+    <div class="tips-section-title">
+        <i class="bi bi-building"></i>
+        {{ _('Source Details Overview') }}
     </div>
+    <ul class="tips-list">
+        <li>{{ _('View comprehensive information about this source including statistics and metadata') }}</li>
+        <li>{{ _('See document count, file types, total size, and other key metrics') }}</li>
+        <li>{{ _('Explore files, categories, and keywords associated with this source') }}</li>
+        <li>{{ _('Edit source information or manage associations from this page') }}</li>
+    </ul>
+</div>
+<div class="tips-section">
+    <div class="tips-section-title">
+        <i class="bi bi-file-text"></i>
+        {{ _('Source Information') }}
+    </div>
+    <ul class="tips-list">
+        <li>{{ _('View source metadata including country, city, ownership, and access status') }}</li>
+        <li>{{ _('See all files originating from this source') }}</li>
+        <li>{{ _('Review categories and keywords most commonly associated with this source') }}</li>
+        <li>{{ _('Use this information to understand the origin and characteristics of your files') }}</li>
+    </ul>
+</div>
+{% endcall %}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="stat-card">
+            <h5 class="mb-3">{{ _('Source Information') }}</h5>
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="text-center p-3 bg-light rounded">
+                        <div class="h4 text-primary mb-0">{{ source.doc_count|default(0) }}</div>
+                        <small class="text-muted">{{ _('Documents') }}</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 bg-light rounded">
+                        <div class="h4 text-success mb-0">{{ source.file_types|default(0) }}</div>
+                        <small class="text-muted">{{ _('File Types') }}</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 bg-light rounded">
+                        <div class="h4 text-warning mb-0">
+                            {% if source.total_size %}
+                                {% if source.total_size > 1073741824 %}
+                                    {{ (source.total_size / 1073741824)|round(1) }} {{ _('GB') }}
+                                {% else %}
+                                    {{ (source.total_size / 1048576)|round(1) }} {{ _('MB') }}
+                                {% endif %}
+                            {% else %}
+                                0 {{ _('MB') }}
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">{{ _('Total Size') }}</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 bg-light rounded">
+                        <div class="h4 text-info mb-0">{{ (source.importance * 100)|round|int }}%</div>
+                        <small class="text-muted">{{ _('Importance') }}</small>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">{{ _('Source Name') }}</label>
+                        <p class="form-control-plaintext"><strong>{{ source.name }}</strong></p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">{{ _('Job/Type') }}</label>
+                        <p class="form-control-plaintext">{{ source.job }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">{{ _('Country') }}</label>
+                        <p class="form-control-plaintext">{{ source.country }}</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">{{ _('City') }}</label>
+                        <p class="form-control-plaintext">{{ source.city or 'N/A' }}</p>
+                    </div>
+                </div>
+            </div>
+            {% if source.description %}
+            <div class="mb-3">
+                <label class="form-label">{{ _('Description') }}    </label>
+                <p class="form-control-plaintext">{{ source.description }}</p>
+            </div>
+            {% endif %}
+            {% if source.accounts %}
+            <div class="mb-3">
+                <label class="form-label">{{ _('Social Media Accounts') }}</label>
+                <p class="form-control-plaintext">{{ source.accounts }}</p>
+            </div>
+            {% endif %}
+            {% if source.attachments %}
+            <div class="mb-3">
+                <label class="form-label">{{ _('Attachments') }}</label>
+                <p class="form-control-plaintext">{{ source.attachments }}</p>
+            </div>
+            {% endif %}
+            {% if source.note %}
+            <div class="mb-3">
+                <label class="form-label">{{ _('Notes') }}</label>
+                <p class="form-control-plaintext">{{ source.note }}</p>
+            </div>
+            {% endif %}
+            {% if source.date_creation %}
+            <div class="mb-3">
+                <label class="form-label">{{ _('Created') }}</label>
+                <p class="form-control-plaintext">{{ source.date_creation.strftime('%Y-%m-%d %H:%M') }}</p>
+            </div>
+            {% endif %}
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">{{ _('Ownership') }}</label>
+                        <p class="form-control-plaintext">{{ source.ownership or 'N/A' }}</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">{{ _('Access Status') }}</label>
+                        <p class="form-control-plaintext">{{ source.access_status or 'N/A' }}</p>
+                    </div>
+                </div>
+            </div>
+            {% if source.date_source_discovery %}
+            <div class="mb-3">
+                <label class="form-label">{{ _('Date of Source Discovery') }}</label>
+                <p class="form-control-plaintext">{{ source.date_source_discovery.strftime('%Y-%m-%d') }}</p>
+            </div>
+            {% endif %}
+            {% if source.category_name %}
+            <div class="mb-3">
+                <label class="form-label">{{ _('Category') }}</label>
+                <p class="form-control-plaintext">{{ source.category_name }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <h5 class="mb-3">{{ _('Actions') }}</h5>
+            <div class="d-grid gap-2">
+                <a href="{{ url_for('source_categories_keywords', source_id=source.id) }}" class="btn btn-primary">
+                    <i class="bi bi-tags me-2"></i>{{ _('View Categories & Keywords') }}
+                </a>
+                <a href="{{ url_for('sources_list') }}?edit={{ source.id }}" class="btn btn-success">
+                    <i class="bi bi-pencil me-2"></i>{{ _('Edit Source') }}
+                </a>
+                <button type="button" class="btn btn-outline-danger" onclick='deleteSource({{ source.id }}, {{ source.name|tojson }})'>
+                    <i class="bi bi-trash me-2"></i>{{ _('Delete Source') }}
+                </button>
+            </div>
 </div>
 {% endblock %}
 
@@ -210,4 +208,5 @@
     },
     "sources_list_url": url_for('sources_list', _external=False)
 }|tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/pages/source-detail-page.js') }}"></script>
 {% endblock %}

@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Charts Dashboard') }}{% endblock %}
-{% block page_type %}charts-dashboard{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/charts-dashboard.css') }}" rel="stylesheet">
@@ -369,6 +368,7 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
 <script type="application/json" id="charts-dashboard-page-data">{{ {
     "translations": {
         "fileType": _('File Type'),
@@ -418,4 +418,3 @@
 }|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/charts-dashboard-page.js') }}"></script>
 {% endblock %}
-

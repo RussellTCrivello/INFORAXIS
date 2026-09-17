@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Page data not found');
         return;
     }
-    
+
     let pageData;
     try {
         pageData = JSON.parse(pageDataEl.textContent);
@@ -17,62 +17,64 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Error parsing page data:', e);
         return;
     }
-    
+
     const sourceId = pageData.source_id;
     const translations = pageData.translations || {};
     let currentCategoriesPage = 1;
     let currentKeywordsPage = 1;
     const itemsPerPage = 10;
-    
-    // Load categories and keywords through one governed request. The backend
-    // accepts independent category/keyword pages, so one pagination control no
-    // longer forces the other list to the wrong offset or triggers duplicate
-    // initial fetches.
-    loadWorkspace(sourceId);
 
-    function loadWorkspace(sourceId, loadingScope = 'all') {
-        const categoriesContainer = document.getElementById('categoriesContainer');
-        const keywordsContainer = document.getElementById('keywordsContainer');
-        const categoriesPagination = document.getElementById('categoriesPagination');
-        const keywordsPagination = document.getElementById('keywordsPagination');
-        const loadingMarkup = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    // Load categories and keywords
+    loadCategories(sourceId, currentCategoriesPage);
+    loadKeywords(sourceId, currentKeywordsPage);
 
-        if ((loadingScope === 'all' || loadingScope === 'categories') && categoriesContainer) {
-            categoriesContainer.innerHTML = loadingMarkup;
-        }
-        if ((loadingScope === 'all' || loadingScope === 'keywords') && keywordsContainer) {
-            keywordsContainer.innerHTML = loadingMarkup;
-        }
+    function loadCategories(sourceId, page) {
+        const container = document.getElementById('categoriesContainer');
+        const paginationContainer = document.getElementById('categoriesPagination');
 
-        fetch(`/api/archives/source-categories-keywords?source_id=${sourceId}&categories_page=${currentCategoriesPage}&keywords_page=${currentKeywordsPage}&limit=${itemsPerPage}`)
+        container.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+        fetch(`/api/archives/source-categories-keywords?source_id=${sourceId}&page=${page}&limit=${itemsPerPage}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    if (categoriesContainer) renderCategories(data.categories, categoriesContainer);
-                    if (keywordsContainer) renderKeywords(data.keywords, keywordsContainer);
-                    if (categoriesPagination) {
-                        renderPagination(data.pagination.categories, categoriesPagination, 'categories', page => {
-                            currentCategoriesPage = page;
-                            loadWorkspace(sourceId, 'categories');
-                        });
-                    }
-                    if (keywordsPagination) {
-                        renderPagination(data.pagination.keywords, keywordsPagination, 'keywords', page => {
-                            currentKeywordsPage = page;
-                            loadWorkspace(sourceId, 'keywords');
-                        });
-                    }
+                    renderCategories(data.categories, container);
+                    renderPagination(data.pagination.categories, paginationContainer, 'categories', page => {
+                        currentCategoriesPage = page;
+                        loadCategories(sourceId, page);
+                    });
                 } else {
-                    const message = escapeHtml(data.error || translations.loadFailed || 'Unable to load categories and keywords');
-                    if (categoriesContainer) categoriesContainer.innerHTML = `<div class="alert alert-warning">${message}</div>`;
-                    if (keywordsContainer) keywordsContainer.innerHTML = `<div class="alert alert-warning">${message}</div>`;
+                    container.innerHTML = `<div class="alert alert-warning">${data.error || translations.noCategories || 'No categories found'}</div>`;
                 }
             })
             .catch(error => {
-                console.error('Error loading categories/keywords:', error);
-                const message = escapeHtml(error.message || 'Unknown error');
-                if (categoriesContainer) categoriesContainer.innerHTML = `<div class="alert alert-danger">Error loading categories and keywords: ${message}</div>`;
-                if (keywordsContainer) keywordsContainer.innerHTML = `<div class="alert alert-danger">Error loading categories and keywords: ${message}</div>`;
+                console.error('Error loading categories:', error);
+                container.innerHTML = `<div class="alert alert-danger">Error loading categories: ${error.message}</div>`;
+            });
+    }
+
+    function loadKeywords(sourceId, page) {
+        const container = document.getElementById('keywordsContainer');
+        const paginationContainer = document.getElementById('keywordsPagination');
+
+        container.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+        fetch(`/api/archives/source-categories-keywords?source_id=${sourceId}&page=${page}&limit=${itemsPerPage}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderKeywords(data.keywords, container);
+                    renderPagination(data.pagination.keywords, paginationContainer, 'keywords', page => {
+                        currentKeywordsPage = page;
+                        loadKeywords(sourceId, page);
+                    });
+                } else {
+                    container.innerHTML = `<div class="alert alert-warning">${data.error || translations.noKeywords || 'No keywords found'}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading keywords:', error);
+                container.innerHTML = `<div class="alert alert-danger">Error loading keywords: ${error.message}</div>`;
             });
     }
 
@@ -81,11 +83,11 @@ document.addEventListener('DOMContentLoaded', function() {
             container.innerHTML = `<div class="alert alert-info">${translations.noCategories || 'No categories found'}</div>`;
             return;
         }
-        
+
         let html = '<div class="list-group">';
         categories.forEach(category => {
             html += `
-                <a href="#" data-section="category" data-id="${category.id}" 
+                <a href="#" data-section="category" data-id="${category.id}"
                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center category-keyword-link">
                     <div>
                         <h6 class="mb-1">${escapeHtml(category.name)}</h6>
@@ -96,7 +98,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         html += '</div>';
         container.innerHTML = html;
-        
+
         // Add click handlers
         container.querySelectorAll('.category-keyword-link').forEach(link => {
             link.addEventListener('click', function(e) {
@@ -104,7 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const section = this.getAttribute('data-section');
                 const id = this.getAttribute('data-id');
                 const name = this.querySelector('h6').textContent;
-                
+
                 // Try to use the unified view system if available
                 if (window.fms && window.fms.loadItemView) {
                     window.fms.loadItemView(section, parseInt(id), name, 1);
@@ -117,17 +119,17 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-    
+
     function renderKeywords(keywords, container) {
         if (!keywords || keywords.length === 0) {
             container.innerHTML = `<div class="alert alert-info">${translations.noKeywords || 'No keywords found'}</div>`;
             return;
         }
-        
+
         let html = '<div class="list-group">';
         keywords.forEach(keyword => {
             html += `
-                <a href="#" data-section="keywords" data-id="${keyword.id}" 
+                <a href="#" data-section="keywords" data-id="${keyword.id}"
                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center category-keyword-link">
                     <div>
                         <h6 class="mb-1">${escapeHtml(keyword.name)}</h6>
@@ -138,7 +140,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         html += '</div>';
         container.innerHTML = html;
-        
+
         // Add click handlers
         container.querySelectorAll('.category-keyword-link').forEach(link => {
             link.addEventListener('click', function(e) {
@@ -146,7 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const section = this.getAttribute('data-section');
                 const id = this.getAttribute('data-id');
                 const name = this.querySelector('h6').textContent;
-                
+
                 // Try to use the unified view system if available
                 if (window.fms && window.fms.loadItemView) {
                     window.fms.loadItemView(section, parseInt(id), name, 1);
@@ -159,26 +161,23 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-    
+
     function renderPagination(pagination, container, type, onPageChange) {
         if (!pagination || pagination.total_pages <= 1) {
             container.innerHTML = '';
             return;
         }
-        
+
         // Ensure container has an ID
         if (!container.id) {
             container.id = `pagination-${type}`;
         }
-        
+
         // Use unified pagination
         import('../modules/rendering/unified-pagination.js').then(module => {
             module.renderUnifiedPagination({
                 currentPage: pagination.page,
                 totalPages: pagination.total_pages,
-                totalItems: pagination.total,
-                pageSize: pagination.per_page,
-                itemLabel: translations[type] || 'items',
                 containerId: container.id,
                 onPageChange: (targetPage) => {
                     onPageChange(targetPage);
@@ -194,7 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderOldPagination(pagination, container, onPageChange);
         });
     }
-    
+
     function renderOldPagination(pagination, container, onPageChange) {
         let html = '<ul class="pagination justify-content-center">';
         if (pagination.has_prev) {
@@ -236,11 +235,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-    
+
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 });
-

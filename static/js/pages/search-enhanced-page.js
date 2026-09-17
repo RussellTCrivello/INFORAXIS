@@ -7,21 +7,6 @@
 import { initializeSearch, loadSearchHistory, loadSavedSearches } from '../modules/search/global-search.js';
 import advancedSearch from '../modules/search/advanced-search.js';
 
-let initialized = false;
-
-async function initializeEnhancedSearchPage() {
-    if (initialized) {
-        console.debug('Enhanced search page already initialized, skipping duplicate setup');
-        return;
-    }
-    initialized = true;
-
-    initializeSearch();
-    advancedSearch.initializeAdvancedSearch();
-    loadSearchHistory();
-    loadSavedSearches();
-}
-
 // Clear search history function
 window.enhancedSearch = window.enhancedSearch || {};
 
@@ -57,14 +42,23 @@ window.enhancedSearch.clearHistory = async function() {
  * Default initialization function for universal-initializer
  */
 export default async function init() {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeEnhancedSearchPage, { once: true });
-    } else {
-        await initializeEnhancedSearchPage();
-    }
+    initializeSearch();
+    advancedSearch.initializeAdvancedSearch();
+    loadSearchHistory();
+    loadSavedSearches();
 }
 
-// Direct module fallback: search_enhanced.html includes this module explicitly,
-// while the universal initializer skips explicit page modules to prevent double
-// work. The guard above keeps dynamically imported usage safe as well.
-init();
+// Initialize advanced search when page loads (fallback for direct access)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeSearch();
+        advancedSearch.initializeAdvancedSearch();
+        loadSearchHistory();
+        loadSavedSearches();
+    });
+} else {
+    initializeSearch();
+    advancedSearch.initializeAdvancedSearch();
+    loadSearchHistory();
+    loadSavedSearches();
+}

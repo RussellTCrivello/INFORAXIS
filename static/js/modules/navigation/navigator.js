@@ -13,31 +13,21 @@ import { loadItemView, loadItemFilesWithFilters } from '../views/item-view.js';
 import { updateSidebarActiveState } from '../ui/sidebar.js';
 import { initEventDelegation } from './event-delegation.js';
 
-let navigationInitialized = false;
-
 /**
  * Initialize navigation
  */
 export function initNavigation() {
-    if (navigationInitialized) {
-        console.debug('Navigation already initialized, skipping duplicate root load');
-        return;
-    }
-    navigationInitialized = true;
-    if (typeof window !== 'undefined') {
-        window.__fmsNavigationInitialized = true;
-    }
     console.log('Initializing navigation...');
-    
+
     // Initialize global event delegation first
     initEventDelegation();
-    
+
     // Initialize perPage selector with current value
     const perPageSelect = document.getElementById('perPageSection');
     if (perPageSelect) {
         perPageSelect.value = navigationState.sectionPagination.perPage || 10;
     }
-    
+
     // Wait a bit to ensure DOM is fully ready
     setTimeout(() => {
         const contentView = document.getElementById('unifiedContentView');
@@ -86,15 +76,15 @@ export function navigateToRoot() {
  */
 export function navigateToSection(section) {
     console.log('Navigating to section:', section);
-    
+
     if (!section) {
         console.error('Section parameter is missing');
         return;
     }
-    
+
     // Reset pagination when navigating to a new section
     navigationState.sectionPagination.currentPage = 1;
-    
+
     const state = { type: 'section', section: section, itemId: null, itemName: null };
     addToHistory(state);
     updateBreadcrumb([
@@ -114,7 +104,7 @@ export function navigateToSection(section) {
  */
 export function navigateToItem(section, itemId, itemName = null) {
     console.log('Navigating to item:', { section, itemId, itemName });
-    
+
     if (!section || !itemId) {
         console.error('Section or itemId parameter is missing');
         if (window.showError) {
@@ -122,13 +112,13 @@ export function navigateToItem(section, itemId, itemName = null) {
         }
         return;
     }
-    
+
     // Reset file pagination when navigating to a new item
     navigationState.filePagination.currentPage = 1;
-    
+
     const state = { type: 'item', section: section, itemId: itemId, itemName: itemName };
     addToHistory(state);
-    
+
     // Build breadcrumb path
     const sectionState = { type: 'section', section: section };
     const breadcrumbPath = [
@@ -137,7 +127,7 @@ export function navigateToItem(section, itemId, itemName = null) {
         { name: itemName || `${translations.items} ${itemId}`, state: state }
     ];
     updateBreadcrumb(breadcrumbPath);
-    
+
     loadItemView(section, itemId, itemName, 1);
     updateNavButtons();
     updateSidebarActiveState(section);
@@ -149,11 +139,11 @@ export function navigateToItem(section, itemId, itemName = null) {
 export function handleSortChange() {
     const sortSelect = document.getElementById('sortBy');
     if (!sortSelect) return;
-    
+
     const newSort = sortSelect.value;
     if (navigationState.sortBy !== newSort) {
         navigationState.sortBy = newSort;
-        
+
         // Reset to page 1 when sort changes and clear cursor state
         navigationState.sectionPagination.currentPage = 1;
         Object.keys(sectionCursorState).forEach(section => {
@@ -165,7 +155,7 @@ export function handleSortChange() {
                 state.cursorToPage.set(null, 1);
             }
         });
-        
+
         // Reload current section with new sort
         if (navigationState.currentSection) {
             loadSectionView(navigationState.currentSection, 1);
@@ -182,11 +172,11 @@ export function handleSortChange() {
 export function handlePerPageChange() {
     const perPageSelect = document.getElementById('perPageSection');
     if (!perPageSelect) return;
-    
+
     const newPerPage = parseInt(perPageSelect.value) || 50;
     if (navigationState.sectionPagination.perPage !== newPerPage) {
         navigationState.sectionPagination.perPage = newPerPage;
-        
+
         // Reset to page 1 when perPage changes and clear cursor state
         navigationState.sectionPagination.currentPage = 1;
         Object.keys(sectionCursorState).forEach(section => {
@@ -198,7 +188,7 @@ export function handlePerPageChange() {
                 state.cursorToPage.set(null, 1);
             }
         });
-        
+
         // Reload current section with new perPage
         if (navigationState.currentSection) {
             loadSectionView(navigationState.currentSection, 1);
@@ -215,20 +205,20 @@ export function handlePerPageChange() {
 export function handleFilePerPageChange() {
     const perPageSelect = document.getElementById('perPageFiles');
     if (!perPageSelect) return;
-    
+
     const newPerPage = parseInt(perPageSelect.value) || 50;
     if (navigationState.filePagination.perPage !== newPerPage) {
         navigationState.filePagination.perPage = newPerPage;
-        
+
         // Reset to page 1 when perPage changes
         navigationState.filePagination.currentPage = 1;
-        
+
         // Reload current file view with new perPage
         if (navigationState.currentFileSection && navigationState.currentFileItemId) {
             // Get current state from history to preserve item name
             const currentState = navigationState.history?.[navigationState.currentIndex];
             const itemName = currentState?.itemName || null;
-            
+
             // Check if we have filters applied
             if (navigationState.currentSourceFilter || navigationState.currentSideFilter) {
                 // Use loadItemFilesWithFilters for filtered views
@@ -259,4 +249,3 @@ window.handleSortChange = handleSortChange;
 window.handlePerPageChange = handlePerPageChange;
 // Expose handleFilePerPageChange globally for HTML onclick
 window.handleFilePerPageChange = handleFilePerPageChange;
-

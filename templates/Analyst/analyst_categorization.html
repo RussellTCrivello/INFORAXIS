@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Analyst Categorization') }} - {{ _('File Analysis System') }}{% endblock %}
-{% block page_type %}analyst-categorization{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/analyst-categorization.css') }}" rel="stylesheet">
@@ -160,7 +159,10 @@
                 </div>
 
                 <!-- Pagination -->
-                <div class="analyst-pagination" id="assignmentsPagination" aria-label="{{ _('Assignment pagination') }}"></div>
+                <div class="analyst-pagination d-flex justify-content-between align-items-center">
+                    <span class="text-muted small" id="assignmentsPageInfo"></span>
+                    <div class="btn-group btn-group-sm" id="assignmentsPagination"></div>
+                </div>
             </div>
         </div>
 

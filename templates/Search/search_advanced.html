@@ -2,7 +2,6 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Advanced Search') }}{% endblock %}
-{% block page_type %}search-advanced{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/search-advanced.css') }}" rel="stylesheet">
@@ -13,12 +12,12 @@
 <!-- Page header (slim, theme-aware — the search bar below is the  -->
 <!-- visual hero, not this banner).                                -->
 <!-- ============================================================ -->
-<header class="search-header page-header">
-    <div class="search-logo" aria-hidden="true">
-        <i class="bi bi-search-heart"></i>
-    </div>
+<header class="search-header">
     <div class="search-header-content">
-        <h1 class="page-title">{{ _('Advanced Search') }}</h1>
+        <h1 class="search-logo">
+            <i class="bi bi-search-heart" aria-hidden="true"></i>
+            {{ _('Advanced Search') }}
+        </h1>
         <p class="search-subtitle">{{ _('Find exactly what you need with powerful filters and intelligent algorithms') }}</p>
     </div>
 </header>
