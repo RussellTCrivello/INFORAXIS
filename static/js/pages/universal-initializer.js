@@ -26,14 +26,15 @@ const pageDetectors = [
         if (path.match(/\/categories\/\d+\/words/)) return 'category-words';  // Must be before general /words check
         if (path.match(/\/words\/\d+/)) return 'word-detail';
         if (path.includes('/words')) return 'words-list';
-        if (path.match(/\/sources\/\d+\/categories-keywords/)) return 'default';
+        if (path.match(/\/sources\/\d+\/categories-keywords/)) return 'source-categories-keywords';
         if (path.match(/\/sources\/\d+/)) return 'source-detail';
         if (path.includes('/sources')) return 'sources-list';
-        if (path.match(/\/sides\/\d+\/categories-keywords/)) return 'default';
+        if (path.match(/\/sides\/\d+\/categories-keywords/)) return 'side-categories-keywords';
         if (path.match(/\/sides\/\d+/)) return 'side-detail';
         if (path.includes('/sides')) return 'sides-list';
         if (path === '/search/enhanced') return 'search-enhanced';
         if (path === '/search/advanced') return 'search-advanced';
+        if (path.includes('/search/saved')) return 'saved-searches';
         if (path === '/search') return 'search';
         if (path === '/upload') return 'upload';
         if (path === '/' || path === '/dashboard') return 'dashboard';
@@ -60,11 +61,14 @@ const pageHandlers = {
     'word-detail': () => import('./word-detail-page.js'),
     'sources-list': () => import('./sources-list-page.js'),
     'source-detail': () => import('./source-detail-page.js'),
+    'source-categories-keywords': () => import('./source-categories-keywords-page.js'),
     'sides-list': () => import('./sides-list-page.js'),
     'side-detail': () => import('./side-detail-page.js'),
+    'side-categories-keywords': () => import('./side-categories-keywords-page.js'),
     'search': () => import('./search-page.js'),
     'search-enhanced': () => import('./search-enhanced-page.js'),
     'search-advanced': () => import('./search-advanced-page.js'),
+    'saved-searches': () => import('./saved-searches-page.js'),
     'upload': () => import('./upload-page.js'),
     'dashboard': () => import('./dashboard-page.js'),
     'comprehensive-dashboard': () => import('./comprehensive-dashboard-page.js'),
@@ -90,11 +94,14 @@ const pageScriptFiles = {
     'word-detail': 'word-detail-page.js',
     'sources-list': 'sources-list-page.js',
     'source-detail': 'source-detail-page.js',
+    'source-categories-keywords': 'source-categories-keywords-page.js',
     'sides-list': 'sides-list-page.js',
     'side-detail': 'side-detail-page.js',
+    'side-categories-keywords': 'side-categories-keywords-page.js',
     'search': 'search-page.js',
     'search-enhanced': 'search-enhanced-page.js',
     'search-advanced': 'search-advanced-page.js',
+    'saved-searches': 'saved-searches-page.js',
     'upload': 'upload-page.js',
     'dashboard': 'dashboard-page.js',
     'comprehensive-dashboard': 'comprehensive-dashboard-page.js',

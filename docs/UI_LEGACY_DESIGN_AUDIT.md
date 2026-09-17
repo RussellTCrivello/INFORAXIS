@@ -33,12 +33,12 @@ Runtime/browser inspection could not be completed in the sandbox because Flask i
 
 | Area | Current finding | Risk interpretation |
 | --- | ---: | --- |
-| CSS files | 43 total, 42 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Good coverage, but several global/page boundaries are blurred. |
+| CSS files | 47 total, 46 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Coverage now includes the shared JavaScript-rendered component layer plus page CSS for batch analysis, saved searches, and source/side relationship pages. |
 | Template inline `style="..."`/`style='...'` attributes | 104 | Mostly runtime visibility/progress/theme swatches; the two base-page visual hits are favicon SVG stop-color attributes. |
 | Template `<style>` blocks | 2 | Both are in `templates/base.html` for runtime custom CSS/theme injection and should remain controlled. |
-| JavaScript inline style literals (`style="..."` / `style='...'`) | 42 | Several are dynamic/progress states, but some are still presentational. |
-| JavaScript `style.cssText` uses | 5 | High-risk because it bypasses the design system and can override modern layout rules. |
-| JavaScript `.style.*` mutations | 421 | Many are runtime state toggles, but some still set layout/width/z-index/visual formatting. |
+| JavaScript style usage count | 463 | Many are runtime state toggles, but some still set layout/width/z-index/visual formatting. |
+| JS-rendered class names without CSS coverage | 0 | New audit coverage verifies class names emitted by `static/js/pages/*.js` have non-vendor CSS coverage after filtering Bootstrap utility/state/icon classes. |
+| Templates with page JavaScript but no page-local CSS | 0 | Every template that directly loads a `static/js/pages/*` module now has page-local CSS and/or the shared JavaScript component stylesheet. |
 | CSS `!important` declarations | 248 | Indicates cascade pressure between Bootstrap, global enterprise CSS, data-interface CSS, and page CSS. |
 | CSS hard-coded hex colors | 471 | Many are fallback values, but some represent legacy color decisions outside tokens. |
 
@@ -669,7 +669,7 @@ Use the existing message/modal system for confirmations and errors, with native 
 
 ### Phase 4 — Add design regression governance
 
-1. Use `scripts/audit_ui_design.py` to report inline styles, JS style mutation, CSS duplicate selectors, broad page selectors, hard-coded colors and `!important` counts.
+1. Use `scripts/audit_ui_design.py` to report inline styles, JS style mutation, CSS duplicate selectors, broad page selectors, hard-coded colors, `!important` counts, JavaScript-rendered class coverage, and page-JS stylesheet coverage.
 2. Add stricter fail-on-new thresholds once the current backlog is burned down.
 3. Add a dev-only DOM audit that logs unclassified control/data regions.
 4. Add visual smoke coverage once Flask/test browser dependencies are available.

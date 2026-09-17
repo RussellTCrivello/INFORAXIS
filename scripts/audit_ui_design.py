@@ -40,6 +40,37 @@ HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 PX_RE = re.compile(r"(?<![\w-])-?\d+(?:\.\d+)?px\b")
 IMPORTANT_RE = re.compile(r"!important")
 STYLE_USAGE_PATTERNS = ("style=\"", "style='", "style.cssText", ".style.")
+CLASS_TOKEN_RE = re.compile(r"^[A-Za-z_][\w-]*$")
+
+BOOTSTRAP_CLASS_PREFIXES = (
+    "btn", "text", "bg", "d", "m", "p", "py", "px", "pt", "pb", "ps", "pe", "mt", "mb", "ms", "me",
+    "mx", "my", "col", "row", "container", "card", "modal", "form", "alert", "badge", "nav", "navbar",
+    "dropdown", "input", "table", "spinner", "visually", "w", "h", "gap", "align", "justify", "flex",
+    "border", "rounded", "shadow", "list", "small", "fw", "fs", "lh", "position", "top", "bottom",
+    "start", "end", "translate", "opacity", "overflow", "sticky", "display", "pagination",
+)
+
+STATE_CLASS_NAMES = {
+    "active", "show", "hidden", "collapsed", "disabled", "selected", "open", "loading", "loaded", "visible",
+    "expanded", "success", "error", "warning", "danger", "info", "primary", "secondary", "light", "dark", "muted",
+    "read", "unread", "unknown", "current", "idle", "processing", "running", "complete", "completed", "failed",
+    "was-validated", "has-scroll",
+}
+ICON_FRAGMENT_NAMES = {
+    "check-circle", "check-circle-fill", "info-circle", "info-circle-fill", "x-circle", "x-circle-fill",
+    "dash-circle", "exclamation-circle", "exclamation-triangle", "hourglass-split",
+}
+GLOBAL_CSS_FILES = {
+    "bootstrap.min.css",
+    "styles.css",
+    "message_system.css",
+    "chart-export.css",
+    "design-system.css",
+    "responsive-fixes.css",
+    "page-tips.css",
+    "data-interface.css",
+    "js-page-components.css",
+}
 
 BROAD_SELECTOR_RE = re.compile(
     r"^(\.card\b|\.card-|\.btn\b|\.btn-|\.modal\b|\.modal-|\.table\b|\.table-|"
@@ -143,6 +174,72 @@ def js_style_counts() -> Counter[str]:
     return counts
 
 
+def css_class_selectors() -> set[str]:
+    classes: set[str] = set()
+    for path in iter_css():
+        text = re.sub(r"/\*.*?\*/", "", path.read_text(errors="ignore"), flags=re.S)
+        classes.update(re.findall(r"\.([A-Za-z_][\w-]*)", text))
+    return classes
+
+
+def class_token_is_covered(token: str, styled_classes: set[str]) -> bool:
+    if not token or token in styled_classes or token in STATE_CLASS_NAMES or token in ICON_FRAGMENT_NAMES:
+        return True
+    if token.startswith(("bi-", "fa-", "ri-", "ti-")):
+        return True
+    return any(token == prefix or token.startswith(prefix + "-") for prefix in BOOTSTRAP_CLASS_PREFIXES)
+
+
+def extract_js_class_tokens(text: str) -> set[str]:
+    tokens: set[str] = set()
+
+    for match in re.finditer(r"(?:class(?:Name)?\s*=|class\s*=)\s*([`'\"])(.*?)\1", text, re.S):
+        raw = match.group(2)
+        for token in re.split(r"\s+", raw):
+            cleaned = token.strip("{}$`'\"<>/.,;:()[]")
+            if "-" in cleaned and CLASS_TOKEN_RE.fullmatch(cleaned):
+                tokens.add(cleaned)
+
+    for match in re.finditer(r"classList\.(?:add|remove|toggle|contains)\((.*?)\)", text, re.S):
+        tokens.update(re.findall(r"[`'\"]([A-Za-z_][\w-]*-[\w-]*)[`'\"]", match.group(1)))
+
+    for match in re.finditer(r"className\s*=\s*([`'\"])(.*?)\1", text, re.S):
+        for token in re.split(r"\s+", match.group(2)):
+            cleaned = token.strip("{}$`'\"<>/.,;:()[]")
+            if "-" in cleaned and CLASS_TOKEN_RE.fullmatch(cleaned):
+                tokens.add(cleaned)
+
+    return tokens
+
+
+def js_rendered_class_gaps() -> dict[str, list[str]]:
+    styled_classes = css_class_selectors()
+    gaps: dict[str, list[str]] = {}
+    for path in sorted((JS_ROOT / "pages").glob("*.js")):
+        if path.name in VENDOR_JS_NAMES or path.name.endswith(".min.js"):
+            continue
+        tokens = extract_js_class_tokens(path.read_text(errors="ignore"))
+        missing = sorted(token for token in tokens if not class_token_is_covered(token, styled_classes))
+        if missing:
+            gaps[rel(path)] = missing
+    return gaps
+
+
+def template_js_page_style_gaps() -> dict[str, list[str]]:
+    gaps: dict[str, list[str]] = {}
+    css_ref_re = re.compile(r"css/([^'\"]+\.css)")
+    js_page_re = re.compile(r"js/pages/([^'\"]+\.js)")
+    for path in iter_templates():
+        text = path.read_text(errors="ignore")
+        page_scripts = js_page_re.findall(text)
+        if not page_scripts or path.name == "base.html":
+            continue
+        local_css = [name for name in css_ref_re.findall(text) if name not in GLOBAL_CSS_FILES]
+        if not local_css:
+            gaps[rel(path)] = page_scripts
+    return gaps
+
+
 def css_metrics() -> dict[str, dict[str, int]]:
     metrics: dict[str, dict[str, int]] = {}
     for path in iter_css():
@@ -189,6 +286,7 @@ def broad_page_selectors() -> dict[str, list[tuple[int, str]]]:
         "design-system.css",
         "responsive-fixes.css",
         "auth-workspace.css",
+        "js-page-components.css",
         "bootstrap.min.css",
     }
     result: dict[str, list[tuple[int, str]]] = {}
@@ -208,6 +306,8 @@ def print_markdown() -> None:
     metrics = css_metrics()
     duplicates = duplicate_selectors()
     broad = broad_page_selectors()
+    js_class_gaps = js_rendered_class_gaps()
+    js_template_gaps = template_js_page_style_gaps()
 
     print("# Static UI Design Audit Report")
     print()
@@ -224,6 +324,8 @@ def print_markdown() -> None:
     print(f"- CSS hard-coded hex colors: {sum(m['colors'] for m in metrics.values())}")
     print(f"- Duplicate selectors across CSS files: {len(duplicates)}")
     print(f"- Page CSS files with broad reusable selectors: {len(broad)}")
+    print(f"- JS-rendered class names without CSS coverage: {sum(len(items) for items in js_class_gaps.values())}")
+    print(f"- Templates with page JavaScript but no page-local CSS: {len(js_template_gaps)}")
     print()
 
     print("## Template inline styles")
@@ -241,6 +343,34 @@ def print_markdown() -> None:
     for file, count in js_counts.most_common():
         print(f"| `{file}` | {count} |")
     print()
+
+    print("## JavaScript-rendered class coverage")
+    print()
+    if js_class_gaps:
+        print("These class names are emitted from `static/js/pages/*.js` but are not covered by a non-vendor CSS selector after filtering Bootstrap utility/state/icon classes.")
+        print()
+        for file, classes in sorted(js_class_gaps.items()):
+            print(f"### `{file}`")
+            for class_name in classes[:80]:
+                print(f"- `.{class_name}`")
+            if len(classes) > 80:
+                print(f"- ... {len(classes) - 80} more")
+            print()
+    else:
+        print("All detected page-script class names have CSS coverage.")
+        print()
+
+    print("## Page JavaScript stylesheet coverage")
+    print()
+    if js_template_gaps:
+        print("These templates include a `static/js/pages/*` script but no page-local stylesheet beyond the global shell styles.")
+        print()
+        for file, scripts in sorted(js_template_gaps.items()):
+            print(f"- `{file}` → {', '.join(f'`{script}`' for script in scripts)}")
+        print()
+    else:
+        print("Every template that includes a page JavaScript module also includes page-local CSS or the shared JavaScript component stylesheet from `base.html`.")
+        print()
 
     print("## CSS metrics")
     print()

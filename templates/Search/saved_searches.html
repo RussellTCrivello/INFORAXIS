@@ -1,17 +1,27 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Saved Searches') }}{% endblock %}
+{% block page_type %}saved-searches{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/saved-searches.css') }}" rel="stylesheet">
+{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1 class="page-title">
-        <i class="bi bi-bookmarks me-2"></i>
-        {{ _('Saved Searches') }}
-    </h1>
-    <a href="{{ url_for('search_enhanced_page') }}" class="btn btn-primary">
-        <i class="bi bi-plus-circle me-2"></i>
-        {{ _('New Search') }}
-    </a>
+    <div>
+        <h1 class="page-title">
+            <i class="bi bi-bookmarks me-2"></i>
+            {{ _('Saved Searches') }}
+        </h1>
+        <p class="text-muted mb-0">{{ _('Pinned search definitions for repeatable investigations') }}</p>
+    </div>
+    <div class="saved-searches-header-actions">
+        <a href="{{ url_for('search_enhanced_page') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>
+            {{ _('New Search') }}
+        </a>
+    </div>
 </div>
 
 <!-- Page Tips -->
@@ -32,78 +42,104 @@
 </div>
 {% endcall %}
 
-<!-- Search Filter -->
-<div class="stat-card mb-4">
-    <div class="input-group">
-        <span class="input-group-text">
-            <i class="bi bi-search"></i>
-        </span>
-        <input type="text" class="form-control" id="searchSaved"
-               placeholder="{{ _('Search saved searches...') }}" onkeyup="filterSavedSearches()"
-               aria-label="{{ _('Filter saved searches by name') }}">
-    </div>
-</div>
-
-<!-- Saved Searches Grid -->
-<div class="row g-4" id="savedSearchesContainer">
-    {% for search in saved_searches %}
-    <div class="col-md-6 col-lg-4 search-card" data-name="{{ search.name|lower }}">
-        <div class="stat-card h-100">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="mb-0 search-name">
-                    <i class="bi bi-pin-angle me-2 text-primary"></i>
-                    {{ search.name }}
-                </h5>
-            </div>
-
-            <div class="mb-3">
-                <div class="text-muted small mb-2">
-                    <i class="bi bi-search me-1"></i>
-                    {{ _('Query:') }} <strong>{{ search.query }}</strong>
-                </div>
-                <div class="text-muted small mb-2">
-                    <i class="bi bi-clock me-1"></i>
-                    {{ _('Saved:') }} {{ search.created_at[:10] if search.created_at else '—' }}
-                </div>
-                {% set active_filters = search.get('filters') or {} %}
-                {% if active_filters %}
-                <div class="text-muted small">
-                    <i class="bi bi-funnel me-1"></i>
-                    {% for fk, fv in active_filters.items() %}
-                        {% if fv %}<span class="badge bg-light text-dark me-1">{{ fk }}: {{ fv }}</span>{% endif %}
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- Actions -->
-            <div class="btn-group w-100" role="group">
-                <a class="btn btn-primary" href="/search?q={{ search.query|urlencode }}" title="{{ _('Run this search') }}">
-                    <i class="bi bi-play-fill"></i> {{ _('Run') }}
-                </a>
-                <button class="btn btn-outline-secondary" onclick='renameSavedSearch({{ search.id }}, {{ search.name|tojson }})' title="{{ _('Rename') }}">
-                    <i class="bi bi-pencil"></i> {{ _('Rename') }}
-                </button>
-                <button class="btn btn-outline-danger" onclick="deleteSavedSearch({{ search.id }})" title="{{ _('Delete') }}">
-                    <i class="bi bi-trash"></i> {{ _('Delete') }}
-                </button>
+<section class="saved-searches-workspace" aria-labelledby="savedSearchesTitle">
+    <div class="saved-searches-toolbar ia-control-surface" data-ia-role="controls">
+        <div class="saved-searches-toolbar-main">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="search" class="form-control" id="searchSaved"
+                       placeholder="{{ _('Search saved searches...') }}"
+                       aria-label="{{ _('Filter saved searches by name') }}"
+                       autocomplete="off">
             </div>
         </div>
+        <div class="saved-searches-toolbar-meta" aria-live="polite">
+            <span class="saved-search-count">
+                <i class="bi bi-bookmark-check" aria-hidden="true"></i>
+                <span id="savedSearchVisibleCount">{{ saved_searches|length }}</span>/<span id="savedSearchTotalCount">{{ saved_searches|length }}</span>
+            </span>
+            <span>{{ _('visible saved searches') }}</span>
+        </div>
     </div>
-    {% else %}
-    <div class="col-12">
-        <div class="stat-card text-center py-5">
-            <i class="bi bi-bookmarks display-4 d-block mb-3 text-muted"></i>
-            <h5 class="text-muted">{{ _('No Saved Searches') }}</h5>
-            <p class="text-muted mb-4">{{ _('Run a search on the Enhanced Search page and use "Save Search" to bookmark it here.') }}</p>
+
+    <h2 class="visually-hidden" id="savedSearchesTitle">{{ _('Saved Searches') }}</h2>
+    <div class="saved-searches-grid ia-scroll-body" id="savedSearchesContainer" data-ia-role="data-region">
+        {% for search in saved_searches %}
+        {% set active_filters = search.get('filters') or {} %}
+        <article class="saved-search-item search-card" data-name="{{ search.name|lower }}" data-search-id="{{ search.id }}">
+            <div class="saved-search-card">
+                <div class="saved-search-card-header">
+                    <h3 class="saved-search-name search-name">
+                        <i class="bi bi-pin-angle text-primary" aria-hidden="true"></i>
+                        <span class="saved-search-name-text">{{ search.name }}</span>
+                    </h3>
+                </div>
+
+                <div class="saved-search-card-body">
+                    <div class="saved-search-meta-row saved-search-query">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                        <span>{{ _('Query:') }}</span>
+                        <strong title="{{ search.query }}">{{ search.query }}</strong>
+                    </div>
+                    <div class="saved-search-meta-row">
+                        <i class="bi bi-clock" aria-hidden="true"></i>
+                        <span>{{ _('Saved:') }} {{ search.created_at[:10] if search.created_at else '—' }}</span>
+                    </div>
+                    {% if active_filters %}
+                    <div class="saved-search-filter-list" aria-label="{{ _('Saved search filters') }}">
+                        <i class="bi bi-funnel text-muted" aria-hidden="true"></i>
+                        {% for fk, fv in active_filters.items() %}
+                            {% if fv %}<span class="saved-search-filter-chip">{{ fk }}: {{ fv }}</span>{% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="saved-search-actions" role="group" aria-label="{{ _('Saved search actions') }}">
+                    <a class="btn btn-primary btn-sm" href="/search?q={{ search.query|urlencode }}" title="{{ _('Run this search') }}">
+                        <i class="bi bi-play-fill" aria-hidden="true"></i> {{ _('Run') }}
+                    </a>
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            data-saved-search-rename
+                            data-search-id="{{ search.id }}"
+                            data-search-name="{{ search.name|e }}"
+                            title="{{ _('Rename') }}">
+                        <i class="bi bi-pencil" aria-hidden="true"></i> {{ _('Rename') }}
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm"
+                            data-saved-search-delete
+                            data-search-id="{{ search.id }}"
+                            title="{{ _('Delete') }}">
+                        <i class="bi bi-trash" aria-hidden="true"></i> {{ _('Delete') }}
+                    </button>
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <div class="saved-search-empty" id="savedSearchEmptyState" {% if saved_searches|length > 0 %}hidden{% endif %}>
+        <div>
+            <i class="bi bi-bookmarks d-block mb-3" aria-hidden="true"></i>
+            <h3>{{ _('No Saved Searches') }}</h3>
+            <p class="mb-4">{{ _('Run a search on the Enhanced Search page and use "Save Search" to bookmark it here.') }}</p>
             <a href="{{ url_for('search_enhanced_page') }}" class="btn btn-primary">
                 <i class="bi bi-plus-circle me-2"></i>
                 {{ _('Go to Enhanced Search') }}
             </a>
         </div>
     </div>
-    {% endfor %}
-</div>
+
+    <div class="saved-search-empty" id="savedSearchNoMatches" hidden>
+        <div>
+            <i class="bi bi-search d-block mb-3" aria-hidden="true"></i>
+            <h3>{{ _('No matching saved searches') }}</h3>
+            <p class="mb-0">{{ _('Try a different saved-search name or clear the filter.') }}</p>
+        </div>
+    </div>
+</section>
 
 {% endblock %}
 
@@ -115,7 +151,9 @@
         "error": _('Error'),
         "deleteSearchConfirm": _('Are you sure you want to delete this saved search?'),
         "searchDeletedSuccessfully": _('Search deleted successfully'),
-        "unknownError": _('Unknown error')
+        "unknownError": _('Unknown error'),
+        "renaming": _('Renaming'),
+        "deleting": _('Deleting')
     }
 }|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/saved-searches-page.js') }}"></script>

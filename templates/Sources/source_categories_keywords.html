@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Source Categories & Keywords') }}{% endblock %}
+{% block page_type %}source-categories-keywords{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/entity-relationships.css') }}" rel="stylesheet">
+{% endblock %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item">
@@ -65,40 +70,38 @@
 </div>
 {% endcall %}
 
-<div class="row">
-    <div class="col-md-6">
-        <div class="stat-card">
-            <h5 class="mb-3">
+<div class="relationship-workspace">
+    <div class="relationship-grid">
+        <section class="relationship-panel">
+            <h2 class="relationship-panel-title">
                 <i class="bi bi-tags me-2"></i>{{ _('Categories') }}
-            </h5>
-            <div id="categoriesContainer">
+            </h2>
+            <div class="relationship-list-region" id="categoriesContainer">
                 <div class="text-center p-4">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">{{ _('Loading...') }}</span>
                     </div>
                 </div>
             </div>
-            <nav aria-label="{{ _('Categories pagination') }}" id="categoriesPagination">
+            <nav class="relationship-pagination" aria-label="{{ _('Categories pagination') }}" id="categoriesPagination">
                 <!-- Pagination will be inserted here -->
             </nav>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="stat-card">
-            <h5 class="mb-3">
+        </section>
+        <section class="relationship-panel">
+            <h2 class="relationship-panel-title">
                 <i class="bi bi-key me-2"></i>{{ _('Keywords') }}
-            </h5>
-            <div id="keywordsContainer">
+            </h2>
+            <div class="relationship-list-region" id="keywordsContainer">
                 <div class="text-center p-4">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">{{ _('Loading...') }}</span>
                     </div>
                 </div>
             </div>
-            <nav aria-label="{{ _('Keywords pagination') }}" id="keywordsPagination">
+            <nav class="relationship-pagination" aria-label="{{ _('Keywords pagination') }}" id="keywordsPagination">
                 <!-- Pagination will be inserted here -->
             </nav>
-        </div>
+        </section>
     </div>
 </div>
 {% endblock %}
