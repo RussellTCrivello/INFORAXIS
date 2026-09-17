@@ -308,14 +308,11 @@
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary" onclick="copyEmail('{{ word }}')" title="{{ _('Copy') }}">
+                                    <button class="btn btn-outline-primary" onclick='copyEmail({{ word|tojson }})' title="{{ _('Copy') }}">
                                         <i class="bi bi-clipboard"></i>
                                     </button>
-                                    <button class="btn btn-outline-secondary" onclick="searchInFiles('{{ word }}')" title="{{ _('Search in Files') }}">
+                                    <button class="btn btn-outline-secondary" onclick='searchInFiles({{ word|tojson }})' title="{{ _('Search in Files') }}">
                                         <i class="bi bi-search"></i>
-                                    </button>
-                                    <button class="btn btn-outline-success" onclick="addToContacts('{{ word }}')" title="{{ _('Add to Contacts') }}">
-                                        <i class="bi bi-person-plus"></i>
                                     </button>
                                 </div>
                             </td>

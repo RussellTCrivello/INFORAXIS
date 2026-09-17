@@ -148,6 +148,15 @@
                 </div>
             </form>
 
+            <div class="chunked-upload-panel" aria-labelledby="chunkedUploadHeading">
+                <div class="chunked-upload-heading" id="chunkedUploadHeading">
+                    <i class="bi bi-cloud-upload" aria-hidden="true"></i>
+                    <span>{{ _('Large File Upload') }}</span>
+                    <small>{{ _('Uses the selected source and side, verifies the file hash, then queues processing.') }}</small>
+                </div>
+                <div id="chunked-upload-container"></div>
+            </div>
+
             <div class="cli-log-container" id="logContainer">
                 <div class="cli-log-line prompt">{{ _('Welcome to File Processor CLI') }}</div>
                 <div class="cli-log-line info">{{ _('Enter file path, select source and side, then click "Run Process"') }}</div>

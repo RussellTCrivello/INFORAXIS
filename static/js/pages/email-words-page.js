@@ -499,32 +499,6 @@ function copyAllEmails() {
     copyToClipboard();
 }
 
-// Add to contacts
-function addToContacts(email) {
-    fetch('/contacts/add', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({email: email})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const btn = currentActionButton();
-            if (!btn) return;
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-check"></i>';
-            btn.classList.remove('btn-outline-success');
-            btn.classList.add('btn-success');
-            
-            setTimeout(() => {
-                btn.innerHTML = originalHTML;
-                btn.classList.remove('btn-success');
-                btn.classList.add('btn-outline-success');
-            }, 2000);
-        }
-    })
-    .catch(error => console.error('Error:', error));
-}
 
 // Additional utility functions
 function refreshPage() {
@@ -567,7 +541,6 @@ window.copyToClipboard = copyToClipboard;
 window.searchInFiles = searchInFiles;
 window.showEmailFiles = showEmailFiles;
 window.exportData = exportData;
-window.addToContacts = addToContacts;
 window.refreshPage = refreshPage;
 window.showHelp = showHelp;
 window.sortTable = sortTable;

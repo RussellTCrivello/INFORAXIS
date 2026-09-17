@@ -377,10 +377,11 @@ notificationsPage.loadTabData = async function(tab) {
             unreadNotifications = this.sortNotifications(unreadNotifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
             readNotifications = this.sortNotifications(readNotifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
             
-            this.renderNotifications(allNotifications, tab, 'all');
-            this.renderNotifications(unreadNotifications, tab, 'unread');
-            this.renderNotifications(readNotifications, tab, 'read');
-            this.updateCategoryStats(tab, data.notifications);
+            const summary = data.summary || null;
+            this.renderNotifications(allNotifications, tab, 'all', summary?.total);
+            this.renderNotifications(unreadNotifications, tab, 'unread', summary?.unread);
+            this.renderNotifications(readNotifications, tab, 'read', summary?.read);
+            this.updateCategoryStats(tab, data.notifications, summary);
             
             const sortSelect = document.getElementById(`sortBy${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
             if (sortSelect) {
@@ -402,7 +403,7 @@ notificationsPage.loadTabData = async function(tab) {
     }
 };
 
-notificationsPage.renderNotifications = function(notifications, tab, section) {
+notificationsPage.renderNotifications = function(notifications, tab, section, totalOverride = null) {
     const listId = `messages${tab.charAt(0).toUpperCase() + tab.slice(1)}${section.charAt(0).toUpperCase() + section.slice(1)}`;
     const messagesList = document.getElementById(listId);
     const countId = `${section}Count${tab.charAt(0).toUpperCase() + tab.slice(1)}`;
@@ -412,11 +413,12 @@ notificationsPage.renderNotifications = function(notifications, tab, section) {
     const markReadTitle = window.appTranslations?.['Mark as Read'] || 'Mark as Read';
     const dismissTitle = window.appTranslations?.['Dismiss'] || 'Dismiss';
     
+    const displayedCount = Number.isFinite(Number(totalOverride)) ? Number(totalOverride) : notifications.length;
     if (countElement) {
-        countElement.textContent = notifications.length;
+        countElement.textContent = displayedCount;
     }
     if (subTabCountElement) {
-        subTabCountElement.textContent = notifications.length;
+        subTabCountElement.textContent = displayedCount;
     }
     
     if (notifications.length === 0) {
@@ -512,10 +514,10 @@ notificationsPage.sortNotifications = function(notifications, sortBy, sortOrder)
     return sorted;
 };
 
-notificationsPage.updateCategoryStats = function(tab, notifications) {
-    const total = notifications.length;
-    const unread = notifications.filter(n => !n.read).length;
-    const read = notifications.filter(n => n.read).length;
+notificationsPage.updateCategoryStats = function(tab, notifications, summary = null) {
+    const total = Number.isFinite(Number(summary?.total)) ? Number(summary.total) : notifications.length;
+    const unread = Number.isFinite(Number(summary?.unread)) ? Number(summary.unread) : notifications.filter(n => !n.read).length;
+    const read = Number.isFinite(Number(summary?.read)) ? Number(summary.read) : notifications.filter(n => n.read).length;
     
     if (tab === 'all') {
         const statAllTotal = document.getElementById('statAllTotal');

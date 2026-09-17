@@ -190,8 +190,13 @@ def register_notification_page_routes(app):
                                         fetch="one"
                                     )
                                     if hash_info:
-                                        file_source_id = hash_info[0][0] if not file_source_id else file_source_id
-                                        file_side_id = hash_info[0][1] if not file_side_id else file_side_id
+                                        # execute_query(..., fetch="one") returns a single
+                                        # row/tuple in this codebase, not a list containing a
+                                        # row. Older code indexed it as hash_info[0][0], which
+                                        # made source/side filtering silently drop notifications
+                                        # whose metadata did not already carry source_id/side_id.
+                                        file_source_id = hash_info[0] if not file_source_id else file_source_id
+                                        file_side_id = hash_info[1] if not file_side_id and len(hash_info) > 1 else file_side_id
                         except Exception:
                             pass  # If query fails, use metadata values or skip filter
                     
@@ -218,8 +223,17 @@ def register_notification_page_routes(app):
             else:  # created_at (default)
                 notifications.sort(key=lambda x: x.created_at, reverse=reverse_order)
             
+            # Capture full filtered counts before pagination so the UI badges and
+            # summary chips report the true result set, not just the oversized
+            # page the current high-density client happens to request.
+            summary = {
+                'total': len(notifications),
+                'unread': len([n for n in notifications if not n.read]),
+                'read': len([n for n in notifications if n.read]),
+            }
+
             # Paginate
-            total = len(notifications)
+            total = summary['total']
             start = (page - 1) * per_page
             end = start + per_page
             paginated_notifications = notifications[start:end]
@@ -333,7 +347,8 @@ def register_notification_page_routes(app):
                     'per_page': per_page,
                     'total': total,
                     'pages': (total + per_page - 1) // per_page if total > 0 else 0
-                }
+                },
+                'summary': summary
             })
             
         except Exception as e:
