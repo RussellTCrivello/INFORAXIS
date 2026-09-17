@@ -10,6 +10,36 @@ let initialized = false;
 let isProcessing = false;
 let resetStatusTimer = null;
 
+function normalizeTranslation(value) {
+    if (typeof value !== 'string') return value;
+    // Some legacy templates serialized already-jsonified strings inside a
+    // second JSON payload. Unwrap that shape so UI text is never rendered with
+    // literal quote marks.
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+        try {
+            return JSON.parse(value);
+        } catch (error) {
+            return value.slice(1, -1);
+        }
+    }
+    return value;
+}
+
+function loadUploadTranslations() {
+    const el = document.getElementById('upload-page-translations');
+    if (!el) return;
+    try {
+        const data = JSON.parse(el.textContent || '{}');
+        window.translations = window.translations || {};
+        Object.entries(data).forEach(([key, value]) => {
+            window.translations[key] = normalizeTranslation(value);
+        });
+    } catch (error) {
+        console.warn('Upload translations could not be parsed', error);
+    }
+}
+
 function t(key, fallback) {
     return window.translations?.[key] || fallback;
 }
@@ -19,6 +49,7 @@ function getElements() {
         cliForm: document.getElementById('cliForm'),
         filePathInput: document.getElementById('filePathInput'),
         filePickerBtn: document.getElementById('filePickerBtn'),
+        folderPickerBtn: document.getElementById('folderPickerBtn'),
         fileInput: document.getElementById('fileInput'),
         folderInput: document.getElementById('folderInput'),
         processBtn: document.getElementById('processBtn'),
@@ -30,7 +61,7 @@ function getElements() {
 function setStatus(statusEl, text, className) {
     if (!statusEl) return;
     statusEl.textContent = text;
-    statusEl.className = `cli-status ${className}`;
+    statusEl.className = `processor-status ${className}`;
 }
 
 function addLog(type, message) {
@@ -38,7 +69,7 @@ function addLog(type, message) {
     if (!logContainer) return;
 
     const logLine = document.createElement('div');
-    logLine.className = `cli-log-line ${type}`;
+    logLine.className = `processor-log-line ${type}`;
     logLine.textContent = message;
     logContainer.appendChild(logLine);
     logContainer.scrollTop = logContainer.scrollHeight;
@@ -142,9 +173,10 @@ async function startProcessing(filePath, sourceId, sideId) {
 }
 
 function setupHandlers() {
-    const { cliForm, filePathInput, filePickerBtn, fileInput, folderInput } = getElements();
+    const { cliForm, filePathInput, filePickerBtn, folderPickerBtn, fileInput, folderInput } = getElements();
 
     filePickerBtn?.addEventListener('click', () => fileInput?.click());
+    folderPickerBtn?.addEventListener('click', () => folderInput?.click());
 
     fileInput?.addEventListener('change', (event) => {
         if (isProcessing) {
@@ -194,6 +226,7 @@ function initializeUploadPage() {
         return;
     }
     initialized = true;
+    loadUploadTranslations();
 
     // PROGRESS: this page ships a #processingProgressContainer block and
     // upload.css styles it, but nothing ever polled /upload/active-tasks - so
@@ -214,7 +247,7 @@ function initializeUploadPage() {
         logContainer.replaceChildren();
         ['prompt', 'info'].forEach((type, index) => {
             const line = document.createElement('div');
-            line.className = `cli-log-line ${type}`;
+            line.className = `processor-log-line ${type}`;
             line.textContent = index === 0 ? t('ready', 'Ready') : t('logCleared', 'Log cleared');
             logContainer.appendChild(line);
         });

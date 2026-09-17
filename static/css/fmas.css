@@ -883,3 +883,85 @@
     color: var(--text-muted, #64748b);
     font-size: 0.875rem;
 }
+
+/* Large FMAS file viewer modal: one bounded overlay, fixed header/search, internal
+   document/analysis scrolling. Avoids nested body/page scroll traps. */
+.archives-modal-content.file-details-modal {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(1280px, calc(100vw - 2rem));
+    max-height: min(88vh, 58rem);
+    overflow: hidden;
+}
+
+.archives-modal-content.file-details-modal .archives-modal-header {
+    min-height: 3.4rem;
+    background: color-mix(in srgb, var(--bg-white) 94%, var(--bg-section));
+}
+
+.file-details-modal-body {
+    display: grid;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+    padding: 0;
+}
+
+.file-details-content-section {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    min-height: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.file-details-content-section .file-details-section-header,
+.file-content-search {
+    flex: 0 0 auto;
+    padding: 0.72rem 0.9rem;
+}
+
+.file-content-search {
+    background: color-mix(in srgb, var(--bg-section) 82%, var(--bg-white));
+}
+
+.file-content-scroll {
+    min-height: 0;
+    max-height: none;
+    padding: 1rem;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.file-details-content-view,
+.file-details-analysis-view {
+    min-width: 0;
+}
+
+.file-details-analysis-view {
+    max-height: min(70vh, 46rem);
+    overflow: auto;
+    padding: 1rem;
+}
+
+.modal-search-results[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 767.98px) {
+    .archives-modal {
+        align-items: stretch;
+        padding: 0.5rem;
+    }
+
+    .archives-modal-content.file-details-modal {
+        width: 100%;
+        max-height: calc(100vh - 1rem);
+    }
+
+    .archives-modal-title {
+        width: 100%;
+    }
+}

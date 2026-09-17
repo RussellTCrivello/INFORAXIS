@@ -167,12 +167,12 @@ export class ProcessingProgressTracker {
         if (!container || !list) return;
 
         if (!tasks.length) {
-            container.style.display = 'none';
+            container.hidden = true;
             this._nodes.forEach((node) => node.remove());
             this._nodes.clear();
             return;
         }
-        container.style.display = 'block';
+        container.hidden = false;
 
         const seen = new Set();
         tasks.forEach((task) => {

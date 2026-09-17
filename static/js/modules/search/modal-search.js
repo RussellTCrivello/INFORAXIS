@@ -71,7 +71,7 @@ export function performModalSearch() {
     
     const searchResultsDiv = document.getElementById('modalSearchResults');
     if (searchResultsDiv) {
-        searchResultsDiv.style.display = 'block';
+        searchResultsDiv.hidden = false;
     }
     
     if (modalSearchResults.length > 0) {
@@ -197,7 +197,7 @@ export function clearModalSearch() {
     if (searchInput) searchInput.value = '';
     if (caseSensitive) caseSensitive.checked = false;
     if (wholeWord) wholeWord.checked = false;
-    if (searchResultsDiv) searchResultsDiv.style.display = 'none';
+    if (searchResultsDiv) searchResultsDiv.hidden = true;
     
     // Restore original content
     const contentElement = document.getElementById('modalContentText');

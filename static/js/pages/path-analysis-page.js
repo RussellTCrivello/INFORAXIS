@@ -729,15 +729,33 @@ function destroyAllCharts() {
     });
 }
 
+function setChartCanvasLoading(canvas) {
+    if (!canvas) return;
+    canvas.classList.add('chart-canvas-loading');
+    canvas.classList.remove('chart-canvas-ready');
+}
+
+function setChartCanvasReady(canvas) {
+    if (!canvas) return;
+    canvas.classList.add('chart-canvas-ready');
+    canvas.classList.remove('chart-canvas-loading');
+}
+
+function getChartSizeClass(chartId) {
+    if (chartId === 'timelineChart') return 'path-chart-size-tall';
+    if (chartId === 'classificationChart') return 'path-chart-size-wide';
+    return 'path-chart-size-standard';
+}
+
 // Show loading states for all data sections
 function showLoadingStates() {
     // Show loading for charts - preserve canvas and use overlay
     const chartConfigs = [
-        { id: 'fileTypeChart', height: '600px' },
-        { id: 'statusChart', height: '600px' },
-        { id: 'timelineChart', height: '700px' },
-        { id: 'wordFrequencyChart', height: '600px' },
-        { id: 'classificationChart', height: '650px' }
+        { id: 'fileTypeChart' },
+        { id: 'statusChart' },
+        { id: 'timelineChart' },
+        { id: 'wordFrequencyChart' },
+        { id: 'classificationChart' }
     ];
     
     chartConfigs.forEach(config => {
@@ -752,15 +770,11 @@ function showLoadingStates() {
             }
             
             // Hide canvas but keep it in DOM
-            if (canvas) {
-                canvas.style.display = 'none';
-                canvas.style.opacity = '0';
-            }
+            setChartCanvasLoading(canvas);
             
             // Add loading overlay
             const loadingOverlay = document.createElement('div');
-            loadingOverlay.className = 'chart-loading-overlay';
-            loadingOverlay.style.height = config.height;
+            loadingOverlay.className = `chart-loading-overlay ${getChartSizeClass(config.id)}`;
             loadingOverlay.innerHTML = `
                 <div class="spinner"></div>
                 <p class="chart-loading-message">${translations.loading}</p>
@@ -803,13 +817,11 @@ function showLoadingStates() {
                 // Clear any existing content and create canvas with loading overlay
                 const canvas = document.createElement('canvas');
                 canvas.id = config.id;
-                canvas.style.display = 'none';
-                canvas.style.opacity = '0';
+                setChartCanvasLoading(canvas);
                 
                 const loadingOverlay = document.createElement('div');
-                loadingOverlay.className = 'chart-loading-overlay';
-                // Use CSS classes instead of inline styles for better responsive behavior
-                loadingOverlay.className = 'chart-loading-overlay chart-loading-overlay-responsive';
+                // Use CSS classes instead of inline styles for responsive behavior.
+                loadingOverlay.className = `chart-loading-overlay chart-loading-overlay-responsive ${getChartSizeClass(config.id)}`;
                 loadingOverlay.innerHTML = `
                     <div class="spinner"></div>
                     <p class="chart-loading-message">${translations.loading}</p>
@@ -981,9 +993,8 @@ function showChartError(chartId) {
             loadingOverlay.remove();
         }
         
-        const height = chartId === 'timelineChart' ? '700px' : (chartId === 'classificationChart' ? '650px' : '600px');
         container.innerHTML = `
-            <div class="empty-state" style="height: ${height};">
+            <div class="empty-state path-chart-empty-state ${getChartSizeClass(chartId)}">
                 <i class="bi bi-exclamation-triangle"></i>
                 <p>${translations.errorLoadingChart}</p>
             </div>
@@ -1063,11 +1074,7 @@ function renderFileTypeChart(typeDistribution) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -1232,11 +1239,7 @@ function renderStatusChart(statusDistribution) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -1388,11 +1391,7 @@ function renderTimelineChart(timeline) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -1754,11 +1753,7 @@ function renderWordFrequencyChart(words) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -2230,11 +2225,7 @@ function renderClassificationChart(classifications) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');

@@ -10,11 +10,48 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Page Tips -->
+<div class="file-detail-page page-container">
     {% from 'components/page_tips.html' import page_tips %}
     {% from 'components/analyst_classify.html' import analyst_classify %}
-        {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+
+    <div class="page-header file-detail-identity">
+        <div class="file-detail-identity-main">
+            <div class="page-eyebrow">{{ _('File Analysis') }}</div>
+            <h1 class="page-title">
+                <i class="bi bi-file-earmark-text me-2" aria-hidden="true"></i>
+                {{ file[1][:120] }}{% if file[1]|length > 120 %}...{% endif %}
+            </h1>
+            <div class="file-detail-header-meta">
+                <span><i class="bi bi-hdd me-1" aria-hidden="true"></i>
+                    {% if file[3] > 1048576 %}
+                        {{ (file[3] / 1048576)|round(1) }} MB
+                    {% else %}
+                        {{ (file[3] / 1024)|round(1) }} KB
+                    {% endif %}
+                </span>
+                <span><i class="bi bi-calendar me-1" aria-hidden="true"></i>{{ file[7]|format_date('%Y-%m-%d') }}</span>
+                <span><i class="bi bi-building me-1" aria-hidden="true"></i>{{ file[9] if file|length > 9 else 'Unknown' }}</span>
+                <span><i class="bi bi-flag me-1" aria-hidden="true"></i>{{ file[10] if file|length > 10 else 'Unknown' }}</span>
+            </div>
+        </div>
+        <div class="file-detail-header-actions" role="toolbar" aria-label="{{ _('File actions') }}">
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleFullscreen()" title="{{ _('Fullscreen') }}">
+                <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="shareFile()" title="{{ _('Share') }}">
+                <i class="bi bi-share" aria-hidden="true"></i>
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="window.print()" title="{{ _('Print') }}">
+                <i class="bi bi-printer" aria-hidden="true"></i>
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="exportFile()" title="{{ _('Export') }}">
+                <i class="bi bi-download me-1" aria-hidden="true"></i>{{ _('Export') }}
+            </button>
+        </div>
+    </div>
+
+    <!-- Page Tips -->
+    {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
 
     <div class="tips-section">
         <div class="tips-section-title">
@@ -53,50 +90,6 @@
         </ul>
     </div>
 {% endcall %}
-    
-    <!-- File Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h1 class="h4 mb-0">
-                                <i class="bi bi-file-earmark-text me-2"></i>
-                                {{ file[1][:100] }}{% if file[1]|length > 100 %}...{% endif %}
-                            </h1>
-                            <div class="d-flex gap-3 mt-2">
-                                <small><i class="bi bi-hdd me-1"></i>
-                                    {% if file[3] > 1048576 %}
-                                        {{ (file[3] / 1048576)|round(1) }} MB
-                                    {% else %}
-                                        {{ (file[3] / 1024)|round(1) }} KB
-                                    {% endif %}
-                                </small>
-                                <small><i class="bi bi-calendar me-1"></i>{{ file[7]|format_date('%Y-%m-%d') }}</small>
-                                <small><i class="bi bi-building me-1"></i>{{ file[9] if file|length > 9 else 'Unknown' }}</small>
-                                <small><i class="bi bi-flag me-1"></i>{{ file[10] if file|length > 10 else 'Unknown' }}</small>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-light btn-sm" onclick="toggleFullscreen()">
-                                <i class="bi bi-arrows-fullscreen"></i>
-                            </button>
-                            <button class="btn btn-light btn-sm" onclick="shareFile()">
-                                <i class="bi bi-share"></i>
-                            </button>
-                            <button class="btn btn-light btn-sm" onclick="window.print()">
-                                <i class="bi bi-printer"></i>
-                            </button>
-                            <button class="btn btn-light btn-sm" onclick="exportFile()">
-                                <i class="bi bi-download"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Navigation Tabs -->
     <div class="row">
@@ -174,7 +167,7 @@
                             </div>
                             
                             <!-- Search Results -->
-                            <div class="mt-3" id="searchResults" style="display: none;">
+                            <div class="mt-3 file-detail-search-results" id="searchResults" hidden>
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <span class="badge bg-primary" id="resultCount">{{ _('0 results') }}</span>
@@ -215,7 +208,7 @@
                             {% set file_path = file[2] if file|length > 2 else '' %}
                             {% set file_id = file[0] if file|length > 0 else 0 %}
                             {% if content_length > 0 %}
-                            <div class="content-viewer" id="contentViewer" 
+                            <div class="content-viewer ia-document-viewer ia-data-scroll-region" id="contentViewer" data-ia-scroll="true"
                                  data-file-type="{{ file_type }}" 
                                  data-file-path="{{ file_path }}"
                                  data-file-id="{{ file_id }}"
@@ -437,9 +430,9 @@
                                 <table class="table table-hover">
                                     <thead>
                                         <tr>
-                                            <th width="50">#</th>
+                                            <th class="file-detail-col-index">#</th>
                                             <th>{{ _('Keyword') }}</th>
-                                            <th width="120">{{ _('Frequency') }}</th>
+                                            <th class="file-detail-col-frequency">{{ _('Frequency') }}</th>
                                         </tr>
                                     </thead>
                                     <tbody>

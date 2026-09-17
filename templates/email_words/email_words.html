@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-container">
+<div class="page-container email-words-page">
 <div class="page-header">
     <div>
         <h1 class="page-title">
@@ -66,7 +66,7 @@
 {% endcall %}
 
 <!-- Filters Section - Using unified file-filters-section -->
-<div class="file-filters-section">
+<div class="file-filters-section email-words-filters ia-fixed-control-surface" data-ia-role="controls">
     <form id="emailFiltersForm" method="get" action="{{ url_for('email_words') }}">
         <input type="hidden" name="page" value="1">
         
@@ -161,7 +161,7 @@
         </div>
     </form>
 </div>
-<div class="row g-4">
+<div class="row g-3 email-summary-grid">
     <!-- Statistics Card -->
     <div class="col-lg-3">
         <div class="stat-card">
@@ -224,10 +224,10 @@
 </div>
 
 <!-- Email Words Table -->
-<div class="row mt-4">
+<div class="row email-table-section">
     <div class="col-12">
-        <div class="stat-card">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="stat-card email-workbench ia-table-workbench">
+            <div class="email-results-toolbar ia-fixed-control-surface" data-ia-role="controls">
                 <h5 class="mb-0">{{ _('Email-like Words Found') }}</h5>
                 <div class="d-flex align-items-center gap-3">
                     <div class="d-flex align-items-center gap-2">
@@ -247,8 +247,8 @@
             </div>
             
             {% if email_words %}
-            <div class="table-wrapper email-table-wrapper">
-                <table class="table table-hover table-striped mb-0">
+            <div class="table-wrapper email-table-wrapper ia-table-scroll ia-data-scroll-region" data-ia-scroll="true">
+                <table class="table table-hover table-striped mb-0 ia-table">
                     <thead class="table-light sticky-top email-table-head">
                         <tr>
                             <th class="email-col-index">#</th>
@@ -322,7 +322,7 @@
                 </table>
             </div>
             
-            <div class="mt-3 d-flex justify-content-between align-items-center">
+            <div class="email-table-footer">
                 <small class="text-muted">
                     <i class="bi bi-info-circle me-1"></i>
                     {{ _('Showing') }} {{ email_words|length }} {{ _('of') }} {{ total_words|number_format }} {{ _('email-like words') }} ({{ _('Page') }} {{ page }} {{ _('of') }} {{ total_pages }})
@@ -365,7 +365,7 @@
 </div>
 
 <!-- Email Files Modal -->
-<div class="modal fade" id="emailFilesModal" tabindex="-1" aria-labelledby="emailFilesModalLabel" aria-hidden="true">
+<div class="modal fade ia-modal" id="emailFilesModal" tabindex="-1" aria-labelledby="emailFilesModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">

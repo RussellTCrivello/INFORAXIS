@@ -12,12 +12,14 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-container keywords-page">
+<div class="page-header keywords-page-header">
     <div>
-        <h1 class="page-title"><i class="bi bi-key me-2"></i> {{ _('Keywords') }} ({{ total_keywords|default(0) }})</h1>
-
+        <div class="page-eyebrow">{{ _('Data Management') }}</div>
+        <h1 class="page-title"><i class="bi bi-key me-2" aria-hidden="true"></i> {{ _('Keywords') }}</h1>
+        <p class="page-subtitle mb-0">{{ _('Manage keyword associations, duplicate cleanup, category context, and paginated review.') }}</p>
     </div>
-    <div class="d-flex gap-2">
+    <div class="keywords-header-actions">
         <button class="btn btn-primary" onclick="openAddKeywordModal()"><i class="bi bi-plus-circle me-2"></i> {{ _('Add') }}</button>
         <button class="btn btn-success" onclick="updateKeywordAssociations()" id="updateKeywordsBtn" title="{{ _('Update keyword associations for all files') }}">
             <i class="bi bi-arrow-repeat me-2"></i> {{ _('Update Keywords') }}
@@ -71,7 +73,7 @@
 </div>
 {% endcall %}
 
-<div class="row g-4 mb-2">
+<div class="row g-3 mb-2 keywords-summary-grid">
     <div class="col-md-3">
         <div class="stat-card">
             <div class="stat-card-icon stat-card-icon-primary">
@@ -108,7 +110,7 @@
 </div>
 
 <!-- Filters Section -->
-<div class="file-filters-section">
+<div class="file-filters-section ia-fixed-control-surface keywords-filter-surface" data-ia-role="controls">
     <!-- Search and Main Filters -->
     <div class="filter-controls-grid">
         <div class="filter-group filter-group-search">
@@ -117,10 +119,10 @@
                 {{ _('Search Keywords') }}
             </label>
             <div class="search-input-wrapper">
-                <input type="text" 
-                       id="searchKeywords" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search keywords...') }}" 
+                <input type="text"
+                       id="searchKeywords"
+                       class="form-control search-input"
+                       placeholder="{{ _('Search keywords...') }}"
                        autocomplete="off">
                 <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
                     <i class="bi bi-x"></i>
@@ -210,7 +212,7 @@
 </div>
 
 <!-- Pagination info above table -->
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="keywords-results-toolbar ia-fixed-control-surface" data-ia-role="controls">
     <div>
         <small class="text-muted" id="searchResultsInfo" aria-live="polite">
             {% if keywords %}
@@ -222,8 +224,8 @@
             {% endif %}
         </small>
     </div>
-    <div class="d-flex align-items-center">
-        <label for="perPage" class="form-label me-2 mb-0">{{ _('Per Page:') }}</label>
+    <div class="keywords-page-size-control">
+        <label for="perPage" class="form-label mb-0">{{ _('Per Page:') }}</label>
         <select class="form-select form-select-sm per-page-select" id="perPage" onchange="changePageSize()">
             <option value="10" selected>{{ _('10') }}</option>
             <option value="25">{{ _('25') }}</option>
@@ -233,13 +235,13 @@
     </div>
 </div>
 
-<div class="stat-card">
-    <div class="table-wrapper">
-        <table class="table table-hover align-middle" id="keywordsTable">
+<div class="stat-card keywords-workbench ia-table-workbench">
+    <div class="table-wrapper ia-table-scroll ia-data-scroll-region keywords-table-wrapper" data-ia-scroll="true">
+        <table class="table table-hover align-middle ia-table" id="keywordsTable">
             <thead>
                 <tr>
                     <th class="col-select">
-                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                        <input type="checkbox" class="form-check-input" id="selectAllCheckbox" onchange="toggleSelectAll()">
                     </th>
                     <th class="col-id">#</th>
                     <th>
@@ -274,13 +276,13 @@
                 {% if keywords %}
                     {% for keyword in keywords %}
                     {% set row_number = (page - 1) * per_page + loop.index %}
-                    <tr data-keyword-id="{{ keyword.id }}" 
+                    <tr data-keyword-id="{{ keyword.id }}"
                         data-usage-count="{{ keyword.usage_count }}"
                         data-status="{{ 'active' if keyword.usage_count > 0 else 'unused' }}">
                         <td>
-                            <input type="checkbox" 
-                                   class="keyword-checkbox" 
-                                   value="{{ keyword.id }}" 
+                            <input type="checkbox"
+                                   class="form-check-input keyword-checkbox"
+                                   value="{{ keyword.id }}"
                                    onchange="updateBulkButtons()">
                         </td>
                         <td>{{ row_number }}</td>
@@ -305,18 +307,18 @@
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm">
-                                <a href="{{ url_for('keyword_detail', keyword_id=keyword.id) }}" 
-                                   class="btn btn-outline-primary" 
+                                <a href="{{ url_for('keyword_detail', keyword_id=keyword.id) }}"
+                                   class="btn btn-outline-primary"
                                    title="{{ _('View Details') }}">
                                     <i class="bi bi-eye"></i>
                                 </a>
-                                <button class="btn btn-outline-warning" 
-                                        onclick="editKeyword({{ keyword.id }})" 
+                                <button class="btn btn-outline-warning"
+                                        onclick="editKeyword({{ keyword.id }})"
                                         title="{{ _('Edit') }}">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <button class="btn btn-outline-danger" 
-                                        onclick="deleteKeyword({{ keyword.id }})" 
+                                <button class="btn btn-outline-danger"
+                                        onclick="deleteKeyword({{ keyword.id }})"
                                         title="{{ _('Delete') }}">
                                     <i class="bi bi-trash"></i>
                                 </button>
@@ -349,7 +351,7 @@
 </div>
 
     <!-- Add Keyword Modal -->
-    <div class="modal fade" id="addKeywordModal" tabindex="-1" aria-labelledby="addKeywordModalLabel" aria-hidden="true">
+    <div class="modal fade ia-modal ia-create-modal" id="addKeywordModal" tabindex="-1" aria-labelledby="addKeywordModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
@@ -362,29 +364,29 @@
                         <div class="mb-3">
                             <label for="keywordWordInput" class="form-label">{{ _('Select or Create Words') }} *</label>
                             <div class="position-relative">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="keywordWordInput" 
-                                       name="word_text" 
+                                <input type="text"
+                                       class="form-control"
+                                       id="keywordWordInput"
+                                       name="word_text"
                                        autocomplete="off"
                                        placeholder="{{ _('Type to search or create a new word...') }}">
-                                <div id="keywordWordSearchResults" class="word-search-results" style="display: none;"></div>
+                                <div id="keywordWordSearchResults" class="word-search-results" hidden></div>
                             </div>
                             <small class="form-text text-muted">{{ _('Type a new word name to create it, or search for an existing word. You must select at least 2 words to create a keyword phrase.') }}</small>
-                            <div id="selectedWordsContainer" class="mt-2" style="display: none;">
+                            <div id="selectedWordsContainer" class="mt-2" hidden>
                                 <div class="d-flex flex-wrap gap-2" id="selectedWordsList"></div>
                             </div>
                         </div>
                         <div class="mb-3">
                             <label for="keywordCategoryInput" class="form-label">{{ _('Category (from Categories table)') }}</label>
                             <div class="position-relative">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="keywordCategoryInput" 
-                                       name="category_text" 
+                                <input type="text"
+                                       class="form-control"
+                                       id="keywordCategoryInput"
+                                       name="category_text"
                                        autocomplete="off"
                                        placeholder="{{ _('Type to search for a category...') }}">
-                                <div id="keywordCategorySearchResults" class="word-search-results" style="display: none;"></div>
+                                <div id="keywordCategorySearchResults" class="word-search-results" hidden></div>
                             </div>
                             <small class="form-text text-muted">{{ _('Type to search for categories from the categories table.') }}</small>
                         </div>
@@ -397,6 +399,7 @@
             </div>
         </div>
     </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

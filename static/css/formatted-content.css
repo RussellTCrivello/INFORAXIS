@@ -1,38 +1,146 @@
-/* Formatted content renderer: cleaned enterprise document/table presentation. */
+/* ============================================================================
+   Formatted document/content renderer
+   ---------------------------------------------------------------------------
+   Governs every dynamic content surface fed by content-formatter.js: file
+   detail previews, full reader, file-management modals, global search previews,
+   PDFs, spreadsheets, slides, email/HTML/JSON/XML/log/plain text, and search
+   highlights. The wrapper supplies the scroll viewport; this file keeps raw
+   extractor output from falling back to browser-native tables/pre blocks.
+   ============================================================================ */
 
+.formatted-content-wrapper,
 .formatted-content,
 .content-viewer,
-.full-content-viewer {
+.full-content-viewer,
+.reader,
+.file-content-scroll,
+#contentText,
+#content {
+    min-width: 0;
     color: var(--text-dark);
     font-size: 0.9rem;
-    line-height: 1.65;
+    line-height: 1.62;
+}
+
+.formatted-content-wrapper,
+#contentText,
+#content {
+    display: block;
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.formatted-word-content,
+.formatted-pdf-content,
+.formatted-excel-content,
+.formatted-powerpoint-content,
+.formatted-email-content,
+.formatted-html-content,
+.formatted-json-content,
+.formatted-xml-content,
+.formatted-text-content,
+.formatted-log-content,
+.formatted-markdown-content,
+.formatted-image-content {
+    display: grid;
+    gap: 0.85rem;
+    min-width: 0;
+    width: 100%;
 }
 
 .formatted-content p,
-.content-viewer p {
-    margin-bottom: 0.8rem;
+.content-viewer p,
+.formatted-page-content p,
+.formatted-word-content p,
+.formatted-email-body p,
+.formatted-markdown-content p {
+    margin: 0 0 0.75rem;
+    color: var(--text-dark);
+    line-height: 1.68;
+}
+
+.formatted-content p:last-child,
+.content-viewer p:last-child,
+.formatted-page-content p:last-child {
+    margin-bottom: 0;
+}
+
+.formatted-content h1,
+.formatted-content h2,
+.formatted-content h3,
+.formatted-content h4,
+.formatted-content h5,
+.formatted-content h6,
+.content-section-heading,
+.sheet-section-title,
+.formatted-image-text-title {
+    margin: 1.15rem 0 0.55rem;
+    color: var(--text-heading);
+    font-weight: 780;
+    letter-spacing: -0.018em;
+    line-height: 1.22;
+}
+
+.formatted-content h1:first-child,
+.formatted-content h2:first-child,
+.formatted-content h3:first-child,
+.formatted-content h4:first-child,
+.content-section-heading:first-child,
+.sheet-section-title:first-child {
+    margin-top: 0;
 }
 
 .formatted-content pre,
 .content-viewer pre,
-.formatted-code-block {
+.formatted-code-block,
+.formatted-text,
+.formatted-json,
+.formatted-xml {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
     overflow: auto;
-    padding: 0.9rem;
+    padding: 0.95rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--bg-section) 82%, var(--bg-white));
     color: var(--text-dark);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     font-size: 0.82rem;
+    line-height: 1.62;
+    white-space: pre-wrap;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    tab-size: 4;
 }
 
+.pre,
+.content.pre,
+.content-reader-body.pre {
+    white-space: pre;
+}
+
+.pre-wrap,
+.content.pre-wrap,
+.content-reader-body.pre-wrap {
+    white-space: pre-wrap;
+}
+
+/* Standard extracted table contract. */
 .formatted-table-container {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    margin: 0.85rem 0;
     overflow: auto;
-    margin: 1rem 0;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     background: var(--bg-white);
     box-shadow: var(--shadow-xs);
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
 }
 
 .formatted-table-container.nested-table {
@@ -47,23 +155,33 @@
     border-collapse: separate;
     border-spacing: 0;
     background: transparent;
-    font-size: 0.84rem;
+    color: var(--text-dark);
+    font-size: 0.82rem;
+    line-height: 1.42;
 }
 
 .formatted-content-table th,
 .formatted-content-table td {
-    padding: 0.52rem 0.7rem;
+    max-width: 30rem;
+    padding: 0.48rem 0.62rem;
+    border-inline-end: 1px solid var(--border-light);
     border-bottom: 1px solid var(--border-light);
     vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.formatted-content-table th:last-child,
+.formatted-content-table td:last-child {
+    border-inline-end: 0;
 }
 
 .formatted-content-table th {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 3;
     background: var(--table-header-bg);
     color: var(--table-header-text);
-    font-size: 0.68rem;
+    font-size: 0.67rem;
     font-weight: 780;
     letter-spacing: 0.07em;
     text-transform: uppercase;
@@ -74,29 +192,440 @@
     background: var(--table-row-hover);
 }
 
-.formatted-content mark,
-.search-highlight {
-    border-radius: var(--radius-xs);
-    background: color-mix(in srgb, var(--warning-color) 32%, #fff);
-    color: var(--text-heading);
-    padding: 0.08rem 0.2rem;
+/* Spreadsheet renderer. */
+.formatted-excel-content {
+    --sheet-cell-min: 7rem;
+    --sheet-gutter: 3rem;
+    --sheet-max-height: min(64vh, 42rem);
+    padding: 0;
 }
 
-.search-highlight.current-match {
-    background: color-mix(in srgb, var(--primary-color) 24%, #fff);
+.sheet-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--bg-white) 94%, var(--bg-section));
+    box-shadow: var(--shadow-xs);
+    scrollbar-width: thin;
 }
 
-.content-section-heading {
-    margin: 1.2rem 0 0.55rem;
-    color: var(--text-heading);
+.sheet-tab {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-height: 1.85rem;
+    max-width: 14rem;
+    padding: 0.28rem 0.65rem;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-pill);
+    background: var(--bg-white);
+    color: var(--text-light);
+    font-size: 0.76rem;
+    font-weight: 720;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sheet-tab:hover,
+.sheet-tab:focus-visible,
+.sheet-tab.active {
+    border-color: color-mix(in srgb, var(--primary-color) 36%, var(--border-color));
+    background: color-mix(in srgb, var(--primary-color) 9%, var(--bg-white));
+    color: var(--primary-color);
+    outline: none;
+}
+
+.sheet-section {
+    display: grid;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.sheet-section + .sheet-section {
+    margin-top: 1rem;
+}
+
+.sheet-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.2rem 0;
+    font-size: 0.95rem;
+}
+
+.sheet-section-title i {
+    color: var(--primary-color);
+}
+
+.sheet-grid-container {
+    max-height: var(--sheet-max-height);
+    margin: 0;
+    border-radius: var(--radius-lg);
+}
+
+.sheet-grid-table {
+    table-layout: fixed;
+    min-width: max(100%, calc(var(--sheet-gutter) + (var(--sheet-cell-min) * 6)));
+}
+
+.sheet-corner,
+.sheet-row-num,
+.sheet-col-letter {
+    background: color-mix(in srgb, var(--table-header-bg) 90%, var(--bg-section));
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.68rem;
     font-weight: 780;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.sheet-corner,
+.sheet-row-num {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 4;
+    width: var(--sheet-gutter);
+    min-width: var(--sheet-gutter);
+    max-width: var(--sheet-gutter);
+    border-inline-end: 1px solid var(--border-color);
+}
+
+.sheet-corner {
+    top: 0;
+    z-index: 7;
+}
+
+.sheet-col-letter {
+    top: 0;
+    min-width: var(--sheet-cell-min);
+    width: var(--sheet-cell-min);
+}
+
+.sheet-row-num {
+    background: color-mix(in srgb, var(--table-header-bg) 92%, var(--bg-white));
+}
+
+.sheet-cell {
+    min-width: var(--sheet-cell-min);
+    width: var(--sheet-cell-min);
+    height: 2rem;
+    max-height: 4.4rem;
+    overflow: hidden;
+    background: var(--bg-white);
+    color: var(--text-dark);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+}
+
+.sheet-cell:empty::after {
+    content: "";
+    display: inline-block;
+    min-width: 1ch;
+}
+
+.sheet-first-row .sheet-cell {
+    color: var(--text-heading);
+    font-weight: 700;
+}
+
+.sheet-cell:hover,
+.sheet-cell:focus-within {
+    background: color-mix(in srgb, var(--primary-color) 6%, var(--bg-white));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+
+/* PDF/page renderer. */
+.formatted-pdf-content {
+    gap: 1.1rem;
+}
+
+.formatted-page {
+    position: relative;
+    display: grid;
+    gap: 0.75rem;
+    width: min(100%, 62rem);
+    margin-inline: auto;
+}
+
+.formatted-page + .formatted-page {
+    margin-top: 0.9rem;
+}
+
+.page-divider {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 760;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.page-divider::before,
+.page-divider::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: var(--border-light);
+}
+
+.page-number-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.1rem;
+    min-height: 1.45rem;
+    padding: 0.12rem 0.48rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-pill);
+    background: var(--bg-white);
+    color: var(--text-light);
+    font-variant-numeric: tabular-nums;
+    box-shadow: var(--shadow-xs);
+}
+
+.formatted-page-content {
+    padding: clamp(1rem, 2vw, 1.45rem);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+    box-shadow: var(--shadow-xs);
+}
+
+.formatted-page-content p {
+    max-width: 76ch;
+    margin-inline: auto;
+    font-size: 0.94rem;
+    line-height: 1.78;
+}
+
+/* Slides/images/email/markdown/code. */
+.formatted-powerpoint-content {
+    gap: 0.8rem;
+}
+
+.formatted-slide {
+    display: grid;
+    gap: 0.6rem;
+    padding: 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+    box-shadow: var(--shadow-xs);
+}
+
+.formatted-slide.slide-active {
+    border-color: color-mix(in srgb, var(--primary-color) 34%, var(--border-color));
+    box-shadow: var(--shadow-sm);
+}
+
+.formatted-slide-content {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.formatted-slide-image,
+.md-image-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0.22rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-pill);
+    background: var(--bg-section);
+    color: var(--text-light);
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.formatted-image-container,
+.formatted-image-path,
+.formatted-image-text,
+.formatted-email-message,
+.formatted-email-header,
+.formatted-email-body {
+    min-width: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+    box-shadow: var(--shadow-xs);
+}
+
+.formatted-image-container,
+.formatted-image-text,
+.formatted-email-body {
+    padding: 0.9rem;
+}
+
+.formatted-image {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: min(70vh, 44rem);
+    margin-inline: auto;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+}
+
+.formatted-image-path {
+    padding: 0.55rem 0.75rem;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.76rem;
+    overflow-wrap: anywhere;
+}
+
+.formatted-email-message {
+    overflow: hidden;
+}
+
+.formatted-email-header {
+    display: grid;
+    gap: 0.42rem;
+    padding: 0.72rem 0.85rem;
+    border: 0;
+    border-bottom: 1px solid var(--border-light);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--bg-section) 70%, var(--bg-white));
+    box-shadow: none;
+}
+
+.formatted-email-field,
+.formatted-email-subject,
+.formatted-email-index {
+    min-width: 0;
+    color: var(--text-light);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+.formatted-email-subject,
+.formatted-email-index {
+    color: var(--text-heading);
+    font-weight: 760;
+}
+
+.recipient-badge,
+.recipient-from {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    margin: 0.1rem 0.12rem;
+    padding: 0.15rem 0.42rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-pill);
+    background: var(--bg-white);
+    color: var(--text-dark);
+    font-size: 0.76rem;
+    overflow-wrap: anywhere;
+}
+
+.formatted-markdown-content ul,
+.formatted-markdown-content ol {
+    margin: 0 0 0.8rem;
+    padding-inline-start: 1.35rem;
+}
+
+.formatted-markdown-content li + li {
+    margin-top: 0.24rem;
+}
+
+.md-code,
+.formatted-content code {
+    padding: 0.08rem 0.3rem;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xs);
+    background: color-mix(in srgb, var(--bg-section) 86%, var(--bg-white));
+    color: var(--primary-color);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.86em;
+}
+
+.md-link {
+    color: var(--primary-color);
+    font-weight: 640;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+}
+
+.formatted-log-content {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.82rem;
+}
+
+/* Search highlighting shared with content-highlighter.js and legacy previews. */
+.formatted-content mark,
+.content-hl,
+.search-highlight,
+.hl {
+    border-radius: var(--radius-xs);
+    background: color-mix(in srgb, var(--warning-color) 34%, var(--bg-white));
+    color: var(--text-heading);
+    padding: 0.05rem 0.14rem;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+.content-hl.current,
+.search-highlight.current-match,
+.hl.current {
+    background: color-mix(in srgb, var(--primary-color) 27%, var(--bg-white));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent);
 }
 
 .image-load-error {
     display: none;
     padding: 1rem;
-    border: 1px solid var(--border-color, #dee2e6);
-    border-radius: var(--radius-sm, 0.25rem);
-    background: var(--bg-section, #f8f9fa);
-    color: var(--text-muted, #6c757d);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-section);
+    color: var(--text-muted);
+}
+
+body.ia-theme-dark .formatted-page-content,
+body.ia-theme-dark .formatted-table-container,
+body.ia-theme-dark .formatted-slide,
+body.ia-theme-dark .formatted-image-container,
+body.ia-theme-dark .formatted-image-path,
+body.ia-theme-dark .formatted-image-text,
+body.ia-theme-dark .formatted-email-message,
+body.ia-theme-dark .formatted-email-body,
+body.ia-theme-dark .recipient-badge,
+body.ia-theme-dark .sheet-tab,
+body.ia-theme-dark .page-number-chip {
+    background: color-mix(in srgb, var(--bg-white) 96%, #020617);
+}
+
+@media (max-width: 767.98px) {
+    .formatted-excel-content {
+        --sheet-cell-min: 6.2rem;
+        --sheet-max-height: min(58vh, 34rem);
+    }
+
+    .formatted-page-content {
+        padding: 0.9rem;
+    }
+
+    .formatted-page-content p {
+        font-size: 0.9rem;
+        line-height: 1.68;
+    }
 }

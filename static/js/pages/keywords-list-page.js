@@ -139,20 +139,24 @@ if (typeof window.translations === 'undefined') {
     function setupEventListeners() {
         // Search with debounce
         let searchTimeout;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                currentPage = 1;
-                fetchPage(1);
-            }, 300);
-        });
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    currentPage = 1;
+                    fetchPage(1);
+                }, 300);
+            });
+        }
 
         // Page size change
-        perPageSelect.addEventListener('change', () => {
-            currentPerPage = parseInt(perPageSelect.value);
-            currentPage = 1;
-            fetchPage(1);
-        });
+        if (perPageSelect) {
+            perPageSelect.addEventListener('change', () => {
+                currentPerPage = parseInt(perPageSelect.value, 10) || currentPerPage || 10;
+                currentPage = 1;
+                fetchPage(1);
+            });
+        }
     }
 
     function loadCategories() {
@@ -165,6 +169,7 @@ if (typeof window.translations === 'undefined') {
             })
             .then(data => {
                 categories = data || [];
+                if (!categoryFilter) return;
                 categoryFilter.innerHTML = `<option value="">${translations.allCategories || 'All Categories'}</option>`;
                 if (Array.isArray(data)) {
                     data.forEach(cat => {
@@ -179,10 +184,12 @@ if (typeof window.translations === 'undefined') {
                 console.error('Error loading categories:', error);
                 categories = [];
                 // ✅ FIXED: Show user-friendly error message
-                categoryFilter.innerHTML = `
-                    <option value="">${translations.allCategories || 'All Categories'}</option>
-                    <option value="" disabled>Error loading categories</option>
-                `;
+                if (categoryFilter) {
+                    categoryFilter.innerHTML = `
+                        <option value="">${translations.allCategories || 'All Categories'}</option>
+                        <option value="" disabled>Error loading categories</option>
+                    `;
+                }
                 // Show toast notification if available
                 if (typeof showToast === 'function') {
                     showToast('Failed to load categories. Please refresh the page.', 'error');
@@ -280,8 +287,7 @@ if (typeof window.translations === 'undefined') {
             tr.dataset.keywordId = kw.id;
             tr.dataset.keyword = keywordText;
             if (isDuplicate) {
-                tr.classList.add('table-warning');
-                tr.style.borderLeft = '4px solid #f59e0b';
+                tr.classList.add('table-warning', 'keyword-row-merge-candidate');
             }
             
             // ✅ FIXED: Use proper HTML escaping to prevent XSS
@@ -509,9 +515,7 @@ if (typeof window.translations === 'undefined') {
         
         container = document.createElement('div');
         container.id = 'paginationContainer';
-        container.className = 'unified-pagination-container'; // Use unified class to match template
-        container.style.width = '100%'; // Full width
-        container.style.clear = 'both'; // Ensure it's on a new line
+        container.className = 'unified-pagination-container keywords-pagination';
         
         if (insertAfter && insertAfter.parentNode) {
             // Insert directly after the table wrapper/responsive/table
@@ -572,9 +576,9 @@ if (typeof window.translations === 'undefined') {
         url.searchParams.set('sort', currentSort);
         url.searchParams.set('order', currentOrder);
         
-        if (searchInput.value.trim()) url.searchParams.set('q', searchInput.value.trim());
-        if (statusFilter.value) url.searchParams.set('status', statusFilter.value);
-        if (categoryFilter.value) url.searchParams.set('category', categoryFilter.value);
+        if (searchInput?.value?.trim()) url.searchParams.set('q', searchInput.value.trim());
+        if (statusFilter?.value) url.searchParams.set('status', statusFilter.value);
+        if (categoryFilter?.value) url.searchParams.set('category', categoryFilter.value);
 
         // Add cache-busting parameter to ensure fresh data
         url.searchParams.set('_t', Date.now());
@@ -754,7 +758,7 @@ if (typeof window.translations === 'undefined') {
             const start = ((json.page - 1) * json.per_page) + 1;
             const end = start + ((json.keywords || []).length) - 1;
             const total = json.total || 0;
-            const query = searchInput.value.trim();
+            const query = searchInput?.value?.trim() || '';
             
             if (query) {
                 infoEl.textContent = `Found ${total} result${total !== 1 ? 's' : ''} for "${query}" (${start}–${end})`;
@@ -806,7 +810,7 @@ if (typeof window.translations === 'undefined') {
     }
 
     function toggleSelectAll() {
-        const isChecked = selectAllCheckbox.checked;
+        const isChecked = Boolean(selectAllCheckbox?.checked);
         document.querySelectorAll('.keyword-checkbox').forEach(cb => {
             cb.checked = isChecked;
         });
@@ -830,19 +834,19 @@ if (typeof window.translations === 'undefined') {
     // Filter and sort functions
     function applyFilters() {
         currentFilters = {
-            status: statusFilter.value,
-            category: categoryFilter.value
+            status: statusFilter?.value || '',
+            category: categoryFilter?.value || ''
         };
         currentPage = 1;
         
         // ✅ FIXED: Update URL to persist filters
         const url = new URL(window.location);
-        if (statusFilter.value) {
+        if (statusFilter?.value) {
             url.searchParams.set('status', statusFilter.value);
         } else {
             url.searchParams.delete('status');
         }
-        if (categoryFilter.value) {
+        if (categoryFilter?.value) {
             url.searchParams.set('category', categoryFilter.value);
         } else {
             url.searchParams.delete('category');
@@ -860,28 +864,28 @@ if (typeof window.translations === 'undefined') {
             currentSort = field;
             currentOrder = 'asc';
         }
-        sortBySelect.value = currentSort;
-        sortOrderSelect.value = currentOrder;
+        if (sortBySelect) sortBySelect.value = currentSort;
+        if (sortOrderSelect) sortOrderSelect.value = currentOrder;
         updateSortIcons();
         fetchPage(currentPage);
     }
     
     function applySorting() {
-        currentSort = sortBySelect.value;
-        currentOrder = sortOrderSelect.value;
+        currentSort = sortBySelect?.value || currentSort;
+        currentOrder = sortOrderSelect?.value || currentOrder;
         currentPage = 1;
         updateSortIcons();
         fetchPage(1);
     }
 
     function changePageSize() {
-        currentPerPage = parseInt(perPageSelect.value);
+        currentPerPage = parseInt(perPageSelect?.value || currentPerPage || 10, 10);
         currentPage = 1;
         fetchPage(1);
     }
 
     function clearSearch() {
-        searchInput.value = '';
+        if (searchInput) searchInput.value = '';
         currentPage = 1;
         fetchPage(1);
     }
@@ -1578,11 +1582,11 @@ if (typeof window.translations === 'undefined') {
         wordInput.value = '';
         categoryInput.value = '';
         if (selectedCategoryIdInput) selectedCategoryIdInput.value = '';
-        wordResults.style.display = 'none';
+        wordResults.hidden = true;
         wordResults.innerHTML = '';
-        categoryResults.style.display = 'none';
+        categoryResults.hidden = true;
         categoryResults.innerHTML = '';
-        selectedWordsContainer.style.display = 'none';
+        selectedWordsContainer.hidden = true;
         selectedWordsList.innerHTML = '';
         
         // Initialize word search
@@ -1607,7 +1611,7 @@ if (typeof window.translations === 'undefined') {
                 }
                 
                 if (searchTerm.length === 0) {
-                    wordResults.style.display = 'none';
+                    wordResults.hidden = true;
                     wordResults.innerHTML = '';
                     return;
                 }
@@ -1627,7 +1631,7 @@ if (typeof window.translations === 'undefined') {
                         firstItem.classList.add('active');
                     }
                 } else if (e.key === 'Escape') {
-                    wordResults.style.display = 'none';
+                    wordResults.hidden = true;
                 }
             };
             wordInput.addEventListener('keydown', keywordWordKeydownHandler);
@@ -1659,7 +1663,7 @@ if (typeof window.translations === 'undefined') {
                 }
                 
                 if (searchTerm.length === 0) {
-                    categoryResults.style.display = 'none';
+                    categoryResults.hidden = true;
                     categoryResults.innerHTML = '';
                     return;
                 }
@@ -1679,7 +1683,7 @@ if (typeof window.translations === 'undefined') {
                         firstItem.classList.add('active');
                     }
                 } else if (e.key === 'Escape') {
-                    categoryResults.style.display = 'none';
+                    categoryResults.hidden = true;
                 }
             };
             categoryInput.addEventListener('keydown', keywordCategoryKeydownHandler);
@@ -1688,7 +1692,7 @@ if (typeof window.translations === 'undefined') {
         // Search words function
         async function searchWordsForKeyword(searchTerm) {
             if (!searchTerm || searchTerm.length === 0) {
-                wordResults.style.display = 'none';
+                wordResults.hidden = true;
                 return;
             }
             
@@ -1709,7 +1713,7 @@ if (typeof window.translations === 'undefined') {
                 }
             } catch (error) {
                 console.error('Error searching words:', error);
-                wordResults.style.display = 'none';
+                wordResults.hidden = true;
             }
         }
         
@@ -1812,7 +1816,7 @@ if (typeof window.translations === 'undefined') {
                 wordResults.appendChild(createDiv);
             }
             
-            wordResults.style.display = 'block';
+            wordResults.hidden = false;
         }
         
         // Select word function
@@ -1855,7 +1859,7 @@ if (typeof window.translations === 'undefined') {
             }
             
             wordInput.value = '';
-            wordResults.style.display = 'none';
+            wordResults.hidden = true;
             wordInput.focus();
         }
         
@@ -1867,12 +1871,12 @@ if (typeof window.translations === 'undefined') {
             if (!selectedWordsList || !selectedWordsContainer) return;
             
             if (selectedWords.length === 0) {
-                selectedWordsContainer.style.display = 'none';
+                selectedWordsContainer.hidden = true;
                 selectedWordsList.innerHTML = '';
                 return;
             }
             
-            selectedWordsContainer.style.display = 'block';
+            selectedWordsContainer.hidden = false;
             selectedWordsList.innerHTML = selectedWords.map((word, index) => `
                 <span class="badge bg-primary d-flex align-items-center gap-1 archives-selected-word-badge">
                     ${escapeHtml(word.text)}
@@ -1890,7 +1894,7 @@ if (typeof window.translations === 'undefined') {
         // Search categories function
         async function searchCategoriesForKeyword(searchTerm) {
             if (!searchTerm || searchTerm.length === 0) {
-                categoryResults.style.display = 'none';
+                categoryResults.hidden = true;
                 return;
             }
             
@@ -1911,7 +1915,7 @@ if (typeof window.translations === 'undefined') {
                 }
             } catch (error) {
                 console.error('Error searching categories:', error);
-                categoryResults.style.display = 'none';
+                categoryResults.hidden = true;
             }
         }
         
@@ -2009,7 +2013,7 @@ if (typeof window.translations === 'undefined') {
                 categoryResults.appendChild(createDiv);
             }
             
-            categoryResults.style.display = 'block';
+            categoryResults.hidden = false;
         }
         
         // Select category function
@@ -2049,7 +2053,7 @@ if (typeof window.translations === 'undefined') {
             selectedCategoryText = categoryName;
             categoryInput.value = categoryName;
             if (selectedCategoryIdInput) selectedCategoryIdInput.value = categoryId;
-            categoryResults.style.display = 'none';
+            categoryResults.hidden = true;
             categoryInput.focus();
         }
         
@@ -2071,12 +2075,12 @@ if (typeof window.translations === 'undefined') {
                 if (wordInputContainer && wordResults && 
                     !wordInputContainer.contains(target) && 
                     !wordResults.contains(target)) {
-                    wordResults.style.display = 'none';
+                    wordResults.hidden = true;
                 }
                 if (categoryInputContainer && categoryResults && 
                     !categoryInputContainer.contains(target) && 
                     !categoryResults.contains(target)) {
-                    categoryResults.style.display = 'none';
+                    categoryResults.hidden = true;
                 }
             };
             setTimeout(() => {
@@ -2128,15 +2132,15 @@ if (typeof window.translations === 'undefined') {
             if (categoryInput) categoryInput.value = '';
             if (selectedCategoryIdInput) selectedCategoryIdInput.value = '';
             if (wordResults) {
-                wordResults.style.display = 'none';
+                wordResults.hidden = true;
                 wordResults.innerHTML = '';
             }
             if (categoryResults) {
-                categoryResults.style.display = 'none';
+                categoryResults.hidden = true;
                 categoryResults.innerHTML = '';
             }
             if (selectedWordsList) selectedWordsList.innerHTML = '';
-            if (selectedWordsContainer) selectedWordsContainer.style.display = 'none';
+            if (selectedWordsContainer) selectedWordsContainer.hidden = true;
             
             // Reset state
             selectedWords = [];

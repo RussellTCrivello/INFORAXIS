@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error parsing words list page data:', e);
         }
     }
-    
+
     console.log('Words list page loaded');
 });
 
@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
-    
+
     let currentPage = 1;
     let currentPerPage = 10;
     let currentSort = 'usage_count';
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedWords = new Set();
     let wordModal = null;
     let editWordId = null;
-    
+
     // Initialize Bootstrap modal
     function initializeModal() {
         const modalElement = document.getElementById('wordModal');
@@ -58,33 +58,33 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     // Initialize
     function init() {
         const urlParams = new URLSearchParams(window.location.search);
         currentPage = parseInt(urlParams.get('page')) || 1;
-        
+
         if (perPageSelect) {
             currentPerPage = parseInt(perPageSelect.value) || 10;
         }
-        
+
         if (sortBySelect) {
             sortBySelect.value = currentSort;
         }
         if (sortOrderSelect) {
             sortOrderSelect.value = currentOrder;
         }
-        
+
         updateSortIcons();
         createPaginationContainer();
-        
+
         // Only fetch page if tableBody exists
         if (tableBody) {
             fetchPage(currentPage);
         }
-        
+
         setupEventListeners();
-        
+
         // Initialize Bootstrap modal - ensure it's available
         initializeModal();
 
@@ -94,12 +94,12 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => openAddWordModal(), 200);
         }
     }
-    
+
     function updateSortIcons() {
         document.querySelectorAll('[id^="sortIcon-"]').forEach(icon => {
             icon.className = 'bi bi-arrow-down-up';
         });
-        
+
         const activeIcon = document.getElementById(`sortIcon-${currentSort}`);
         if (activeIcon) {
             if (currentOrder === 'asc') {
@@ -109,10 +109,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     function setupEventListeners() {
         let searchTimeout;
-        
+
         if (searchInput) {
             searchInput.addEventListener('input', () => {
                 clearTimeout(searchTimeout);
@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 300);
             });
         }
-        
+
         if (perPageSelect) {
             perPageSelect.addEventListener('change', () => {
                 currentPerPage = parseInt(perPageSelect.value);
@@ -131,43 +131,49 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = String(value == null ? '' : value);
+        return div.innerHTML;
+    }
+
     function renderRows(words, page) {
         if (!tableBody) return;
-        
+
         tableBody.innerHTML = '';
-        
+
         if (!words || words.length === 0) {
             const query = searchInput?.value?.trim() || '';
-            const message = query ? 
-                `${translations.noWordsFound} "${query}".` : 
+            const message = query ?
+                `${translations.noWordsFound} "${query}".` :
                 translations.noWordsYet;
-            
+
             tableBody.innerHTML = `
                 <tr><td colspan="6" class="text-center py-5 text-muted">
                     <i class="bi bi-book display-4 mb-3"></i>
-                    <div>${message}</div>
+                    <div>${escapeHtml(message)}</div>
                 </td></tr>`;
             return;
         }
-        
+
         words.forEach((word, idx) => {
             if (!word || !word.id) return;
-            
+
             const globalIndex = ((page - 1) * currentPerPage) + (idx + 1);
             const tr = document.createElement('tr');
             tr.dataset.wordId = word.id;
-            
+
             tr.innerHTML = `
                 <td>
-                    <input type="checkbox" class="form-check-input word-checkbox" 
+                    <input type="checkbox" class="form-check-input word-checkbox"
                            value="${word.id}" onchange="updateSelection()">
                 </td>
                 <td><span class="badge bg-secondary">${globalIndex}</span></td>
                 <td>
                     <div class="d-flex align-items-center">
                         <span class="word-text" data-word-id="${word.id}">
-                            <strong>${(word.word || '').replace(/</g,'&lt;')}</strong>
+                            <strong>${escapeHtml(word.word || '')}</strong>
                         </span>
                         <button class="btn btn-sm btn-link p-0 ms-1" onclick="editWord(${word.id})" title="${translations.editWord}">
                             <i class="bi bi-pencil"></i>
@@ -188,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>`;
             tableBody.appendChild(tr);
         });
-        
+
         // Update stats
         const activeCount = words.filter(w => w.usage_count > 0).length;
         const unusedCount = words.filter(w => w.usage_count === 0).length;
@@ -197,24 +203,24 @@ document.addEventListener('DOMContentLoaded', function() {
         if (activeEl) activeEl.textContent = activeCount;
         if (unusedEl) unusedEl.textContent = unusedCount;
     }
-    
+
     function renderPaginator(page, total_pages, totalItems = null) {
         // Find or create pagination container
         let paginationContainer = document.querySelector('.pagination-container');
         if (!paginationContainer) {
             paginationContainer = createPaginationContainer();
         }
-        
+
         if (!paginationContainer) {
             console.error('Could not create pagination container');
             return;
         }
-        
+
         // Ensure container has an ID
         if (!paginationContainer.id) {
             paginationContainer.id = 'paginationContainer';
         }
-        
+
         // Get URL parameters to preserve
         const urlParams = {};
         const currentParams = new URLSearchParams(window.location.search);
@@ -223,14 +229,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 urlParams[key] = value;
             }
         });
-        
+
         // Use unified pagination
         import('../modules/rendering/unified-pagination.js').then(module => {
             module.renderUnifiedPagination({
                 currentPage: page,
                 totalPages: total_pages,
                 totalItems: totalItems,
-                pageSize: Number(document.getElementById('perPageSelect')?.value || new URLSearchParams(window.location.search).get('per_page') || 10),
+                pageSize: Number(document.getElementById('perPage')?.value || new URLSearchParams(window.location.search).get('per_page') || currentPerPage || 10),
                 itemLabel: translations.words || 'words',
                 containerId: paginationContainer.id,
                 onPageChange: (targetPage) => {
@@ -251,11 +257,11 @@ document.addEventListener('DOMContentLoaded', function() {
             renderOldPaginator(page, total_pages, paginationContainer);
         });
     }
-    
+
     // Fallback old pagination renderer
     function renderOldPaginator(page, total_pages, paginationContainer) {
         paginationContainer.innerHTML = '';
-        
+
         let pageInfo = paginationContainer.querySelector('.pagination-info');
         if (!pageInfo) {
             pageInfo = document.createElement('div');
@@ -263,18 +269,18 @@ document.addEventListener('DOMContentLoaded', function() {
             paginationContainer.insertBefore(pageInfo, paginationContainer.firstChild);
         }
         pageInfo.textContent = `${translations.page} ${page} ${translations.of} ${total_pages}`;
-        
+
         let pagContainer = paginationContainer.querySelector('ul.pagination');
         if (!pagContainer) {
             pagContainer = createPaginationList();
             paginationContainer.appendChild(pagContainer);
         }
         pagContainer.innerHTML = '';
-        
+
         const windowSize = 2;
         const start = Math.max(1, page - windowSize);
         const end = Math.min(total_pages, page + windowSize);
-        
+
         function addItem(label, p, disabled=false, active=false) {
             const li = document.createElement('li');
             li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
@@ -293,76 +299,73 @@ document.addEventListener('DOMContentLoaded', function() {
             li.appendChild(a);
             pagContainer.appendChild(li);
         }
-        
+
         addItem('<i class="bi bi-chevron-double-left" aria-hidden="true"></i>', 1, page === 1);
         addItem('<i class="bi bi-chevron-left" aria-hidden="true"></i>', Math.max(1, page - 1), page === 1);
-        
+
         if (start > 1) addItem('1', 1);
         if (start > 2) {
-            const li = document.createElement('li'); 
+            const li = document.createElement('li');
             li.className='page-item disabled';
-            li.innerHTML = '<span class="page-link">…</span>'; 
+            li.innerHTML = '<span class="page-link">…</span>';
             pagContainer.appendChild(li);
         }
-        
+
         for (let p = start; p <= end; p++) {
             addItem(String(p), p, false, p === page);
         }
-        
+
         if (end < total_pages - 1) {
-            const li = document.createElement('li'); 
+            const li = document.createElement('li');
             li.className='page-item disabled';
-            li.innerHTML = '<span class="page-link">…</span>'; 
+            li.innerHTML = '<span class="page-link">…</span>';
             pagContainer.appendChild(li);
         }
         if (end < total_pages) addItem(String(total_pages), total_pages);
-        
+
         addItem('<i class="bi bi-chevron-right" aria-hidden="true"></i>', Math.min(total_pages, page + 1), page === total_pages);
         addItem('<i class="bi bi-chevron-double-right" aria-hidden="true"></i>', total_pages, page === total_pages);
     }
-    
+
     function createPaginationContainer() {
         const wordsTable = document.getElementById('wordsTable');
         if (!wordsTable) return null;
-        
+
         const statCard = wordsTable.closest('.stat-card');
         if (!statCard) return null;
-        
-        let container = statCard.querySelector('.pagination-container');
+
+        let container = statCard.querySelector('.unified-pagination-container, .pagination-container');
         if (container) {
-            container.style.display = 'flex';
+            container.classList.add('unified-pagination-container');
             return container;
         }
-        
+
         container = document.createElement('div');
-        container.className = 'd-flex justify-content-between align-items-center mt-3 mb-3 pagination-container';
-        container.style.display = 'flex';
-        container.style.width = '100%';
-        container.style.clear = 'both';
-        
+        container.className = 'unified-pagination-container pagination-container words-pagination';
+
         const tableWrapper = statCard.querySelector('.table-wrapper');
         if (tableWrapper && tableWrapper.parentNode) {
             tableWrapper.parentNode.insertBefore(container, tableWrapper.nextSibling);
         } else {
             statCard.appendChild(container);
         }
-        
+
         return container;
     }
-    
+
     function createPaginationList() {
         const ul = document.createElement('ul');
         ul.className = 'pagination pagination-sm mb-0';
         return ul;
     }
-    
+
     let pendingFetch = null;
     function fetchPage(page=1) {
         currentPage = page;
         if (pendingFetch) pendingFetch.abort();
         const controller = new AbortController();
         pendingFetch = controller;
-        
+
         // Show loading state
         if (tableBody) {
             tableBody.innerHTML = `
@@ -373,7 +376,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="mt-2 text-muted">${translations.loading || 'Loading...'}</div>
                 </td></tr>`;
         }
-        
+
         // Get API URL from page data or use default
         const pageDataEl = document.getElementById('words-list-page-data');
         let apiUrl = '/api/words';
@@ -385,18 +388,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.warn('Error parsing page data, using default API URL');
             }
         }
-        
+
         const url = new URL(apiUrl, window.location.origin);
         url.searchParams.set('page', page);
         url.searchParams.set('per_page', currentPerPage);
         url.searchParams.set('sort', currentSort);
         url.searchParams.set('order', currentOrder);
-        
+
         if (searchInput && searchInput.value.trim()) url.searchParams.set('q', searchInput.value.trim());
         if (statusFilter && statusFilter.value) url.searchParams.set('status', statusFilter.value);
         url.searchParams.set('_t', Date.now());
-        
-        fetch(url.toString(), { 
+
+        fetch(url.toString(), {
             signal: controller.signal,
             cache: 'no-cache',
             headers: {
@@ -410,7 +413,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(json => {
                 if (!tableBody) return;
-                
+
                 if (!json || json.success === false) {
                     tableBody.innerHTML = `
                         <tr><td colspan="6" class="text-center py-5 text-danger">
@@ -419,12 +422,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         </td></tr>`;
                     return;
                 }
-                
+
                 if (json.per_page) {
                     currentPerPage = json.per_page;
                     if (perPageSelect) perPageSelect.value = json.per_page;
                 }
-                
+
                 if (json.sort_by) {
                     currentSort = json.sort_by;
                     if (sortBySelect) sortBySelect.value = currentSort;
@@ -434,11 +437,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (sortOrderSelect) sortOrderSelect.value = currentOrder;
                 }
                 updateSortIcons();
-                
+
                 const words = json.words || [];
                 const pageNum = json.page || 1;
                 const totalPages = json.total_pages || 1;
-                
+
                 renderRows(words, pageNum);
                 renderPaginator(pageNum, totalPages, json.total);
                 updateSearchInfo(json);
@@ -463,7 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .finally(() => { if (pendingFetch === controller) pendingFetch = null; });
     }
-    
+
     function updateSearchInfo(json) {
         const infoEl = document.getElementById('searchResultsInfo');
         if (infoEl) {
@@ -471,7 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const end = start + ((json.words || []).length) - 1;
             const total = json.total || 0;
             const query = searchInput ? searchInput.value.trim() : '';
-            
+
             if (query) {
                 infoEl.textContent = `Found ${total} result${total !== 1 ? 's' : ''} for "${query}" (${start}–${end})`;
             } else {
@@ -479,21 +482,23 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     function updateSelection() {
         const checkboxes = document.querySelectorAll('.word-checkbox:checked');
         selectedWords.clear();
         checkboxes.forEach(cb => selectedWords.add(parseInt(cb.value)));
-        
+
         const hasSelection = selectedWords.size > 0;
-        bulkDeleteBtn.disabled = !hasSelection;
-        bulkUpdateBtn.disabled = !hasSelection;
-        
+        if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
+        if (bulkUpdateBtn) bulkUpdateBtn.disabled = !hasSelection;
+
         const allCheckboxes = document.querySelectorAll('.word-checkbox');
-        selectAllCheckbox.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
-        selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+            selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
+        }
     }
-    
+
     function toggleSelectAll() {
         const isChecked = selectAllCheckbox.checked;
         document.querySelectorAll('.word-checkbox').forEach(cb => {
@@ -501,26 +506,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         updateSelection();
     }
-    
+
     function selectAll() {
         document.querySelectorAll('.word-checkbox').forEach(cb => {
             cb.checked = true;
         });
         updateSelection();
     }
-    
+
     function selectNone() {
         document.querySelectorAll('.word-checkbox').forEach(cb => {
             cb.checked = false;
         });
         updateSelection();
     }
-    
+
     function applyFilters() {
         currentPage = 1;
         fetchPage(1);
     }
-    
+
     function sortBy(field) {
         if (currentSort === field) {
             currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
@@ -528,32 +533,32 @@ document.addEventListener('DOMContentLoaded', function() {
             currentSort = field;
             currentOrder = 'asc';
         }
-        sortBySelect.value = currentSort;
-        sortOrderSelect.value = currentOrder;
+        if (sortBySelect) sortBySelect.value = currentSort;
+        if (sortOrderSelect) sortOrderSelect.value = currentOrder;
         updateSortIcons();
         fetchPage(currentPage);
     }
-    
+
     function applySorting() {
-        currentSort = sortBySelect.value;
-        currentOrder = sortOrderSelect.value;
+        currentSort = sortBySelect?.value || currentSort;
+        currentOrder = sortOrderSelect?.value || currentOrder;
         currentPage = 1;
         updateSortIcons();
         fetchPage(1);
     }
-    
+
     function changePageSize() {
-        currentPerPage = parseInt(perPageSelect.value);
+        currentPerPage = parseInt(perPageSelect?.value || currentPerPage || 10, 10);
         currentPage = 1;
         fetchPage(1);
     }
-    
+
     function clearSearch() {
-        searchInput.value = '';
+        if (searchInput) searchInput.value = '';
         currentPage = 1;
         fetchPage(1);
     }
-    
+
     function openAddWordModal() {
         // Get modal element - try both possible IDs
         let modalElement = document.getElementById('wordModal');
@@ -564,13 +569,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Modal doesn't exist on this page, silently return
             return;
         }
-        
+
         // Check if Bootstrap is available
         if (typeof bootstrap === 'undefined') {
             console.error('Bootstrap is not loaded');
             return;
         }
-        
+
         // Create modal instance (create new each time to avoid timing issues)
         let modal;
         try {
@@ -579,15 +584,15 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error creating Bootstrap modal:', e);
             return;
         }
-        
+
         // Reset form and set title
         editWordId = null;
         const wordInput = document.getElementById('wordInput');
         const wordModalLabel = document.getElementById('wordModalLabel');
-        
+
         if (wordInput) wordInput.value = '';
         if (wordModalLabel) wordModalLabel.innerHTML = '<i class="bi bi-book"></i> ' + translations.addWord;
-        
+
         // Show modal
         try {
             modal.show();
@@ -597,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error showing modal:', e);
         }
     }
-    
+
     function editWord(wordId) {
         fetch(`/api/words/${wordId}`)
             .then(response => response.json())
@@ -608,11 +613,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         alert(translations.errorLoadingWords);
                         return;
                     }
-                    
+
                     editWordId = wordId;
                     document.getElementById('wordInput').value = data.word.word;
                     document.getElementById('wordModalLabel').innerHTML = '<i class="bi bi-pencil"></i> ' + translations.editWord;
-                    
+
                     // Create and show modal
                     try {
                         const modal = new bootstrap.Modal(modalElement);
@@ -631,18 +636,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert(translations.errorLoadingWords);
             });
     }
-    
+
     function submitWord() {
         const wordText = document.getElementById('wordInput').value.trim();
         if (!wordText) {
             alert(translations.wordRequired);
             return;
         }
-        
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         const url = editWordId ? `/api/words/${editWordId}` : '/api/words';
         const method = editWordId ? 'PUT' : 'POST';
-        
+
         fetch(url, {
             method: method,
             headers: {
@@ -679,12 +684,12 @@ document.addEventListener('DOMContentLoaded', function() {
             alert(translations.error);
         });
     }
-    
+
     function bulkDelete() {
         if (selectedWords.size === 0) return;
-        
+
         if (!confirm(`${selectedWords.size} ${translations.deleteSelectedWords}`)) return;
-        
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         fetch('/api/words/bulk-delete', {
             method: 'POST',
@@ -708,27 +713,27 @@ document.addEventListener('DOMContentLoaded', function() {
             alert(translations.errorDeletingWords);
         });
     }
-    
+
     function bulkUpdate() {
         if (selectedWords.size === 0) return;
-        
+
         if (selectedWords.size === 1) {
             const wordId = Array.from(selectedWords)[0];
             editWord(wordId);
             return;
         }
-        
+
         if (confirm(`Multiple words selected. Edit the first word?`)) {
             const wordId = Array.from(selectedWords)[0];
             editWord(wordId);
         }
     }
-    
+
     // Global functions
     window.viewWord = function(id) {
         window.location.href = `/words/${id}`;
     };
-    
+
     window.deleteWord = function(id) {
         if (!confirm(translations.deleteWordConfirm + id + '?')) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -750,7 +755,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(e => alert(translations.error + ': ' + e.message));
     };
-    
+
     window.updateSelection = updateSelection;
     window.toggleSelectAll = toggleSelectAll;
     window.selectAll = selectAll;
@@ -765,7 +770,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.openAddWordModal = openAddWordModal;
     window.editWord = editWord;
     window.submitWord = submitWord;
-    
+
     // Wait for DOM and Bootstrap to be ready - optimized with better checks
     function waitForBootstrap(callback, maxAttempts = 10) {
         const modalElement = document.getElementById('wordModal');
@@ -779,7 +784,7 @@ document.addEventListener('DOMContentLoaded', function() {
             callback();
         }
     }
-    
+
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {

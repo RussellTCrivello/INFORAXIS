@@ -523,6 +523,8 @@
 
 .chart-container-positioned {
     position: relative;
+    min-height: var(--path-chart-height, clamp(20rem, 44vh, 37.5rem));
+    overflow: hidden;
 }
 
 .chart-loading-overlay {
@@ -530,6 +532,7 @@
     inset: 0;
     z-index: 10;
     display: flex;
+    min-height: var(--path-chart-height, clamp(20rem, 44vh, 37.5rem));
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -545,16 +548,11 @@
     padding: 2rem;
 }
 
-.empty-state-chart-md {
-    height: 37.5rem;
-}
-
-.empty-state-chart-lg {
-    height: 40.625rem;
-}
-
+.empty-state-chart-md,
+.empty-state-chart-lg,
 .empty-state-chart-xl {
-    height: 43.75rem;
+    min-height: var(--path-chart-height, clamp(20rem, 44vh, 37.5rem));
+    height: auto;
 }
 
 .expand-placeholder {
@@ -646,4 +644,35 @@
     .path-tree-card .path-tree-container {
         max-height: min(45vh, 24rem);
     }
+}
+
+/* Responsive chart containment governance */
+.chart-container-positioned:has(.path-chart-size-tall),
+.path-chart-size-tall {
+    --path-chart-height: clamp(24rem, 52vh, 43.75rem);
+}
+
+.chart-container-positioned:has(.path-chart-size-wide),
+.path-chart-size-wide {
+    --path-chart-height: clamp(22rem, 48vh, 40.625rem);
+}
+
+.path-chart-size-standard {
+    --path-chart-height: clamp(20rem, 44vh, 37.5rem);
+}
+
+.path-chart-empty-state {
+    min-height: var(--path-chart-height, clamp(20rem, 44vh, 37.5rem));
+}
+
+.chart-canvas-loading {
+    display: none !important;
+    opacity: 0;
+}
+
+.chart-canvas-ready {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    opacity: 1;
 }
