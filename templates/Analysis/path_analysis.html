@@ -80,9 +80,9 @@
     <div class="path-layout">
         <!-- Path Tree Sidebar -->
         <div class="path-tree-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h3 style="margin: 0;"><i class="bi bi-diagram-3"></i> {{ _('Directory Structure') }}</h3>
-                <div style="display: flex; gap: 0.5rem;">
+            <div class="path-tree-header">
+                <h3 class="section-title-inline"><i class="bi bi-diagram-3"></i> {{ _('Directory Structure') }}</h3>
+                <div class="path-tree-actions">
                     <button id="expandAllBtn" class="tree-controls-btn" title="{{ _('Expand All') }}">
                         <i class="bi bi-arrows-expand"></i> {{ _('Expand') }}
                     </button>
@@ -93,7 +93,7 @@
             </div>
             
             <!-- Filters Section -->
-            <div class="section-card" style="margin-bottom: 1rem;">
+            <div class="section-card path-filter-card">
                 <div class="section-header">
                     <div>
                         <i class="bi bi-funnel me-2"></i>
@@ -104,7 +104,7 @@
                     </span>
                 </div>
                 
-                <div class="filter-controls-grid" style="grid-template-columns: 1fr;">
+                <div class="filter-controls-grid filter-controls-grid-single">
                     <!-- Source Filter -->
                     <div class="filter-group">
                         <label for="sourceFilter" class="filter-label">
@@ -172,7 +172,7 @@
 
                 <!-- Analytics Section -->
                 <div class="analytics-section" id="analyticsSection">
-                    <h3 style="margin-bottom: 1.5rem;"><i class="bi bi-bar-chart"></i> {{ _('Folder Analytics') }}</h3>
+                    <h3 class="analytics-title"><i class="bi bi-bar-chart"></i> {{ _('Folder Analytics') }}</h3>
                     
                     <div class="charts-grid">
                         <!-- File Type Distribution -->
@@ -193,50 +193,50 @@
                     </div>
 
                     <!-- Classification Analysis -->
-                    <div class="chart-card" style="margin-bottom: 2rem;">
+                    <div class="chart-card chart-card-spaced">
                         <h3><i class="bi bi-tags"></i> {{ _('Classification Distribution') }}</h3>
-                        <div id="classificationSummary" style="display: flex; justify-content: space-around; padding: 1rem; background: var(--bg-section); border-radius: 0.5rem; margin-bottom: 1rem;">
-                            <div style="text-align: center;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--primary-color);" id="totalFilesCount">0</div>
-                                <div style="font-size: 0.875rem; color: var(--text-light);">{{ _('Total Files') }}</div>
+                        <div id="classificationSummary" class="metric-summary-strip">
+                            <div class="metric-summary-item">
+                                <div class="metric-summary-value is-primary" id="totalFilesCount">0</div>
+                                <div class="metric-summary-label">{{ _('Total Files') }}</div>
                             </div>
-                            <div style="text-align: center;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--success-color);" id="categorizedFilesCount">0</div>
-                                <div style="font-size: 0.875rem; color: var(--text-light);">{{ _('Categorized') }}</div>
+                            <div class="metric-summary-item">
+                                <div class="metric-summary-value is-success" id="categorizedFilesCount">0</div>
+                                <div class="metric-summary-label">{{ _('Categorized') }}</div>
                             </div>
-                            <div style="text-align: center;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--danger-color);" id="uncategorizedFilesCount">0</div>
-                                <div style="font-size: 0.875rem; color: var(--text-light);">{{ _('Uncategorized') }}</div>
+                            <div class="metric-summary-item">
+                                <div class="metric-summary-value is-danger" id="uncategorizedFilesCount">0</div>
+                                <div class="metric-summary-label">{{ _('Uncategorized') }}</div>
                             </div>
                         </div>
                         <div class="chart-container">
                             <canvas id="classificationChart"></canvas>
                         </div>
-                        <div id="classificationDetails" style="margin-top: 1.5rem;"></div>
+                        <div id="classificationDetails" class="analytics-details"></div>
                     </div>
 
                     <!-- Category Words Analysis -->
-                    <div class="chart-card" style="margin-bottom: 2rem;">
+                    <div class="chart-card chart-card-spaced">
                         <h3><i class="bi bi-diagram-3"></i> {{ _('Category Words Breakdown') }}</h3>
-                        <div id="categoryWordsSummary" style="display: flex; justify-content: space-around; padding: 1rem; background: var(--bg-section); border-radius: 0.5rem; margin-bottom: 1rem;">
-                            <div style="text-align: center;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--primary-color);" id="totalCategoriesCount">0</div>
-                                <div style="font-size: 0.875rem; color: var(--text-light);">{{ _('Total Categories') }}</div>
+                        <div id="categoryWordsSummary" class="metric-summary-strip">
+                            <div class="metric-summary-item">
+                                <div class="metric-summary-value is-primary" id="totalCategoriesCount">0</div>
+                                <div class="metric-summary-label">{{ _('Total Categories') }}</div>
                             </div>
-                            <div style="text-align: center;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--success-color);" id="totalCategoryWordsCount">0</div>
-                                <div style="font-size: 0.875rem; color: var(--text-light);">{{ _('Total Words') }}</div>
+                            <div class="metric-summary-item">
+                                <div class="metric-summary-value is-success" id="totalCategoryWordsCount">0</div>
+                                <div class="metric-summary-label">{{ _('Total Words') }}</div>
                             </div>
-                            <div style="text-align: center;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--warning-color);" id="totalCategoryFilesCount">0</div>
-                                <div style="font-size: 0.875rem; color: var(--text-light);">{{ _('Files Analyzed') }}</div>
+                            <div class="metric-summary-item">
+                                <div class="metric-summary-value is-warning" id="totalCategoryFilesCount">0</div>
+                                <div class="metric-summary-label">{{ _('Files Analyzed') }}</div>
                             </div>
                         </div>
                         <div id="categoryWordsDetails"></div>
                     </div>
 
                     <!-- Word Frequency -->
-                    <div class="charts-grid" style="margin-bottom: 2rem;">
+                    <div class="charts-grid charts-grid-spaced">
                         <div class="chart-card">
                             <h3><i class="bi bi-bar-chart-fill"></i> {{ _('Top Keywords (Bar Chart)') }}</h3>
                             <div class="chart-container">
@@ -265,13 +265,13 @@
 
                 <!-- Files in Path -->
                 <div class="files-section" id="filesSection">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                        <h3 style="margin: 0;"><i class="bi bi-files"></i> {{ _('Files in This Folder') }}</h3>
-                        <small id="scrollHint" style="color: var(--text-light); display: none;">
+                    <div class="files-section-header">
+                        <h3 class="section-title-inline"><i class="bi bi-files"></i> {{ _('Files in This Folder') }}</h3>
+                        <small id="scrollHint" class="scroll-hint" style="display: none;">
                             <i class="bi bi-arrows-expand"></i> {{ _('Scroll horizontally for more') }}
                         </small>
                     </div>
-                    <div class="files-grid" id="filesGrid" style="max-height: 600px; overflow-y: auto; overflow-x: hidden; padding-right: 0.5rem;">
+                    <div class="files-grid files-grid-scroll" id="filesGrid">
                         <div class="loading-state">
                             <div class="spinner"></div>
                             <p>{{ _('Loading files...') }}</p>
@@ -282,20 +282,20 @@
 
             <!-- Empty State (shown when no path is selected) -->
             <div class="path-details-card" id="emptyState">
-                <div class="empty-state" style="min-height: 400px;">
-                    <i class="bi bi-folder" style="font-size: 4rem;"></i>
+                <div class="empty-state path-empty-prompt">
+                    <i class="bi bi-folder path-empty-icon"></i>
                     <h3>{{ _('Select a Directory to Begin') }}</h3>
-                    <p style="max-width: 500px; margin-top: 0.5rem;">
+                    <p class="path-empty-copy">
                         {{ _('Click on any folder name in the directory tree on the left to view:') }}
                     </p>
-                    <ul style="text-align: left; margin-top: 1rem; color: var(--text-light);">
+                    <ul class="path-empty-list">
                         <li><i class="bi bi-bar-chart-line me-2 text-primary" aria-hidden="true"></i>{{ _('File statistics and metrics') }}</li>
                         <li><i class="bi bi-pie-chart me-2 text-primary" aria-hidden="true"></i>{{ _('File type distribution charts') }}</li>
                         <li><i class="bi bi-tags me-2 text-primary" aria-hidden="true"></i>{{ _('Top keywords from folder contents') }}</li>
                         <li><i class="bi bi-calendar3 me-2 text-primary" aria-hidden="true"></i>{{ _('File creation timeline') }}</li>
                         <li><i class="bi bi-folder2-open me-2 text-primary" aria-hidden="true"></i>{{ _('All files in the folder') }}</li>
                     </ul>
-                    <p style="margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-muted);">
+                    <p class="path-empty-tip">
                         <strong>{{ _('Tip:') }}</strong> {{ _('Click the') }} <i class="bi bi-chevron-right"></i> {{ _('button to expand folders and see subfolders') }}
                     </p>
                 </div>

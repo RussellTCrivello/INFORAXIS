@@ -1,39 +1,67 @@
-.tab-content {
-    display: block !important;
+/* File detail: cleaned structural layout; shared enterprise visuals are global. */
+
+.file-detail-grid,
+.file-detail-sections {
+    display: grid;
+    gap: 1rem;
 }
 
-.tab-content .tab-pane {
-    display: none;
+.file-detail-header,
+.file-detail-card,
+.metadata-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+    box-shadow: var(--shadow-xs);
 }
 
-.tab-content .tab-pane.active, .tab-content .tab-pane.show {
-    display: block;
+.file-detail-header,
+.file-detail-card,
+.metadata-card {
+    padding: 1rem;
 }
 
-@media (max-width: 991.98px) {
-    .tab-content {
-        padding: 1rem;
-    }
-    .tab-content .tab-pane {
-        padding: 0.875rem;
-    }
+.content-viewer {
+    width: 100%;
+    overflow-x: auto;
 }
 
-@media (max-width: 767.98px) {
-    .tab-content {
-        padding: 0.875rem;
-    }
-    .tab-content .tab-pane {
-        padding: 0.75rem;
-    }
+.content-text-wrap {
+    width: 100%;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
-@media (max-width: 575.98px) {
-    .tab-content {
-        padding: 0.75rem;
-    }
-    .tab-content .tab-pane {
-        padding: 0.625rem;
-    }
+.content-preformatted {
+    margin: 0;
+    padding: 1rem;
+    font-family: inherit;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
+.page-jump-input {
+    width: 80px;
+}
+
+.progress-slim {
+    height: 6px;
+}
+
+.break-anywhere {
+    word-break: break-all;
+}
+
+.modal-content-text-pre {
+    margin: 0;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.analysis-section-divider {
+    margin: 1rem 0;
+    border-color: var(--border-color, #e2e8f0);
+}

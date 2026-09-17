@@ -203,8 +203,8 @@
                 </div>
                 <div class="results-section">
                     <div class="results-header">
-                        <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">{{ _('File Types Chart') }}</h3>
-                        <span class="results-count" id="files-chart-count" aria-live="polite" style="font-size: 1rem; font-weight: 500;">-</span>
+                        <h3 class="dashboard-chart-title">{{ _('File Types Chart') }}</h3>
+                        <span class="results-count dashboard-chart-count" id="files-chart-count" aria-live="polite">-</span>
                     </div>
                     <div class="chart-container-layout" role="img" aria-label="{{ _('File types distribution chart') }}">
                         <canvas id="files-chart"></canvas>
@@ -376,7 +376,7 @@
                     </div>
                 </div>
             </div>
-            <div class="combined-view" style="margin-top: 2rem;">
+            <div class="combined-view combined-view-spaced">
                 <div class="results-section">
                     <div class="results-header">
                         <h3>{{ _('Size Distribution Chart') }}</h3>
@@ -488,7 +488,7 @@
                 <div id="words-results" aria-live="polite" aria-busy="false">
                     <div class="skeleton-loader skeleton-table"></div>
                 </div>
-                <div class="words-chart-container" id="words-chart-container" style="display: none; min-height: 500px; height: 500px; background: var(--bg-white); border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid var(--border-color); position: relative; max-width: 100%; width: 100%; box-sizing: border-box;" role="img" aria-label="{{ _('Words distribution chart') }}">
+                <div class="words-chart-container" id="words-chart-container" style="display: none;" role="img" aria-label="{{ _('Words distribution chart') }}">
                     <canvas id="words-chart"></canvas>
                 </div>
             </div>

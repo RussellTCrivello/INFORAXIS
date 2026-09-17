@@ -225,10 +225,10 @@
     <!-- Table View -->
     <div class="view-table">
         <div class="table-wrapper category-words-table-wrapper">
-            <table class="table table-hover align-middle category-words-table" id="categoryWordsTable" style="width: 100%;">
+            <table class="table table-hover align-middle category-words-table" id="categoryWordsTable">
                 <thead>
                     <tr>
-                        <th style="width:70px">#</th>
+                        <th class="col-id">#</th>
                         <th>
                             <div class="d-flex align-items-center">
                                 <span>{{ _('Word') }}</span>
@@ -237,7 +237,7 @@
                                 </button>
                             </div>
                         </th>
-                        <th style="width:200px">{{ _('Actions') }}</th>
+                        <th class="col-actions">{{ _('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody id="categoryWordsTableBody">
@@ -325,7 +325,7 @@
     
     <!-- Empty State -->
     <div id="emptyState" class="text-center p-5" style="display: none;">
-        <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+        <i class="bi bi-inbox empty-state-icon"></i>
         <p class="text-muted mt-3">{{ _('No words found') }}</p>
         <button type="button" class="btn btn-primary mt-3" onclick="openAddWordModal()">
             <i class="bi bi-plus-circle me-2"></i>

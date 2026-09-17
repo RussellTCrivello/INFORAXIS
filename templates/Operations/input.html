@@ -23,8 +23,7 @@
           </ul>
 
           <div id="uploadSection">
-            <div id="dropZone" class="border border-2 border-dashed rounded p-5 text-center text-muted"
-                 style="cursor:pointer;">
+            <div id="dropZone" class="border border-2 border-dashed rounded p-5 text-center text-muted interactive-drop-zone">
               <i class="bi bi-cloud-arrow-up fs-1 d-block mb-2"></i>
               {{ _('Drag & drop files here, or click to browse') }}
               <input type="file" id="fileInput" multiple class="d-none">
@@ -56,7 +55,7 @@
             </div>
           </div>
           <details class="mt-2">
-            <summary class="text-primary" style="cursor:pointer;">{{ _('Create new source / side') }}</summary>
+            <summary class="text-primary disclosure-summary">{{ _('Create new source / side') }}</summary>
             <div class="row g-2 mt-2" id="newSourceForm">
               <div class="col-md-6"><input id="nsName" class="form-control" placeholder="{{ _('Source name *') }}"></div>
               <div class="col-md-6"><input id="nsJob" class="form-control" placeholder="{{ _('Job / role *') }}"></div>

@@ -138,7 +138,7 @@ function highlightModalMatches() {
         
         const matchText = fullContent.substring(match.index, match.index + match.length);
         const highlightClass = index === modalCurrentSearchIndex ? 'search-highlight current-match' : 'search-highlight';
-        highlightedContent += `<span class="${highlightClass}" style="background-color: #ffeb3b; padding: 2px 0; border-radius: 2px;">${escapeHtml(matchText)}</span>`;
+        highlightedContent += `<span class="${highlightClass}">${escapeHtml(matchText)}</span>`;
         
         lastIndex = match.index + match.length;
     });

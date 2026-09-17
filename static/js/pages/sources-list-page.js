@@ -278,7 +278,7 @@ function renderSourcesTable(records) {
             <table class="table table-hover align-middle sources-table" id="sourcesTable" data-ia-table="sources" data-ia-title="Sources" data-ia-sort="true" data-ia-toolbar="true">
                 <thead>
                     <tr>
-                        <th style="width:44px"><input type="checkbox" onchange="this.closest('table').querySelectorAll('.source-checkbox').forEach(cb => cb.checked = this.checked); updateBulkButtons();"></th>
+                        <th class="ia-select-column"><input type="checkbox" onchange="this.closest('table').querySelectorAll('.source-checkbox').forEach(cb => cb.checked = this.checked); updateBulkButtons();"></th>
                         <th>ID</th><th>${escapeHtml(translations.source || 'Source')}</th><th>${escapeHtml(translations.jobType || 'Job/Type')}</th><th>${escapeHtml(translations.importance || 'Importance')}</th><th>${escapeHtml(translations.documents || 'Documents')}</th><th>${escapeHtml(translations.location || 'Location')}</th><th>${escapeHtml(translations.access || 'Access')}</th><th>${escapeHtml(translations.category || 'Category')}</th><th>${escapeHtml(translations.actions || 'Actions')}</th>
                     </tr>
                 </thead>

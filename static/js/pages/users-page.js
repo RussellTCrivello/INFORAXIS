@@ -64,7 +64,7 @@ function renderUserRow(u) {
             <td>
                 ${isSelf
                     ? `<span class="badge ${roleBadge}">${escapeHtml(u.role)}</span>`
-                    : `<select class="form-select form-select-sm user-role-select" style="max-width: 130px;" onchange="updateUser(${u.id})" aria-label="Role for ${escapeHtml(u.username)}">
+                    : `<select class="form-select form-select-sm user-role-select" onchange="updateUser(${u.id})" aria-label="Role for ${escapeHtml(u.username)}">
                         ${['viewer', 'analyst', 'admin'].map(r =>
                             `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r.charAt(0).toUpperCase() + r.slice(1)}</option>`
                         ).join('')}

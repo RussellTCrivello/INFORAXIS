@@ -480,6 +480,7 @@ td[data-ia-type="actions"] .btn,
     background: color-mix(in srgb, var(--bg-white, #ffffff) 92%, var(--bg-section, #f8fafc));
     box-shadow: var(--ia-table-shadow);
     padding: 0.9rem;
+    margin-bottom: 1rem;
 }
 
 .filter-controls-grid {
@@ -1772,4 +1773,256 @@ body.ia-command-open {
 .page-item.disabled .page-link {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   Fixed-control / scroll-body contract
+   --------------------------------------------------------------------------
+   Toolbars, filters, sorting controls, and pagination stay anchored in their
+   workspaces. Tables, generated result sets, cards, and rows own the scrolling.
+*/
+:root {
+    --ia-sticky-offset: calc(var(--topbar-height, 52px) + 0.75rem);
+    --ia-data-scroll-max-block: min(68vh, 54rem);
+    --ia-modal-scroll-max-block: min(58vh, 38rem);
+}
+
+.ia-data-scroll-region,
+.ia-table-scroll,
+.table-wrapper,
+.table-responsive {
+    max-height: var(--ia-data-scroll-max-block);
+    min-height: 0;
+    overscroll-behavior: contain;
+}
+
+.ia-table-scroll,
+.table-wrapper,
+.table-responsive {
+    overflow: auto;
+}
+
+.modal .ia-data-scroll-region,
+.modal .ia-table-scroll,
+.modal .table-wrapper,
+.modal .table-responsive,
+.archives-modal .ia-data-scroll-region {
+    max-height: var(--ia-modal-scroll-max-block);
+}
+
+.ia-table-workbench,
+.ia-fixed-control-surface {
+    position: sticky;
+    top: var(--ia-sticky-offset);
+    z-index: 24;
+    flex: 0 0 auto;
+    backdrop-filter: blur(16px);
+}
+
+.ia-table-workbench {
+    box-shadow: var(--ia-table-sticky-shadow);
+}
+
+.ia-fixed-control-surface {
+    background: color-mix(in srgb, var(--bg-white, #fff) 92%, transparent);
+}
+
+.ia-scroll-framed-section,
+.results-section,
+.search-results-section {
+    display: flex;
+    flex-direction: column;
+    max-height: min(78vh, 60rem);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.ia-fixed-control-row,
+.results-header,
+.section-header {
+    flex: 0 0 auto;
+}
+
+.ia-scroll-framed-section > .ia-data-scroll-region,
+.results-section > .ia-data-scroll-region,
+.search-results-section > .ia-data-scroll-region,
+.results-container,
+.similar-groups-container,
+.file-reports-grid,
+.notifications-list {
+    min-height: 0;
+    overflow: auto;
+}
+
+.results-container,
+.similar-groups-container,
+.file-reports-grid,
+.notifications-list {
+    max-height: var(--ia-data-scroll-max-block);
+    overscroll-behavior: contain;
+}
+
+.word-search-results,
+.category-search-results,
+[id$="SearchResults"] {
+    max-height: 16rem;
+    overflow: auto !important;
+}
+
+.pagination-container,
+.pagination-wrapper,
+.paging-controls,
+.unified-pagination-container,
+.cursor-pagination-container {
+    position: relative;
+    z-index: 12;
+    flex: 0 0 auto;
+    background: color-mix(in srgb, var(--bg-light, #f8fafc) 88%, transparent);
+}
+
+@media (max-width: 991.98px) {
+    :root {
+        --ia-sticky-offset: 0.75rem;
+        --ia-data-scroll-max-block: min(70vh, 42rem);
+    }
+
+    .ia-table-workbench,
+    .ia-fixed-control-surface {
+        top: 0.5rem;
+    }
+}
+
+.search-results-summary,
+.search-result-meta,
+.search-page-status {
+    color: var(--text-light, #64748b);
+    font-size: 0.875rem;
+}
+
+.search-result-meta {
+    margin-top: 0.25rem;
+}
+
+.search-result-meta-item {
+    margin-inline-end: 1rem;
+}
+
+.search-result-card {
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+}
+
+.search-result-title {
+    margin-bottom: 0.25rem;
+    color: var(--text-heading, #0f172a);
+    font-weight: 700;
+}
+
+.search-results-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.search-page-status {
+    display: flex;
+    align-items: center;
+    padding-inline: 1rem;
+}
+
+.section-spaced {
+    margin-bottom: 1rem;
+}
+
+.search-empty-state {
+    margin-top: 1rem;
+}
+
+.ia-select-column {
+    width: 2.75rem;
+}
+
+.modal .ia-table-workbench,
+.modal .ia-fixed-control-surface {
+    top: 0;
+    z-index: 6;
+}
+
+.modal-state {
+    padding: 2rem;
+    color: var(--text-muted, #64748b);
+    text-align: center;
+}
+
+.modal-state-error {
+    color: var(--danger-color, #ef4444);
+}
+
+.ia-spin {
+    animation: spin 1s linear infinite;
+}
+
+.archives-selected-word-badge {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.archives-selected-word-remove {
+    font-size: 0.6rem;
+}
+
+.autocomplete-container {
+    position: relative;
+}
+
+.autocomplete-dropdown {
+    z-index: 1000;
+    max-height: 18.75rem;
+    overflow-y: auto;
+    margin-top: 0.125rem;
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: var(--radius-md, 0.375rem);
+    background: var(--bg-white, #fff);
+    box-shadow: var(--shadow-lg, 0 0.5rem 1rem rgba(0, 0, 0, 0.15));
+}
+
+.autocomplete-item {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border-light, #f0f0f0);
+    cursor: pointer;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+    background-color: var(--bg-section, #f8f9fa);
+}
+
+.autocomplete-item:last-child {
+    border-bottom: 0;
+}
+
+.autocomplete-item-type,
+.autocomplete-item-count {
+    color: var(--text-muted, #6c757d);
+    font-size: 0.75rem;
+}
+
+.autocomplete-item-type {
+    margin-inline-start: 0.5rem;
+}
+
+.autocomplete-item-count {
+    float: right;
+}
+
+.search-highlight {
+    border-radius: 0.2rem;
+    background-color: color-mix(in srgb, var(--warning-color, #facc15) 28%, transparent);
+    padding: 0.1rem 0.2rem;
+}
+
+.preview-scroll-pane {
+    max-height: 31.25rem;
+    overflow-y: auto;
 }

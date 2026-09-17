@@ -657,9 +657,9 @@ async function renderPreviewBody(body, previewData) {
 
         if (formatted) {
             ensureFormattedContentStyles();
-            content = `<div class="formatted-content-wrapper" style="max-height: 500px; overflow-y: auto;">${formatted}</div>`;
+            content = `<div class="formatted-content-wrapper preview-scroll-pane">${formatted}</div>`;
         } else {
-            content = `<pre class="bg-light p-3" style="max-height: 500px; overflow-y: auto;">${escapeHtml(text)}</pre>`;
+            content = `<pre class="bg-light p-3 preview-scroll-pane">${escapeHtml(text)}</pre>`;
         }
     } else {
         content = `<p class="text-muted">${previewData.message || 'Preview not available'}</p>`;

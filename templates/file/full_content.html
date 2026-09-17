@@ -102,10 +102,10 @@
                 <span class="badge bg-primary">{{ start_char or 1 }}–{{ end_char or (content|length if content) }} {{ _('of') }} {{ total_chars or 0 }}</span>
                 <div class="d-none d-md-flex align-items-center gap-2">
                     <i class="bi bi-arrows-move"></i>
-                    <input type="range" min="0" max="{{ total_chars or 0 }}" value="{{ start_char or 1 }}" class="form-range" id="rangeJump" style="width: 220px;">
+                    <input type="range" min="0" max="{{ total_chars or 0 }}" value="{{ start_char or 1 }}" class="form-range range-jump" id="rangeJump">
                 </div>
             </div>
-            <div class="input-group" style="max-width:520px;">
+            <div class="input-group full-content-search">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
                 <input type="text" id="q" class="form-control" placeholder="{{ _('Search... (supports whole word, case)') }}" value="{{ search_query }}">
                 <button class="btn btn-outline-secondary" id="btnPrev"><i class="bi bi-arrow-up"></i></button>
@@ -121,9 +121,8 @@
             <div id="reader" class="reader" 
                  data-file-type="{{ file[4] if file|length > 4 else '' }}" 
                  data-file-path="{{ file[2] if file|length > 2 else '' }}"
-                 data-file-id="{{ file[0] if file|length > 0 else 0 }}"
-                 style="width: 100%; overflow-x: auto;">
-                <div id="content" class="content pre-wrap formatted-content-wrapper" style="width: 100%; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; padding: 1rem;"></div>
+                 data-file-id="{{ file[0] if file|length > 0 else 0 }}">
+                <div id="content" class="content pre-wrap formatted-content-wrapper content-text-wrap content-reader-body"></div>
                 <div id="sentinel" class="sentinel text-center text-muted py-3">{{ _('Loading…') }}</div>
             </div>
         </div>
@@ -131,7 +130,7 @@
             <div class="small text-muted" id="status">{{ _('Ready') }}</div>
             <div class="d-flex align-items-center gap-2">
                 <label class="small text-muted">{{ _('Chunk size') }} </label>
-                <select id="chunkSize" class="form-select form-select-sm" style="width:auto;">
+                <select id="chunkSize" class="form-select form-select-sm per-page-select">
                     <option value="20000">20k</option>
                     <option value="50000" selected>50k</option>
                     <option value="100000">100k</option>

@@ -237,7 +237,7 @@ function renderSidesTable(records) {
             <table class="table table-hover align-middle sides-table" id="sidesTable" data-ia-table="sides" data-ia-title="Sides" data-ia-sort="true" data-ia-toolbar="true">
                 <thead>
                     <tr>
-                        <th style="width:44px"><input type="checkbox" onchange="this.closest('table').querySelectorAll('.side-checkbox').forEach(cb => cb.checked = this.checked); updateBulkButtons();"></th>
+                        <th class="ia-select-column"><input type="checkbox" onchange="this.closest('table').querySelectorAll('.side-checkbox').forEach(cb => cb.checked = this.checked); updateBulkButtons();"></th>
                         <th>ID</th><th>${escapeHtml(translations.side || 'Side')}</th><th>${escapeHtml(translations.importance || 'Importance')}</th><th>${escapeHtml(translations.sources || 'Sources')}</th><th>${escapeHtml(translations.documents || 'Documents')}</th><th>${escapeHtml(translations.created || 'Created')}</th><th>${escapeHtml(translations.actions || 'Actions')}</th>
                     </tr>
                 </thead>

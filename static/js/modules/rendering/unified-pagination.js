@@ -174,7 +174,7 @@ export function renderUnifiedPagination(options) {
         html += '<div class="unified-pagination-jump">';
         html += `<label for="${jumpId}" class="visually-hidden">Jump to page</label>`;
         html += `<input type="number" id="${jumpId}" class="form-control form-control-sm unified-pagination-jump-input" `;
-        html += `min="1" max="${totalPagesFinal}" value="${page}" placeholder="Page" style="width: 70px;" `;
+        html += `min="1" max="${totalPagesFinal}" value="${page}" placeholder="Page" `;
         html += `data-total-pages="${totalPagesFinal}">`;
         html += '<button type="button" class="btn btn-sm btn-outline-primary unified-pagination-jump-btn" ';
         html += `data-container-id="${containerId}" aria-label="Go to page">`;

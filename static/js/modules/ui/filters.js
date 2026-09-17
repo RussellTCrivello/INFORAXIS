@@ -328,7 +328,7 @@ async function performComprehensiveSearch(query) {
                         <div class="section-label">
                             <i class="bi bi-search"></i> ${translations.searchResults || 'Search Results'}
                         </div>
-                        <div style="color: var(--text-light); font-size: 0.875rem;">
+                        <div class="search-results-summary">
                             ${data.pagination?.total || 0} ${translations.resultsFound || 'results found'} for "${escapeHtml(query)}"
                         </div>
                     </div>
@@ -379,42 +379,42 @@ async function performComprehensiveSearch(query) {
                         case 'file':
                             resultLink = `/file/${result.id}`;
                             resultDetails = `
-                                <div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;">
-                                    <span style="margin-right: 1rem;"><i class="bi bi-building"></i> ${escapeHtml(result.source_name || 'Unknown')}</span>
-                                    <span style="margin-right: 1rem;"><i class="bi bi-diagram-3"></i> ${escapeHtml(result.side_name || 'Unknown')}</span>
+                                <div class="search-result-meta">
+                                    <span class="search-result-meta-item"><i class="bi bi-building"></i> ${escapeHtml(result.source_name || 'Unknown')}</span>
+                                    <span class="search-result-meta-item"><i class="bi bi-diagram-3"></i> ${escapeHtml(result.side_name || 'Unknown')}</span>
                                     <span><i class="bi bi-calendar"></i> ${result.date || 'N/A'}</span>
                                 </div>
                             `;
                             break;
                         case 'category':
                             resultLink = `#category/${result.id}`;
-                            resultDetails = `<div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;"><i class="bi bi-file-earmark"></i> ${result.file_count || 0} files</div>`;
+                            resultDetails = `<div class="search-result-meta"><i class="bi bi-file-earmark"></i> ${result.file_count || 0} files</div>`;
                             break;
                         case 'keyword':
                             resultLink = `#keywords/${result.id}`;
-                            resultDetails = `<div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;"><i class="bi bi-file-earmark"></i> Used in ${result.usage_count || 0} files</div>`;
+                            resultDetails = `<div class="search-result-meta"><i class="bi bi-file-earmark"></i> Used in ${result.usage_count || 0} files</div>`;
                             break;
                         case 'source':
                             resultLink = `#sources/${result.id}`;
-                            resultDetails = `<div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;"><i class="bi bi-briefcase"></i> ${escapeHtml(result.job || 'N/A')}</div>`;
+                            resultDetails = `<div class="search-result-meta"><i class="bi bi-briefcase"></i> ${escapeHtml(result.job || 'N/A')}</div>`;
                             break;
                         case 'side':
                             resultLink = `#sides/${result.id}`;
-                            resultDetails = `<div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;"><i class="bi bi-hash"></i> ${result.hash_count || 0} hashes</div>`;
+                            resultDetails = `<div class="search-result-meta"><i class="bi bi-hash"></i> ${result.hash_count || 0} hashes</div>`;
                             break;
                         case 'word':
                             resultLink = `#word/${result.id}`;
-                            resultDetails = `<div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;"><i class="bi bi-file-earmark"></i> ${result.file_count || 0} files</div>`;
+                            resultDetails = `<div class="search-result-meta"><i class="bi bi-file-earmark"></i> ${result.file_count || 0} files</div>`;
                             break;
                         case 'title':
                             resultLink = result.path_id ? `/file/${result.path_id}` : '#';
-                            resultDetails = `<div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;">${result.file_name ? escapeHtml(result.file_name) : ''}</div>`;
+                            resultDetails = `<div class="search-result-meta">${result.file_name ? escapeHtml(result.file_name) : ''}</div>`;
                             break;
                     }
                     
                     html += `
-                        <div class="file-card" style="border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem; cursor: pointer;" onclick="window.location.href='${resultLink}'">
-                            <div style="font-weight: 600; margin-bottom: 0.25rem;">
+                        <div class="file-card search-result-card" onclick="window.location.href='${resultLink}'">
+                            <div class="search-result-title">
                                 <i class="bi ${typeInfo.icon} me-2"></i>
                                 ${escapeHtml(resultName)}
                             </div>
@@ -433,12 +433,12 @@ async function performComprehensiveSearch(query) {
             if (data.pagination && data.pagination.total_pages > 1) {
                 html += `
                     <div class="section">
-                        <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
+                        <div class="search-results-pagination">
                 `;
                 if (data.pagination.has_prev) {
                     html += `<button class="btn btn-outline-primary" onclick="performGlobalSearchPage('${escapeHtml(query)}', ${data.pagination.page - 1})">${translations.previous || 'Previous'}</button>`;
                 }
-                html += `<span style="display: flex; align-items: center; padding: 0 1rem;">${translations.currentPage || 'Page'} ${data.pagination.page} ${translations.of || 'of'} ${data.pagination.total_pages}</span>`;
+                html += `<span class="search-page-status">${translations.currentPage || 'Page'} ${data.pagination.page} ${translations.of || 'of'} ${data.pagination.total_pages}</span>`;
                 if (data.pagination.has_next) {
                     html += `<button class="btn btn-outline-primary" onclick="performGlobalSearchPage('${escapeHtml(query)}', ${data.pagination.page + 1})">${translations.next || 'Next'}</button>`;
                 }
@@ -572,12 +572,12 @@ async function performSectionSearch(query, section) {
         
         // Add search info header
         const searchInfo = `
-            <div class="section" style="margin-bottom: 1rem;">
+            <div class="section section-spaced">
                 <div class="section-header">
                     <div class="section-label">
                         <i class="bi bi-search"></i> ${translations.searchResults || 'Search Results'}
                     </div>
-                    <div style="color: var(--text-light); font-size: 0.875rem;">
+                    <div class="search-results-summary">
                         ${filteredItems.length} ${translations.resultsFound || 'results found'} ${allItems.length !== filteredItems.length ? `(${allItems.length} total items searched)` : ''} for "${escapeHtml(query)}"
                     </div>
                 </div>
@@ -707,12 +707,12 @@ async function performItemFilesSearch(query, currentState) {
         
         // Add search info before rendering
         const searchInfo = `
-            <div class="section" style="margin-bottom: 1rem;">
+            <div class="section section-spaced">
                 <div class="section-header">
                     <div class="section-label">
                         <i class="bi bi-search"></i> ${translations.searchResults || 'Search Results'}
                     </div>
-                    <div style="color: var(--text-light); font-size: 0.875rem;">
+                    <div class="search-results-summary">
                         ${filteredFiles.length} ${translations.resultsFound || 'results found'} ${allFiles.length !== filteredFiles.length ? `(${allFiles.length} total files searched)` : ''} for "${escapeHtml(query)}"
                     </div>
                 </div>
@@ -799,8 +799,7 @@ async function filterDisplayedSectionItems(searchQuery) {
     if (visibleCount === 0) {
         const { escapeHtml } = await import('../core/utils.js');
         const noResultsMsg = document.createElement('div');
-        noResultsMsg.className = 'empty-state';
-        noResultsMsg.style.marginTop = '1rem';
+        noResultsMsg.className = 'empty-state search-empty-state';
         noResultsMsg.innerHTML = `
             <i class="bi bi-search"></i>
             <p>${translations.noResultsFound || 'No results found'} for "${escapeHtml(searchQuery)}"</p>

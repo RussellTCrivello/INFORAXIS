@@ -1874,9 +1874,9 @@ if (typeof window.translations === 'undefined') {
             
             selectedWordsContainer.style.display = 'block';
             selectedWordsList.innerHTML = selectedWords.map((word, index) => `
-                <span class="badge bg-primary d-flex align-items-center gap-1" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">
+                <span class="badge bg-primary d-flex align-items-center gap-1 archives-selected-word-badge">
                     ${escapeHtml(word.text)}
-                    <button type="button" class="btn-close btn-close-white" style="font-size: 0.6rem;" onclick="removeSelectedWord(${index})" aria-label="Remove"></button>
+                    <button type="button" class="btn-close btn-close-white archives-selected-word-remove" onclick="removeSelectedWord(${index})" aria-label="Remove"></button>
                 </span>
             `).join('');
         }

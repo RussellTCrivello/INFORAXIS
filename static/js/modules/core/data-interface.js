@@ -24,6 +24,52 @@ const STORAGE_KEYS = {
 const SELECTOR = {
     tables: 'table',
     modals: '.modal',
+    controlSurfaces: [
+        '.file-filters-section',
+        '.filter-panel',
+        '.filters-panel',
+        '.advanced-filters-panel',
+        '.search-command-card',
+        '.search-filter-section',
+        '.analysis-view-navigation',
+        '.analyst-classify-controls',
+        '.chart-controls-wrapper',
+        '.upload-controls',
+        '.file-section-toolbar',
+        '.action-bar',
+        '.results-info-bar',
+        '.pagination-container',
+        '.pagination-wrapper',
+        '.unified-pagination-container',
+        '.cursor-pagination-container',
+        '.pagination-controls',
+        '.unified-pagination-controls',
+        '.results-sort',
+        '.paging-controls'
+    ].join(','),
+    dataRegions: [
+        '.table-wrapper',
+        '.table-responsive',
+        '.ia-table-scroll',
+        '.results-container',
+        '.similar-groups-container',
+        '.files-list-view',
+        '.files-grid-view',
+        '.explorer-grid',
+        '.source-linkage-grid',
+        '.categories-grid',
+        '.keywords-grid',
+        '.cards-grid',
+        '.ia-record-list',
+        '.files-grid',
+        '.files-container',
+        '.data-grid',
+        '.result-list',
+        '.file-reports-grid',
+        '.notifications-list',
+        '.word-search-results',
+        '.category-search-results'
+    ].join(','),
     focusable: [
         'input:not([type="hidden"]):not([disabled]):not([readonly])',
         'select:not([disabled])',
@@ -93,6 +139,13 @@ function escapeAttr(value) {
     return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function queryWithin(root, selector) {
+    const elements = [];
+    if (root?.matches?.(selector)) elements.push(root);
+    elements.push(...Array.from(root?.querySelectorAll?.(selector) || []));
+    return elements;
+}
+
 function closestTableWrapper(table) {
     return table.closest('.ia-table-scroll, .table-wrapper, .table-responsive');
 }
@@ -110,7 +163,7 @@ function shouldEnhanceTable(table) {
 function ensureTableWrapper(table) {
     const existing = closestTableWrapper(table);
     if (existing) {
-        existing.classList.add('ia-table-scroll');
+        existing.classList.add('ia-table-scroll', 'ia-data-scroll-region');
         if (!existing.getAttribute('role')) existing.setAttribute('role', 'region');
         if (!existing.getAttribute('aria-label')) {
             const heading = existing.closest('.section-card, .stat-card, .card')?.querySelector('h1,h2,h3,h4,h5,h6');
@@ -120,7 +173,7 @@ function ensureTableWrapper(table) {
     }
 
     const wrapper = document.createElement('div');
-    wrapper.className = 'ia-table-scroll';
+    wrapper.className = 'ia-table-scroll ia-data-scroll-region';
     wrapper.setAttribute('role', 'region');
     wrapper.setAttribute('aria-label', table.getAttribute('aria-label') || table.caption?.textContent?.trim() || 'Data table');
     table.parentNode.insertBefore(wrapper, table);
@@ -355,19 +408,26 @@ function sortTableByHeader(table, th, additive) {
     SORT_STATE.set(table, next);
     updateSortIndicators(table, next);
 
-    const rows = Array.from(tbody.rows);
-    const sortableRows = rows
-        .map((row, originalIndex) => ({ row, originalIndex }))
-        .filter(({ row }) => row.cells.length > 1 && !row.cells[0]?.hasAttribute('colspan'));
-
-    sortableRows.sort((a, b) => compareRows(a, b, next));
-    const fragment = document.createDocumentFragment();
-    sortableRows.forEach(({ row }) => fragment.appendChild(row));
-    tbody.appendChild(fragment);
+    sortRowsByState(table, next);
 
     updateWorkbenchMetrics(table);
     persistTablePreferences(table);
     window.dispatchEvent(new CustomEvent('ia:table-sorted', { detail: { table, sort: next } }));
+}
+
+function sortRowsByState(table, sortEntries) {
+    const tbody = table.tBodies[0];
+    if (!tbody || !sortEntries.length) return;
+    tbody.querySelectorAll('.ia-row-detail').forEach((detailRow) => detailRow.remove());
+    tbody.querySelectorAll('tr[aria-expanded="true"]').forEach((row) => row.setAttribute('aria-expanded', 'false'));
+    const sortableRows = Array.from(tbody.rows)
+        .map((row, originalIndex) => ({ row, originalIndex }))
+        .filter(({ row }) => row.cells.length > 1 && !row.classList.contains('ia-row-detail') && !row.cells[0]?.hasAttribute('colspan'));
+
+    sortableRows.sort((a, b) => compareRows(a, b, sortEntries));
+    const fragment = document.createDocumentFragment();
+    sortableRows.forEach(({ row }) => fragment.appendChild(row));
+    tbody.appendChild(fragment);
 }
 
 function updateSortIndicators(table, sortEntries) {
@@ -467,6 +527,7 @@ function setupDynamicTableObserver(table) {
             if (!row.hasAttribute('aria-expanded')) row.setAttribute('aria-expanded', 'false');
         });
         filterTableRows(table, table.dataset.iaFilterQuery || '');
+        ensureTableWorkbench(table, closestTableWrapper(table) || ensureTableWrapper(table));
         updateWorkbenchMetrics(table);
     });
     observer.observe(tbody, { childList: true, subtree: false });
@@ -686,6 +747,7 @@ function applyTablePreferences(table, prefs = {}, toolbar = TABLE_WORKBENCHES.ge
     if (Array.isArray(prefs.sort) && prefs.sort.length) {
         SORT_STATE.set(table, prefs.sort);
         updateSortIndicators(table, prefs.sort);
+        sortRowsByState(table, prefs.sort);
     }
     if (prefs.density) applyDensity(prefs.density, false);
     updateWorkbenchMetrics(table);
@@ -934,6 +996,7 @@ function enhanceTables(root = document) {
             applyColumnSemantics(table);
             refreshSortableHeaders(table);
             applyColumnVisibility(table);
+            ensureTableWorkbench(table, closestTableWrapper(table) || ensureTableWrapper(table));
             updateWorkbenchMetrics(table);
         }
     });
@@ -1470,8 +1533,42 @@ function setupGlobalSelectionContext() {
     document.body.dataset.iaSelectionContextSetup = 'true';
 }
 
+function enhanceScrollPolicy(root = document) {
+    queryWithin(root, SELECTOR.controlSurfaces).forEach((surface) => {
+        if (!(surface instanceof HTMLElement)) return;
+        if (surface.closest('.ia-data-scroll-region, .ia-table-scroll, .table-wrapper, .table-responsive')) return;
+        surface.classList.add('ia-fixed-control-surface');
+    });
+
+    queryWithin(root, SELECTOR.dataRegions).forEach((region) => {
+        if (!(region instanceof HTMLElement)) return;
+        region.classList.add('ia-data-scroll-region');
+        if (!region.getAttribute('role') && region.querySelector('table, .file-card, .file-row-item, .explorer-item, .result-card, .search-result-item')) {
+            region.setAttribute('role', 'region');
+        }
+        if (!region.getAttribute('aria-label')) {
+            const heading = region.closest('.section, .section-card, .stat-card, .card, .results-section, .search-results-section')?.querySelector('h1,h2,h3,h4,h5,h6,.section-label');
+            if (heading) region.setAttribute('aria-label', textOf(heading));
+        }
+    });
+
+    queryWithin(root, '.results-section, .search-results-section').forEach((section) => {
+        if (!(section instanceof HTMLElement)) return;
+        section.classList.add('ia-scroll-framed-section');
+        Array.from(section.children).forEach((child) => {
+            if (!(child instanceof HTMLElement)) return;
+            if (child.matches('.results-header, .section-header, .filter-actions, .results-sort, script, style')) {
+                child.classList.add('ia-fixed-control-row');
+            } else {
+                child.classList.add('ia-data-scroll-region');
+            }
+        });
+    });
+}
+
 function refresh(root = document) {
     enhanceExistingFilters(root);
+    enhanceScrollPolicy(root);
     enhanceTables(root);
     enhanceModals(root);
     injectCommandTrigger();

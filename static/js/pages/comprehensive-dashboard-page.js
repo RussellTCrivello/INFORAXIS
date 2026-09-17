@@ -1486,11 +1486,10 @@ function showEmptyChartState(canvasId, message) {
     
     // Create and add empty state message
     const emptyStateDiv = document.createElement('div');
-    emptyStateDiv.className = 'empty-state';
-    emptyStateDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 500px; padding: 2rem;';
+    emptyStateDiv.className = 'empty-state chart-empty-state';
     emptyStateDiv.innerHTML = `
-        <i class="bi bi-inbox" style="font-size: 3rem; color: var(--text-muted); margin-bottom: 1rem;" aria-hidden="true"></i>
-        <p style="color: var(--text-light); font-size: 1.1rem; margin: 0;">${message || translations.noDataAvailable}</p>
+        <i class="bi bi-inbox" aria-hidden="true"></i>
+        <p>${message || translations.noDataAvailable}</p>
     `;
     
     chartContainer.appendChild(emptyStateDiv);

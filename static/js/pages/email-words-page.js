@@ -52,24 +52,12 @@ function initializeEmailWordsPage() {
     
     // Add click handlers for sortable columns
     document.querySelectorAll('.sortable').forEach((th) => {
-        th.style.cursor = 'pointer';
         th.addEventListener('click', function() {
             const sortColumn = this.getAttribute('data-sort');
             sortTable(sortColumn);
         });
     });
-    
-    // Add hover effect for sortable columns
-    document.querySelectorAll('.sortable').forEach((th) => {
-        th.addEventListener('mouseenter', function() {
-            this.style.backgroundColor = '#f8f9fa';
-        });
-        th.addEventListener('mouseleave', function() {
-            if (!this.querySelector('.sort-icon.text-primary')) {
-                this.style.backgroundColor = '';
-            }
-        });
-    });
+
     
     // Update totals display immediately
     updateTotalsDisplay();
@@ -306,9 +294,8 @@ function renderEmailFiles(files, email) {
             : '<span class="badge bg-secondary">Unread</span>';
         
         html += `
-            <div class="list-group-item list-group-item-action" 
-                 onclick="window.open('/file/${file.id}', '_blank')"
-                 style="cursor: pointer;">
+            <div class="list-group-item list-group-item-action email-file-result"
+                 onclick="window.open('/file/${file.id}', '_blank')">
                 <div class="d-flex w-100 justify-content-between align-items-start">
                     <div class="flex-grow-1">
                         <div class="d-flex align-items-center mb-2">
@@ -447,8 +434,7 @@ async function exportData() {
 function showToast(message, type = 'info') {
     const toastContainer = document.getElementById('toastContainer') || createToastContainer();
     const toast = document.createElement('div');
-    toast.className = `alert alert-${type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
-    toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.className = `alert alert-${type === 'success' ? 'success' : 'info'} alert-dismissible fade show email-toast`;
     toast.innerHTML = `
         <i class="bi bi-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
         ${message}
@@ -461,6 +447,7 @@ function showToast(message, type = 'info') {
 function createToastContainer() {
     const container = document.createElement('div');
     container.id = 'toastContainer';
+    container.className = 'toast-container-global';
     document.body.appendChild(container);
     return container;
 }

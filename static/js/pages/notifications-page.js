@@ -767,9 +767,9 @@ notificationsPage.openMessageDetail = function(notificationId) {
                 
                 if (n.file_path) {
                     detailHtml += `
-                        <div class="message-detail-info-item" style="grid-column: 1 / -1;">
+                        <div class="message-detail-info-item message-detail-info-item-full">
                             <strong>${filePathLabel}</strong>
-                            <span style="word-break: break-all;">${this.escapeHtml(n.file_path)}</span>
+                            <span class="message-detail-path">${this.escapeHtml(n.file_path)}</span>
                         </div>
                     `;
                 }
@@ -780,8 +780,8 @@ notificationsPage.openMessageDetail = function(notificationId) {
                     detailHtml += `
                         <div class="message-detail-section">
                             <h4>${additionalInfoLabel}</h4>
-                            <div style="background: var(--bg-section, #f8f9fa); padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.875rem; overflow-x: auto;">
-                                <pre style="margin: 0; white-space: pre-wrap;">${this.escapeHtml(JSON.stringify(n.metadata, null, 2))}</pre>
+                            <div class="message-detail-metadata">
+                                <pre>${this.escapeHtml(JSON.stringify(n.metadata, null, 2))}</pre>
                             </div>
                         </div>
                     `;
