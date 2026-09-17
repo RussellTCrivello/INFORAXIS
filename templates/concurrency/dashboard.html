@@ -1,13 +1,32 @@
 {% extends "base.html" %}
 
-{% block title %}Concurrency Monitoring Dashboard{% endblock %}
+{% block title %}{{ _('Concurrency Monitoring') }}{% endblock %}
+{% block page_type %}concurrency-workspace{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/concurrency-dashboard.css') }}">
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <h1 class="mb-4">Concurrency Monitoring Dashboard</h1>
-    <p class="text-muted">Real-time monitoring of four concurrency managers: ThreadManager, ProcessManager, AsyncManager, and MultiprocessingManager</p>
-    
-    <!-- Page Tips -->
+<div class="concurrency-workspace">
+    <section class="section-card concurrency-hero" aria-labelledby="concurrencyTitle">
+        <div class="concurrency-title-group">
+            <span class="concurrency-eyebrow">{{ _('Operations workspace') }}</span>
+            <h1 id="concurrencyTitle">{{ _('Concurrency Monitoring') }}</h1>
+            <p>{{ _('Track thread, process, async, and pool managers without moving the operational controls while live data refreshes underneath.') }}</p>
+        </div>
+        <div class="concurrency-hero-actions ia-control-surface" data-ia-role="controls">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="refreshConcurrency">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                {{ _('Refresh') }}
+            </button>
+            <span class="concurrency-live-status" id="concurrencyLiveStatus" aria-live="polite">
+                <span class="concurrency-live-dot" aria-hidden="true"></span>
+                <span id="concurrencyLiveText">{{ _('Live refresh every 5s') }}</span>
+            </span>
+        </div>
+    </section>
+
     {% from 'components/page_tips.html' import page_tips %}
     {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
     <div class="tips-section">
@@ -41,100 +60,163 @@
         </div>
         <ul class="tips-list">
             <li>{{ _('Metrics update automatically to show current system status') }}</li>
-            <li>{{ _('Refresh the page or use the refresh button to get the latest data') }}</li>
-            <li>{{ _('Monitor trends over time to understand system behavior patterns') }}</li>
+            <li>{{ _('Refresh manually when you need the latest data before the next polling cycle') }}</li>
+            <li>{{ _('Only the metrics and rows update; filters and navigation remain stable') }}</li>
             <li>{{ _('Use this information to tune concurrency settings for optimal performance') }}</li>
         </ul>
     </div>
-{% endcall %}
-    
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Thread Manager</h5>
-                    <div id="thread-metrics">
-                        <p class="text-muted">{{ _('Loading...') }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Process Manager</h5>
-                    <div id="process-metrics">
-                        <p class="text-muted">{{ _('Loading...') }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Async Manager</h5>
-                    <div id="async-metrics">
-                        <p class="text-muted">{{ _('Loading...') }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Pool Manager</h5>
-                    <div id="pool-metrics">
-                        <p class="text-muted">{{ _('Loading...') }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Detailed Information</h5>
-                </div>
-                <div class="card-body">
-                    <ul class="nav nav-tabs" id="detailTabs" role="tablist">
-                        <li class="nav-item">
-                            <a class="nav-link active" id="threads-tab" data-toggle="tab" href="#threads" role="tab">Threads</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" id="processes-tab" data-toggle="tab" href="#processes" role="tab">Processes</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" id="async-tasks-tab" data-toggle="tab" href="#async-tasks" role="tab">Async Tasks</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" id="pools-tab" data-toggle="tab" href="#pools" role="tab">Pools</a>
-                        </li>
-                    </ul>
-                    <div class="tab-content mt-3" id="detailTabsContent">
-                        <div class="tab-pane fade show active" id="threads" role="tabpanel">
-                            <div id="threads-list">{{ _('Loading...') }}</div>
-                        </div>
-                        <div class="tab-pane fade" id="processes" role="tabpanel">
-                            <div id="processes-list">{{ _('Loading...') }}</div>
-                        </div>
-                        <div class="tab-pane fade" id="async-tasks" role="tabpanel">
-                            <div id="async-tasks-list">{{ _('Loading...') }}</div>
-                        </div>
-                        <div class="tab-pane fade" id="pools" role="tabpanel">
-                            <div id="pools-list">{{ _('Loading...') }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+    {% endcall %}
 
+    <section class="concurrency-manager-strip" aria-label="{{ _('Concurrency manager status') }}">
+        <article class="concurrency-manager-tile" data-manager="thread">
+            <div class="concurrency-manager-header">
+                <span class="concurrency-manager-icon"><i class="bi bi-cpu" aria-hidden="true"></i></span>
+                <div>
+                    <h2>{{ _('Thread Manager') }}</h2>
+                    <p>{{ _('In-process worker threads') }}</p>
+                </div>
+            </div>
+            <div class="concurrency-metrics" id="thread-metrics" aria-live="polite">
+                <div class="concurrency-loading">{{ _('Loading...') }}</div>
+            </div>
+        </article>
+
+        <article class="concurrency-manager-tile" data-manager="process">
+            <div class="concurrency-manager-header">
+                <span class="concurrency-manager-icon"><i class="bi bi-hdd-network" aria-hidden="true"></i></span>
+                <div>
+                    <h2>{{ _('Process Manager') }}</h2>
+                    <p>{{ _('Isolated process workloads') }}</p>
+                </div>
+            </div>
+            <div class="concurrency-metrics" id="process-metrics" aria-live="polite">
+                <div class="concurrency-loading">{{ _('Loading...') }}</div>
+            </div>
+        </article>
+
+        <article class="concurrency-manager-tile" data-manager="async">
+            <div class="concurrency-manager-header">
+                <span class="concurrency-manager-icon"><i class="bi bi-lightning-charge" aria-hidden="true"></i></span>
+                <div>
+                    <h2>{{ _('Async Manager') }}</h2>
+                    <p>{{ _('Event-loop task execution') }}</p>
+                </div>
+            </div>
+            <div class="concurrency-metrics" id="async-metrics" aria-live="polite">
+                <div class="concurrency-loading">{{ _('Loading...') }}</div>
+            </div>
+        </article>
+
+        <article class="concurrency-manager-tile" data-manager="pool">
+            <div class="concurrency-manager-header">
+                <span class="concurrency-manager-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span>
+                <div>
+                    <h2>{{ _('Pool Manager') }}</h2>
+                    <p>{{ _('Worker pools and queue health') }}</p>
+                </div>
+            </div>
+            <div class="concurrency-metrics" id="pool-metrics" aria-live="polite">
+                <div class="concurrency-loading">{{ _('Loading...') }}</div>
+            </div>
+        </article>
+    </section>
+
+    <section class="section-card concurrency-detail-workbench ia-scroll-framed-section" aria-labelledby="concurrencyDetailsTitle">
+        <div class="section-header concurrency-detail-header ia-control-surface" data-ia-role="controls">
+            <div>
+                <span class="concurrency-eyebrow">{{ _('Live detail workbench') }}</span>
+                <h2 id="concurrencyDetailsTitle">{{ _('Detailed Information') }}</h2>
+                <p>{{ _('Choose a manager type; the row region scrolls independently from the tabs and actions.') }}</p>
+            </div>
+            <ul class="nav nav-pills concurrency-tabs" id="detailTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="threads-tab" data-bs-toggle="tab" data-bs-target="#threads" type="button" role="tab" aria-controls="threads" aria-selected="true">{{ _('Threads') }}</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="processes-tab" data-bs-toggle="tab" data-bs-target="#processes" type="button" role="tab" aria-controls="processes" aria-selected="false">{{ _('Processes') }}</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="async-tasks-tab" data-bs-toggle="tab" data-bs-target="#async-tasks" type="button" role="tab" aria-controls="async-tasks" aria-selected="false">{{ _('Async Tasks') }}</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pools-tab" data-bs-toggle="tab" data-bs-target="#pools" type="button" role="tab" aria-controls="pools" aria-selected="false">{{ _('Pools') }}</button>
+                </li>
+            </ul>
+        </div>
+
+        <div class="tab-content concurrency-tab-content" id="detailTabsContent">
+            <div class="tab-pane fade show active" id="threads" role="tabpanel" aria-labelledby="threads-tab" tabindex="0">
+                <div class="ia-scroll-body concurrency-table-region" id="threads-list" data-ia-role="data-region">
+                    <table class="table table-sm concurrency-table" id="threads-table" data-ia-enhance="false">
+                        <thead>
+                            <tr><th>{{ _('ID') }}</th><th>{{ _('Name') }}</th><th>{{ _('State') }}</th><th>{{ _('Priority') }}</th></tr>
+                        </thead>
+                        <tbody id="threads-tbody"></tbody>
+                    </table>
+                    <div class="concurrency-empty d-none" id="threads-empty">{{ _('No threads') }}</div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="processes" role="tabpanel" aria-labelledby="processes-tab" tabindex="0">
+                <div class="ia-scroll-body concurrency-table-region" id="processes-list" data-ia-role="data-region">
+                    <table class="table table-sm concurrency-table" id="processes-table" data-ia-enhance="false">
+                        <thead>
+                            <tr><th>{{ _('ID') }}</th><th>{{ _('Name') }}</th><th>{{ _('State') }}</th><th>{{ _('PID') }}</th><th>{{ _('Priority') }}</th></tr>
+                        </thead>
+                        <tbody id="processes-tbody"></tbody>
+                    </table>
+                    <div class="concurrency-empty d-none" id="processes-empty">{{ _('No processes') }}</div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="async-tasks" role="tabpanel" aria-labelledby="async-tasks-tab" tabindex="0">
+                <div class="ia-scroll-body concurrency-table-region" id="async-tasks-list" data-ia-role="data-region">
+                    <table class="table table-sm concurrency-table" id="async-tasks-table" data-ia-enhance="false">
+                        <thead>
+                            <tr><th>{{ _('ID') }}</th><th>{{ _('Name') }}</th><th>{{ _('State') }}</th><th>{{ _('Priority') }}</th></tr>
+                        </thead>
+                        <tbody id="async-tasks-tbody"></tbody>
+                    </table>
+                    <div class="concurrency-empty d-none" id="async-tasks-empty">{{ _('No async tasks') }}</div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="pools" role="tabpanel" aria-labelledby="pools-tab" tabindex="0">
+                <div class="ia-scroll-body concurrency-table-region" id="pools-list" data-ia-role="data-region">
+                    <table class="table table-sm concurrency-table" id="pools-table" data-ia-enhance="false">
+                        <thead>
+                            <tr><th>{{ _('ID') }}</th><th>{{ _('Name') }}</th><th>{{ _('State') }}</th><th>{{ _('Workers') }}</th><th>{{ _('Active Workers') }}</th><th>{{ _('Priority') }}</th></tr>
+                        </thead>
+                        <tbody id="pools-tbody"></tbody>
+                    </table>
+                    <div class="concurrency-empty d-none" id="pools-empty">{{ _('No pools') }}</div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
 {% endblock %}
 
 {% block extra_js %}
+<script type="application/json" id="concurrency-labels">{{ {
+    'status': _('Status'),
+    'active': _('Active'),
+    'total': _('Total'),
+    'completed': _('Completed'),
+    'errors': _('Errors'),
+    'paused': _('Paused'),
+    'memory': _('Memory'),
+    'avgCpu': _('Avg CPU'),
+    'totalRuntime': _('Total Runtime'),
+    'totalPools': _('Total Pools'),
+    'totalWorkers': _('Total Workers'),
+    'failed': _('Failed'),
+    'pending': _('Pending'),
+    'unknown': _('unknown'),
+    'notAvailable': _('N/A'),
+    'error': _('Error'),
+    'updated': _('Updated'),
+    'loading': _('Loading...'),
+    'refreshing': _('Refreshing...'),
+    'refreshFailed': _('Refresh failed'),
+    'liveRefresh': _('Live refresh every 5s')
+}|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/concurrency-dashboard-page.js') }}"></script>
 {% endblock %}
-

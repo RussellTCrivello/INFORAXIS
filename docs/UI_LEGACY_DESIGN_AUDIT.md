@@ -33,14 +33,14 @@ Runtime/browser inspection could not be completed in the sandbox because Flask i
 
 | Area | Current finding | Risk interpretation |
 | --- | ---: | --- |
-| CSS files | 38 total, all referenced | Good coverage, but several global/page boundaries are blurred. |
+| CSS files | 40 total, 39 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Good coverage, but several global/page boundaries are blurred. |
 | Template inline `style="..."`/`style='...'` attributes | 104 | Mostly runtime visibility/progress/theme swatches; the two base-page visual hits are favicon SVG stop-color attributes. |
 | Template `<style>` blocks | 2 | Both are in `templates/base.html` for runtime custom CSS/theme injection and should remain controlled. |
 | JavaScript inline style literals (`style="..."` / `style='...'`) | 42 | Several are dynamic/progress states, but some are still presentational. |
 | JavaScript `style.cssText` uses | 5 | High-risk because it bypasses the design system and can override modern layout rules. |
 | JavaScript `.style.*` mutations | 421 | Many are runtime state toggles, but some still set layout/width/z-index/visual formatting. |
 | CSS `!important` declarations | 248 | Indicates cascade pressure between Bootstrap, global enterprise CSS, data-interface CSS, and page CSS. |
-| CSS hard-coded hex colors | 410 | Many are fallback values, but some represent legacy color decisions outside tokens. |
+| CSS hard-coded hex colors | 471 | Many are fallback values, but some represent legacy color decisions outside tokens. |
 
 ## 4. Executive summary
 
@@ -268,6 +268,10 @@ Rebuild as an enterprise operations workspace:
 - Add fixed controls for refresh/range/filter, and make only table bodies scroll.
 - Add i18n strings and modern empty/loading states.
 
+**Follow-up now applied**
+
+The concurrency dashboard now has a dedicated enterprise workspace shell, stable refresh/status controls, compact manager metric strip, Bootstrap 5 tab triggers, scroll-contained detail tables, translated label configuration, and DOM-based incremental row/metric rendering with hidden-tab polling suppression.
+
 ---
 
 ### P1.2 — Import Center remains a Bootstrap utility page with inline script
@@ -290,6 +294,10 @@ The import workflow looks and behaves differently from the modern ingestion/oper
 **Recommended action**
 
 Extract JS into `static/js/pages/import-center-page.js`, add `static/css/import-center.css` or fold into operations styles, and convert the page to a fixed import workbench with scrollable validation/preview results.
+
+**Follow-up now applied**
+
+The Import Center now uses a dedicated operations workbench layout, source-specific compact panels, stable preview/confirmation controls, scroll-contained validation output, externalized page JavaScript, DOM-safe preview/message rendering, and metadata-driven labels/CSRF handling.
 
 ---
 
