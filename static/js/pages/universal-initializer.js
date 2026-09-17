@@ -21,15 +21,17 @@ const pageDetectors = [
         // Map routes to page types
         if (path.includes('/files') && !path.match(/\/file\/\d+/)) return 'files-list';
         if (path.match(/\/file\/\d+/)) return 'file-detail';
-        if (path.includes('/keywords') && !path.match(/\/keyword\/\d+/)) return 'keywords-list';
-        if (path.match(/\/keyword\/\d+/)) return 'keyword-detail';
+        if (path.match(/\/keywords\/\d+/)) return 'keyword-detail';
+        if (path.includes('/keywords')) return 'keywords-list';
         if (path.match(/\/categories\/\d+\/words/)) return 'category-words';  // Must be before general /words check
-        if (path.includes('/words') && !path.match(/\/word\/\d+/)) return 'words-list';
-        if (path.match(/\/word\/\d+/)) return 'word-detail';
-        if (path.includes('/sources') && !path.match(/\/source\/\d+/)) return 'sources-list';
-        if (path.match(/\/source\/\d+/)) return 'source-detail';
-        if (path.includes('/sides') && !path.match(/\/side\/\d+/)) return 'sides-list';
-        if (path.match(/\/side\/\d+/)) return 'side-detail';
+        if (path.match(/\/words\/\d+/)) return 'word-detail';
+        if (path.includes('/words')) return 'words-list';
+        if (path.match(/\/sources\/\d+\/categories-keywords/)) return 'default';
+        if (path.match(/\/sources\/\d+/)) return 'source-detail';
+        if (path.includes('/sources')) return 'sources-list';
+        if (path.match(/\/sides\/\d+\/categories-keywords/)) return 'default';
+        if (path.match(/\/sides\/\d+/)) return 'side-detail';
+        if (path.includes('/sides')) return 'sides-list';
         if (path === '/search/enhanced') return 'search-enhanced';
         if (path === '/search/advanced') return 'search-advanced';
         if (path === '/search') return 'search';

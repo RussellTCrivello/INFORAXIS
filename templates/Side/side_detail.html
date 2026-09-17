@@ -2,115 +2,128 @@
 
 {% block title %}{{ _('Side Details') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/entity-detail.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">
-        <i class="bi bi-diagram-3 me-2"></i>
-        {{ _('Side Details') }}
-    </h1>
-    <a href="{{ url_for('sides_list') }}" class="btn btn-outline-primary">
-        <i class="bi bi-arrow-left me-2"></i>
-        {{ _('Back to Sides') }}
-    </a>
-</div>
+<div class="entity-workspace entity-side-detail">
+    <section class="section-card entity-hero" aria-labelledby="sideDetailTitle">
+        <div>
+            <span class="entity-eyebrow">{{ _('Side record') }}</span>
+            <h1 id="sideDetailTitle"><i class="bi bi-diagram-3 me-2" aria-hidden="true"></i>{{ side.name }}</h1>
+            <p>{{ _('Review side-level distribution, associated sources, and related analytical actions in a compact record workspace.') }}</p>
+        </div>
+        <div class="entity-hero-actions ia-control-surface" data-ia-role="controls">
+            <a href="{{ url_for('sides_list') }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ _('Back to Sides') }}
+            </a>
+            <a href="{{ url_for('sides_list') }}?edit={{ side.id }}" class="btn btn-sm btn-success">
+                <i class="bi bi-pencil me-1" aria-hidden="true"></i>{{ _('Edit Side') }}
+            </a>
+        </div>
+    </section>
 
-<!-- Page Tips -->
-{% from 'components/page_tips.html' import page_tips %}
+    {% from 'components/page_tips.html' import page_tips %}
     {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
-
-<div class="tips-section">
-    <div class="tips-section-title">
-        <i class="bi bi-diagram-3"></i>
-        {{ _('Side Details Overview') }}
-    </div>
-    <ul class="tips-list">
-        <li>{{ _('View comprehensive information about this side including statistics and associations') }}</li>
-        <li>{{ _('See document count, source count, total file size, and other key metrics') }}</li>
-        <li>{{ _('Explore files, categories, and keywords associated with this side') }}</li>
-        <li>{{ _('Edit side information or manage associations from this page') }}</li>
-    </ul>
-</div>
-<div class="tips-section">
-    <div class="tips-section-title">
-        <i class="bi bi-file-text"></i>
-        {{ _('Associated Data') }}
-    </div>
-    <ul class="tips-list">
-        <li>{{ _('View all files associated with this side in the files section') }}</li>
-        <li>{{ _('See categories and keywords linked to this side') }}</li>
-        <li>{{ _('Review statistics showing the distribution of data across this side') }}</li>
-        <li>{{ _('Use filters to find specific files or data within this side') }}</li>
-    </ul>
-</div>
-{% endcall %}
-
-<div class="row">
-    <div class="col-md-8">
-        <div class="stat-card">
-            <h5 class="mb-3">{{ _('Side Information') }}</h5>
-            <div class="row mb-4">
-                <div class="col-md-3">
-                    <div class="text-center p-3 bg-light rounded">
-                        <div class="h4 text-primary mb-0">{{ side.doc_count|default(0) }}</div>
-                        <small class="text-muted">{{ _('Documents') }}</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center p-3 bg-light rounded">
-                        <div class="h4 text-success mb-0">{{ side.source_count|default(0) }}</div>
-                        <small class="text-muted">{{ _('Sources') }}</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center p-3 bg-light rounded">
-                        <div class="h4 text-warning mb-0">
-                            {% if side.total_size %}
-                                {% if side.total_size > 1073741824 %}
-                                    {{ (side.total_size / 1073741824)|round(1) }} {{ _('GB') }}
-                                {% else %}
-                                    {{ (side.total_size / 1048576)|round(1) }} {{ _('MB') }}
-                                {% endif %}
-                            {% else %}
-                                0 {{ _('MB') }}
-                            {% endif %}
-                        </div>
-                        <small class="text-muted">{{ _('Total Size') }}</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center p-3 bg-light rounded">
-                        <div class="h4 text-info mb-0">{{ (side.importance * 100)|round|int }}%</div>
-                        <small class="text-muted">{{ _('Importance') }}</small>
-                    </div>
-                </div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">{{ _('Side Name') }}</label>
-                <p class="form-control-plaintext"><strong>{{ side.name }}</strong></p>
-            </div>
-            {% if side.date_creation %}
-            <div class="mb-3">
-                <label class="form-label">{{ _('Created') }}</label>
-                <p class="form-control-plaintext text-muted">{{ side.date_creation.strftime('%Y-%m-%d %H:%M') }}</p>
-            </div>
-            {% endif %}
+    <div class="tips-section">
+        <div class="tips-section-title">
+            <i class="bi bi-diagram-3"></i>
+            {{ _('Side Details Overview') }}
         </div>
+        <ul class="tips-list">
+            <li>{{ _('View comprehensive information about this side including statistics and associations') }}</li>
+            <li>{{ _('See document count, source count, total file size, and other key metrics') }}</li>
+            <li>{{ _('Explore files, categories, and keywords associated with this side') }}</li>
+            <li>{{ _('Edit side information or manage associations from this page') }}</li>
+        </ul>
     </div>
-    <div class="col-md-4">
-        <div class="stat-card">
-            <h5 class="mb-3">{{ _('Actions') }}</h5>
-            <div class="d-grid gap-2">
-                <a href="{{ url_for('side_categories_keywords', side_id=side.id) }}" class="btn btn-primary">
-                    <i class="bi bi-tags me-2"></i>{{ _('View Categories & Keywords') }}
-                </a>
-                <a href="{{ url_for('sides_list') }}?edit={{ side.id }}" class="btn btn-success">
-                    <i class="bi bi-pencil me-2"></i>{{ _('Edit Side') }}
-                </a>
-                <button type="button" class="btn btn-outline-danger" onclick='deleteSide({{ side.id }}, {{ side.name|tojson }})'>
-                    <i class="bi bi-trash me-2"></i>{{ _('Delete Side') }}
-                </button>
-            </div>
+    <div class="tips-section">
+        <div class="tips-section-title">
+            <i class="bi bi-file-text"></i>
+            {{ _('Associated Data') }}
         </div>
+        <ul class="tips-list">
+            <li>{{ _('View all files associated with this side in the files section') }}</li>
+            <li>{{ _('See categories and keywords linked to this side') }}</li>
+            <li>{{ _('Review statistics showing the distribution of data across this side') }}</li>
+            <li>{{ _('Use filters to find specific files or data within this side') }}</li>
+        </ul>
+    </div>
+    {% endcall %}
+
+    <section class="entity-metric-strip" aria-label="{{ _('Side metrics') }}">
+        <div class="entity-metric-card">
+            <span class="entity-metric-value">{{ side.doc_count|default(0) }}</span>
+            <span class="entity-metric-label">{{ _('Documents') }}</span>
+        </div>
+        <div class="entity-metric-card">
+            <span class="entity-metric-value">{{ side.source_count|default(0) }}</span>
+            <span class="entity-metric-label">{{ _('Sources') }}</span>
+        </div>
+        <div class="entity-metric-card">
+            <span class="entity-metric-value">
+                {% if side.total_size %}
+                    {% if side.total_size > 1073741824 %}
+                        {{ (side.total_size / 1073741824)|round(1) }} {{ _('GB') }}
+                    {% else %}
+                        {{ (side.total_size / 1048576)|round(1) }} {{ _('MB') }}
+                    {% endif %}
+                {% else %}
+                    0 {{ _('MB') }}
+                {% endif %}
+            </span>
+            <span class="entity-metric-label">{{ _('Total Size') }}</span>
+        </div>
+        <div class="entity-metric-card">
+            <span class="entity-metric-value">{{ ((side.importance|default(0, true)) * 100)|round|int }}%</span>
+            <span class="entity-metric-label">{{ _('Importance') }}</span>
+        </div>
+    </section>
+
+    <div class="entity-detail-layout">
+        <main class="entity-detail-main">
+            <section class="section-card entity-info-panel" aria-labelledby="sideInfoTitle">
+                <div class="entity-panel-header ia-control-surface" data-ia-role="controls">
+                    <div>
+                        <span class="entity-eyebrow">{{ _('Profile') }}</span>
+                        <h2 id="sideInfoTitle">{{ _('Side Information') }}</h2>
+                    </div>
+                </div>
+                <dl class="entity-field-grid ia-scroll-body" data-ia-role="data-region">
+                    <div class="entity-field full">
+                        <dt class="entity-field-label">{{ _('Side Name') }}</dt>
+                        <dd class="entity-field-value primary">{{ side.name }}</dd>
+                    </div>
+                    {% if side.date_creation %}
+                    <div class="entity-field">
+                        <dt class="entity-field-label">{{ _('Created') }}</dt>
+                        <dd class="entity-field-value">{{ side.date_creation.strftime('%Y-%m-%d %H:%M') }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </section>
+        </main>
+        <aside class="entity-detail-aside">
+            <section class="section-card entity-action-card ia-control-surface" data-ia-role="controls" aria-labelledby="sideActionsTitle">
+                <div>
+                    <span class="entity-eyebrow">{{ _('Record actions') }}</span>
+                    <h2 id="sideActionsTitle">{{ _('Actions') }}</h2>
+                    <p>{{ _('Navigate to related analytical context or manage this side record.') }}</p>
+                </div>
+                <div class="entity-action-list">
+                    <a href="{{ url_for('side_categories_keywords', side_id=side.id) }}" class="btn btn-primary">
+                        <i class="bi bi-tags me-2" aria-hidden="true"></i>{{ _('View Categories & Keywords') }}
+                    </a>
+                    <a href="{{ url_for('sides_list') }}?edit={{ side.id }}" class="btn btn-success">
+                        <i class="bi bi-pencil me-2" aria-hidden="true"></i>{{ _('Edit Side') }}
+                    </a>
+                    <button type="button" class="btn btn-outline-danger" data-side-delete data-side-id="{{ side.id }}" data-side-name="{{ side.name }}">
+                        <i class="bi bi-trash me-2" aria-hidden="true"></i>{{ _('Delete Side') }}
+                    </button>
+                </div>
+            </section>
+        </aside>
     </div>
 </div>
 {% endblock %}
@@ -124,5 +137,4 @@
     },
     "sides_list_url": url_for('sides_list', _external=False)
 }|tojson }}</script>
-<script type="module" src="{{ url_for('static', filename='js/pages/side-detail-page.js') }}"></script>
 {% endblock %}

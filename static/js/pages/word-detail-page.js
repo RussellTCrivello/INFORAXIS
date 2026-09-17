@@ -1,89 +1,101 @@
 /**
  * Word Detail Page JavaScript
- * Extracted from Word/Word_detail.html
- * 
- * TODO: Copy all inline JavaScript from Word_detail.html into this file
+ * Handles record-level word actions without inline event handlers.
  */
 
-// Load translations from JSON script tag
+let pageData = {};
 let translations = {};
+let initialized = false;
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Load translations from JSON script tag
+function readPageData() {
     const pageDataEl = document.getElementById('word-detail-page-data');
-    if (pageDataEl) {
-        try {
-            const data = JSON.parse(pageDataEl.textContent);
-            translations = data.translations || {};
-            // Also make available on window for backward compatibility
-            window.translations = window.translations || {};
-            Object.assign(window.translations, translations);
-        } catch (e) {
-            console.error('Error parsing word detail page data:', e);
-        }
+    if (!pageDataEl) return {};
+    try {
+        return JSON.parse(pageDataEl.textContent || '{}');
+    } catch (error) {
+        console.error('Error parsing word detail page data:', error);
+        return {};
     }
-    
-    console.log('Word detail page loaded');
-});
+}
 
-// ✅ SECURITY: Helper function to get CSRF token
 function getCSRFToken() {
     const metaTag = document.querySelector('meta[name="csrf-token"]');
     return metaTag ? metaTag.getAttribute('content') : '';
 }
 
-function editWord(id) {
-    // Navigate to words list page - user can edit from there
-    // Or we could pass a parameter to auto-trigger edit, but for simplicity just navigate
-    // Get URL from page data or use default
-    const pageDataEl = document.getElementById('word-detail-page-data');
-    let redirectUrl = '/words';
-    if (pageDataEl) {
-        try {
-            const data = JSON.parse(pageDataEl.textContent);
-            redirectUrl = data.words_list_url || '/words';
-        } catch (e) {
-            console.warn('Error parsing page data, using default URL');
-        }
+function notify(message, type = 'error') {
+    if (type === 'success' && window.showSuccess) {
+        window.showSuccess(message);
+        return;
     }
-    window.location.href = redirectUrl;
+    if (type === 'error' && window.showError) {
+        window.showError(message);
+        return;
+    }
+    console[type === 'error' ? 'error' : 'log'](message);
 }
 
-function deleteWord(id) {
-    if (!confirm(translations.deleteConfirm)) return;
-    
-    fetch(`/api/words/${id}`, {
-        method: 'DELETE',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-        }
-    })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                alert(translations.wordDeletedSuccessfully);
-                // Get URL from page data or use default
-                const pageDataEl = document.getElementById('word-detail-page-data');
-                let redirectUrl = '/words';
-                if (pageDataEl) {
-                    try {
-                        const data = JSON.parse(pageDataEl.textContent);
-                        redirectUrl = data.words_list_url || '/words';
-                    } catch (e) {
-                        console.warn('Error parsing page data, using default URL');
-                    }
-                }
-                window.location.href = redirectUrl;
-            } else {
-                alert(translations.error + ': ' + (data.error || 'Unknown error'));
-            }
-        })
-        .catch(e => {
-            console.error('Error deleting word:', e);
-            alert(translations.error + ': ' + e.message);
+async function confirmRecordDelete(message) {
+    if (window.showConfirm) {
+        return window.showConfirm(message, {
+            title: translations.deleteConfirm || 'Delete word',
+            confirmLabel: translations.delete || 'Delete',
+            type: 'danger'
         });
+    }
+    const originalConfirm = window.__originalConfirm || window.confirm;
+    return originalConfirm(message);
 }
-// DETL-01: referenced by the template's inline onclick handler; this module is
-// loaded as ES module, so top-level functions are module-scoped by default.
+
+function editWord() {
+    window.location.href = pageData.words_list_url || '/words';
+}
+
+async function deleteWord(id) {
+    if (!(await confirmRecordDelete(translations.deleteConfirm || 'Are you sure you want to delete this word?'))) return;
+
+    try {
+        const response = await fetch(`/api/words/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.success) {
+            notify(translations.wordDeletedSuccessfully || 'Word deleted successfully!', 'success');
+            window.location.href = pageData.words_list_url || '/words';
+            return;
+        }
+        notify(`${translations.error || 'Error'}: ${data.error || response.statusText}`, 'error');
+    } catch (error) {
+        notify(`${translations.error || 'Error'}: ${error.message}`, 'error');
+    }
+}
+
+function initWordDetailPage() {
+    if (initialized) return;
+    initialized = true;
+    pageData = readPageData();
+    translations = pageData.translations || {};
+    window.translations = window.translations || {};
+    Object.assign(window.translations, translations);
+
+    document.querySelectorAll('[data-word-delete]').forEach((button) => {
+        button.addEventListener('click', () => deleteWord(button.dataset.wordId));
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWordDetailPage);
+} else {
+    initWordDetailPage();
+}
+
+window.editWord = editWord;
 window.deleteWord = deleteWord;
+
+export default function init() {
+    initWordDetailPage();
+}

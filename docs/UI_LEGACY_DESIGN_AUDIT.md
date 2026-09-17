@@ -33,7 +33,7 @@ Runtime/browser inspection could not be completed in the sandbox because Flask i
 
 | Area | Current finding | Risk interpretation |
 | --- | ---: | --- |
-| CSS files | 42 total, 41 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Good coverage, but several global/page boundaries are blurred. |
+| CSS files | 43 total, 42 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Good coverage, but several global/page boundaries are blurred. |
 | Template inline `style="..."`/`style='...'` attributes | 104 | Mostly runtime visibility/progress/theme swatches; the two base-page visual hits are favicon SVG stop-color attributes. |
 | Template `<style>` blocks | 2 | Both are in `templates/base.html` for runtime custom CSS/theme injection and should remain controlled. |
 | JavaScript inline style literals (`style="..."` / `style='...'`) | 42 | Several are dynamic/progress states, but some are still presentational. |
@@ -366,6 +366,10 @@ Create a reusable entity detail shell:
 - Relationship/data panels with enhanced tables or record lists.
 - Consistent delete/confirm modal pattern.
 - Master/detail navigation back to sources/sides/words/keywords.
+
+**Follow-up now applied**
+
+Source, side, keyword, and word detail pages now share `static/css/entity-detail.css`, use compact entity hero/action/metric/detail shells, replace Bootstrap stat boxes with contextual metric strips, remove inline delete/edit handlers, rely on delegated module actions, and use the shared confirmation/notification system where available.
 
 ---
 

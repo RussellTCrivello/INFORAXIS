@@ -2,6 +2,10 @@
 
 {% block title %}{{ _('Word Details') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/entity-detail.css') }}">
+{% endblock %}
+
 {% block breadcrumb %}
 <li class="breadcrumb-item">
     <a href="{{ url_for('index') }}">
@@ -19,108 +23,124 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title">
-            <i class="bi bi-book me-2"></i>
-            {{ _('Word Details') }}
-        </h1>
-    </div>
-    <div class="d-flex gap-2">
-        <a href="{{ url_for('words_list') }}" class="btn btn-outline-primary">
-            <i class="bi bi-arrow-left me-2"></i>
-            {{ _('Back to Words') }}
-        </a>
-    </div>
-</div>
+<div class="entity-workspace entity-word-detail">
+    <section class="section-card entity-hero" aria-labelledby="wordDetailTitle">
+        <div>
+            <span class="entity-eyebrow">{{ _('Word record') }}</span>
+            <h1 id="wordDetailTitle"><i class="bi bi-book me-2" aria-hidden="true"></i>{{ word.word }}</h1>
+            <p>{{ _('Review usage, status, and record actions while staying anchored in the vocabulary workbench.') }}</p>
+        </div>
+        <div class="entity-hero-actions ia-control-surface" data-ia-role="controls">
+            <a href="{{ url_for('words_list') }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ _('Back to Words') }}
+            </a>
+            <a href="{{ url_for('words_list') }}" class="btn btn-sm btn-success">
+                <i class="bi bi-pencil me-1" aria-hidden="true"></i>{{ _('Edit Word') }}
+            </a>
+        </div>
+    </section>
 
-<!-- Page Tips -->
-{% from 'components/page_tips.html' import page_tips %}
+    {% from 'components/page_tips.html' import page_tips %}
     {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
-
-<div class="tips-section">
-    <div class="tips-section-title">
-        <i class="bi bi-book"></i>
-        {{ _('Word Details Overview') }}
+    <div class="tips-section">
+        <div class="tips-section-title">
+            <i class="bi bi-book"></i>
+            {{ _('Word Details Overview') }}
+        </div>
+        <ul class="tips-list">
+            <li>{{ _('View comprehensive information about this word including usage statistics') }}</li>
+            <li>{{ _('See which files contain this word and how frequently it appears') }}</li>
+            <li>{{ _('View categories and keywords associated with this word') }}</li>
+            <li>{{ _('Edit word information or manage associations from this page') }}</li>
+        </ul>
     </div>
-    <ul class="tips-list">
-        <li>{{ _('View comprehensive information about this word including usage statistics') }}</li>
-        <li>{{ _('See which files contain this word and how frequently it appears') }}</li>
-        <li>{{ _('View categories and keywords associated with this word') }}</li>
-        <li>{{ _('Edit word information or manage associations from this page') }}</li>
-    </ul>
-</div>
-<div class="tips-section">
-    <div class="tips-section-title">
-        <i class="bi bi-file-text"></i>
-        {{ _('Word Usage') }}
+    <div class="tips-section">
+        <div class="tips-section-title">
+            <i class="bi bi-file-text"></i>
+            {{ _('Word Usage') }}
+        </div>
+        <ul class="tips-list">
+            <li>{{ _('See usage count showing how many files contain this word') }}</li>
+            <li>{{ _('View file types where this word appears most frequently') }}</li>
+            <li>{{ _('Review categories that commonly contain this word') }}</li>
+            <li>{{ _('Use this information to understand word distribution across your files') }}</li>
+        </ul>
     </div>
-    <ul class="tips-list">
-        <li>{{ _('See usage count showing how many files contain this word') }}</li>
-        <li>{{ _('View file types where this word appears most frequently') }}</li>
-        <li>{{ _('Review categories that commonly contain this word') }}</li>
-        <li>{{ _('Use this information to understand word distribution across your files') }}</li>
-    </ul>
-</div>
-{% endcall %}
+    {% endcall %}
 
-<div class="row g-4">
-    <div class="col-md-8">
-        <div class="stat-card">
-            <h5 class="mb-3"><i class="bi bi-info-circle me-2"></i>{{ _('Word Information') }}</h5>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="mb-3">
-                        <label class="form-label text-muted">{{ _('Word ID') }}</label>
-                        <p class="form-control-plaintext"><strong>{{ word.id }}</strong></p>
+    <section class="entity-metric-strip" aria-label="{{ _('Word metrics') }}">
+        <div class="entity-metric-card">
+            <span class="entity-metric-value">{{ word.id }}</span>
+            <span class="entity-metric-label">{{ _('Word ID') }}</span>
+        </div>
+        <div class="entity-metric-card">
+            <span class="entity-metric-value">{{ word.usage_count|default(0) }}</span>
+            <span class="entity-metric-label">{{ _('Usage Count') }}</span>
+        </div>
+        <div class="entity-metric-card">
+            <span class="entity-metric-value">
+                {% if word.usage_count and word.usage_count > 0 %}
+                    {{ _('Active') }}
+                {% else %}
+                    {{ _('Unused') }}
+                {% endif %}
+            </span>
+            <span class="entity-metric-label">{{ _('Status') }}</span>
+        </div>
+    </section>
+
+    <div class="entity-detail-layout">
+        <main class="entity-detail-main">
+            <section class="section-card entity-info-panel" aria-labelledby="wordInfoTitle">
+                <div class="entity-panel-header ia-control-surface" data-ia-role="controls">
+                    <div>
+                        <span class="entity-eyebrow">{{ _('Profile') }}</span>
+                        <h2 id="wordInfoTitle">{{ _('Word Information') }}</h2>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="mb-3">
-                        <label class="form-label text-muted">{{ _('Usage Count') }}</label>
-                        <p class="form-control-plaintext">
-                            <span class="badge bg-info fs-6">{{ word.usage_count|default(0) }}</span>
-                            <span class="text-muted ms-2">{{ _('files') }}</span>
-                        </p>
+                <dl class="entity-field-grid ia-scroll-body" data-ia-role="data-region">
+                    <div class="entity-field">
+                        <dt class="entity-field-label">{{ _('Word ID') }}</dt>
+                        <dd class="entity-field-value">{{ word.id }}</dd>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-3">
-                        <label class="form-label text-muted">{{ _('Status') }}</label>
-                        <p class="form-control-plaintext">
+                    <div class="entity-field">
+                        <dt class="entity-field-label">{{ _('Word Text') }}</dt>
+                        <dd class="entity-field-value primary">{{ word.word }}</dd>
+                    </div>
+                    <div class="entity-field">
+                        <dt class="entity-field-label">{{ _('Usage Count') }}</dt>
+                        <dd class="entity-field-value">{{ word.usage_count|default(0) }} {{ _('files') }}</dd>
+                    </div>
+                    <div class="entity-field">
+                        <dt class="entity-field-label">{{ _('Status') }}</dt>
+                        <dd class="entity-field-value">
                             {% if word.usage_count and word.usage_count > 0 %}
-                                <span class="badge bg-success">
-                                    <i class="bi bi-check-circle me-1"></i>{{ _('Active') }}
-                                </span>
+                            <span class="entity-status-pill success"><i class="bi bi-check-circle" aria-hidden="true"></i>{{ _('Active') }}</span>
                             {% else %}
-                                <span class="badge bg-secondary">
-                                    <i class="bi bi-dash-circle me-1"></i>{{ _('Unused') }}
-                                </span>
+                            <span class="entity-status-pill neutral"><i class="bi bi-dash-circle" aria-hidden="true"></i>{{ _('Unused') }}</span>
                             {% endif %}
-                        </p>
+                        </dd>
                     </div>
+                </dl>
+            </section>
+        </main>
+        <aside class="entity-detail-aside">
+            <section class="section-card entity-action-card ia-control-surface" data-ia-role="controls" aria-labelledby="wordActionsTitle">
+                <div>
+                    <span class="entity-eyebrow">{{ _('Record actions') }}</span>
+                    <h2 id="wordActionsTitle">{{ _('Actions') }}</h2>
+                    <p>{{ _('Edit this word from the vocabulary workbench or remove it after confirmation.') }}</p>
                 </div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label text-muted">{{ _('Word Text') }}</label>
-                <p class="form-control-plaintext">
-                    <strong class="fs-5">{{ word.word }}</strong>
-                </p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="stat-card">
-            <h5 class="mb-3"><i class="bi bi-gear me-2"></i>{{ _('Actions') }}</h5>
-            <div class="d-grid gap-2">
-                <button class="btn btn-success" onclick="editWord({{ word.id }})">
-                    <i class="bi bi-pencil me-2"></i> {{ _('Edit Word') }}
-                </button>
-                <button class="btn btn-outline-danger" onclick="deleteWord({{ word.id }})">
-                    <i class="bi bi-trash me-2"></i> {{ _('Delete Word') }}
-                </button>
-            </div>
-        </div>
+                <div class="entity-action-list">
+                    <a href="{{ url_for('words_list') }}" class="btn btn-success">
+                        <i class="bi bi-pencil me-2" aria-hidden="true"></i>{{ _('Edit Word') }}
+                    </a>
+                    <button type="button" class="btn btn-outline-danger" data-word-delete data-word-id="{{ word.id }}">
+                        <i class="bi bi-trash me-2" aria-hidden="true"></i>{{ _('Delete Word') }}
+                    </button>
+                </div>
+            </section>
+        </aside>
     </div>
 </div>
 {% endblock %}
@@ -136,6 +156,4 @@
     },
     "words_list_url": url_for('words_list', _external=False)
 }|tojson }}</script>
-<script type="module" src="{{ url_for('static', filename='js/pages/word-detail-page.js') }}"></script>
 {% endblock %}
-
