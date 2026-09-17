@@ -33,7 +33,7 @@ Runtime/browser inspection could not be completed in the sandbox because Flask i
 
 | Area | Current finding | Risk interpretation |
 | --- | ---: | --- |
-| CSS files | 41 total, 40 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Good coverage, but several global/page boundaries are blurred. |
+| CSS files | 42 total, 41 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Good coverage, but several global/page boundaries are blurred. |
 | Template inline `style="..."`/`style='...'` attributes | 104 | Mostly runtime visibility/progress/theme swatches; the two base-page visual hits are favicon SVG stop-color attributes. |
 | Template `<style>` blocks | 2 | Both are in `templates/base.html` for runtime custom CSS/theme injection and should remain controlled. |
 | JavaScript inline style literals (`style="..."` / `style='...'`) | 42 | Several are dynamic/progress states, but some are still presentational. |
@@ -325,6 +325,10 @@ Three search experiences exist visually and structurally: basic, advanced, and e
 **Recommended action**
 
 Unify search navigation and result rendering behind one search workspace shell. Use the advanced/enhanced result card pattern for basic search and route all pagination through the unified pagination renderer.
+
+**Follow-up now applied**
+
+The basic search page now uses a dedicated intelligence workspace shell, compact fixed query/view controls, modern option toggles, scroll-contained dense result cards, stable pagination controls, DOM-safe API result rendering, delegated pagination events, and a ready-safe module initializer.
 
 ---
 
