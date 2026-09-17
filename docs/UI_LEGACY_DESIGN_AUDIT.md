@@ -8,6 +8,8 @@ Baseline audited commit: `13fc114` (`Complete enterprise UI cleanup and fixed co
 
 This audit focuses specifically on outdated or legacy design patterns that can disrupt the modern enterprise workspace direction: dense data analysis layouts, fixed controls with scrolling data regions, consistent record/card formatting, polished light/dark themes, stable workbench controls, and reusable interface patterns.
 
+The supplied reference benchmark is now codified in `docs/ENTERPRISE_DATA_WORKSPACE_BLUEPRINT.md`: data is the workspace, controls are compact and persistent, contextual actions appear only when relevant, and visual emphasis stays quiet/semantic rather than card-heavy or decorative.
+
 The goal is not to re-list every already-cleaned file. It is to identify remaining visual/cascade/interaction risks that can still make the product feel like a conventional legacy admin dashboard or cause advanced layouts to behave inconsistently.
 
 ## 2. Audit methodology
@@ -32,13 +34,13 @@ Runtime/browser inspection could not be completed in the sandbox because Flask i
 | Area | Current finding | Risk interpretation |
 | --- | ---: | --- |
 | CSS files | 38 total, all referenced | Good coverage, but several global/page boundaries are blurred. |
-| Template inline `style="..."` attributes | 102 | Mostly runtime visibility/progress/theme swatches, but still a governance risk. |
+| Template inline `style="..."`/`style='...'` attributes | 104 | Mostly runtime visibility/progress/theme swatches; the two base-page visual hits are favicon SVG stop-color attributes. |
 | Template `<style>` blocks | 2 | Both are in `templates/base.html` for runtime custom CSS/theme injection and should remain controlled. |
-| JavaScript inline style literals (`style="..."` / `style='...'`) | 44 | Several are dynamic/progress states, but some are still presentational. |
-| JavaScript `style.cssText` uses | 6 | High-risk because it bypasses the design system and can override modern layout rules. |
-| JavaScript `.style.*` mutations | 449 | Many are runtime state toggles, but some still set layout/width/z-index/visual formatting. |
-| CSS `!important` declarations | 212 | Indicates cascade pressure between Bootstrap, global enterprise CSS, data-interface CSS, and page CSS. |
-| CSS hard-coded hex colors | 409 | Many are fallback values, but some represent legacy color decisions outside tokens. |
+| JavaScript inline style literals (`style="..."` / `style='...'`) | 42 | Several are dynamic/progress states, but some are still presentational. |
+| JavaScript `style.cssText` uses | 5 | High-risk because it bypasses the design system and can override modern layout rules. |
+| JavaScript `.style.*` mutations | 421 | Many are runtime state toggles, but some still set layout/width/z-index/visual formatting. |
+| CSS `!important` declarations | 248 | Indicates cascade pressure between Bootstrap, global enterprise CSS, data-interface CSS, and page CSS. |
+| CSS hard-coded hex colors | 410 | Many are fallback values, but some represent legacy color decisions outside tokens. |
 
 ## 4. Executive summary
 
@@ -60,13 +62,17 @@ The modern enterprise foundation is now present and broad, but several older des
 - `static/css/responsive-fixes.css`
 - `templates/base.html`
 
-**Evidence**
+**Evidence at audit time**
 
-`responsive-fixes.js` is loaded globally from `base.html` and still performs layout mutation:
+`responsive-fixes.js` was loaded globally from `base.html` and performed layout mutation:
 
-- Removes duplicate `.unified-pagination-container` and `.pagination-container` elements.
-- Sets `.btn-group`, `.filter-controls-grid`, `.action-bar`, `.page-header`, button widths, margins, flex directions, and grid columns through inline styles.
-- Runs at DOM ready, on resize, and delayed timeouts.
+- Removed duplicate `.unified-pagination-container` and `.pagination-container` elements.
+- Set `.btn-group`, `.filter-controls-grid`, `.action-bar`, `.page-header`, button widths, margins, flex directions, and grid columns through inline styles.
+- Ran at DOM ready, on resize, and delayed timeouts.
+
+**Follow-up now applied**
+
+`responsive-fixes.js` has been rewritten as semantic responsive table metadata only. It no longer mutates visual layout styles or deletes pagination nodes; responsive layout now lives in CSS.
 
 **Why this disrupts modern layouts**
 
@@ -201,6 +207,10 @@ The policy currently uses broad selectors and applies sticky behavior to matched
 4. Add an opt-out attribute for nested/nonsticky controls: `data-ia-sticky="false"`.
 5. Add a small DOM audit in development mode that logs unclassified control/result containers.
 
+**Follow-up now applied**
+
+The data-interface enhancer now recognizes explicit `data-ia-role`/`data-ia-scroll`/`data-ia-sticky` contracts, supports opt-outs, and expands fixed-control/data-region coverage for the missing search, FMAS, dashboard, path-analysis, analyst, chart, and pagination classes.
+
 ---
 
 ### P0.4 — `charts-dashboard-page.js` still contains old inline empty-state rendering
@@ -211,9 +221,13 @@ The policy currently uses broad selectors and applies sticky behavior to matched
 - `static/css/charts-dashboard.css`
 - `static/css/comprehensive-dashboard.css`
 
-**Evidence**
+**Evidence at audit time**
 
-`charts-dashboard-page.js` still creates an empty state with `style.cssText` and inline icon/text styles, while `comprehensive-dashboard-page.js` has already been normalized to `.chart-empty-state`.
+`charts-dashboard-page.js` still created an empty state with `style.cssText` and inline icon/text styles, while `comprehensive-dashboard-page.js` had already been normalized to `.chart-empty-state`.
+
+**Follow-up now applied**
+
+`charts-dashboard-page.js` now uses the shared `.chart-empty-state` surface, and the shared chart empty-state styling lives in `static/css/chart-export.css`.
 
 **Why this disrupts modern layouts**
 
@@ -635,8 +649,8 @@ Use the existing message/modal system for confirmations and errors, with native 
 
 ### Phase 4 — Add design regression governance
 
-1. Add a lint script that reports disallowed inline styles in templates and JS.
-2. Add a duplicate selector report for CSS files outside approved shared layers.
+1. Use `scripts/audit_ui_design.py` to report inline styles, JS style mutation, CSS duplicate selectors, broad page selectors, hard-coded colors and `!important` counts.
+2. Add stricter fail-on-new thresholds once the current backlog is burned down.
 3. Add a dev-only DOM audit that logs unclassified control/data regions.
 4. Add visual smoke coverage once Flask/test browser dependencies are available.
 5. Document allowed runtime styles: progress width, theme swatches, canvas sizing, file input hiding, and initial no-flicker display states.

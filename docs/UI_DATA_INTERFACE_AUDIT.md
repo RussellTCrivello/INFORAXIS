@@ -2,7 +2,7 @@
 
 Date: 2026-09-16
 
-This audit enumerates the structured-data and Add/Create interfaces reviewed for the application-wide data-interface enhancement.
+This audit enumerates the structured-data and Add/Create interfaces reviewed for the application-wide data-interface enhancement. The target interaction model is codified in `docs/ENTERPRISE_DATA_WORKSPACE_BLUEPRINT.md`: a high-density enterprise workspace where the data workbench is the primary product surface.
 
 ## Structured and tabular surfaces
 

@@ -25,33 +25,61 @@ const SELECTOR = {
     tables: 'table',
     modals: '.modal',
     controlSurfaces: [
+        '.ia-control-surface',
+        '[data-ia-role="controls"]',
+        '[data-ia-sticky="true"]',
         '.file-filters-section',
         '.filter-panel',
         '.filters-panel',
         '.advanced-filters-panel',
+        '.filters-chips-container',
+        '.filter-actions-bar',
         '.search-command-card',
         '.search-filter-section',
+        '.search-view-navigation',
+        '.search-toolbar',
+        '.search-toolbar-side',
         '.analysis-view-navigation',
+        '.dashboard-navigation',
+        '.tab-navigation',
+        '.path-tree-actions',
         '.analyst-classify-controls',
+        '.analyst-filters',
+        '.analyst-pagination',
         '.chart-controls-wrapper',
+        '.chart-toolbar',
+        '.chart-actions',
         '.upload-controls',
+        '.navigation-bar',
+        '.fmas-global-search-bar',
         '.file-section-toolbar',
+        '.file-content-actions',
+        '.file-modal-nav-controls',
+        '.modal-search-row',
+        '.sort-control',
+        '.per-page-control',
         '.action-bar',
         '.results-info-bar',
+        '.results-actions',
+        '.results-sort',
+        '.results-pagination',
         '.pagination-container',
         '.pagination-wrapper',
         '.unified-pagination-container',
         '.cursor-pagination-container',
         '.pagination-controls',
         '.unified-pagination-controls',
-        '.results-sort',
         '.paging-controls'
     ].join(','),
     dataRegions: [
+        '.ia-scroll-body',
+        '[data-ia-role="data-region"]',
+        '[data-ia-scroll="true"]',
         '.table-wrapper',
         '.table-responsive',
         '.ia-table-scroll',
         '.results-container',
+        '.search-results-container',
         '.similar-groups-container',
         '.files-list-view',
         '.files-grid-view',
@@ -65,8 +93,13 @@ const SELECTOR = {
         '.files-container',
         '.data-grid',
         '.result-list',
+        '.results-list',
+        '.results-grid',
+        '.search-results-card',
         '.file-reports-grid',
         '.notifications-list',
+        '.path-tree',
+        '.path-tree-container',
         '.word-search-results',
         '.category-search-results'
     ].join(','),
@@ -1432,6 +1465,12 @@ function setupCommandPalette() {
     const palette = ensureCommandPalette();
     const input = palette.querySelector('#iaCommandInput');
     input.addEventListener('input', () => renderCommandPalette(input.value));
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('[data-ia-open-command]')) {
+            event.preventDefault();
+            openCommandPalette();
+        }
+    });
     palette.addEventListener('click', (event) => {
         if (event.target.closest('[data-ia-command-close]')) closeCommandPalette();
         const item = event.target.closest('.ia-command-item');
@@ -1536,12 +1575,15 @@ function setupGlobalSelectionContext() {
 function enhanceScrollPolicy(root = document) {
     queryWithin(root, SELECTOR.controlSurfaces).forEach((surface) => {
         if (!(surface instanceof HTMLElement)) return;
-        if (surface.closest('.ia-data-scroll-region, .ia-table-scroll, .table-wrapper, .table-responsive')) return;
+        if (surface.matches('[data-ia-sticky="false"], [data-ia-role="inline-controls"]')) return;
+        if (surface.closest('[data-ia-sticky="false"], .ia-data-scroll-region, .ia-table-scroll, .table-wrapper, .table-responsive')) return;
         surface.classList.add('ia-fixed-control-surface');
     });
 
     queryWithin(root, SELECTOR.dataRegions).forEach((region) => {
         if (!(region instanceof HTMLElement)) return;
+        if (region.matches('[data-ia-scroll="false"], [data-ia-role="controls"], [data-ia-sticky="true"]')) return;
+        if (region.closest('[data-ia-scroll="false"]')) return;
         region.classList.add('ia-data-scroll-region');
         if (!region.getAttribute('role') && region.querySelector('table, .file-card, .file-row-item, .explorer-item, .result-card, .search-result-item')) {
             region.setAttribute('role', 'region');
@@ -1554,12 +1596,14 @@ function enhanceScrollPolicy(root = document) {
 
     queryWithin(root, '.results-section, .search-results-section').forEach((section) => {
         if (!(section instanceof HTMLElement)) return;
+        if (section.matches('[data-ia-scroll="false"]')) return;
         section.classList.add('ia-scroll-framed-section');
         Array.from(section.children).forEach((child) => {
             if (!(child instanceof HTMLElement)) return;
-            if (child.matches('.results-header, .section-header, .filter-actions, .results-sort, script, style')) {
+            if (child.matches('script, style, [data-ia-sticky="false"], [data-ia-role="inline-controls"]')) return;
+            if (child.matches('.results-header, .section-header, .filter-actions, .filter-actions-bar, .results-actions, .results-sort, .results-pagination, [data-ia-role="controls"], [data-ia-sticky="true"]')) {
                 child.classList.add('ia-fixed-control-row');
-            } else {
+            } else if (!child.matches('[data-ia-scroll="false"]')) {
                 child.classList.add('ia-data-scroll-region');
             }
         });

@@ -34,6 +34,12 @@ img, video, canvas, svg {
     }
 }
 
+@media (max-width: 991.98px) {
+    .filter-controls-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
 @media (max-width: 767.98px) {
     .btn-group,
     .action-buttons,
@@ -42,9 +48,38 @@ img, video, canvas, svg {
         flex-wrap: wrap;
     }
 
+    .filter-controls-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .modal-dialog.modal-lg,
     .modal-dialog.modal-xl {
         max-width: calc(100vw - 1rem);
         margin-inline: 0.5rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .btn-group,
+    .action-bar,
+    .page-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .btn-group,
+    .action-bar .action-group,
+    .page-header .d-flex.gap-2 {
+        width: 100%;
+    }
+
+    .btn-group .btn,
+    .action-bar .btn-action,
+    .page-header .d-flex.gap-2 .btn {
+        width: 100%;
+    }
+
+    .filter-controls-grid {
+        grid-template-columns: 1fr;
     }
 }

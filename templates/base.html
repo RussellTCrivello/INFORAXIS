@@ -217,6 +217,26 @@
             {% endif %}
             <h4>{{ user_settings.get('system', 'app_name', _('File Analysis')) if user_settings else _('File Analysis') }}</h4>
         </div>
+
+        <div class="sidebar-quick-actions" aria-label="{{ _('Quick Actions') }}">
+            <button type="button" class="sidebar-command-btn" data-ia-open-command>
+                <i class="bi bi-command" aria-hidden="true"></i>
+                <span>{{ _('Quick Actions') }}</span>
+                <kbd>Ctrl/⌘K</kbd>
+            </button>
+            <div class="sidebar-quick-links">
+                {% if is_interface_enabled('upload_files') %}
+                <a href="{{ url_for('files.upload_page') }}" class="sidebar-quick-link">
+                    <i class="bi bi-cloud-upload" aria-hidden="true"></i>{{ _('Upload') }}
+                </a>
+                {% endif %}
+                {% if is_interface_enabled('search') or is_interface_enabled('advanced_search') %}
+                <a href="{{ url_for('search_page') }}" class="sidebar-quick-link">
+                    <i class="bi bi-search" aria-hidden="true"></i>{{ _('Search') }}
+                </a>
+                {% endif %}
+            </div>
+        </div>
         
         <!-- Navigation Menu -->
         <ul class="sidebar-nav">

@@ -59,6 +59,27 @@
     color: var(--text-light, #5f6f85);
 }
 
+.chart-empty-state {
+    display: flex;
+    min-height: 31.25rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.chart-empty-state i {
+    margin-bottom: 1rem;
+    color: var(--text-muted);
+    font-size: 3rem;
+}
+
+.chart-empty-state p {
+    margin: 0;
+    color: var(--text-light);
+    font-size: 1.1rem;
+}
+
 @media (max-width: 767.98px) {
     .chart-type-selector-wrapper,
     .chart-export-wrapper {
