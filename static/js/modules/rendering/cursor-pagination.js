@@ -40,7 +40,7 @@ class CursorPaginator {
         this.nextCursor = null;
         this.prevCursor = null;
         this.hasNext = false;
-        this.hasNext = false;
+        this.hasPrev = false;
         this.currentData = [];
         this.totalEstimated = null;
         this.queryTimeMs = null;

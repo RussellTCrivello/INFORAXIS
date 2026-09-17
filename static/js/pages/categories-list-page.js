@@ -537,6 +537,9 @@ function renderPagination() {
         module.renderUnifiedPagination({
             currentPage: currentPage,
             totalPages: totalPages,
+            totalItems: totalItems,
+            pageSize: itemsPerPage,
+            itemLabel: translations.categories || 'categories',
             containerId: paginationContainer.id,
             onPageChange: (targetPage) => {
                 changePage(targetPage);

@@ -61,6 +61,9 @@ export function initializeSectionPaginationControls(section) {
     renderUnifiedPagination({
         currentPage: pag.currentPage,
         totalPages: pag.totalPages,
+        totalItems: pag.total,
+        pageSize: pag.perPage,
+        itemLabel: translations.items || 'items',
         containerId: containerId,
         onPageChange: (targetPage) => {
             if (typeof window.loadSectionPage === 'function') {
@@ -120,6 +123,9 @@ export function initializeFilePaginationControls() {
         renderUnifiedPagination({
             currentPage: pag.currentPage,
             totalPages: pag.totalPages,
+            totalItems: pag.total,
+            pageSize: pag.perPage,
+            itemLabel: translations.files || 'files',
             containerId: containerId,
             onPageChange: (targetPage) => {
                 if (typeof window.loadFilePage === 'function') {

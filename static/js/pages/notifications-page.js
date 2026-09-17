@@ -21,7 +21,8 @@ const notificationsPage = {
         future: { source: '', side: '', search: '', sort_by: 'created_at', sort_order: 'desc', page: 1 }
     },
     searchTimeouts: {},
-    currentNotificationId: null
+    currentNotificationId: null,
+    perPage: 50
 };
 
 // Track if already initialized to prevent double initialization
@@ -243,7 +244,11 @@ notificationsPage.switchTab = function(tab) {
 };
 
 notificationsPage.switchSubTab = function(tab, subTab, loadData = true) {
+    const previousSubTab = this.currentSubTab[tab];
     this.currentSubTab[tab] = subTab;
+    if (previousSubTab !== subTab) {
+        this.filters[tab].page = 1;
+    }
     
     // Update sub-tab buttons for this main tab
     const tabContent = document.getElementById(`tab-${tab}`);
@@ -297,6 +302,18 @@ notificationsPage.refreshAll = function() {
     this.loadTabData(this.currentTab);
 };
 
+notificationsPage.changePage = function(tab, page) {
+    const nextPage = Math.max(1, parseInt(page, 10) || 1);
+    this.filters[tab].page = nextPage;
+    this.loadTabData(tab).then(() => {
+        const activeSubTab = this.currentSubTab[tab] || 'all';
+        const tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
+        const sectionName = activeSubTab.charAt(0).toUpperCase() + activeSubTab.slice(1);
+        const list = document.getElementById(`messages${tabName}${sectionName}`);
+        if (list) list.scrollTop = 0;
+    });
+};
+
 notificationsPage.setSort = function(tab, sortValue) {
     let sortBy, sortOrder;
     if (sortValue.startsWith('created_at_')) {
@@ -321,28 +338,27 @@ notificationsPage.setSort = function(tab, sortValue) {
 };
 
 notificationsPage.loadTabData = async function(tab) {
-    const allListId = `messages${tab.charAt(0).toUpperCase() + tab.slice(1)}All`;
-    const unreadListId = `messages${tab.charAt(0).toUpperCase() + tab.slice(1)}Unread`;
-    const readListId = `messages${tab.charAt(0).toUpperCase() + tab.slice(1)}Read`;
-    const allList = document.getElementById(allListId);
-    const unreadList = document.getElementById(unreadListId);
-    const readList = document.getElementById(readListId);
+    const tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
+    const activeSubTab = this.currentSubTab[tab] || 'all';
+    const sectionName = activeSubTab.charAt(0).toUpperCase() + activeSubTab.slice(1);
+    const activeList = document.getElementById(`messages${tabName}${sectionName}`);
     const loadingText = window.appTranslations?.['Loading...'] || 'Loading...';
-    
-    if (allList) allList.innerHTML = `<div class="loading-spinner"><i class="bi bi-arrow-repeat"></i><p>${loadingText}</p></div>`;
-    if (unreadList) unreadList.innerHTML = `<div class="loading-spinner"><i class="bi bi-arrow-repeat"></i><p>${loadingText}</p></div>`;
-    if (readList) readList.innerHTML = `<div class="loading-spinner"><i class="bi bi-arrow-repeat"></i><p>${loadingText}</p></div>`;
-    
+
+    if (activeList) {
+        activeList.innerHTML = `<div class="loading-spinner"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><p>${loadingText}</p></div>`;
+    }
+
     try {
         const params = new URLSearchParams({
             page: this.filters[tab].page,
-            per_page: 1000,
+            per_page: this.perPage,
             search: this.filters[tab].search || '',
             show_read: 'true',
+            read_status: activeSubTab,
             sort_by: this.filters[tab].sort_by || 'created_at',
             sort_order: this.filters[tab].sort_order || 'desc'
         });
-        
+
         // Tab-specific filters
         if (tab === 'all') {
             if (this.filters[tab].source) params.append('source_id', this.filters[tab].source);
@@ -356,51 +372,96 @@ notificationsPage.loadTabData = async function(tab) {
             if (this.filters[tab].source) params.append('source_id', this.filters[tab].source);
             if (this.filters[tab].side) params.append('side_id', this.filters[tab].side);
         }
-        
+
         const response = await fetch(`/api/notifications/paginated?${params}`);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
-            // Debug logging
-            console.log(`Loaded ${data.notifications?.length || 0} notifications for tab: ${tab}`);
-            
-            let allNotifications = data.notifications || [];
-            let unreadNotifications = allNotifications.filter(n => !n.read);
-            let readNotifications = allNotifications.filter(n => n.read);
-            
-            allNotifications = this.sortNotifications(allNotifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
-            unreadNotifications = this.sortNotifications(unreadNotifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
-            readNotifications = this.sortNotifications(readNotifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
-            
+            console.log(`Loaded ${data.notifications?.length || 0} notifications for tab: ${tab}/${activeSubTab}`);
+
+            let notifications = data.notifications || [];
+            notifications = this.sortNotifications(notifications, this.filters[tab].sort_by, this.filters[tab].sort_order);
+
             const summary = data.summary || null;
-            this.renderNotifications(allNotifications, tab, 'all', summary?.total);
-            this.renderNotifications(unreadNotifications, tab, 'unread', summary?.unread);
-            this.renderNotifications(readNotifications, tab, 'read', summary?.read);
-            this.updateCategoryStats(tab, data.notifications, summary);
-            
-            const sortSelect = document.getElementById(`sortBy${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+            this.updateSubTabCounts(tab, summary);
+            this.renderNotifications(notifications, tab, activeSubTab, data.pagination?.total);
+            this.updateCategoryStats(tab, notifications, summary);
+            this.renderPagination(tab, activeSubTab, data.pagination, summary);
+
+            const sortSelect = document.getElementById(`sortBy${tabName}`);
             if (sortSelect) {
                 const sortValue = `${this.filters[tab].sort_by}_${this.filters[tab].sort_order}`;
                 sortSelect.value = sortValue;
             }
         } else {
             const errorMsg = window.appTranslations?.['Error loading notifications'] || 'Error loading notifications';
-            if (allList) allList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${data.error || errorMsg}</p></div>`;
-            if (unreadList) unreadList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${data.error || errorMsg}</p></div>`;
-            if (readList) readList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${data.error || errorMsg}</p></div>`;
+            if (activeList) {
+                activeList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><h3>Error</h3><p>${this.escapeHtml(data.error || errorMsg)}</p></div>`;
+            }
         }
     } catch (error) {
         console.error('Error loading notifications:', error);
         const errorMsg = window.appTranslations?.['Error loading notifications'] || 'Error loading notifications';
-        if (allList) allList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${errorMsg}</p></div>`;
-        if (unreadList) unreadList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${errorMsg}</p></div>`;
-        if (readList) readList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><h3>Error</h3><p>${errorMsg}</p></div>`;
+        if (activeList) {
+            activeList.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><h3>Error</h3><p>${this.escapeHtml(errorMsg)}</p></div>`;
+        }
     }
+};
+
+notificationsPage.updateSubTabCounts = function(tab, summary = null) {
+    if (!summary) return;
+    const tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
+    const counts = {
+        all: Number.isFinite(Number(summary.total)) ? Number(summary.total) : 0,
+        unread: Number.isFinite(Number(summary.unread)) ? Number(summary.unread) : 0,
+        read: Number.isFinite(Number(summary.read)) ? Number(summary.read) : 0
+    };
+
+    Object.entries(counts).forEach(([section, value]) => {
+        const id = `${section}Count${tabName}`;
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+        const subTabEl = document.querySelector(`#tab-${tab} .sub-tab-btn[data-sub-tab="${section}"] .sub-tab-count`);
+        if (subTabEl) subTabEl.textContent = value;
+    });
+};
+
+notificationsPage.renderPagination = function(tab, section, pagination, summary = null) {
+    const tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
+    const container = document.getElementById(`pagination${tabName}`);
+    if (!container) return;
+
+    const totalPages = Number(pagination?.total_pages || pagination?.pages || 1);
+    if (!pagination || totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    import('../modules/rendering/unified-pagination.js').then(module => {
+        module.renderUnifiedPagination({
+            currentPage: Number(pagination.page || this.filters[tab].page || 1),
+            totalPages,
+            totalItems: pagination.total,
+            pageSize: pagination.per_page || this.perPage,
+            itemLabel: window.appTranslations?.notifications || 'notifications',
+            containerId: container.id,
+            onPageChange: (page) => this.changePage(tab, page),
+            urlParams: {},
+            showInfo: true,
+            showJump: totalPages > 5,
+            labels: {
+                itemLabel: window.appTranslations?.notifications || 'notifications'
+            }
+        });
+    }).catch(error => {
+        console.error('Error loading pagination renderer:', error);
+        container.innerHTML = '';
+    });
 };
 
 notificationsPage.renderNotifications = function(notifications, tab, section, totalOverride = null) {
@@ -598,7 +659,9 @@ notificationsPage.markAsRead = async function(notificationId, reload = true) {
         
         const data = await response.json();
         if (data.success) {
-            this.loadTabData(this.currentTab);
+            if (reload) {
+                this.loadTabData(this.currentTab);
+            }
             this.updateNotificationBadge();
         }
     } catch (error) {

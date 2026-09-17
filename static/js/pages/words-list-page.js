@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (unusedEl) unusedEl.textContent = unusedCount;
     }
     
-    function renderPaginator(page, total_pages) {
+    function renderPaginator(page, total_pages, totalItems = null) {
         // Find or create pagination container
         let paginationContainer = document.querySelector('.pagination-container');
         if (!paginationContainer) {
@@ -229,6 +229,9 @@ document.addEventListener('DOMContentLoaded', function() {
             module.renderUnifiedPagination({
                 currentPage: page,
                 totalPages: total_pages,
+                totalItems: totalItems,
+                pageSize: Number(document.getElementById('perPageSelect')?.value || new URLSearchParams(window.location.search).get('per_page') || 10),
+                itemLabel: translations.words || 'words',
                 containerId: paginationContainer.id,
                 onPageChange: (targetPage) => {
                     // Update URL without page reload
@@ -437,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const totalPages = json.total_pages || 1;
                 
                 renderRows(words, pageNum);
-                renderPaginator(pageNum, totalPages);
+                renderPaginator(pageNum, totalPages, json.total);
                 updateSearchInfo(json);
 
                 // STALE-01: keep the server-rendered "Total Words" stat card

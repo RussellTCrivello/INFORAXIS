@@ -1089,6 +1089,9 @@ function updatePagination(pagination) {
         module.renderUnifiedPagination({
             currentPage: pagination.page,
             totalPages: pagination.total_pages,
+            totalItems: pagination.total || searchState.totalResults,
+            pageSize: pagination.per_page || searchState.resultsPerPage,
+            itemLabel: tPage('results', 'results'),
             containerId: 'pagination',
             onPageChange: (page) => {
                 searchState.currentPage = page;

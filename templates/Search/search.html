@@ -212,7 +212,7 @@
         {% if results and total_pages and total_pages > 1 %}
         <div class="search-results-pagination ia-control-surface" data-ia-role="controls">
             {% from "components/unified_pagination.html" import unified_pagination %}
-            {{ unified_pagination(page, total_pages, url_for, 'search_page', {'q': query, 'scope': analyst_scope}) }}
+            {{ unified_pagination(page, total_pages, url_for, 'search_page', {'q': query, 'scope': analyst_scope}, total_items=total_results, per_page=per_page|default(results|length), item_label=_('results')) }}
         </div>
         {% endif %}
     </section>

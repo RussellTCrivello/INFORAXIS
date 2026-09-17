@@ -106,14 +106,6 @@ async function loadAssignments(page = 1) {
         analystState.totalPages = data.total_pages || 1;
         document.getElementById('assignmentsTotal').textContent = analystState.total;
 
-        const pageInfo = document.getElementById('assignmentsPageInfo');
-        if (pageInfo) {
-            pageInfo.textContent = analystT('pageOf', 'Page {page} of {pages} ({total} assignments)')
-                .replace('{page}', data.page || page)
-                .replace('{pages}', analystState.totalPages)
-                .replace('{total}', analystState.total);
-        }
-
         if (!data.assignments || data.assignments.length === 0) {
             body.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">${
                 escapeHtmlText(analystT('noAssignments', 'No analyst-categorized files match the current filters.'))
@@ -158,22 +150,21 @@ function renderPagination() {
     container.innerHTML = '';
     if (analystState.totalPages <= 1) return;
 
-    const make = (label, page, disabled, active) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-outline-secondary' + (active ? ' active' : '');
-        btn.textContent = label;
-        btn.disabled = disabled;
-        btn.onclick = () => loadAssignments(page);
-        container.appendChild(btn);
-    };
-    make('‹', analystState.page - 1, analystState.page <= 1, false);
-    const windowStart = Math.max(1, Math.min(analystState.page - 2, analystState.totalPages - 4));
-    const windowEnd = Math.min(analystState.totalPages, windowStart + 4);
-    for (let p = windowStart; p <= windowEnd; p++) {
-        make(String(p), p, false, p === analystState.page);
-    }
-    make('›', analystState.page + 1, analystState.page >= analystState.totalPages, false);
+    import('../modules/rendering/unified-pagination.js').then(module => {
+        module.renderUnifiedPagination({
+            currentPage: analystState.page,
+            totalPages: analystState.totalPages,
+            totalItems: analystState.total,
+            pageSize: analystState.perPage,
+            itemLabel: analystT('assignments', 'assignments'),
+            containerId: 'assignmentsPagination',
+            onPageChange: (targetPage) => loadAssignments(targetPage),
+            showInfo: true,
+            showJump: analystState.totalPages > 5
+        });
+    }).catch(error => {
+        console.error('Failed to load unified pagination renderer:', error);
+    });
 }
 
 // Reversibility (NFR-3): remove one category from one file. Only the

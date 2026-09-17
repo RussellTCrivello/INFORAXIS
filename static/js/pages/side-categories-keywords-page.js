@@ -24,60 +24,58 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentKeywordsPage = 1;
     const itemsPerPage = 10;
     
-    // Load categories and keywords
-    loadCategories(sideId, currentCategoriesPage);
-    loadKeywords(sideId, currentKeywordsPage);
-    
-    function loadCategories(sideId, page) {
-        const container = document.getElementById('categoriesContainer');
-        const paginationContainer = document.getElementById('categoriesPagination');
-        
-        container.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
-        
-        fetch(`/api/archives/side-categories-keywords?side_id=${sideId}&page=${page}&limit=${itemsPerPage}`)
+    // Load categories and keywords through one governed request. The backend
+    // accepts independent category/keyword pages, so one pagination control no
+    // longer forces the other list to the wrong offset or triggers duplicate
+    // initial fetches.
+    loadWorkspace(sideId);
+
+    function loadWorkspace(sideId, loadingScope = 'all') {
+        const categoriesContainer = document.getElementById('categoriesContainer');
+        const keywordsContainer = document.getElementById('keywordsContainer');
+        const categoriesPagination = document.getElementById('categoriesPagination');
+        const keywordsPagination = document.getElementById('keywordsPagination');
+        const loadingMarkup = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+        if ((loadingScope === 'all' || loadingScope === 'categories') && categoriesContainer) {
+            categoriesContainer.innerHTML = loadingMarkup;
+        }
+        if ((loadingScope === 'all' || loadingScope === 'keywords') && keywordsContainer) {
+            keywordsContainer.innerHTML = loadingMarkup;
+        }
+
+        fetch(`/api/archives/side-categories-keywords?side_id=${sideId}&categories_page=${currentCategoriesPage}&keywords_page=${currentKeywordsPage}&limit=${itemsPerPage}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    renderCategories(data.categories, container);
-                    renderPagination(data.pagination.categories, paginationContainer, 'categories', page => {
-                        currentCategoriesPage = page;
-                        loadCategories(sideId, page);
-                    });
+                    if (categoriesContainer) renderCategories(data.categories, categoriesContainer);
+                    if (keywordsContainer) renderKeywords(data.keywords, keywordsContainer);
+                    if (categoriesPagination) {
+                        renderPagination(data.pagination.categories, categoriesPagination, 'categories', page => {
+                            currentCategoriesPage = page;
+                            loadWorkspace(sideId, 'categories');
+                        });
+                    }
+                    if (keywordsPagination) {
+                        renderPagination(data.pagination.keywords, keywordsPagination, 'keywords', page => {
+                            currentKeywordsPage = page;
+                            loadWorkspace(sideId, 'keywords');
+                        });
+                    }
                 } else {
-                    container.innerHTML = `<div class="alert alert-warning">${data.error || translations.noCategories || 'No categories found'}</div>`;
+                    const message = escapeHtml(data.error || translations.loadFailed || 'Unable to load categories and keywords');
+                    if (categoriesContainer) categoriesContainer.innerHTML = `<div class="alert alert-warning">${message}</div>`;
+                    if (keywordsContainer) keywordsContainer.innerHTML = `<div class="alert alert-warning">${message}</div>`;
                 }
             })
             .catch(error => {
-                console.error('Error loading categories:', error);
-                container.innerHTML = `<div class="alert alert-danger">Error loading categories: ${error.message}</div>`;
+                console.error('Error loading categories/keywords:', error);
+                const message = escapeHtml(error.message || 'Unknown error');
+                if (categoriesContainer) categoriesContainer.innerHTML = `<div class="alert alert-danger">Error loading categories and keywords: ${message}</div>`;
+                if (keywordsContainer) keywordsContainer.innerHTML = `<div class="alert alert-danger">Error loading categories and keywords: ${message}</div>`;
             });
     }
-    
-    function loadKeywords(sideId, page) {
-        const container = document.getElementById('keywordsContainer');
-        const paginationContainer = document.getElementById('keywordsPagination');
-        
-        container.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
-        
-        fetch(`/api/archives/side-categories-keywords?side_id=${sideId}&page=${page}&limit=${itemsPerPage}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    renderKeywords(data.keywords, container);
-                    renderPagination(data.pagination.keywords, paginationContainer, 'keywords', page => {
-                        currentKeywordsPage = page;
-                        loadKeywords(sideId, page);
-                    });
-                } else {
-                    container.innerHTML = `<div class="alert alert-warning">${data.error || translations.noKeywords || 'No keywords found'}</div>`;
-                }
-            })
-            .catch(error => {
-                console.error('Error loading keywords:', error);
-                container.innerHTML = `<div class="alert alert-danger">Error loading keywords: ${error.message}</div>`;
-            });
-    }
-    
+
     function renderCategories(categories, container) {
         if (!categories || categories.length === 0) {
             container.innerHTML = `<div class="alert alert-info">${translations.noCategories || 'No categories found'}</div>`;
@@ -178,6 +176,9 @@ document.addEventListener('DOMContentLoaded', function() {
             module.renderUnifiedPagination({
                 currentPage: pagination.page,
                 totalPages: pagination.total_pages,
+                totalItems: pagination.total,
+                pageSize: pagination.per_page,
+                itemLabel: translations[type] || 'items',
                 containerId: container.id,
                 onPageChange: (targetPage) => {
                     onPageChange(targetPage);

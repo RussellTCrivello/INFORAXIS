@@ -404,7 +404,7 @@
 <!-- Pagination -->
 {% if cursor_pagination and total_pages >= 1 %}
     {% from "components/unified_pagination.html" import unified_pagination %}
-    {{ unified_pagination(page, total_pages, url_for, 'sides_list', {'search': search}, show_info=true, show_jump=true) }}
+    {{ unified_pagination(page, total_pages, url_for, 'sides_list', {'search': search, 'limit': limit|default(50)}, show_info=true, show_jump=true, total_items=total_estimated, per_page=limit|default(50), item_label=_('sides')) }}
     
     <script>
     // Override pagination navigation for cursor-based pagination

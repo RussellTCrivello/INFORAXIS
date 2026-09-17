@@ -128,6 +128,7 @@ def register_sources_routes(app):
                                  has_next=has_next,
                                  has_prev=has_prev,
                                  total_estimated=total_estimated,
+                                 limit=limit,
                                  query_time_ms=result.get('query_time_ms', 0))
         
         except Exception as e:

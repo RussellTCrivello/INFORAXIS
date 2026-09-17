@@ -503,6 +503,9 @@ function renderPagination() {
             window.renderUnifiedPagination({
                 currentPage: currentPage,
                 totalPages: totalPages,
+                totalItems: totalItems,
+                pageSize: itemsPerPage,
+                itemLabel: translations.words || 'words',
                 containerId: paginationContainer.id,
                 onPageChange: (targetPage) => {
                     changePage(targetPage);
@@ -524,6 +527,9 @@ function renderPagination() {
             module.renderUnifiedPagination({
                 currentPage: currentPage,
                 totalPages: totalPages,
+                totalItems: totalItems,
+                pageSize: itemsPerPage,
+                itemLabel: translations.words || 'words',
                 containerId: paginationContainer.id,
                 onPageChange: (targetPage) => {
                     changePage(targetPage);
