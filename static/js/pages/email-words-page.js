@@ -6,8 +6,11 @@
 // Global state for sorting
 let currentSortBy = 'word';
 let currentSortOrder = 'asc';
+let initialized = false;
 
 function initializeEmailWordsPage() {
+    if (initialized) return;
+    initialized = true;
     // Load filters from JSON embedded in the page (template-safe)
     const filtersDataEl = document.getElementById('emailWordsFiltersData');
     if (filtersDataEl && filtersDataEl.textContent) {
@@ -52,24 +55,12 @@ function initializeEmailWordsPage() {
     
     // Add click handlers for sortable columns
     document.querySelectorAll('.sortable').forEach((th) => {
-        th.style.cursor = 'pointer';
         th.addEventListener('click', function() {
             const sortColumn = this.getAttribute('data-sort');
             sortTable(sortColumn);
         });
     });
-    
-    // Add hover effect for sortable columns
-    document.querySelectorAll('.sortable').forEach((th) => {
-        th.addEventListener('mouseenter', function() {
-            this.style.backgroundColor = '#f8f9fa';
-        });
-        th.addEventListener('mouseleave', function() {
-            if (!this.querySelector('.sort-icon.text-primary')) {
-                this.style.backgroundColor = '';
-            }
-        });
-    });
+
     
     // Update totals display immediately
     updateTotalsDisplay();
@@ -137,10 +128,15 @@ function clearSearch() {
     if (searchInput) searchInput.value = '';
 }
 
+function currentActionButton() {
+    return window.event?.target?.closest?.('button') || document.activeElement?.closest?.('button') || null;
+}
+
 function copyEmail(email) {
     navigator.clipboard.writeText(email).then(() => {
         // Show temporary success message
-        const btn = event.target.closest('button');
+        const btn = currentActionButton();
+        if (!btn) return;
         const originalHTML = btn.innerHTML;
         btn.innerHTML = '<i class="bi bi-check"></i>';
         btn.classList.remove('btn-outline-primary');
@@ -157,7 +153,8 @@ function copyEmail(email) {
 async function copyToClipboard() {
     // Fetch ALL filtered emails from database
     try {
-        const button = event.target.closest('button');
+        const button = currentActionButton();
+        if (!button) return;
         const originalHTML = button.innerHTML;
         button.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading...';
         button.disabled = true;
@@ -190,9 +187,11 @@ async function copyToClipboard() {
     } catch (error) {
         console.error('Error copying emails:', error);
         alert(`Error copying emails: ${error.message}`);
-        const button = event.target.closest('button');
-        button.innerHTML = '<i class="bi bi-clipboard"></i> Copy All';
-        button.disabled = false;
+        const button = currentActionButton();
+        if (button) {
+            button.innerHTML = '<i class="bi bi-clipboard"></i> Copy All';
+            button.disabled = false;
+        }
     }
 }
 
@@ -274,8 +273,8 @@ async function showEmailFiles(email) {
         console.error('Error loading email files:', error);
         modalBody.innerHTML = `
             <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>Error loading files:</strong> ${error.message}
+                <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>
+                <strong>Error loading files:</strong> ${escapeHtml(error.message)}
             </div>
         `;
     }
@@ -284,77 +283,96 @@ async function showEmailFiles(email) {
 // Render files list in modal
 function renderEmailFiles(files, email) {
     const modalBody = document.getElementById('emailFilesModalBody');
-    
+    if (!modalBody) return;
+
+    const emailEsc = escapeHtml(email);
     let html = `
         <div class="mb-3 p-3 bg-light rounded">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <strong>${files.length}</strong> ${files.length === 1 ? 'file' : 'files'} containing 
-                    <code>${email}</code>
+                    <strong>${files.length}</strong> ${files.length === 1 ? 'file' : 'files'} containing
+                    <code>${emailEsc}</code>
                 </div>
             </div>
         </div>
-        <div class="list-group">
+        <div class="list-group email-file-results-list">
     `;
-    
-    files.forEach((file, index) => {
+
+    files.forEach((file) => {
         const fileIcon = getFileIcon(file.type);
         const fileSize = formatFileSize(file.size);
         const fileDate = file.date ? new Date(file.date).toLocaleDateString() : 'N/A';
-        const statusBadge = file.status === 'Read' 
-            ? '<span class="badge bg-success">Read</span>' 
+        const fileType = escapeHtml(String(file.type || 'file').toUpperCase());
+        const fileId = encodeURIComponent(file.id);
+        const wordCount = Number(file.word_count) || 0;
+        const statusBadge = file.status === 'Read'
+            ? '<span class="badge bg-success">Read</span>'
             : '<span class="badge bg-secondary">Unread</span>';
-        
+
         html += `
-            <div class="list-group-item list-group-item-action" 
-                 onclick="window.open('/file/${file.id}', '_blank')"
-                 style="cursor: pointer;">
-                <div class="d-flex w-100 justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <div class="d-flex align-items-center mb-2">
+            <div class="list-group-item list-group-item-action email-file-result"
+                 data-file-url="/file/${fileId}" role="button" tabindex="0">
+                <div class="d-flex w-100 justify-content-between align-items-start gap-3">
+                    <div class="flex-grow-1 min-width-0">
+                        <div class="d-flex align-items-center gap-2 mb-2 min-width-0">
                             ${fileIcon}
-                            <h6 class="mb-0 ms-2">${escapeHtml(file.name)}</h6>
+                            <h6 class="mb-0 text-truncate">${escapeHtml(file.name || 'Untitled file')}</h6>
                             ${statusBadge}
                         </div>
-                        <div class="small text-muted mb-1">
-                            <i class="bi bi-folder"></i> ${escapeHtml(file.path || 'N/A')}
+                        <div class="small text-muted mb-1 text-truncate">
+                            <i class="bi bi-folder" aria-hidden="true"></i> ${escapeHtml(file.path || 'N/A')}
                         </div>
-                        <div class="small">
-                            <span class="badge bg-info me-2">
-                                <i class="bi bi-file-earmark"></i> ${file.type.toUpperCase()}
+                        <div class="small d-flex flex-wrap gap-1">
+                            <span class="badge bg-info">
+                                <i class="bi bi-file-earmark" aria-hidden="true"></i> ${fileType}
                             </span>
-                            <span class="badge bg-secondary me-2">
-                                <i class="bi bi-hdd"></i> ${fileSize}
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-hdd" aria-hidden="true"></i> ${fileSize}
                             </span>
-                            <span class="badge bg-secondary me-2">
-                                <i class="bi bi-calendar"></i> ${fileDate}
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-calendar" aria-hidden="true"></i> ${escapeHtml(fileDate)}
                             </span>
-                            ${file.word_count ? `<span class="badge bg-primary">
-                                <i class="bi bi-envelope"></i> ${file.word_count} occurrence${file.word_count !== 1 ? 's' : ''}
+                            ${wordCount ? `<span class="badge bg-primary">
+                                <i class="bi bi-envelope" aria-hidden="true"></i> ${wordCount} occurrence${wordCount !== 1 ? 's' : ''}
                             </span>` : ''}
                         </div>
                         ${file.source || file.side ? `
-                            <div class="small mt-1">
-                                ${file.source ? `<span class="badge bg-outline-primary me-1">Source: ${escapeHtml(file.source)}</span>` : ''}
+                            <div class="small mt-1 d-flex flex-wrap gap-1">
+                                ${file.source ? `<span class="badge bg-outline-primary">Source: ${escapeHtml(file.source)}</span>` : ''}
                                 ${file.side ? `<span class="badge bg-outline-secondary">Side: ${escapeHtml(file.side)}</span>` : ''}
                             </div>
                         ` : ''}
                     </div>
-                    <div class="ms-3">
-                        <button class="btn btn-sm btn-outline-primary" 
-                                onclick="event.stopPropagation(); window.open('/file/${file.id}', '_blank')"
-                                title="View file">
-                            <i class="bi bi-eye"></i>
+                    <div class="flex-shrink-0">
+                        <button class="btn btn-sm btn-outline-primary email-file-open-btn" type="button" title="View file">
+                            <i class="bi bi-eye" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
             </div>
         `;
     });
-    
+
     html += `</div>`;
-    
+
     modalBody.innerHTML = html;
+    modalBody.querySelectorAll('.email-file-result').forEach((item) => {
+        const open = () => {
+            const url = item.getAttribute('data-file-url');
+            if (url) window.open(url, '_blank', 'noopener');
+        };
+        item.addEventListener('click', open);
+        item.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                open();
+            }
+        });
+        item.querySelector('.email-file-open-btn')?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            open();
+        });
+    });
 }
 
 // Helper functions
@@ -393,7 +411,8 @@ function escapeHtml(text) {
 async function exportData() {
     // Fetch ALL filtered emails from database for export
     try {
-        const button = event.target.closest('button');
+        const button = currentActionButton();
+        if (!button) return;
         const originalHTML = button.innerHTML;
         button.innerHTML = '<i class="bi bi-hourglass-split"></i> Exporting...';
         button.disabled = true;
@@ -437,9 +456,11 @@ async function exportData() {
     } catch (error) {
         console.error('Error exporting emails:', error);
         alert(`Error exporting emails: ${error.message}`);
-        const button = event.target.closest('button');
-        button.innerHTML = '<i class="bi bi-download"></i> Export CSV';
-        button.disabled = false;
+        const button = currentActionButton();
+        if (button) {
+            button.innerHTML = '<i class="bi bi-download"></i> Export CSV';
+            button.disabled = false;
+        }
     }
 }
 
@@ -447,13 +468,21 @@ async function exportData() {
 function showToast(message, type = 'info') {
     const toastContainer = document.getElementById('toastContainer') || createToastContainer();
     const toast = document.createElement('div');
-    toast.className = `alert alert-${type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
-    toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    toast.innerHTML = `
-        <i class="bi bi-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
+    toast.className = `alert alert-${type === 'success' ? 'success' : 'info'} alert-dismissible fade show email-toast`;
+
+    const icon = document.createElement('i');
+    icon.className = `bi bi-${type === 'success' ? 'check-circle' : 'info-circle'} me-2`;
+    icon.setAttribute('aria-hidden', 'true');
+    toast.appendChild(icon);
+    toast.appendChild(document.createTextNode(message));
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'btn-close';
+    close.setAttribute('data-bs-dismiss', 'alert');
+    close.setAttribute('aria-label', 'Close');
+    toast.appendChild(close);
+
     toastContainer.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
 }
@@ -461,6 +490,7 @@ function showToast(message, type = 'info') {
 function createToastContainer() {
     const container = document.createElement('div');
     container.id = 'toastContainer';
+    container.className = 'toast-container-global';
     document.body.appendChild(container);
     return container;
 }
@@ -469,31 +499,6 @@ function copyAllEmails() {
     copyToClipboard();
 }
 
-// Add to contacts
-function addToContacts(email) {
-    fetch('/contacts/add', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({email: email})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const btn = event.target.closest('button');
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-check"></i>';
-            btn.classList.remove('btn-outline-success');
-            btn.classList.add('btn-success');
-            
-            setTimeout(() => {
-                btn.innerHTML = originalHTML;
-                btn.classList.remove('btn-success');
-                btn.classList.add('btn-outline-success');
-            }, 2000);
-        }
-    })
-    .catch(error => console.error('Error:', error));
-}
 
 // Additional utility functions
 function refreshPage() {
@@ -536,7 +541,6 @@ window.copyToClipboard = copyToClipboard;
 window.searchInFiles = searchInFiles;
 window.showEmailFiles = showEmailFiles;
 window.exportData = exportData;
-window.addToContacts = addToContacts;
 window.refreshPage = refreshPage;
 window.showHelp = showHelp;
 window.sortTable = sortTable;

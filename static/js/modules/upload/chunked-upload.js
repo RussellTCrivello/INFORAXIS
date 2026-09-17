@@ -38,7 +38,9 @@ class ChunkedUploadClient {
     /**
      * Start chunked upload
      */
-    async upload(file, sourceId, sideId, autoAnalyze = false) {
+    async upload(file, sourceId, sideId, autoAnalyze = false, context = {}) {
+        const uiUploadId = context.uiUploadId || null;
+        let uploadId = null;
         try {
             // Validate inputs
             if (!file || !sourceId || !sideId) {
@@ -65,7 +67,7 @@ class ChunkedUploadClient {
                 throw new Error(session.error || 'Failed to start upload session');
             }
             
-            const uploadId = session.upload_id;
+            uploadId = session.upload_id;
             const totalChunks = session.total_chunks;
             const chunkSize = session.chunk_size;
             
@@ -106,6 +108,7 @@ class ChunkedUploadClient {
                 
                 this.onProgress({
                     uploadId,
+                    uiUploadId: uiUploadId || uploadId,
                     progress,
                     uploadedChunks: uploadInfo.uploadedChunks,
                     totalChunks,
@@ -123,15 +126,23 @@ class ChunkedUploadClient {
             
             console.log('Upload completed successfully!');
             
+            const completedResult = {
+                ...result,
+                uploadId,
+                uiUploadId: uiUploadId || uploadId
+            };
+
             // Cleanup
             this.activeUploads.delete(uploadId);
             
             // Call completion callback
-            this.onComplete(result);
+            this.onComplete(completedResult);
             
-            return result;
+            return completedResult;
             
         } catch (error) {
+            if (uiUploadId) error.uiUploadId = uiUploadId;
+            if (uploadId) error.uploadId = uploadId;
             console.error('Upload error:', error);
             this.onError(error);
             throw error;
@@ -229,7 +240,7 @@ class ChunkedUploadClient {
      */
     async completeUpload(uploadId) {
         try {
-            const data = await apiPost(`/upload/chunked/${uploadId}/complete`, {});
+            const data = await apiPost(`/upload/chunked/${uploadId}/complete`, {}, {}, 10 * 60 * 1000);
             return data;
         } catch (error) {
             console.error('Error completing upload:', error);
@@ -324,19 +335,23 @@ class ChunkedUploadUI {
         this.container.innerHTML = `
             <div class="chunked-upload-container">
                 <div class="upload-controls">
-                    <input type="file" id="chunked-file-input" multiple style="display: none;">
-                    <button class="btn btn-primary" onclick="document.getElementById('chunked-file-input').click()">
-                        <i class="bi bi-upload"></i> Select Files
+                    <input type="file" id="chunked-file-input" class="chunked-file-input" multiple hidden>
+                    <button class="btn btn-primary" type="button" data-chunked-select-files>
+                        <i class="bi bi-upload" aria-hidden="true"></i> Select Files
                     </button>
-                    <span class="upload-info"></span>
+                    <span class="upload-info" aria-live="polite"></span>
                 </div>
                 <div class="upload-list" id="chunked-upload-list"></div>
             </div>
         `;
         
-        // Setup file input handler
+        // Setup file input handler without inline JavaScript so the chunked
+        // uploader follows the same enterprise event-binding pattern as the
+        // rest of the upload workspace.
         const fileInput = document.getElementById('chunked-file-input');
-        fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+        const selectButton = this.container.querySelector('[data-chunked-select-files]');
+        selectButton?.addEventListener('click', () => fileInput?.click());
+        fileInput?.addEventListener('change', (e) => this.handleFileSelect(e));
     }
     
     async handleFileSelect(event) {
@@ -347,9 +362,10 @@ class ChunkedUploadUI {
         }
         
         // Get source and side from form (assuming they exist)
-        const sourceId = parseInt(document.getElementById('source_id')?.value);
-        const sideId = parseInt(document.getElementById('side_id')?.value);
-        const autoAnalyze = document.getElementById('auto_analyze')?.checked || false;
+        const sourceId = parseInt(document.getElementById('source_id')?.value || document.getElementById('sourceSelect')?.value, 10);
+        const sideId = parseInt(document.getElementById('side_id')?.value || document.getElementById('sideSelect')?.value, 10);
+        const autoAnalyzeEl = document.getElementById('auto_analyze');
+        const autoAnalyze = autoAnalyzeEl ? autoAnalyzeEl.checked : true;
         
         if (!sourceId || !sideId) {
             if (window.showWarning) {
@@ -376,7 +392,10 @@ class ChunkedUploadUI {
         this.addUploadToUI(uploadId, file);
         
         try {
-            await this.client.upload(file, sourceId, sideId, autoAnalyze);
+            const result = await this.client.upload(file, sourceId, sideId, autoAnalyze, { uiUploadId: uploadId });
+            if (!result.uiUploadId) {
+                this.updateUploadStatus(uploadId, 'success', result.message || 'Upload complete');
+            }
         } catch (error) {
             this.updateUploadStatus(uploadId, 'error', error.message);
         }
@@ -384,21 +403,37 @@ class ChunkedUploadUI {
     
     addUploadToUI(uploadId, file) {
         const list = document.getElementById('chunked-upload-list');
+        if (!list) return;
         
         const uploadDiv = document.createElement('div');
         uploadDiv.id = `upload-${uploadId}`;
         uploadDiv.className = 'upload-item';
-        uploadDiv.innerHTML = `
-            <div class="upload-item-header">
-                <span class="file-name">${file.name}</span>
-                <span class="file-size">${ChunkedUploadClient.formatFileSize(file.size)}</span>
-            </div>
-            <div class="progress">
-                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-            </div>
-            <div class="upload-status">Preparing...</div>
-        `;
-        
+
+        const header = document.createElement('div');
+        header.className = 'upload-item-header';
+        const name = document.createElement('span');
+        name.className = 'file-name';
+        name.textContent = file.name;
+        const size = document.createElement('span');
+        size.className = 'file-size';
+        size.textContent = ChunkedUploadClient.formatFileSize(file.size);
+        header.append(name, size);
+
+        const progress = document.createElement('div');
+        progress.className = 'progress';
+        const progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar';
+        progressBar.setAttribute('role', 'progressbar');
+        progressBar.setAttribute('aria-valuemin', '0');
+        progressBar.setAttribute('aria-valuemax', '100');
+        progressBar.setAttribute('aria-valuenow', '0');
+        progress.appendChild(progressBar);
+
+        const status = document.createElement('div');
+        status.className = 'upload-status';
+        status.textContent = 'Preparing...';
+
+        uploadDiv.append(header, progress, status);
         list.appendChild(uploadDiv);
         
         this.uploads.set(uploadId, {
@@ -408,7 +443,7 @@ class ChunkedUploadUI {
     }
     
     handleProgress(progressData) {
-        const uploadDiv = this.uploads.get(progressData.uploadId)?.element;
+        const uploadDiv = this.uploads.get(progressData.uiUploadId || progressData.uploadId)?.element;
         if (!uploadDiv) return;
         
         const progressBar = uploadDiv.querySelector('.progress-bar');
@@ -416,12 +451,18 @@ class ChunkedUploadUI {
         
         progressBar.style.width = `${progressData.progress}%`;
         progressBar.textContent = `${Math.round(progressData.progress)}%`;
+        progressBar.setAttribute('aria-valuenow', String(Math.round(progressData.progress)));
         
         statusDiv.textContent = `Uploading chunk ${progressData.uploadedChunks}/${progressData.totalChunks}...`;
     }
     
     handleComplete(result) {
         console.log('Upload complete:', result);
+        if (result.uiUploadId) {
+            const taskSuffix = result.task_id ? ` Task ID: ${result.task_id}` : '';
+            this.updateUploadStatus(result.uiUploadId, 'success', `${result.message || 'Upload complete'}.${taskSuffix}`);
+        }
+        window.processingProgressTracker?.refresh?.();
         if (window.showSuccess) {
             window.showSuccess(`Upload complete: ${result.filename || 'File'}`);
         } else {

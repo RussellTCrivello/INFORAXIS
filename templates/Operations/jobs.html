@@ -45,7 +45,7 @@
       <table class="table table-hover align-middle mb-0" id="jobsTable">
         <thead class="table-light">
           <tr>
-            <th>{{ _('Job') }}</th><th>{{ _('Type') }}</th><th>{{ _('Status') }}</th><th style="min-width:160px;">{{ _('Progress') }}</th>
+            <th>{{ _('Job') }}</th><th>{{ _('Type') }}</th><th>{{ _('Status') }}</th><th class="progress-col">{{ _('Progress') }}</th>
             <th>{{ _('Started') }}</th><th>{{ _('Duration') }}</th><th>{{ _('User') }}</th><th>{{ _('Actions') }}</th>
           </tr>
         </thead>
@@ -114,12 +114,12 @@
         <td>${(j.job_type||'').replace(/_/g,' ')}</td>
         <td>${statusBadge(j.status)}</td>
         <td>
-          <div class="progress" style="height:8px;">
+          <div class="progress progress-job">
             <!-- Width transitions so a poll shows movement, not a snap. -->
-            <div class="progress-bar${active ? ' progress-bar-striped progress-bar-animated' : ''}"
+            <div class="progress-bar smooth-progress${active ? ' progress-bar-striped progress-bar-animated' : ''}"
                  role="progressbar" aria-valuemin="0" aria-valuemax="100"
                  aria-valuenow="${j.progress||0}"
-                 style="width:${j.progress||0}%; transition: width .3s ease;"></div>
+                 style="width:${j.progress||0}%;"></div>
           </div>
           <small class="text-muted">
             ${j.progress||0}%

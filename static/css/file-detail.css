@@ -1,39 +1,348 @@
-.tab-content {
-    display: block !important;
+/* ============================================================================
+   File Detail / Analysis Workspace
+   ============================================================================ */
+
+body[data-page-type="file-detail"] .container-fluid,
+.file-detail-page {
+    max-width: 100%;
+    padding-inline: 0;
 }
 
-.tab-content .tab-pane {
-    display: none;
+body[data-page-type="file-detail"] .row {
+    --bs-gutter-x: 1rem;
 }
 
-.tab-content .tab-pane.active, .tab-content .tab-pane.show {
-    display: block;
+.file-detail-identity {
+    align-items: center;
+    margin-bottom: 0.9rem;
+}
+
+.file-detail-identity-main {
+    min-width: 0;
+}
+
+.file-detail-identity .page-title {
+    max-width: min(78rem, 100%);
+    overflow-wrap: anywhere;
+}
+
+.file-detail-header-meta,
+.file-detail-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.file-detail-header-meta {
+    color: var(--text-light);
+    font-size: 0.82rem;
+}
+
+.file-detail-header-meta span {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.file-detail-header-actions {
+    justify-content: flex-end;
+}
+
+body[data-page-type="file-detail"] .card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+}
+
+body[data-page-type="file-detail"] .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+    min-height: 2.85rem;
+    padding: 0.75rem 0.9rem;
+    border-bottom: 1px solid var(--border-light);
+    background: color-mix(in srgb, var(--bg-white) 92%, var(--bg-section));
+    color: var(--text-heading);
+}
+
+body[data-page-type="file-detail"] .card-header.bg-primary {
+    border-bottom-color: color-mix(in srgb, var(--primary-color) 28%, var(--border-color));
+    background: color-mix(in srgb, var(--primary-color) 9%, var(--bg-white)) !important;
+    color: var(--text-heading) !important;
+}
+
+body[data-page-type="file-detail"] .card-header h1,
+body[data-page-type="file-detail"] .card-header h5,
+body[data-page-type="file-detail"] .card-header h6 {
+    margin: 0;
+    color: inherit;
+    font-size: 0.98rem;
+    font-weight: 780;
+    letter-spacing: -0.015em;
+}
+
+body[data-page-type="file-detail"] .card-body {
+    min-width: 0;
+    padding: 0.9rem;
+}
+
+body[data-page-type="file-detail"] .nav-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 7;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding: 0.4rem;
+    margin: 0 0 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--bg-white) 94%, var(--bg-section));
+    box-shadow: var(--shadow-xs);
+}
+
+body[data-page-type="file-detail"] .nav-tabs .nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+    padding: 0.35rem 0.72rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    color: var(--text-light);
+    font-size: 0.8rem;
+    font-weight: 720;
+    white-space: nowrap;
+}
+
+body[data-page-type="file-detail"] .nav-tabs .nav-link.active,
+body[data-page-type="file-detail"] .nav-tabs .nav-link:hover,
+body[data-page-type="file-detail"] .nav-tabs .nav-link:focus-visible {
+    border-color: color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
+    background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-white));
+    color: var(--primary-color);
+}
+
+#tabContent .row.mt-4,
+#tabAnalysis .row.mt-4,
+#tabMetadata .row.mt-4 {
+    margin-top: 0 !important;
+}
+
+#tabContent .col-lg-9,
+#tabContent .col-lg-3,
+#tabAnalysis .col-lg-6,
+#tabAnalysis .col-12,
+#tabMetadata .col-lg-8,
+#tabMetadata .col-lg-4 {
+    margin-bottom: 1rem;
+}
+
+#tabContent .col-lg-9 > .card:first-child {
+    position: sticky;
+    top: 3.6rem;
+    z-index: 6;
+}
+
+#tabContent .input-group,
+#tabContent .card-header .d-flex,
+#tabContent #searchResults > .d-flex,
+.pagination-controls > .d-flex {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+#searchResults,
+#modalSearchResults {
+    padding: 0.65rem 0 0;
+    border-top: 1px solid var(--border-light);
+}
+
+.content-viewer,
+#contentViewer {
+    position: relative;
+    width: 100%;
+    max-height: min(68vh, 50rem);
+    min-height: 22rem;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--bg-section) 58%, var(--bg-white));
+    overscroll-behavior: contain;
+}
+
+#contentText,
+.content-text-wrap {
+    width: 100%;
+    min-height: 100%;
+    padding: clamp(0.9rem, 1.7vw, 1.25rem);
+    background: transparent;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+
+.content-preformatted,
+.modal-content-text-pre {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    white-space: pre-wrap;
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+
+.content-ready {
+    visibility: visible;
+}
+
+.content-unformatted {
+    white-space: pre-wrap;
+}
+
+.pagination-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    margin-top: 0.8rem !important;
+    padding: 0.65rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+}
+
+.page-jump-input {
+    width: 5rem;
+}
+
+.break-anywhere {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.stat-item {
+    padding: 0.68rem;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    background: var(--bg-section);
+}
+
+.stat-item .h4 {
+    margin: 0;
+    font-size: 1.12rem;
+    font-weight: 820;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-container {
+    position: relative;
+    width: 100%;
+    min-height: 18rem;
+    height: clamp(18rem, 42vh, 28rem);
+    overflow: hidden;
+}
+
+.chart-container canvas {
+    width: 100% !important;
+    max-width: 100%;
+}
+
+#tabAnalysis .card-body:has(.chart-container) {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.progress-slim {
+    height: 0.42rem;
+    overflow: hidden;
+    border-radius: var(--radius-pill);
+    background: var(--border-light);
+}
+
+.analysis-section-divider {
+    margin: 1rem 0;
+    border-color: var(--border-color);
+}
+
+#tabAnalysis .table-responsive,
+#tabMetadata .table-responsive,
+#tabAnalysis .table-wrapper,
+#tabMetadata .table-wrapper {
+    max-height: min(52vh, 32rem);
+    overflow: auto;
+}
+
+#tabMetadata table,
+#tabContent table,
+#tabAnalysis table {
+    margin-bottom: 0;
+}
+
+#tabMetadata th,
+#tabContent th,
+#tabAnalysis th {
+    color: var(--text-light);
+    font-size: 0.74rem;
+    font-weight: 760;
+    white-space: nowrap;
 }
 
 @media (max-width: 991.98px) {
-    .tab-content {
-        padding: 1rem;
+    #tabContent .col-lg-9 > .card:first-child,
+    body[data-page-type="file-detail"] .nav-tabs {
+        position: static;
     }
-    .tab-content .tab-pane {
-        padding: 0.875rem;
-    }
-}
 
-@media (max-width: 767.98px) {
-    .tab-content {
-        padding: 0.875rem;
-    }
-    .tab-content .tab-pane {
-        padding: 0.75rem;
+    .content-viewer,
+    #contentViewer {
+        max-height: min(62vh, 38rem);
     }
 }
 
 @media (max-width: 575.98px) {
-    .tab-content {
-        padding: 0.75rem;
+    body[data-page-type="file-detail"] .card-header,
+    .pagination-controls,
+    .pagination-controls > .d-flex {
+        align-items: stretch;
     }
-    .tab-content .tab-pane {
-        padding: 0.625rem;
+
+    #tabContent .input-group > .form-control,
+    .pagination-controls .per-page-select,
+    .page-jump-input {
+        min-width: 100%;
     }
 }
 
+.file-detail-chart-state {
+    display: grid;
+    min-height: 12rem;
+    place-items: center;
+    align-content: center;
+    gap: 0.45rem;
+    padding: 1.5rem;
+    color: var(--text-light);
+    text-align: center;
+}
+
+.file-detail-chart-state p {
+    margin: 0;
+    font-size: 0.88rem;
+}
+
+.file-detail-chart-state-danger {
+    color: var(--danger-color);
+}
+
+.file-detail-col-index {
+    width: 3.25rem;
+}
+
+.file-detail-col-frequency {
+    width: 7.5rem;
+}

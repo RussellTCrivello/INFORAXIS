@@ -8,6 +8,10 @@
  * @param {Object} options - Pagination options
  * @param {number} options.currentPage - Current page number (1-based)
  * @param {number} options.totalPages - Total number of pages
+ * @param {number} options.totalItems - Optional total record count for range metadata
+ * @param {number} options.pageSize - Optional page size for range metadata
+ * @param {string} options.itemLabel - Optional item label used in range metadata
+ * @param {number} options.visiblePageCount - Number of numeric page buttons to keep visible
  * @param {string} options.containerId - ID of container element
  * @param {Function} options.onPageChange - Callback function when page changes
  * @param {Object} options.urlParams - URL parameters to preserve
@@ -15,18 +19,24 @@
  * @param {boolean} options.showJump - Whether to show jump to page input
  * @param {string} options.endpoint - Flask endpoint name (for URL building)
  * @param {string} options.baseUrl - Base URL (alternative to endpoint)
+ * @param {Object} options.labels - Optional labels for localization
  */
 export function renderUnifiedPagination(options) {
     const {
         currentPage = 1,
         totalPages = 1,
+        totalItems = null,
+        pageSize = null,
+        itemLabel = 'records',
+        visiblePageCount = 5,
         containerId = 'paginationContainer',
         onPageChange = null,
         urlParams = {},
         showInfo = true,
         showJump = true,
         endpoint = null,
-        baseUrl = null
+        baseUrl = null,
+        labels = {}
     } = options;
 
     const container = document.getElementById(containerId);
@@ -48,9 +58,15 @@ export function renderUnifiedPagination(options) {
     // Use validated values
     const page = pageValid;
     const totalPagesFinal = totalPagesValid;
-    const windowSize = 2;
-    const startPage = Math.max(1, page - windowSize);
-    const endPage = Math.min(totalPagesFinal, page + windowSize);
+    const { startPage, endPage } = getPageWindow(page, totalPagesFinal, visiblePageCount);
+    const metadata = buildPaginationMetadata({
+        page,
+        totalPages: totalPagesFinal,
+        totalItems,
+        pageSize,
+        itemLabel,
+        labels
+    });
 
     // Check if container is already a unified-pagination-container
     const isAlreadyUnifiedContainer = container.classList.contains('unified-pagination-container');
@@ -61,12 +77,16 @@ export function renderUnifiedPagination(options) {
     if (!isAlreadyUnifiedContainer) {
         html = '<div class="unified-pagination-container"';
         html += ` data-current-page="${page}" data-total-pages="${totalPagesFinal}"`;
-        if (endpoint) html += ` data-endpoint="${endpoint}"`;
+        if (metadata.hasTotalItems) html += ` data-total-items="${metadata.totalItems}"`;
+        if (metadata.hasPageSize) html += ` data-page-size="${metadata.pageSize}"`;
+        if (endpoint) html += ` data-endpoint="${escapeAttr(endpoint)}"`;
         html += '>';
     } else {
         // Update data attributes on existing container
         container.setAttribute('data-current-page', page);
         container.setAttribute('data-total-pages', totalPagesFinal);
+        if (metadata.hasTotalItems) container.setAttribute('data-total-items', metadata.totalItems);
+        if (metadata.hasPageSize) container.setAttribute('data-page-size', metadata.pageSize);
         if (endpoint) container.setAttribute('data-endpoint', endpoint);
     }
 
@@ -74,37 +94,40 @@ export function renderUnifiedPagination(options) {
     if (showInfo) {
         html += '<div class="unified-pagination-info">';
         html += '<span class="pagination-text">';
-        html += '<i class="bi bi-info-circle me-1"></i>';
-        html += `Page ${page} of ${totalPagesFinal}`;
+        html += '<i class="bi bi-info-circle me-1" aria-hidden="true"></i>';
+        html += `${escapeHtml(metadata.pageLabel)} <strong>${formatNumber(page)}</strong> ${escapeHtml(metadata.ofLabel)} <strong>${formatNumber(totalPagesFinal)}</strong>`;
+        if (metadata.rangeLabel) {
+            html += `<span class="pagination-range">${escapeHtml(metadata.rangeLabel)}</span>`;
+        }
         html += '</span>';
         html += '</div>';
     }
 
     // Pagination controls
     html += '<div class="unified-pagination-controls">';
-    html += '<nav aria-label="Page navigation">';
+    html += `<nav aria-label="${escapeAttr(label(labels, 'pageNavigation', 'Page navigation'))}">`;
     html += '<ul class="unified-pagination-list">';
 
     // First button
     html += '<li class="unified-pagination-item">';
     html += `<a class="unified-pagination-link ${page <= 1 ? 'disabled' : ''}" `;
     html += `href="${page > 1 ? buildPageUrl(1, endpoint, baseUrl, urlParams, onPageChange) : '#'}" `;
-    html += `aria-label="First Page" `;
+    html += `aria-label="${escapeAttr(label(labels, 'firstPage', 'First Page'))}" `;
     if (page <= 1) html += 'aria-disabled="true" tabindex="-1"';
     html += '>';
-    html += '<i class="bi bi-chevron-double-left"></i>';
-    html += '<span class="d-none d-sm-inline ms-1">First</span>';
+    html += '<i class="bi bi-chevron-double-left" aria-hidden="true"></i>';
+    html += `<span class="d-none d-sm-inline ms-1">${escapeHtml(label(labels, 'first', 'First'))}</span>`;
     html += '</a></li>';
 
     // Previous button
     html += '<li class="unified-pagination-item">';
     html += `<a class="unified-pagination-link ${page <= 1 ? 'disabled' : ''}" `;
     html += `href="${page > 1 ? buildPageUrl(page - 1, endpoint, baseUrl, urlParams, onPageChange) : '#'}" `;
-    html += `aria-label="Previous Page" `;
+    html += `aria-label="${escapeAttr(label(labels, 'previousPage', 'Previous Page'))}" `;
     if (page <= 1) html += 'aria-disabled="true" tabindex="-1"';
     html += '>';
-    html += '<i class="bi bi-chevron-left"></i>';
-    html += '<span class="d-none d-sm-inline ms-1">Previous</span>';
+    html += '<i class="bi bi-chevron-left" aria-hidden="true"></i>';
+    html += `<span class="d-none d-sm-inline ms-1">${escapeHtml(label(labels, 'previous', 'Previous'))}</span>`;
     html += '</a></li>';
 
     // First page and ellipsis
@@ -114,7 +137,7 @@ export function renderUnifiedPagination(options) {
         html += '</li>';
         if (startPage > 2) {
             html += '<li class="unified-pagination-item disabled">';
-            html += '<span class="unified-pagination-ellipsis">...</span>';
+            html += '<span class="unified-pagination-ellipsis" aria-hidden="true">…</span>';
             html += '</li>';
         }
     }
@@ -136,7 +159,7 @@ export function renderUnifiedPagination(options) {
     if (endPage < totalPagesFinal) {
         if (endPage < totalPagesFinal - 1) {
             html += '<li class="unified-pagination-item disabled">';
-            html += '<span class="unified-pagination-ellipsis">...</span>';
+            html += '<span class="unified-pagination-ellipsis" aria-hidden="true">…</span>';
             html += '</li>';
         }
         html += '<li class="unified-pagination-item">';
@@ -148,22 +171,22 @@ export function renderUnifiedPagination(options) {
     html += '<li class="unified-pagination-item">';
     html += `<a class="unified-pagination-link ${page >= totalPagesFinal ? 'disabled' : ''}" `;
     html += `href="${page < totalPagesFinal ? buildPageUrl(page + 1, endpoint, baseUrl, urlParams, onPageChange) : '#'}" `;
-    html += `aria-label="Next Page" `;
+    html += `aria-label="${escapeAttr(label(labels, 'nextPage', 'Next Page'))}" `;
     if (page >= totalPagesFinal) html += 'aria-disabled="true" tabindex="-1"';
     html += '>';
-    html += '<span class="d-none d-sm-inline me-1">Next</span>';
-    html += '<i class="bi bi-chevron-right"></i>';
+    html += `<span class="d-none d-sm-inline me-1">${escapeHtml(label(labels, 'next', 'Next'))}</span>`;
+    html += '<i class="bi bi-chevron-right" aria-hidden="true"></i>';
     html += '</a></li>';
 
     // Last button
     html += '<li class="unified-pagination-item">';
     html += `<a class="unified-pagination-link ${page >= totalPagesFinal ? 'disabled' : ''}" `;
     html += `href="${page < totalPagesFinal ? buildPageUrl(totalPagesFinal, endpoint, baseUrl, urlParams, onPageChange) : '#'}" `;
-    html += `aria-label="Last Page" `;
+    html += `aria-label="${escapeAttr(label(labels, 'lastPage', 'Last Page'))}" `;
     if (page >= totalPagesFinal) html += 'aria-disabled="true" tabindex="-1"';
     html += '>';
-    html += '<span class="d-none d-sm-inline me-1">Last</span>';
-    html += '<i class="bi bi-chevron-double-right"></i>';
+    html += `<span class="d-none d-sm-inline me-1">${escapeHtml(label(labels, 'last', 'Last'))}</span>`;
+    html += '<i class="bi bi-chevron-double-right" aria-hidden="true"></i>';
     html += '</a></li>';
 
     html += '</ul></nav>';
@@ -172,12 +195,12 @@ export function renderUnifiedPagination(options) {
     if (showJump && totalPagesFinal > 5) {
         const jumpId = `jumpToPageInput-${containerId}`;
         html += '<div class="unified-pagination-jump">';
-        html += `<label for="${jumpId}" class="visually-hidden">Jump to page</label>`;
+        html += `<label for="${jumpId}" class="visually-hidden">${escapeHtml(label(labels, 'jumpToPage', 'Jump to page'))}</label>`;
         html += `<input type="number" id="${jumpId}" class="form-control form-control-sm unified-pagination-jump-input" `;
-        html += `min="1" max="${totalPagesFinal}" value="${page}" placeholder="Page" style="width: 70px;" `;
+        html += `min="1" max="${totalPagesFinal}" value="${page}" placeholder="${escapeAttr(metadata.pageLabel)}" `;
         html += `data-total-pages="${totalPagesFinal}">`;
         html += '<button type="button" class="btn btn-sm btn-outline-primary unified-pagination-jump-btn" ';
-        html += `data-container-id="${containerId}" aria-label="Go to page">`;
+        html += `data-container-id="${escapeAttr(containerId)}" aria-label="${escapeAttr(label(labels, 'goToPage', 'Go to page'))}">`;
         html += '<i class="bi bi-arrow-right"></i>';
         html += '</button>';
         html += '</div>';
@@ -197,6 +220,8 @@ export function renderUnifiedPagination(options) {
         // Update data attributes
         container.setAttribute('data-current-page', page);
         container.setAttribute('data-total-pages', totalPagesFinal);
+        if (metadata.hasTotalItems) container.setAttribute('data-total-items', metadata.totalItems);
+        if (metadata.hasPageSize) container.setAttribute('data-page-size', metadata.pageSize);
         if (endpoint) container.setAttribute('data-endpoint', endpoint);
     } else {
         container.innerHTML = html;
@@ -213,6 +238,70 @@ export function renderUnifiedPagination(options) {
     }, 0);
 }
 
+function getPageWindow(currentPage, totalPages, visiblePageCount = 5) {
+    const maxVisible = Math.max(1, Math.floor(Number(visiblePageCount) || 5));
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    startPage = Math.max(1, endPage - maxVisible + 1);
+    return { startPage, endPage };
+}
+
+function buildPaginationMetadata({ page, totalPages, totalItems, pageSize, itemLabel, labels }) {
+    const pageLabel = label(labels, 'page', 'Page');
+    const ofLabel = label(labels, 'of', 'of');
+    const showingLabel = label(labels, 'showing', 'Showing');
+    const safeItemLabel = label(labels, 'itemLabel', itemLabel || 'records');
+    const parsedTotal = Number(totalItems);
+    const parsedPageSize = Number(pageSize);
+    const hasTotalItems = Number.isFinite(parsedTotal) && parsedTotal >= 0;
+    const hasPageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0;
+    let rangeLabel = '';
+
+    if (hasTotalItems && hasPageSize) {
+        const total = Math.floor(parsedTotal);
+        const size = Math.floor(parsedPageSize);
+        const start = total > 0 ? ((page - 1) * size) + 1 : 0;
+        const end = total > 0 ? Math.min(page * size, total) : 0;
+        rangeLabel = ` · ${showingLabel} ${formatNumber(start)}–${formatNumber(end)} ${ofLabel} ${formatNumber(total)} ${safeItemLabel}`;
+    }
+
+    return {
+        pageLabel,
+        ofLabel,
+        rangeLabel,
+        hasTotalItems,
+        totalItems: hasTotalItems ? Math.floor(parsedTotal) : null,
+        hasPageSize,
+        pageSize: hasPageSize ? Math.floor(parsedPageSize) : null,
+        totalPages
+    };
+}
+
+function label(labels, key, fallback) {
+    return labels && labels[key] ? String(labels[key]) : String(fallback);
+}
+
+function formatNumber(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return String(value ?? '');
+    return numeric.toLocaleString();
+}
+
+function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+}
+
+function escapeAttr(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 /**
  * Build URL for a specific page
  */
@@ -227,7 +316,7 @@ function buildPageUrl(page, endpoint, baseUrl, urlParams, onPageChange) {
         const params = new URLSearchParams();
         params.set('page', page);
         Object.keys(urlParams).forEach(key => {
-            if (urlParams[key] !== null && urlParams[key] !== undefined && urlParams[key] !== '') {
+            if (key !== 'page' && urlParams[key] !== null && urlParams[key] !== undefined && urlParams[key] !== '') {
                 params.set(key, urlParams[key]);
             }
         });
@@ -246,7 +335,7 @@ function buildPageUrl(page, endpoint, baseUrl, urlParams, onPageChange) {
         const url = new URL(baseUrl, window.location.origin);
         url.searchParams.set('page', page);
         Object.keys(urlParams).forEach(key => {
-            if (urlParams[key] !== null && urlParams[key] !== undefined && urlParams[key] !== '') {
+            if (key !== 'page' && urlParams[key] !== null && urlParams[key] !== undefined && urlParams[key] !== '') {
                 url.searchParams.set(key, urlParams[key]);
             }
         });
@@ -257,7 +346,7 @@ function buildPageUrl(page, endpoint, baseUrl, urlParams, onPageChange) {
     const url = new URL(window.location.href);
     url.searchParams.set('page', page);
     Object.keys(urlParams).forEach(key => {
-        if (urlParams[key] !== null && urlParams[key] !== undefined && urlParams[key] !== '') {
+        if (key !== 'page' && urlParams[key] !== null && urlParams[key] !== undefined && urlParams[key] !== '') {
             url.searchParams.set(key, urlParams[key]);
         }
     });
@@ -268,9 +357,12 @@ function buildPageUrl(page, endpoint, baseUrl, urlParams, onPageChange) {
  * Attach event listeners to pagination
  */
 function attachPaginationListeners(container, onPageChange, endpoint, baseUrl, urlParams) {
-    // Store the callback in the container's dataset for event delegation
+    // Store the callback in the container for event delegation. Clear stale
+    // callbacks when a container switches back to URL-driven pagination.
     if (onPageChange && typeof onPageChange === 'function') {
         container._paginationCallback = onPageChange;
+    } else {
+        delete container._paginationCallback;
     }
     
     // Use event delegation on the container for better reliability

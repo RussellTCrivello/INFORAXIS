@@ -1,0 +1,247 @@
+.users-workspace {
+    display: grid;
+    gap: 1rem;
+}
+
+.users-hero,
+.users-control-surface,
+.users-section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.8rem;
+}
+
+.users-hero {
+    padding: 1rem 1.1rem;
+}
+
+.users-hero h1,
+.users-section-header h2 {
+    margin: 0;
+    color: var(--text-dark);
+    font-weight: 780;
+    letter-spacing: -0.025em;
+}
+
+.users-hero h1 {
+    font-size: clamp(1.18rem, 1.15vw + 0.94rem, 1.7rem);
+}
+
+.users-section-header h2 {
+    font-size: 0.98rem;
+}
+
+.users-hero p {
+    margin: 0.25rem 0 0;
+    color: var(--text-light);
+    font-size: 0.84rem;
+}
+
+.users-eyebrow {
+    display: inline-flex;
+    margin-bottom: 0.18rem;
+    color: var(--text-light);
+    font-size: 0.7rem;
+    font-weight: 780;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.users-control-surface {
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 0.6rem;
+}
+
+.users-search-field {
+    position: relative;
+    flex: 1 1 18rem;
+    min-width: min(100%, 16rem);
+}
+
+.users-search-field i {
+    position: absolute;
+    inset-inline-start: 0.7rem;
+    top: 50%;
+    color: var(--text-muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.users-search-field .form-control {
+    padding-inline-start: 2rem;
+}
+
+.users-control-surface .form-select {
+    flex: 0 1 11rem;
+}
+
+.users-table-workbench,
+.users-capability-workbench {
+    overflow: hidden;
+}
+
+.users-section-header {
+    align-items: center;
+    padding: 0.82rem 1rem 0.68rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.users-count-pill,
+.users-role-badge,
+.users-status-pill,
+.users-self-pill,
+.users-temp-pill,
+.users-capability {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    border: 1px solid var(--border-light);
+    border-radius: 999px;
+    font-weight: 760;
+    white-space: nowrap;
+}
+
+.users-count-pill {
+    min-width: 2.2rem;
+    min-height: 1.55rem;
+    padding: 0.12rem 0.55rem;
+    color: var(--text-light);
+    font-size: 0.76rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.users-table-region {
+    max-height: min(58vh, 38rem);
+}
+
+.users-table,
+.users-capability-table {
+    margin: 0;
+}
+
+.users-table thead th,
+.users-capability-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-bottom: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-section) 92%, var(--bg-white));
+    color: var(--text-light);
+    font-size: 0.72rem;
+    font-weight: 760;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+}
+
+.users-table td,
+.users-capability-table td {
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-dark);
+    font-size: 0.82rem;
+    vertical-align: middle;
+}
+
+.users-role-badge,
+.users-status-pill,
+.users-self-pill,
+.users-temp-pill {
+    min-height: 1.35rem;
+    padding: 0.08rem 0.42rem;
+    font-size: 0.7rem;
+}
+
+.users-role-badge[data-role="admin"] {
+    border-color: color-mix(in srgb, var(--danger-color) 26%, var(--border-light));
+    background: color-mix(in srgb, var(--danger-color) 8%, transparent);
+    color: var(--danger-color);
+}
+
+.users-role-badge[data-role="analyst"] {
+    border-color: color-mix(in srgb, var(--primary-color) 26%, var(--border-light));
+    background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+    color: var(--primary-color);
+}
+
+.users-role-badge[data-role="viewer"] {
+    border-color: color-mix(in srgb, var(--text-muted) 28%, var(--border-light));
+    background: color-mix(in srgb, var(--bg-section) 70%, transparent);
+    color: var(--text-light);
+}
+
+.users-status-pill[data-status="active"] {
+    border-color: color-mix(in srgb, var(--success-color) 26%, var(--border-light));
+    background: color-mix(in srgb, var(--success-color) 8%, transparent);
+    color: var(--success-color);
+}
+
+.users-status-pill[data-status="inactive"] {
+    border-color: color-mix(in srgb, var(--danger-color) 26%, var(--border-light));
+    background: color-mix(in srgb, var(--danger-color) 8%, transparent);
+    color: var(--danger-color);
+}
+
+.users-self-pill {
+    border-color: color-mix(in srgb, var(--info-color) 26%, var(--border-light));
+    background: color-mix(in srgb, var(--info-color) 8%, transparent);
+    color: var(--info-color);
+}
+
+.users-temp-pill {
+    border-color: color-mix(in srgb, var(--warning-color) 28%, var(--border-light));
+    background: color-mix(in srgb, var(--warning-color) 10%, transparent);
+    color: var(--warning-color);
+}
+
+.users-name-stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.users-row-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.35rem;
+}
+
+.users-capability {
+    width: 1.45rem;
+    height: 1.45rem;
+    font-size: 0.85rem;
+}
+
+.users-capability.yes {
+    border-color: color-mix(in srgb, var(--success-color) 24%, var(--border-light));
+    background: color-mix(in srgb, var(--success-color) 8%, transparent);
+    color: var(--success-color);
+}
+
+.users-capability.no {
+    border-color: color-mix(in srgb, var(--danger-color) 24%, var(--border-light));
+    background: color-mix(in srgb, var(--danger-color) 8%, transparent);
+    color: var(--danger-color);
+}
+
+@media (max-width: 767.98px) {
+    .users-hero,
+    .users-section-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .users-control-surface {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .users-control-surface .form-select,
+    .users-control-surface .btn,
+    .users-hero .btn {
+        width: 100%;
+    }
+}

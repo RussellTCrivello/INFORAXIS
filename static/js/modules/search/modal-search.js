@@ -71,7 +71,7 @@ export function performModalSearch() {
     
     const searchResultsDiv = document.getElementById('modalSearchResults');
     if (searchResultsDiv) {
-        searchResultsDiv.style.display = 'block';
+        searchResultsDiv.hidden = false;
     }
     
     if (modalSearchResults.length > 0) {
@@ -138,7 +138,7 @@ function highlightModalMatches() {
         
         const matchText = fullContent.substring(match.index, match.index + match.length);
         const highlightClass = index === modalCurrentSearchIndex ? 'search-highlight current-match' : 'search-highlight';
-        highlightedContent += `<span class="${highlightClass}" style="background-color: #ffeb3b; padding: 2px 0; border-radius: 2px;">${escapeHtml(matchText)}</span>`;
+        highlightedContent += `<span class="${highlightClass}">${escapeHtml(matchText)}</span>`;
         
         lastIndex = match.index + match.length;
     });
@@ -197,7 +197,7 @@ export function clearModalSearch() {
     if (searchInput) searchInput.value = '';
     if (caseSensitive) caseSensitive.checked = false;
     if (wholeWord) wholeWord.checked = false;
-    if (searchResultsDiv) searchResultsDiv.style.display = 'none';
+    if (searchResultsDiv) searchResultsDiv.hidden = true;
     
     // Restore original content
     const contentElement = document.getElementById('modalContentText');

@@ -296,21 +296,9 @@ class SettingsUI {
                         }
                     });
                     
-                    // Broadcast changes
-                    if (typeof BroadcastChannel !== 'undefined') {
-                        const channel = new BroadcastChannel('settings_changes');
-                        channel.postMessage({
-                            type: 'settings_saved',
-                            changes: broadcastChanges
-                        });
-                    }
-                    
-                    self.showSuccess('Interface settings saved successfully. Page will reload to apply changes...');
-                    
-                    // Reload page after a short delay to apply interface visibility changes
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
+                    self.broadcastSettingsChanges(broadcastChanges);
+                    self.applyInterfaceVisibilityEffects(broadcastChanges.interfaces);
+                    self.showSuccess('Interface settings saved successfully. Visible interface controls were updated in place.');
                 } else {
                     throw new Error(data.error || 'Failed to save');
                 }
@@ -337,11 +325,11 @@ class SettingsUI {
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Reload settings state
+                    // Reload settings state and repaint the existing settings workspace.
                     await self.state.load();
-                    
-                    // Reload page to reflect changes
-                    window.location.reload();
+                    await self.populateForm();
+                    self.applyInterfaceVisibilityEffects();
+                    self.showSuccess('Interface settings reset to defaults. Current controls were refreshed in place.');
                 } else {
                     throw new Error(data.error || 'Failed to reset');
                 }
@@ -368,9 +356,10 @@ class SettingsUI {
                 const data = await response.json();
                 
                 if (data.success) {
+                    await self.state.load();
+                    self.applyLogoState('');
+                    window.updateAppBrandingPreview?.();
                     self.showSuccess('Logo removed successfully');
-                    // Reload page to show changes
-                    setTimeout(() => window.location.reload(), 1000);
                 } else {
                     throw new Error(data.error || 'Failed to remove logo');
                 }
@@ -456,9 +445,9 @@ class SettingsUI {
                 const data = await response.json();
                 
                 if (data.success) {
+                    await self.state.load();
+                    self.applyLogoState(data.logo_url || self.state.get('system.app_logo') || '');
                     self.showSuccess('Logo uploaded successfully');
-                    // Reload page to show new logo
-                    setTimeout(() => window.location.reload(), 1000);
                 } else {
                     throw new Error(data.error || 'Failed to upload logo');
                 }
@@ -577,16 +566,21 @@ class SettingsUI {
             const appName = document.getElementById('appName')?.value || '';
             const appIcon = document.getElementById('appIcon')?.value || '';
             
-            // Update preview in sidebar if available
-            const sidebarTitle = document.querySelector('.sidebar-brand, .app-title');
-            if (sidebarTitle && appName) {
-                sidebarTitle.textContent = appName;
-            }
+            // Update preview and sidebar shell if available
+            const previewName = document.getElementById('appBrandingPreviewName');
+            const sidebarTitle = document.querySelector('.sidebar-logo h4, .sidebar-brand, .app-title');
+            if (previewName && appName) previewName.textContent = appName;
+            if (sidebarTitle && appName) sidebarTitle.textContent = appName;
             
-            // Update icon if available
-            const sidebarIcon = document.querySelector('.sidebar-brand i, .app-icon');
-            if (sidebarIcon && appIcon) {
-                sidebarIcon.className = `bi ${appIcon}`;
+            // Update icon if available and no uploaded logo is active
+            const sidebarIcon = document.querySelector('.sidebar-logo i, .sidebar-brand i, .app-icon');
+            const previewIcon = document.getElementById('appBrandingPreviewIcon');
+            const inputPreviewIcon = document.getElementById('appIconPreview');
+            if (appIcon) {
+                const normalizedIcon = appIcon.includes('bi ') ? appIcon : `bi ${appIcon}`;
+                if (sidebarIcon && sidebarIcon.style.display !== 'none') sidebarIcon.className = normalizedIcon;
+                if (previewIcon && previewIcon.style.display !== 'none') previewIcon.className = `${normalizedIcon} branding-preview-icon`;
+                if (inputPreviewIcon) inputPreviewIcon.className = normalizedIcon;
             }
         };
         
@@ -816,6 +810,113 @@ class SettingsUI {
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
     }
+
+
+    /**
+     * Broadcast setting changes to other open tabs without forcing the current
+     * Settings workspace through a full reload.
+     */
+    broadcastSettingsChanges(changes) {
+        if (typeof BroadcastChannel === 'undefined') return;
+        const channel = new BroadcastChannel('settings_changes');
+        channel.postMessage({
+            type: 'settings_saved',
+            changes
+        });
+        channel.close?.();
+    }
+
+    /**
+     * Keep interface cards, live Page Tips and current-page consumers in sync
+     * after interface settings save. This preserves the backend settings flow
+     * while avoiding expensive reloads for UI state that can update in place.
+     */
+    applyInterfaceVisibilityEffects(changes = null) {
+        const interfaceChanges = changes || Array.from(document.querySelectorAll('.interface-toggle')).reduce((acc, toggle) => {
+            if (toggle.dataset.interfaceId) {
+                acc[toggle.dataset.interfaceId] = { enabled: toggle.checked };
+            }
+            return acc;
+        }, {});
+
+        Object.entries(interfaceChanges).forEach(([interfaceId, config]) => {
+            const enabled = !!config.enabled;
+            const escapedId = window.CSS?.escape ? CSS.escape(interfaceId) : String(interfaceId).replace(/"/g, '\\"');
+            const toggle = document.querySelector(`.interface-toggle[data-interface-id="${escapedId}"]`);
+            if (toggle) {
+                toggle.checked = enabled;
+                this.updateInterfaceCardState(toggle, enabled);
+            }
+
+            if (interfaceId === 'page_tips' && window.pageTipsManager) {
+                window.pageTipsManager.setEnabled(enabled);
+            }
+        });
+
+        document.dispatchEvent(new CustomEvent('settings:interfaces-changed', {
+            detail: { interfaces: interfaceChanges }
+        }));
+    }
+
+    updateInterfaceCardState(toggle, enabled) {
+        const card = toggle?.closest('.interface-card');
+        if (!card) return;
+        card.classList.toggle('disabled', !enabled);
+        card.classList.toggle('border-secondary', !enabled);
+        card.classList.toggle('border-success', enabled);
+        card.dataset.interfaceEnabled = String(enabled);
+    }
+
+
+    applyLogoState(logoUrl = '') {
+        const previewLogo = document.getElementById('appBrandingPreviewLogo');
+        const previewIcon = document.getElementById('appBrandingPreviewIcon');
+        const appIconInput = document.getElementById('appIcon');
+        const iconPickerButton = document.querySelector('button[onclick="openIconPicker()"]');
+        const inputPreviewIcon = document.getElementById('appIconPreview');
+        const sidebarLogo = document.querySelector('.sidebar-logo');
+        const sidebarImg = sidebarLogo?.querySelector('img');
+        const sidebarIcon = sidebarLogo?.querySelector('i');
+
+        if (logoUrl) {
+            if (previewLogo) {
+                previewLogo.src = logoUrl;
+                previewLogo.style.display = '';
+            }
+            if (previewIcon) previewIcon.style.display = 'none';
+            if (inputPreviewIcon) inputPreviewIcon.className = 'bi bi-image';
+            if (appIconInput) appIconInput.disabled = true;
+            if (iconPickerButton) iconPickerButton.disabled = true;
+            if (sidebarImg) {
+                sidebarImg.src = logoUrl;
+                sidebarImg.style.display = '';
+            }
+            if (sidebarIcon) sidebarIcon.style.display = 'none';
+            return;
+        }
+
+        if (previewLogo) {
+            previewLogo.removeAttribute('src');
+            previewLogo.style.display = 'none';
+        }
+        if (appIconInput) {
+            appIconInput.disabled = false;
+            if (!appIconInput.value) appIconInput.value = 'bi-file-earmark-text';
+        }
+        if (iconPickerButton) iconPickerButton.disabled = false;
+        const iconClass = appIconInput?.value || 'bi-file-earmark-text';
+        const normalizedIcon = iconClass.includes('bi ') ? iconClass : `bi ${iconClass}`;
+        if (previewIcon) {
+            previewIcon.className = `${normalizedIcon} branding-preview-icon`;
+            previewIcon.style.display = '';
+        }
+        if (inputPreviewIcon) inputPreviewIcon.className = normalizedIcon;
+        if (sidebarImg) sidebarImg.style.display = 'none';
+        if (sidebarIcon) {
+            sidebarIcon.className = normalizedIcon;
+            sidebarIcon.style.display = '';
+        }
+    }
     
     /**
      * Handle state changes
@@ -925,15 +1026,7 @@ class SettingsUI {
                 
                 // Update the card visual state immediately
                 const card = toggle.closest('.interface-card');
-                if (card) {
-                    if (enabled) {
-                        card.classList.remove('disabled', 'border-secondary');
-                        card.classList.add('border-success');
-                    } else {
-                        card.classList.remove('border-success');
-                        card.classList.add('disabled', 'border-secondary');
-                    }
-                }
+                self.updateInterfaceCardState(toggle, enabled);
                 
                 // Auto-save the change immediately
                 try {
@@ -952,52 +1045,24 @@ class SettingsUI {
                         // Get interface name for better message
                         const interfaceName = card ? card.querySelector('.card-title')?.textContent?.trim() || interfaceId : interfaceId;
                         
-                        // Show success message
-                        self.showSuccess(`${interfaceName} ${enabled ? 'enabled' : 'disabled'}. Page will reload to apply changes...`);
-                        
-                        // Broadcast change to other tabs
-                        if (typeof BroadcastChannel !== 'undefined') {
-                            const channel = new BroadcastChannel('settings_changes');
-                            channel.postMessage({
-                                type: 'settings_saved',
-                                changes: {
-                                    interfaces: {
-                                        [interfaceId]: { enabled: enabled }
-                                    }
-                                }
-                            });
-                        }
-                        
-                        // Reload page after short delay to apply changes
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
+                        const changes = {
+                            interfaces: {
+                                [interfaceId]: { enabled: enabled }
+                            }
+                        };
+                        self.broadcastSettingsChanges(changes);
+                        self.applyInterfaceVisibilityEffects(changes.interfaces);
+                        self.showSuccess(`${interfaceName} ${enabled ? 'enabled' : 'disabled'}. Current page controls were updated in place.`);
                     } else {
                         // Revert toggle on error
                         toggle.checked = !enabled;
-                        if (card) {
-                            if (enabled) {
-                                card.classList.remove('border-success');
-                                card.classList.add('disabled', 'border-secondary');
-                            } else {
-                                card.classList.remove('disabled', 'border-secondary');
-                                card.classList.add('border-success');
-                            }
-                        }
+                        self.updateInterfaceCardState(toggle, !enabled);
                         self.showError(data.error || 'Failed to update interface setting');
                     }
                 } catch (error) {
                     // Revert toggle on error
                     toggle.checked = !enabled;
-                    if (card) {
-                        if (enabled) {
-                            card.classList.remove('border-success');
-                            card.classList.add('disabled', 'border-secondary');
-                        } else {
-                            card.classList.remove('disabled', 'border-secondary');
-                            card.classList.add('border-success');
-                        }
-                    }
+                    self.updateInterfaceCardState(toggle, !enabled);
                     console.error('Failed to save interface setting:', error);
                     self.showError(`Failed to save: ${error.message}`);
                 }

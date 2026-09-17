@@ -50,8 +50,12 @@ const searchState = {
     searchHistory: []
 };
 
+let advancedSearchInitialized = false;
+
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
+function initializeAdvancedSearchPage() {
+    if (advancedSearchInitialized) return;
+    advancedSearchInitialized = true;
     console.log('Advanced Search page loaded - Google-like implementation');
     initializePageData();
     initializeSearch();
@@ -59,7 +63,13 @@ document.addEventListener('DOMContentLoaded', function() {
     loadFilterOptions();
     loadSearchHistory();
     setupEventListeners();
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeAdvancedSearchPage, { once: true });
+} else {
+    initializeAdvancedSearchPage();
+}
 
 // Read server-provided page data (initial scope, permissions, translations)
 function initializePageData() {
@@ -533,10 +543,10 @@ async function executeAdvancedSearch() {
     searchState.selectedIds = new Set();
     updateSelectionBar();
 
-    // Show loading
-    showLoading();
+    // Collect filters before showing the loading overlay so a cancelled broad
+    // search never leaves the interface visually blocked.
     
-    // Collect filters. Source/side scoping lives in the advanced-filters
+    // Source/side scoping lives in the advanced-filters
     // panel (the former "Search Within" block was merged into it).
     const sourceIds = Array.from(document.getElementById('sourcesSelect').selectedOptions).map(o => parseInt(o.value));
     const sideIds = Array.from(document.getElementById('sidesSelect').selectedOptions).map(o => parseInt(o.value));
@@ -561,6 +571,8 @@ async function executeAdvancedSearch() {
             'Searching without a source or side filter may be slow on large datasets. Continue?'));
         if (!confirmSearch) return;
     }
+
+    showLoading();
     
     // Search options
     const options = {
@@ -1077,6 +1089,9 @@ function updatePagination(pagination) {
         module.renderUnifiedPagination({
             currentPage: pagination.page,
             totalPages: pagination.total_pages,
+            totalItems: pagination.total || searchState.totalResults,
+            pageSize: pagination.per_page || searchState.resultsPerPage,
+            itemLabel: tPage('results', 'results'),
             containerId: 'pagination',
             onPageChange: (page) => {
                 searchState.currentPage = page;
@@ -1094,13 +1109,19 @@ function updatePagination(pagination) {
 // Show loading
 function showLoading() {
     const overlay = document.getElementById('searchLoadingOverlay');
-    if (overlay) overlay.style.display = 'flex';
+    if (overlay) {
+        overlay.classList.add('active');
+        overlay.style.display = 'grid';
+    }
 }
 
 // Hide loading
 function hideLoading() {
     const overlay = document.getElementById('searchLoadingOverlay');
-    if (overlay) overlay.style.display = 'none';
+    if (overlay) {
+        overlay.classList.remove('active');
+        overlay.style.display = 'none';
+    }
 }
 
 // Get active filters count
@@ -1108,6 +1129,7 @@ function getActiveFiltersCount() {
     let count = 0;
     count += document.getElementById('fileType').selectedOptions.length;
     count += document.getElementById('categoriesSelect').selectedOptions.length;
+    count += document.getElementById('analystCategoriesFilter')?.selectedOptions.length || 0;
     count += document.getElementById('sourcesSelect').selectedOptions.length;
     count += document.getElementById('sidesSelect').selectedOptions.length;
     if (document.getElementById('dateFrom').value) count++;

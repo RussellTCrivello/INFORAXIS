@@ -25,9 +25,12 @@ let availableSides = [];
 let currentLoadingPath = null; // Track which path is currently being loaded
 let abortControllers = {}; // Track AbortControllers for each data type
 let expandedPaths = new Set(); // Track expanded paths for persistence
+let pathAnalysisInitialized = false;
 
 // 🚀 OPTIMIZED: Initialize on page load with error handling
-document.addEventListener('DOMContentLoaded', function() {
+function initializePathAnalysisPage() {
+    if (pathAnalysisInitialized) return;
+    pathAnalysisInitialized = true;
     // Load translations from JSON script tag
     const pageDataEl = document.getElementById('path-analysis-page-data');
     if (pageDataEl) {
@@ -89,7 +92,15 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
         }
     }, true);
-});
+
+    setupModalOverlayHandlers();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializePathAnalysisPage, { once: true });
+} else {
+    initializePathAnalysisPage();
+}
 
 // 🚀 FIXED: Load filters (sources and sides) with proper response handling
 async function loadFilters() {
@@ -371,18 +382,18 @@ function createPathNode(node, depth = 0) {
         const chevronIcon = isRTL ? 'bi-chevron-left' : 'bi-chevron-right';
         expandBtnHtml = `<span class="expand-btn" data-path="${fullPath}"><i class="bi ${chevronIcon}"></i></span>`;
     } else {
-        expandBtnHtml = `<span style="width: 20px;"></span>`;
+        expandBtnHtml = `<span class="expand-placeholder"></span>`;
     }
     
     // 🚀 FIXED: Handle both camelCase and snake_case property names
     const isArchive = node.isArchive || node.type === 'archive';
     const fileCount = node.fileCount || node.file_count || 0;
     const iconClass = isArchive ? 'bi-file-earmark-zip' : 'bi-folder';
-    const iconColor = isArchive ? 'color: var(--warning-color);' : '';  // Orange for archives
+    const itemIconClass = isArchive ? 'icon is-archive' : 'icon';
     
     item.innerHTML = `
         ${expandBtnHtml}
-        <i class="bi ${iconClass} icon" style="${iconColor}"></i>
+        <i class="bi ${iconClass} ${itemIconClass}"></i>
         <span class="path-name">${node.name}</span>
         <span class="path-stats">${fileCount}</span>
     `;
@@ -637,16 +648,16 @@ async function selectPath(node, itemElement) {
     
     // Create breadcrumb with appropriate icon
     const titleIcon = isArchive ? 'bi-file-earmark-zip' : 'bi-folder';
-    const titleColor = isArchive ? 'color: var(--warning-color);' : '';
+    const titleIconClass = isArchive ? 'path-title-icon is-archive' : 'path-title-icon';
     const htmlElement = document.documentElement;
     const isRTL = htmlElement.getAttribute('dir') === 'rtl';
     const breadcrumbChevron = isRTL ? 'bi-chevron-left' : 'bi-chevron-right';
-    let breadcrumbHtml = `<i class="bi ${titleIcon}" style="${titleColor}"></i>`;
+    let breadcrumbHtml = `<i class="bi ${titleIcon} ${titleIconClass}"></i>`;
     pathParts.forEach((part, index) => {
         if (index > 0) {
-            breadcrumbHtml += ` <i class="bi ${breadcrumbChevron}" style="font-size: 0.75rem; opacity: 0.5;"></i> `;
+            breadcrumbHtml += ` <i class="bi ${breadcrumbChevron} breadcrumb-separator"></i> `;
         }
-        breadcrumbHtml += `<span style="${index === pathParts.length - 1 ? 'font-weight: 600;' : ''}">${part}</span>`;
+        breadcrumbHtml += `<span class="${index === pathParts.length - 1 ? 'breadcrumb-current' : ''}">${part}</span>`;
     });
     const pathBreadcrumbEl = document.getElementById('pathBreadcrumb');
     if (pathBreadcrumbEl) pathBreadcrumbEl.innerHTML = breadcrumbHtml;
@@ -718,15 +729,33 @@ function destroyAllCharts() {
     });
 }
 
+function setChartCanvasLoading(canvas) {
+    if (!canvas) return;
+    canvas.classList.add('chart-canvas-loading');
+    canvas.classList.remove('chart-canvas-ready');
+}
+
+function setChartCanvasReady(canvas) {
+    if (!canvas) return;
+    canvas.classList.add('chart-canvas-ready');
+    canvas.classList.remove('chart-canvas-loading');
+}
+
+function getChartSizeClass(chartId) {
+    if (chartId === 'timelineChart') return 'path-chart-size-tall';
+    if (chartId === 'classificationChart') return 'path-chart-size-wide';
+    return 'path-chart-size-standard';
+}
+
 // Show loading states for all data sections
 function showLoadingStates() {
     // Show loading for charts - preserve canvas and use overlay
     const chartConfigs = [
-        { id: 'fileTypeChart', height: '600px' },
-        { id: 'statusChart', height: '600px' },
-        { id: 'timelineChart', height: '700px' },
-        { id: 'wordFrequencyChart', height: '600px' },
-        { id: 'classificationChart', height: '650px' }
+        { id: 'fileTypeChart' },
+        { id: 'statusChart' },
+        { id: 'timelineChart' },
+        { id: 'wordFrequencyChart' },
+        { id: 'classificationChart' }
     ];
     
     chartConfigs.forEach(config => {
@@ -741,31 +770,14 @@ function showLoadingStates() {
             }
             
             // Hide canvas but keep it in DOM
-            if (canvas) {
-                canvas.style.display = 'none';
-                canvas.style.opacity = '0';
-            }
+            setChartCanvasLoading(canvas);
             
             // Add loading overlay
             const loadingOverlay = document.createElement('div');
-            loadingOverlay.className = 'chart-loading-overlay';
-            loadingOverlay.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                background: var(--bg-section, #fff);
-                z-index: 10;
-                height: ${config.height};
-            `;
+            loadingOverlay.className = `chart-loading-overlay ${getChartSizeClass(config.id)}`;
             loadingOverlay.innerHTML = `
                 <div class="spinner"></div>
-                <p style="margin-top: 1rem; color: var(--text-light, #666);">${translations.loading}</p>
+                <p class="chart-loading-message">${translations.loading}</p>
             `;
             
             // Don't override CSS with inline styles - use CSS classes instead
@@ -805,30 +817,14 @@ function showLoadingStates() {
                 // Clear any existing content and create canvas with loading overlay
                 const canvas = document.createElement('canvas');
                 canvas.id = config.id;
-                canvas.style.display = 'none';
-                canvas.style.opacity = '0';
+                setChartCanvasLoading(canvas);
                 
                 const loadingOverlay = document.createElement('div');
-                loadingOverlay.className = 'chart-loading-overlay';
-                // Use CSS classes instead of inline styles for better responsive behavior
-                loadingOverlay.className = 'chart-loading-overlay chart-loading-overlay-responsive';
-                // Only set essential dynamic styles
-                loadingOverlay.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    background: var(--bg-section, #fff);
-                    z-index: 10;
-                `;
+                // Use CSS classes instead of inline styles for responsive behavior.
+                loadingOverlay.className = `chart-loading-overlay chart-loading-overlay-responsive ${getChartSizeClass(config.id)}`;
                 loadingOverlay.innerHTML = `
                     <div class="spinner"></div>
-                    <p style="margin-top: 1rem; color: var(--text-light, #666);">${translations.loading}</p>
+                    <p class="chart-loading-message">${translations.loading}</p>
                 `;
                 
                 chartContainer.innerHTML = '';
@@ -858,13 +854,13 @@ function showLoadingStates() {
     // Reset classification details - show loading state
     const classificationDetails = document.getElementById('classificationDetails');
     if (classificationDetails) {
-        classificationDetails.innerHTML = '<div class="loading-state" style="padding: 2rem;"><div class="spinner"></div><p>' + translations.loading + '</p></div>';
+        classificationDetails.innerHTML = '<div class="loading-state analysis-loading-state"><div class="spinner"></div><p>' + translations.loading + '</p></div>';
     }
     
     // Reset category words details - show loading state
     const categoryWordsDetails = document.getElementById('categoryWordsDetails');
     if (categoryWordsDetails) {
-        categoryWordsDetails.innerHTML = '<div class="loading-state" style="padding: 2rem;"><div class="spinner"></div><p>' + translations.loading + '</p></div>';
+        categoryWordsDetails.innerHTML = '<div class="loading-state analysis-loading-state"><div class="spinner"></div><p>' + translations.loading + '</p></div>';
     }
     
     // Reset summary counts
@@ -997,9 +993,8 @@ function showChartError(chartId) {
             loadingOverlay.remove();
         }
         
-        const height = chartId === 'timelineChart' ? '700px' : (chartId === 'classificationChart' ? '650px' : '600px');
         container.innerHTML = `
-            <div class="empty-state" style="height: ${height};">
+            <div class="empty-state path-chart-empty-state ${getChartSizeClass(chartId)}">
                 <i class="bi bi-exclamation-triangle"></i>
                 <p>${translations.errorLoadingChart}</p>
             </div>
@@ -1058,7 +1053,7 @@ function renderFileTypeChart(typeDistribution) {
     
     if (!typeDistribution || typeDistribution.length === 0) {
         // Show "no data" message
-        container.innerHTML = `<div class="empty-state" style="height: 600px;"><i class="bi bi-pie-chart"></i><p>${translations.noFileTypeData}</p></div>`;
+        container.innerHTML = `<div class="empty-state empty-state-chart-md"><i class="bi bi-pie-chart"></i><p>${translations.noFileTypeData}</p></div>`;
         return;
     }
     
@@ -1079,11 +1074,7 @@ function renderFileTypeChart(typeDistribution) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -1237,7 +1228,7 @@ function renderStatusChart(statusDistribution) {
     
     if (!statusDistribution || statusDistribution.length === 0) {
         // Show "no data" message
-        container.innerHTML = `<div class="empty-state" style="height: 600px;"><i class="bi bi-check-circle"></i><p>${translations.noStatusData}</p></div>`;
+        container.innerHTML = `<div class="empty-state empty-state-chart-md"><i class="bi bi-check-circle"></i><p>${translations.noStatusData}</p></div>`;
         return;
     }
     
@@ -1248,11 +1239,7 @@ function renderStatusChart(statusDistribution) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -1393,7 +1380,7 @@ function renderTimelineChart(timeline) {
     
     if (!timeline || timeline.length === 0) {
         // Show "no data" message
-        container.innerHTML = `<div class="empty-state" style="height: 700px;"><i class="bi bi-calendar-event"></i><p>${translations.noTimelineData}</p></div>`;
+        container.innerHTML = `<div class="empty-state empty-state-chart-xl"><i class="bi bi-calendar-event"></i><p>${translations.noTimelineData}</p></div>`;
         return;
     }
     
@@ -1404,11 +1391,7 @@ function renderTimelineChart(timeline) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -1759,7 +1742,7 @@ function renderWordFrequencyChart(words) {
     }
     
     if (!words || words.length === 0) {
-        container.innerHTML = `<div class="empty-state" style="height: 600px;"><i class="bi bi-bar-chart"></i><p>${translations.noWordFrequencyData}</p></div>`;
+        container.innerHTML = `<div class="empty-state empty-state-chart-md"><i class="bi bi-bar-chart"></i><p>${translations.noWordFrequencyData}</p></div>`;
         return;
     }
     
@@ -1770,11 +1753,7 @@ function renderWordFrequencyChart(words) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -2002,50 +1981,8 @@ async function loadPathFiles(pathName) {
 function renderFiles(files) {
     const grid = document.getElementById('filesGrid');
     grid.innerHTML = '';
-    
-    // Add custom scrollbar styling
-    if (!document.getElementById('filesGridScrollbarStyle')) {
-        const style = document.createElement('style');
-        style.id = 'filesGridScrollbarStyle';
-        style.textContent = `
-            .files-grid::-webkit-scrollbar {
-                width: 8px;
-            }
-            .files-grid::-webkit-scrollbar-track {
-                background: var(--border-light);
-                border-radius: 4px;
-            }
-            .files-grid::-webkit-scrollbar-thumb {
-                background: var(--border-dark);
-                border-radius: 4px;
-            }
-            .files-grid::-webkit-scrollbar-thumb:hover {
-                background: var(--text-muted);
-            }
-            .file-card-number {
-                position: absolute;
-                top: 0.5rem;
-                left: 0.5rem;
-                background: var(--primary-color);
-                color: white;
-                width: 24px;
-                height: 24px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 0.75rem;
-                font-weight: 600;
-                z-index: 10;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            }
-            .file-card {
-                position: relative;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-    
+
+
     files.forEach((file, index) => {
         const card = document.createElement('div');
         card.className = 'file-card';
@@ -2169,7 +2106,7 @@ async function loadPathClassifications(pathName) {
             const canvas = document.getElementById('classificationChart');
             if (canvas && canvas.parentElement) {
                 canvas.parentElement.innerHTML = `
-                    <div class="empty-state" style="height: 600px;">
+                    <div class="empty-state empty-state-chart-md">
                         <i class="bi bi-exclamation-circle"></i>
                         <p>${translations.errorLoadingClassification}</p>
                     </div>
@@ -2184,7 +2121,7 @@ async function loadPathClassifications(pathName) {
             const canvas = document.getElementById('classificationChart');
             if (canvas && canvas.parentElement) {
                 canvas.parentElement.innerHTML = `
-                    <div class="empty-state" style="height: 600px;">
+                    <div class="empty-state empty-state-chart-md">
                         <i class="bi bi-exclamation-circle"></i>
                         <p>${translations.errorLoadingClassification}: ${data.error}</p>
                     </div>
@@ -2218,7 +2155,7 @@ async function loadPathClassifications(pathName) {
             const canvas = document.getElementById('classificationChart');
             if (canvas && canvas.parentElement) {
                 canvas.parentElement.innerHTML = `
-                    <div class="empty-state" style="height: 600px;">
+                    <div class="empty-state empty-state-chart-md">
                         <i class="bi bi-exclamation-circle"></i>
                         <p>${translations.errorLoadingClassification}</p>
                     </div>
@@ -2277,7 +2214,7 @@ function renderClassificationChart(classifications) {
     }
     
     if (!classifications || classifications.length === 0) {
-        container.innerHTML = `<div class="empty-state" style="height: 650px;"><i class="bi bi-tags"></i><p>${translations.noClassificationData}</p></div>`;
+        container.innerHTML = `<div class="empty-state empty-state-chart-lg"><i class="bi bi-tags"></i><p>${translations.noClassificationData}</p></div>`;
         return;
     }
     
@@ -2288,11 +2225,7 @@ function renderClassificationChart(classifications) {
     }
     
     // Show canvas
-    canvas.style.display = 'block';
-    canvas.style.opacity = '1';
-    canvas.style.maxWidth = '100%';
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
+    setChartCanvasReady(canvas);
     
     try {
         const ctx = canvas.getContext('2d');
@@ -2426,83 +2359,79 @@ function renderClassificationDetails(classifications) {
         console.warn('Classification details container not found');
         return;
     }
-    
+
     // Handle empty data
     if (!classifications || classifications.length === 0) {
         container.innerHTML = `
-            <div class="empty-state" style="padding: 2rem; text-align: center;">
-                <i class="bi bi-tags" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
-                <p style="color: var(--text-light); font-size: 0.875rem;">${translations.noClassificationData}</p>
+            <div class="empty-state category-breakdown-empty">
+                <i class="bi bi-tags" aria-hidden="true"></i>
+                <p>${translations.noClassificationData}</p>
             </div>
         `;
         return;
     }
-    
+
     let html = `
-        <h4 style="margin-bottom: 1rem; color: var(--text-heading); font-size: 1.1rem;">
+        <h4 class="category-breakdown-title">
             <i class="bi bi-list-check"></i> ${translations.detailedBreakdown}
-            <span style="font-size: 0.875rem; color: var(--text-light); font-weight: 400; margin-inline-start: 0.5rem;">
+            <span class="category-breakdown-subtitle">
                 ${translations.clickRowToSeeFiles}
             </span>
         </h4>
-        <div style="overflow-x: auto; overflow-y: visible; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch;">
-            <table style="width: 100%; min-width: 600px; border-collapse: collapse; table-layout: auto;">
+        <div class="table-wrapper category-breakdown-table-wrapper">
+            <table class="table category-breakdown-table">
                 <thead>
-                    <tr style="background: var(--table-header-bg); border-bottom: 2px solid var(--table-border);">
-                        <th style="padding: 0.75rem; text-align: start; font-weight: 600; color: var(--table-header-text);">${translations.category}</th>
-                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.files}</th>
-                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.keywords}</th>
-                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.percentage}</th>
-                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.distribution}</th>
+                    <tr>
+                        <th>${translations.category}</th>
+                        <th class="text-center">${translations.files}</th>
+                        <th class="text-center">${translations.keywords}</th>
+                        <th class="text-center">${translations.percentage}</th>
+                        <th>${translations.distribution}</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
-    
-    classifications.forEach((cat, index) => {
+
+    classifications.forEach((cat) => {
         // Handle both camelCase and snake_case property names
         const categoryName = cat.category || cat.category_name || 'Unknown';
         const fileCount = cat.fileCount || cat.file_count || 0;
         const totalKeywords = cat.totalKeywords || cat.total_keywords || 0;
         const percentage = cat.percentage || 0;
-        
         const isUncategorized = categoryName === 'Uncategorized';
-        const backgroundColor = index % 2 === 0 ? 'var(--table-row-bg)' : 'var(--bg-section)';
-        const categoryColor = isUncategorized ? 'var(--danger-color)' : 'var(--primary-color)';
-        
+        const categoryClass = isUncategorized ? 'category-icon-danger' : 'category-icon-primary';
+        const progressClass = isUncategorized ? 'category-distribution-fill-danger' : 'category-distribution-fill-primary';
+
         html += `
-            <tr class="category-row-clickable" 
-                data-category="${categoryName.replace(/"/g, '&quot;')}"
-                style="background: ${backgroundColor}; border-bottom: 1px solid var(--table-border); cursor: pointer; transition: background-color 0.2s;"
-                onmouseover="this.style.background='var(--table-row-hover)'"
-                onmouseout="this.style.background='${backgroundColor}'">
-                <td style="padding: 0.75rem;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="bi bi-tag-fill" style="color: ${categoryColor};"></i>
-                        <span style="font-weight: 500; word-break: break-word; overflow-wrap: break-word;">${categoryName}</span>
-                        <i class="bi bi-box-arrow-up-right" style="font-size: 0.75rem; color: var(--text-muted); margin-inline-start: 0.25rem;"></i>
+            <tr class="category-row-clickable"
+                data-category="${categoryName.replace(/"/g, '&quot;')}">
+                <td>
+                    <div class="category-breakdown-label">
+                        <i class="bi bi-tag-fill category-breakdown-icon ${categoryClass}"></i>
+                        <span>${categoryName}</span>
+                        <i class="bi bi-box-arrow-up-right category-breakdown-open-icon"></i>
                     </div>
                 </td>
-                <td style="padding: 0.75rem; text-align: center; font-weight: 600;">${fileCount}</td>
-                <td style="padding: 0.75rem; text-align: center;">${totalKeywords}</td>
-                <td style="padding: 0.75rem; text-align: center;">${percentage.toFixed(1)}%</td>
-                <td style="padding: 0.75rem;">
-                    <div style="background: var(--border-color); border-radius: 0.25rem; height: 20px; overflow: hidden;">
-                        <div style="background: ${categoryColor}; height: 100%; width: ${percentage}%; transition: width 0.3s;"></div>
+                <td class="text-center fw-semibold">${fileCount}</td>
+                <td class="text-center">${totalKeywords}</td>
+                <td class="text-center">${percentage.toFixed(1)}%</td>
+                <td>
+                    <div class="category-distribution-track">
+                        <div class="category-distribution-fill ${progressClass}" style="width: ${percentage}%;"></div>
                     </div>
                 </td>
             </tr>
         `;
     });
-    
+
     html += `
                 </tbody>
             </table>
         </div>
     `;
-    
+
     container.innerHTML = html;
-    
+
     // Add event delegation for category row clicks
     container.querySelectorAll('.category-row-clickable').forEach(row => {
         row.addEventListener('click', function() {
@@ -2582,10 +2511,10 @@ function renderModalFiles(files, category) {
         <div class="modal-header-info-box">
             <div>
                 <div>
-                    <strong style="font-size: 1.1rem; color: var(--text-heading);">${files.length}</strong>
-                    <span style="color: var(--text-light);"> ${formatTranslation('fileFound', { count: files.length, s: files.length !== 1 ? 's' : '' })}</span>
+                    <strong class="modal-file-count">${files.length}</strong>
+                    <span class="modal-file-count-label"> ${formatTranslation('fileFound', { count: files.length, s: files.length !== 1 ? 's' : '' })}</span>
                 </div>
-                <div style="font-size: 0.875rem; color: var(--text-light);">
+                <div class="modal-file-context">
                     ${category === 'Uncategorized' ? 
                         `<i class="bi bi-info-circle"></i> ${translations.theseFilesNoKeywords}` : 
                         `<i class="bi bi-tags"></i> ${translations.classificationBasedOnKeywords}`}
@@ -2597,6 +2526,7 @@ function renderModalFiles(files, category) {
     files.forEach(file => {
         const fileIcon = getFileIcon(file.type);
         const hasKeywords = file.keywords && file.keywords.length > 0;
+        const statusClass = file.status === translations.read ? 'status-dot-read' : 'status-dot-unread';
         
         html += `
             <div class="modal-file-card" onclick="window.open('/file/${file.id}', '_blank')">
@@ -2608,7 +2538,7 @@ function renderModalFiles(files, category) {
                             <span><i class="bi bi-file-earmark"></i> ${file.type || translations.unknownType}</span>
                             <span><i class="bi bi-hdd"></i> ${formatFileSize(file.size)}</span>
                             ${file.created ? `<span><i class="bi bi-calendar"></i> ${new Date(file.created).toLocaleDateString()}</span>` : ''}
-                            <span><i class="bi bi-circle-fill" style="font-size: 0.5rem; color: ${file.status === translations.read ? 'var(--success-color)' : 'var(--danger-color)'};"></i> ${file.status}</span>
+                            <span><i class="bi bi-circle-fill status-dot ${statusClass}"></i> ${file.status}</span>
                         </div>
                     </div>
                 </div>
@@ -2617,7 +2547,7 @@ function renderModalFiles(files, category) {
         if (hasKeywords) {
             html += `
                 <div class="modal-keywords">
-                    <span style="font-size: 0.875rem; color: var(--text-light); margin-inline-end: 0.5rem;">
+                    <span class="modal-keywords-label">
                         <i class="bi bi-tags"></i> ${translations.keywords}:
                     </span>
             `;
@@ -2634,7 +2564,7 @@ function renderModalFiles(files, category) {
             html += `</div>`;
         } else if (category !== 'Uncategorized') {
             html += `
-                <div style="padding-top: 0.75rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted);">
+                <div class="modal-file-note">
                     <i class="bi bi-info-circle"></i> ${translations.noSpecificKeywords}
                 </div>
             `;
@@ -2656,7 +2586,7 @@ function closeCategoryModal() {
 }
 
 // Close modal when clicking outside
-document.addEventListener('DOMContentLoaded', function() {
+function setupModalOverlayHandlers() {
     const modal = document.getElementById('categoryFilesModal');
     if (modal) {
         modal.addEventListener('click', function(e) {
@@ -2683,7 +2613,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-});
+}
 
 // Load category words analysis
 async function loadCategoryWordsAnalysis(pathName) {
@@ -2727,7 +2657,7 @@ async function loadCategoryWordsAnalysis(pathName) {
         if (!data || typeof data !== 'object') {
             console.error('Invalid category words response format:', data);
             document.getElementById('categoryWordsDetails').innerHTML = `
-                <div class="empty-state" style="padding: 2rem;">
+                <div class="empty-state category-breakdown-empty">
                     <i class="bi bi-exclamation-circle"></i>
                     <p>${translations.errorLoadingCategoryAnalysis}: Invalid response format</p>
                 </div>
@@ -2739,7 +2669,7 @@ async function loadCategoryWordsAnalysis(pathName) {
         if (data.error) {
             console.error('API returned error:', data.error);
             document.getElementById('categoryWordsDetails').innerHTML = `
-                <div class="empty-state" style="padding: 2rem;">
+                <div class="empty-state category-breakdown-empty">
                     <i class="bi bi-exclamation-circle"></i>
                     <p>${translations.errorLoadingCategoryAnalysis}: ${data.error}</p>
                 </div>
@@ -2767,7 +2697,7 @@ async function loadCategoryWordsAnalysis(pathName) {
         if (currentLoadingPath === pathName) {
             console.error('Error loading category words analysis:', error);
             document.getElementById('categoryWordsDetails').innerHTML = `
-                <div class="empty-state" style="padding: 2rem;">
+                <div class="empty-state category-breakdown-empty">
                     <i class="bi bi-exclamation-circle"></i>
                     <p>${translations.errorLoadingCategoryAnalysis}</p>
                 </div>
@@ -2788,84 +2718,78 @@ function renderCategoryWordsDetails(categories) {
         console.warn('Category words details container not found');
         return;
     }
-    
+
     // Handle empty data
     if (!categories || categories.length === 0) {
         container.innerHTML = `
-            <div class="empty-state" style="padding: 2rem; text-align: center;">
-                <i class="bi bi-diagram-3" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
-                <p style="color: var(--text-light); font-size: 0.875rem;">${translations.noCategoryData}</p>
+            <div class="empty-state category-breakdown-empty">
+                <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                <p>${translations.noCategoryData}</p>
             </div>
         `;
         return;
     }
-    
+
     let html = `
-        <h4 style="margin-bottom: 1rem; color: var(--text-heading); font-size: 1.1rem;">
+        <h4 class="category-breakdown-title">
             <i class="bi bi-table"></i> ${translations.categoryWordsBreakdown}
-            <span style="font-size: 0.875rem; color: var(--text-light); font-weight: 400; margin-inline-start: 0.5rem;">
+            <span class="category-breakdown-subtitle">
                 ${translations.clickRowToSeeWords}
             </span>
         </h4>
-        <div style="overflow-x: auto; overflow-y: visible; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch;">
-            <table style="width: 100%; min-width: 600px; border-collapse: collapse; table-layout: auto;">
+        <div class="table-wrapper category-breakdown-table-wrapper">
+            <table class="table category-breakdown-table">
                 <thead>
-                    <tr style="background: var(--table-header-bg); border-bottom: 2px solid var(--table-border);">
-                        <th style="padding: 0.75rem; text-align: start; font-weight: 600; color: var(--table-header-text);">${translations.categoryName}</th>
-                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.files}</th>
-                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.words}</th>
-                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.percentage}</th>
-                        <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: var(--table-header-text);">${translations.distribution}</th>
+                    <tr>
+                        <th>${translations.categoryName}</th>
+                        <th class="text-center">${translations.files}</th>
+                        <th class="text-center">${translations.words}</th>
+                        <th class="text-center">${translations.percentage}</th>
+                        <th>${translations.distribution}</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
-    
-    categories.forEach((cat, index) => {
+
+    categories.forEach((cat) => {
         // Handle both camelCase and snake_case property names
         const categoryId = cat.categoryId || cat.category_id || 0;
         const categoryName = cat.categoryName || cat.category_name || 'Unknown';
         const fileCount = cat.fileCount || cat.file_count || 0;
         const wordCount = cat.wordCount || cat.word_count || 0;
         const filePercentage = cat.filePercentage || cat.file_percentage || 0;
-        
-        const backgroundColor = index % 2 === 0 ? 'var(--table-row-bg)' : 'var(--bg-section)';
-        const categoryColor = 'var(--primary-color)';
-        
+
         html += `
-            <tr class="category-words-row-clickable" 
+            <tr class="category-words-row-clickable category-row-clickable"
                 data-category-id="${categoryId}"
-                data-category-name="${categoryName.replace(/"/g, '&quot;')}"
-                style="background: ${backgroundColor}; border-bottom: 1px solid var(--table-border); cursor: pointer; transition: background-color 0.2s;"
-                onmouseover="this.style.background='var(--table-row-hover)'"
-                onmouseout="this.style.background='${backgroundColor}'">
-                <td style="padding: 0.75rem;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="bi bi-bookmark-fill" style="color: ${categoryColor};"></i>
-                        <span style="font-weight: 500; word-break: break-word; overflow-wrap: break-word;">${categoryName}</span>
-                        <i class="bi bi-box-arrow-up-right" style="font-size: 0.75rem; color: var(--text-muted); margin-inline-start: 0.25rem;"></i>
+                data-category-name="${categoryName.replace(/"/g, '&quot;')}">
+                <td>
+                    <div class="category-breakdown-label">
+                        <i class="bi bi-bookmark-fill category-breakdown-icon category-icon-primary"></i>
+                        <span>${categoryName}</span>
+                        <i class="bi bi-box-arrow-up-right category-breakdown-open-icon"></i>
                     </div>
                 </td>
-                <td style="padding: 0.75rem; text-align: center; font-weight: 600;">${fileCount}</td>
-                <td style="padding: 0.75rem; text-align: center;">${wordCount}</td>
-                <td style="padding: 0.75rem; text-align: center;">${filePercentage.toFixed(1)}%</td>
-                <td style="padding: 0.75rem;">
-                    <div style="background: var(--border-color); border-radius: 0.25rem; height: 20px; overflow: hidden;">
-                        <div style="background: ${categoryColor}; height: 100%; width: ${filePercentage}%; transition: width 0.3s;"></div>
+                <td class="text-center fw-semibold">${fileCount}</td>
+                <td class="text-center">${wordCount}</td>
+                <td class="text-center">${filePercentage.toFixed(1)}%</td>
+                <td>
+                    <div class="category-distribution-track">
+                        <div class="category-distribution-fill category-distribution-fill-primary" style="width: ${filePercentage}%;"></div>
                     </div>
                 </td>
             </tr>
         `;
     });
-    
+
     html += `
                 </tbody>
             </table>
         </div>
     `;
-    
+
     container.innerHTML = html;
-    
+
     // Add event delegation for category words row clicks
     container.querySelectorAll('.category-words-row-clickable').forEach(row => {
         row.addEventListener('click', function() {
@@ -2954,62 +2878,58 @@ async function openCategoryWordsModal(categoryId, categoryName) {
 // Render category words in modal
 function renderCategoryWords(words, categoryName, categoryId) {
     const contentElement = document.getElementById('modalCategoryWordsContent');
-    
+
     let html = `
-        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-section); border-radius: 0.5rem; border-left: 4px solid var(--primary-color);">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div class="modal-summary-callout">
+            <div class="modal-summary-row">
                 <div>
-                    <strong style="font-size: 1.1rem; color: var(--text-heading);">${words.length}</strong>
-                    <span style="color: var(--text-light);"> ${formatTranslation('wordsInCategory', { count: words.length, s: words.length !== 1 ? 's' : '' })}</span>
+                    <strong class="modal-file-count">${words.length}</strong>
+                    <span class="modal-file-count-label"> ${formatTranslation('wordsInCategory', { count: words.length, s: words.length !== 1 ? 's' : '' })}</span>
                 </div>
-                <div style="font-size: 0.875rem; color: var(--text-light);">
+                <div class="modal-file-context">
                     <i class="bi bi-info-circle"></i> ${translations.clickWordToSeeFiles}
                 </div>
             </div>
         </div>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+
+        <div class="category-words-grid">
     `;
-    
+
     words.forEach(word => {
-        const usageColor = word.fileCount > 10 ? 'var(--success-color)' : word.fileCount > 5 ? 'var(--warning-color)' : 'var(--text-muted)';
-        
+        const usageClass = word.fileCount > 10 ? 'usage-count-high' : word.fileCount > 5 ? 'usage-count-medium' : 'usage-count-low';
         const wordTextEscaped = word.word.replace(/"/g, '&quot;');
         html += `
-            <div class="word-card-clickable" 
+            <div class="word-card-clickable category-word-card"
                  data-word-id="${word.id}"
                  data-word-text="${wordTextEscaped}"
-                 data-category-id="${categoryId || ''}"
-                 style="background: var(--bg-section); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; transition: all 0.2s; cursor: pointer;"
-                 onmouseover="this.style.borderColor='var(--primary-color)'; this.style.transform='translateY(-2px)'; const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim(); this.style.boxShadow='0 4px 12px ' + (primaryColor ? primaryColor + '26' : 'rgba(102, 126, 234, 0.15)');"
-                 onmouseout="this.style.borderColor='var(--border-color)'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-                    <span style="font-weight: 600; color: var(--text-heading); word-break: break-word;">${word.word}</span>
-                    <span style="background: ${usageColor}; color: var(--text-white); padding: 0.125rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600; flex-shrink: 0; margin-left: 0.5rem;">
+                 data-category-id="${categoryId || ''}">
+                <div class="category-word-card-header">
+                    <span class="category-word-text">${word.word}</span>
+                    <span class="category-word-count ${usageClass}">
                         ${word.fileCount}
                     </span>
                 </div>
-                <div style="font-size: 0.75rem; color: var(--text-light);">
+                <div class="category-word-meta">
                     <i class="bi bi-files"></i> ${formatTranslation('foundInFiles', { count: word.fileCount, s: word.fileCount !== 1 ? 's' : '' })}
                 </div>
             </div>
         `;
     });
-    
+
     html += `
         </div>
     `;
-    
+
     contentElement.innerHTML = html;
-    
-    // Add event delegation for word card clicks
+
+    // Add event handlers for word cards
     contentElement.querySelectorAll('.word-card-clickable').forEach(card => {
         card.addEventListener('click', function() {
             const wordId = this.getAttribute('data-word-id');
             const wordText = this.getAttribute('data-word-text');
-            const catId = this.getAttribute('data-category-id');
+            const categoryId = this.getAttribute('data-category-id');
             if (wordId && wordText) {
-                openWordFilesModal(parseInt(wordId), wordText, catId ? parseInt(catId) : null);
+                openWordFilesModal(parseInt(wordId), wordText, categoryId ? parseInt(categoryId) : null);
             }
         });
     });
@@ -3033,7 +2953,7 @@ async function openWordFilesModal(wordId, wordText, categoryId = null) {
     // Update modal title - show category context if available
     if (effectiveCategoryId && categoryName) {
         titleElement.innerHTML = formatTranslation('filesContaining', { word: wordText }) + 
-            ` <span style="font-size: 0.875rem; color: var(--text-light); font-weight: 400;">(${translations.inCategory || 'in category'}: ${categoryName})</span>`;
+            ` <span class="modal-title-context">(${translations.inCategory || 'in category'}: ${categoryName})</span>`;
     } else {
         titleElement.innerHTML = formatTranslation('filesContaining', { word: wordText });
     }
@@ -3113,30 +3033,31 @@ async function openWordFilesModal(wordId, wordText, categoryId = null) {
 // Render files for a word
 function renderWordFiles(files, wordText, wordDisplay, categoryId = null, categoryName = '') {
     const contentElement = document.getElementById('modalFilesContent');
-    
+
     let html = `
         <div class="modal-header-info-box">
             <div>
                 <div>
-                    <strong style="font-size: 1.1rem; color: var(--text-dark);">${files.length}</strong>
-                    <span style="color: var(--text-light);"> ${formatTranslation('filesContain', { count: files.length, s: files.length !== 1 ? 's' : '', word: wordDisplay })}</span>
+                    <strong class="modal-file-count">${files.length}</strong>
+                    <span class="modal-file-count-label"> ${formatTranslation('filesContain', { count: files.length, s: files.length !== 1 ? 's' : '', word: wordDisplay })}</span>
                     ${categoryId && categoryName ? `
-                        <div style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.25rem;">
-                            <i class="bi bi-bookmark-fill" style="color: var(--primary-color);"></i> 
+                        <div class="modal-file-category-context">
+                            <i class="bi bi-bookmark-fill"></i>
                             ${translations.showingCategoryWords || 'Showing words from category'}: <strong>${categoryName}</strong>
                         </div>
                     ` : ''}
                 </div>
-                <div style="font-size: 0.875rem; color: var(--text-light);">
+                <div class="modal-file-context">
                     <i class="bi bi-sort-down"></i> ${translations.sortedByFrequency}
                 </div>
             </div>
         </div>
     `;
-    
+
     files.forEach(file => {
         const fileIcon = getFileIcon(file.type);
-        
+        const statusClass = file.status === translations.read ? 'status-dot-read' : 'status-dot-unread';
+
         html += `
             <div class="modal-file-card" onclick="window.open('/file/${file.id}', '_blank')">
                 <div class="modal-file-header">
@@ -3147,34 +3068,34 @@ function renderWordFiles(files, wordText, wordDisplay, categoryId = null, catego
                             <span><i class="bi bi-file-earmark"></i> ${file.type || translations.unknownType}</span>
                             <span><i class="bi bi-hdd"></i> ${formatFileSize(file.size)}</span>
                             ${file.created ? `<span><i class="bi bi-calendar"></i> ${new Date(file.created).toLocaleDateString()}</span>` : ''}
-                            <span><i class="bi bi-circle-fill" style="font-size: 0.5rem; color: ${file.status === translations.read ? 'var(--success-color)' : 'var(--danger-color)'};"></i> ${file.status}</span>
+                            <span><i class="bi bi-circle-fill status-dot ${statusClass}"></i> ${file.status}</span>
                         </div>
                     </div>
                 </div>
                 <div class="modal-keywords">
-                    <span style="font-size: 0.875rem; color: var(--text-light); margin-inline-end: 0.5rem;">
+                    <span class="modal-keywords-label">
                         <i class="bi bi-file-text"></i> ${formatTranslation('appearsTimesInFile', { count: file.wordCount, s: file.wordCount !== 1 ? 's' : '' })}
                     </span>
                     ${file.words && file.words.length > 0 ? `
-                        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                            <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.5rem; font-weight: 500;">
-                                <i class="bi bi-tags"></i> 
-                                ${categoryId && categoryName ? 
-                                    `${translations.categoryWordsInFile || 'Category words in file'}: <strong>${categoryName}</strong>` : 
+                        <div class="modal-word-breakdown">
+                            <div class="modal-word-breakdown-label">
+                                <i class="bi bi-tags"></i>
+                                ${categoryId && categoryName ?
+                                    `${translations.categoryWordsInFile || 'Category words in file'}: <strong>${categoryName}</strong>` :
                                     (translations.wordsInFile || 'Words in file')}:
                             </div>
-                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <div class="modal-word-chip-list">
                                 ${file.words.slice(0, 20).map(word => `
-                                    <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: var(--border-light); border-radius: 0.375rem; font-size: 0.75rem; color: var(--text-dark);">
-                                        <span style="font-weight: 500;">${escapeHtml(word.word)}</span>
-                                        <span style="color: var(--text-muted);">(${word.count})</span>
+                                    <span class="modal-word-chip">
+                                        <span class="modal-word-chip-text">${escapeHtml(word.word)}</span>
+                                        <span class="modal-word-chip-count">(${word.count})</span>
                                     </span>
                                 `).join('')}
-                                ${file.words.length > 20 ? `<span style="font-size: 0.75rem; color: var(--text-muted); padding: 0.25rem 0.5rem;">+${file.words.length - 20} more</span>` : ''}
+                                ${file.words.length > 20 ? `<span class="modal-word-chip-more">+${file.words.length - 20} more</span>` : ''}
                             </div>
                         </div>
                     ` : `
-                        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-muted);">
+                        <div class="modal-file-note">
                             <i class="bi bi-info-circle"></i> ${translations.noWordsInFile}
                         </div>
                     `}
@@ -3182,7 +3103,7 @@ function renderWordFiles(files, wordText, wordDisplay, categoryId = null, catego
             </div>
         `;
     });
-    
+
     contentElement.innerHTML = html;
 }
 
@@ -3207,6 +3128,10 @@ function closeCategoryWordsModal() {
 if (typeof window !== 'undefined') {
     window.closeCategoryModal = closeCategoryModal;
     window.closeCategoryWordsModal = closeCategoryWordsModal;
+}
+
+export default function init() {
+    initializePathAnalysisPage();
 }
 
 function showError() {

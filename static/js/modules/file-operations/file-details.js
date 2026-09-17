@@ -268,7 +268,7 @@ export async function loadFileDetailsContent(fileId, fileName) {
                         }, 10);
                     } else {
                         // SECURITY FIX: Always escape HTML content to prevent XSS
-                        contentSection.innerHTML = `<pre id="modalContentText" style="margin: 0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;">${escapeHtml(displayContent)}</pre>`;
+                        contentSection.innerHTML = `<pre id="modalContentText" class="modal-content-text-pre">${escapeHtml(displayContent)}</pre>`;
                     }
                     
                     const contentElement = document.getElementById('modalContentText');
@@ -279,7 +279,7 @@ export async function loadFileDetailsContent(fileId, fileName) {
                 }).catch(err => {
                     console.error('Error formatting modal content:', err);
                     // SECURITY FIX: Always escape HTML content to prevent XSS
-                    contentSection.innerHTML = `<pre id="modalContentText" style="margin: 0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;">${escapeHtml(displayContent)}</pre>`;
+                    contentSection.innerHTML = `<pre id="modalContentText" class="modal-content-text-pre">${escapeHtml(displayContent)}</pre>`;
                     const contentElement = document.getElementById('modalContentText');
                     if (contentElement) {
                         contentElement.setAttribute('data-original-content', displayContent);
@@ -342,7 +342,7 @@ export async function loadFileDetailsContent(fileId, fileName) {
                     `;
                 }
                 
-                analysisHtml += '<hr style="margin: 1rem 0; border-color: #e2e8f0;">';
+                analysisHtml += '<hr class="analysis-section-divider">';
             }
             
             analysisHtml += '<div id="classificationChartsContainer"></div>';

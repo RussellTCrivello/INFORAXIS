@@ -1083,30 +1083,49 @@ def api_path_files():
 def api_path_classifications():
     """
     API endpoint to get classifications for a specific path.
-    
+
     Returns category/classification statistics for files within the specified path.
-    
+
     Query Parameters:
-        path (str, required): Path to analyze
+        path (str, optional): Path to analyze; use '*' for database scope
+        file_id (int, optional): Analyze a single file by database ID
+        limit (int, optional): Scope database-wide analysis to recent N files
         source_id (int, optional): Filter by source ID
         side_id (int, optional): Filter by side ID
-        
+
     Returns:
         JSON response with classification statistics
     """
     try:
         path_name = request.args.get('path', '').strip()
+        file_id = request.args.get('file_id', type=int)
         source_id = request.args.get('source_id', type=int)
         side_id = request.args.get('side_id', type=int)
-        
-        if not path_name:
-            return jsonify({'error': 'Path parameter required'}), 400
-        
-        # Build WHERE clause for path matching using helper function
-        where_clause, path_params = build_path_where_clause(path_name)
-        if not where_clause:
-            return jsonify({'error': 'Invalid path'}), 400
-        
+        limit = request.args.get('limit', type=int)
+
+        # Support the three classification scopes rendered by the page:
+        # explicit path, single file ID, and database-wide analysis. The legacy
+        # path-only behavior is preserved for Path Analysis callers.
+        if file_id:
+            where_clause = "p.id = %s"
+            path_params = [int(file_id)]
+        elif path_name == '*' or path_name.lower() == 'all':
+            if limit:
+                limit = max(1, min(int(limit), 10000))
+                where_clause = "p.id IN (SELECT id FROM paths ORDER BY date_creation DESC NULLS LAST, id DESC LIMIT %s)"
+                path_params = [limit]
+            else:
+                where_clause = "1=1"
+                path_params = []
+        else:
+            if not path_name:
+                return jsonify({'error': 'Path parameter required'}), 400
+
+            # Build WHERE clause for path matching using helper function
+            where_clause, path_params = build_path_where_clause(path_name)
+            if not where_clause:
+                return jsonify({'error': 'Invalid path'}), 400
+
         # Build filter clause for source and side
         filter_clause, filter_params = build_filter_clause(source_id, side_id)
         

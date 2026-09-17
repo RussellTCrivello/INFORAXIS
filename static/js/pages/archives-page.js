@@ -57,6 +57,10 @@ function initializePageFeatures() {
  */
 function ensureNavigationInitialized() {
     console.log('Archives page: Ensuring navigation is initialized...');
+    if (window.__fmsNavigationInitialized) {
+        console.debug('Archives page: navigation already initialized by file-management-system');
+        return;
+    }
     
     // Wait for file-management-system to be ready, then ensure navigation is initialized
     let attempts = 0;

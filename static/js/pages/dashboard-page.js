@@ -177,7 +177,7 @@ function updateStorageView(view, clickedButton) {
         };
         
         detailsHtml = storageData.by_type.map(t => `
-            <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+            <div class="storage-detail-row">
                 <span><strong>${t.type}</strong> (${t.count} ${translations.files})</span>
                 <span>${formatFileSize(t.total_size)}</span>
             </div>
@@ -190,7 +190,7 @@ function updateStorageView(view, clickedButton) {
         };
         
         detailsHtml = storageData.by_status.map(s => `
-            <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+            <div class="storage-detail-row">
                 <span><strong>${s.status}</strong> (${s.count} ${translations.files})</span>
                 <span>${formatFileSize(s.total_size)}</span>
             </div>
@@ -222,7 +222,7 @@ function updateStorageView(view, clickedButton) {
         };
         
         detailsHtml = sizeData.map(s => `
-            <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+            <div class="storage-detail-row">
                 <span><strong>${s.name}</strong></span>
                 <span>${formatFileSize(s.size)}</span>
             </div>
@@ -662,7 +662,7 @@ function renderLargestFiles(files) {
     
     files.forEach(file => {
         const row = document.createElement('tr');
-        row.style.cursor = 'pointer';
+        row.classList.add('clickable-row');
         row.onclick = () => window.location.href = `/file/${file.id}`;
         
         row.innerHTML = `
@@ -670,7 +670,7 @@ function renderLargestFiles(files) {
             <td><span class="badge bg-primary">${file.type || translations.unknown}</span></td>
             <td><strong>${formatFileSize(file.size)}</strong></td>
             <td>${file.source}</td>
-            <td style="font-size: 0.875rem; color: var(--text-light);">${file.path}</td>
+            <td class="file-path-cell">${file.path}</td>
         `;
         
         tbody.appendChild(row);

@@ -20,6 +20,9 @@ function getHomeUrl() {
 
 // Initialize base page functionality
 document.addEventListener('DOMContentLoaded', function() {
+    if (document.body?.dataset.iaBasePageInitialized === 'true') return;
+    if (document.body) document.body.dataset.iaBasePageInitialized = 'true';
+
     // Mobile menu toggle with backdrop
     const menuToggle = document.getElementById('menuToggle');
     const sidebar = document.getElementById('sidebar');

@@ -172,7 +172,7 @@
     <!-- Dashboard Content -->
     <div id="dashboard-content">
     <!-- Active Processing Tasks Progress Bar -->
-    <div id="processingProgressContainer" class="processing-progress-container" style="display: none;">
+    <div id="processingProgressContainer" class="processing-progress-container" hidden>
         <div class="section-card">
             <div class="section-header">
                 <h2><i class="bi bi-arrow-repeat"></i> {{ _('Active Processing Tasks') }}</h2>
@@ -414,7 +414,7 @@
         <div class="search-filter-section">
             <div class="search-bar">
                 <input type="text" class="search-input" id="searchQuery" placeholder="{{ _('Search files by keyword, category, or path...') }}">
-                <select class="search-input" id="searchType" style="flex: 0.3;">
+                <select class="search-input search-type-select" id="searchType">
                     <option value="">{{ _('All Types') }}</option>
                 </select>
                 <button class="search-btn" onclick="performSearch()">
@@ -458,8 +458,8 @@
                     <canvas id="storageChart"></canvas>
                 </div>
                 <div>
-                    <h4 style="margin-bottom: 1rem;">{{ _('Storage Details') }}</h4>
-                    <div id="storageDetails" style="max-height: 350px; overflow-y: auto;">
+                    <h4 class="analytics-subtitle">{{ _('Storage Details') }}</h4>
+                    <div id="storageDetails" class="storage-details-panel">
                         <div class="loading-state"><div class="spinner"></div></div>
                     </div>
                 </div>
@@ -500,13 +500,13 @@
             </div>
             <div class="two-column-grid">
                 <div>
-                    <h4 style="margin-bottom: 1rem;">{{ _('Content Coverage') }}</h4>
+                    <h4 class="analytics-subtitle">{{ _('Content Coverage') }}</h4>
                     <div class="chart-container">
                         <canvas id="contentCoverageChart"></canvas>
                     </div>
                 </div>
                 <div>
-                    <h4 style="margin-bottom: 1rem;">{{ _('Top Categories') }}</h4>
+                    <h4 class="analytics-subtitle">{{ _('Top Categories') }}</h4>
                     <div class="chart-container">
                         <canvas id="topCategoriesChart"></canvas>
                     </div>
@@ -550,7 +550,6 @@
     <!-- End Dashboard Content -->
 </div>
 
-<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
 <script type="application/json" id="dashboard-page-data">{{ {
     "translations": {
         "loading": _('Loading...'),

@@ -12,8 +12,18 @@ if (typeof window !== 'undefined') {
     window.FunctionManager = FunctionManager;
 }
 
+let modulesInitialized = false;
+
 // Initialize all modules when DOM is ready
 function initializeModules() {
+    if (modulesInitialized || window.__fileManagementSystemInitialized) {
+        console.debug('File Management System: duplicate initialization skipped');
+        return;
+    }
+    modulesInitialized = true;
+    if (typeof window !== 'undefined') {
+        window.__fileManagementSystemInitialized = true;
+    }
     console.log('File Management System: Initializing modules...');
     console.log('File Management System: FunctionManager available:', !!FunctionManager);
     console.log('File Management System: Navigation available:', !!FunctionManager?.navigation);

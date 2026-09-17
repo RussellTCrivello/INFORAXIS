@@ -16,7 +16,7 @@
 
 {% if page_tips_enabled %}
 <!-- Page Tips: ENABLED -->
-<div class="page-tips-container" id="pageTipsContainer" data-page-tips-enabled="true">
+<div class="page-tips-container" id="pageTipsContainer" data-page-tips-enabled="true" data-ia-sticky="false" role="complementary" aria-label="{{ _('Page Tips & Instructions') }}">
     <div class="page-tips-card">
         <div class="page-tips-header">
             <div class="d-flex align-items-center gap-2">
@@ -26,11 +26,13 @@
             <button type="button" class="btn btn-sm btn-link text-muted p-0" 
                     id="toggleTipsBtn" 
                     title="{{ _('Toggle Tips Visibility') }}"
-                    aria-label="{{ _('Toggle Tips Visibility') }}">
+                    aria-label="{{ _('Toggle Tips Visibility') }}"
+                    aria-controls="pageTipsContent"
+                    aria-expanded="false">
                 <i class="bi bi-chevron-up rotated" id="tipsToggleIcon"></i>
             </button>
         </div>
-        <div class="page-tips-content collapsed" id="pageTipsContent">
+        <div class="page-tips-content collapsed" id="pageTipsContent" aria-hidden="true" hidden>
             {{ caller() }}
         </div>
     </div>

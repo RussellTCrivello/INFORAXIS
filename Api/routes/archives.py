@@ -992,8 +992,11 @@ def register_archives_routes(app):
         try:
             source_id = request.args.get('source_id', type=int)
             page = request.args.get('page', 1, type=int)
-            limit = request.args.get('limit', 20, type=int)
-            offset = (page - 1) * limit
+            categories_page = max(1, request.args.get('categories_page', page, type=int))
+            keywords_page = max(1, request.args.get('keywords_page', page, type=int))
+            limit = max(1, min(request.args.get('limit', 20, type=int), 100))
+            categories_offset = (categories_page - 1) * limit
+            keywords_offset = (keywords_page - 1) * limit
             
             if not source_id:
                 return jsonify({'success': False, 'error': 'source_id required'}), 400
@@ -1014,7 +1017,7 @@ def register_archives_routes(app):
                 LIMIT %s OFFSET %s
             """
             try:
-                categories_data = execute_query(categories_query, (source_id, limit, offset), fetch="all")
+                categories_data = execute_query(categories_query, (source_id, limit, categories_offset), fetch="all")
             except Exception as query_error:
                 logger.error(f"Error executing categories query: {query_error}")
                 categories_data = []
@@ -1058,7 +1061,7 @@ def register_archives_routes(app):
                 LIMIT %s OFFSET %s
             """
             try:
-                keywords_data = execute_query(keywords_query, (source_id, limit, offset), fetch="all")
+                keywords_data = execute_query(keywords_query, (source_id, limit, keywords_offset), fetch="all")
             except Exception as query_error:
                 logger.error(f"Error executing keywords query: {query_error}")
                 keywords_data = []
@@ -1118,19 +1121,19 @@ def register_archives_routes(app):
                 'pagination': {
                     'categories': {
                         'total': total_categories,
-                        'page': page,
+                        'page': categories_page,
                         'per_page': limit,
                         'total_pages': total_categories_pages,
-                        'has_prev': page > 1,
-                        'has_next': page < total_categories_pages
+                        'has_prev': categories_page > 1,
+                        'has_next': categories_page < total_categories_pages
                     },
                     'keywords': {
                         'total': total_keywords,
-                        'page': page,
+                        'page': keywords_page,
                         'per_page': limit,
                         'total_pages': total_keywords_pages,
-                        'has_prev': page > 1,
-                        'has_next': page < total_keywords_pages
+                        'has_prev': keywords_page > 1,
+                        'has_next': keywords_page < total_keywords_pages
                     }
                 }
             })
@@ -1147,8 +1150,11 @@ def register_archives_routes(app):
         try:
             side_id = request.args.get('side_id', type=int)
             page = request.args.get('page', 1, type=int)
-            limit = request.args.get('limit', 20, type=int)
-            offset = (page - 1) * limit
+            categories_page = max(1, request.args.get('categories_page', page, type=int))
+            keywords_page = max(1, request.args.get('keywords_page', page, type=int))
+            limit = max(1, min(request.args.get('limit', 20, type=int), 100))
+            categories_offset = (categories_page - 1) * limit
+            keywords_offset = (keywords_page - 1) * limit
             
             if not side_id:
                 return jsonify({'success': False, 'error': 'side_id required'}), 400
@@ -1169,7 +1175,7 @@ def register_archives_routes(app):
                 LIMIT %s OFFSET %s
             """
             try:
-                categories_data = execute_query(categories_query, (side_id, limit, offset), fetch="all")
+                categories_data = execute_query(categories_query, (side_id, limit, categories_offset), fetch="all")
             except Exception as query_error:
                 logger.error(f"Error executing categories query: {query_error}")
                 categories_data = []
@@ -1213,7 +1219,7 @@ def register_archives_routes(app):
                 LIMIT %s OFFSET %s
             """
             try:
-                keywords_data = execute_query(keywords_query, (side_id, limit, offset), fetch="all")
+                keywords_data = execute_query(keywords_query, (side_id, limit, keywords_offset), fetch="all")
             except Exception as query_error:
                 logger.error(f"Error executing keywords query: {query_error}")
                 keywords_data = []
@@ -1273,19 +1279,19 @@ def register_archives_routes(app):
                 'pagination': {
                     'categories': {
                         'total': total_categories,
-                        'page': page,
+                        'page': categories_page,
                         'per_page': limit,
                         'total_pages': total_categories_pages,
-                        'has_prev': page > 1,
-                        'has_next': page < total_categories_pages
+                        'has_prev': categories_page > 1,
+                        'has_next': categories_page < total_categories_pages
                     },
                     'keywords': {
                         'total': total_keywords,
-                        'page': page,
+                        'page': keywords_page,
                         'per_page': limit,
                         'total_pages': total_keywords_pages,
-                        'has_prev': page > 1,
-                        'has_next': page < total_keywords_pages
+                        'has_prev': keywords_page > 1,
+                        'has_next': keywords_page < total_keywords_pages
                     }
                 }
             })

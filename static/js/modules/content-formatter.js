@@ -1182,7 +1182,7 @@ function formatImageContent(filePath, content, fileId = null) {
     html += `data-file-path="${filePath ? escapeHtml(filePath) : ''}" `;
     html += `data-current-source-index="0">`;
     
-    html += '<div class="image-load-error" style="display: none; padding: 1rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; color: #6c757d;">';
+    html += '<div class="image-load-error">';
     html += '<i class="bi bi-exclamation-triangle me-2"></i><span class="error-message">Loading image...</span>';
     html += '</div>';
     html += '</div>';

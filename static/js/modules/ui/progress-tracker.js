@@ -88,13 +88,13 @@ const TASK_TEMPLATE = `
             <span class="task-percent" data-role="percent"></span>
         </div>
         <div class="task-message" data-role="message"></div>
-        <div class="progress-bar-wrapper" style="margin-top: 0.5rem;">
+        <div class="progress-bar-wrapper task-progress-wrapper">
             <div class="progress-bar">
                 <div class="progress-bar-fill" data-role="fill" style="width: 0%;"></div>
                 <div class="progress-bar-text" data-role="counters"></div>
             </div>
         </div>
-        <div class="task-message" data-role="detail" style="margin-top:0.35rem;"></div>
+        <div class="task-message task-detail-message" data-role="detail"></div>
     </div>
 `;
 
@@ -167,12 +167,12 @@ export class ProcessingProgressTracker {
         if (!container || !list) return;
 
         if (!tasks.length) {
-            container.style.display = 'none';
+            container.hidden = true;
             this._nodes.forEach((node) => node.remove());
             this._nodes.clear();
             return;
         }
-        container.style.display = 'block';
+        container.hidden = false;
 
         const seen = new Set();
         tasks.forEach((task) => {

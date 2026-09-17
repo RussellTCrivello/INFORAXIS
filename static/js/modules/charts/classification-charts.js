@@ -30,47 +30,49 @@ export function loadClassificationCharts(fileId) {
     const analysisSection = document.getElementById('fileAnalysisSection');
     if (!analysisSection) return;
     
-    // Show loading state
+    // Show loading state using the shared analytical panel classes. Controls
+    // remain fixed while the chart and backing data table use their own bounded
+    // scroll regions.
     analysisSection.innerHTML = `
         <div class="classification-charts-container">
-            <div class="classification-charts-controls">
-                <div class="data-type-tabs">
-                    <button class="data-type-tab active" data-type="categories" onclick="switchDataType('categories')">
-                        <i class="bi bi-tags"></i> ${translations.categories || 'Categories'}
+            <div class="classification-charts-controls ia-fixed-control-surface" data-ia-role="controls">
+                <div class="data-type-tabs" role="tablist" aria-label="${translations.analysis || 'Analysis'}">
+                    <button type="button" class="data-type-tab active" data-type="categories" onclick="switchDataType('categories')">
+                        <i class="bi bi-tags" aria-hidden="true"></i> ${translations.categories || 'Categories'}
                     </button>
-                    <button class="data-type-tab" data-type="words" onclick="switchDataType('words')">
-                        <i class="bi bi-file-text"></i> ${translations.words || 'Words'}
+                    <button type="button" class="data-type-tab" data-type="words" onclick="switchDataType('words')">
+                        <i class="bi bi-file-text" aria-hidden="true"></i> ${translations.words || 'Words'}
                     </button>
-                    <button class="data-type-tab" data-type="keywords" onclick="switchDataType('keywords')">
-                        <i class="bi bi-key"></i> ${translations.keywords || 'Keywords'}
+                    <button type="button" class="data-type-tab" data-type="keywords" onclick="switchDataType('keywords')">
+                        <i class="bi bi-key" aria-hidden="true"></i> ${translations.keywords || 'Keywords'}
                     </button>
                 </div>
-
-            <div class="chart-filter-container" style="margin-top: 0.75rem;">
-                <input type="text" id="chartFilterInput" 
-                       placeholder="${translations.filterData || 'Filter...'}" 
-                       oninput="filterChartData(this.value)"
-                       style="width: 100%; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 0.875rem;">
+                <div class="chart-filter-container">
+                    <label class="visually-hidden" for="chartFilterInput">${translations.filterData || 'Filter data'}</label>
+                    <input type="text" id="chartFilterInput" class="form-control form-control-sm"
+                           placeholder="${translations.filterData || 'Filter...'}"
+                           oninput="filterChartData(this.value)">
+                </div>
             </div>
-            <div class="chart-and-table-container" style="display: flex; gap: 1rem; margin-top: 1rem;">
-                <div class="chart-container" style="flex: 1; position: relative; height: 300px; min-width: 0;">
+            <div class="chart-and-table-container">
+                <div class="chart-container classification-chart-panel">
                     <canvas id="classificationChart"></canvas>
                 </div>
-                <div class="chart-data-table-container" style="flex: 0 0 300px; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; background: #ffffff;">
-                    <div id="chartDataTable" style="padding: 0.5rem;">
-                        <div style="font-size: 0.75rem; color: #64748b; padding: 0.5rem; border-bottom: 1px solid #e2e8f0; font-weight: 600;">
+                <div class="chart-data-table-container ia-data-scroll-region" data-ia-scroll="true">
+                    <div id="chartDataTable" class="chart-data-table">
+                        <div class="chart-data-table-title">
                             ${translations.dataTable || 'Data Table'}
                         </div>
-                        <div class="table-loading" style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.875rem;">
+                        <div class="table-loading chart-table-state">
                             ${translations.loadingAnalysis || 'Loading...'}
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="chart-loading" style="text-align: center; padding: 2rem; color: #64748b;">
+            <div class="chart-loading chart-state">
                 ${translations.loadingAnalysis || 'Loading analysis...'}
             </div>
-            
+        </div>
     `;
     
     // Fetch chart data
@@ -95,7 +97,7 @@ export function loadClassificationCharts(fileId) {
             console.error('Error loading classification charts:', error);
             const chartContainer = analysisSection.querySelector('.chart-container');
             if (chartContainer) {
-                chartContainer.innerHTML = `<div class="empty-state" style="text-align: center; padding: 2rem; color: #ef4444;">
+                chartContainer.innerHTML = `<div class="empty-state chart-state chart-state-error">
                     ${translations.errorLoadingAnalysis || 'Error loading analysis'}: ${escapeHtml(error.message)}
                 </div>`;
             }
@@ -191,8 +193,7 @@ export function renderClassificationChart() {
         const container = canvas.parentElement;
         if (container) {
             const emptyDiv = document.createElement('div');
-            emptyDiv.className = 'empty-state';
-            emptyDiv.style.cssText = 'text-align: center; padding: 2rem; color: #64748b;';
+            emptyDiv.className = 'empty-state chart-state';
             emptyDiv.textContent = translations.noCategoriesAssigned || 'No data available';
             
             // Remove existing empty state if any
@@ -472,7 +473,7 @@ export function renderClassificationChart() {
     // Hide loading indicator
     const loadingDiv = document.querySelector('.chart-loading');
     if (loadingDiv) {
-        loadingDiv.style.display = 'none';
+        loadingDiv.hidden = true;
     }
 }
 
@@ -520,68 +521,48 @@ export function renderChartDataTable() {
         loadingDiv.remove();
     }
     
+    const currentLabel = classificationChartState.currentDataType === 'categories'
+        ? (translations.category || 'Category')
+        : classificationChartState.currentDataType === 'words'
+            ? (translations.word || 'Word')
+            : (translations.keyword || 'Keyword');
+
     if (!filteredData || filteredData.length === 0) {
         tableContainer.innerHTML = `
-            <div style="font-size: 0.75rem; color: #64748b; padding: 0.5rem; border-bottom: 1px solid #e2e8f0; font-weight: 600;">
-                ${translations.dataTable || 'Data Table'}
-            </div>
-            <div style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.875rem;">
-                ${translations.noDataAvailable || 'No data available'}
-            </div>
+            <div class="chart-data-table-title">${translations.dataTable || 'Data Table'}</div>
+            <div class="chart-table-state">${translations.noDataAvailable || 'No data available'}</div>
         `;
         return;
     }
     
-    // Build table HTML
     let tableHtml = `
-        <div style="font-size: 0.75rem; color: #64748b; padding: 0.5rem; border-bottom: 1px solid #e2e8f0; font-weight: 600; position: sticky; top: 0; background: #ffffff; z-index: 10;">
-            ${translations.dataTable || 'Data Table'} (${filteredData.length})
-        </div>
-        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+        <div class="chart-data-table-title">${translations.dataTable || 'Data Table'} (${filteredData.length})</div>
+        <table class="chart-data-table-grid">
             <thead>
-                <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                    <th style="padding: 0.5rem; text-align: left; font-weight: 600; color: #475569; position: sticky; top: 32px; background: #f8fafc; z-index: 9;">
-                        ${classificationChartState.currentDataType === 'categories' ? (translations.category || 'Category') : 
-                          classificationChartState.currentDataType === 'words' ? (translations.word || 'Word') : 
-                          (translations.keyword || 'Keyword')}
-                    </th>
-                    <th style="padding: 0.5rem; text-align: right; font-weight: 600; color: #475569; position: sticky; top: 32px; background: #f8fafc; z-index: 9;">
-                        ${translations.count || 'Count'}
-                    </th>
-                    ${classificationChartState.currentDataType === 'categories' ? `
-                    <th style="padding: 0.5rem; text-align: right; font-weight: 600; color: #475569; position: sticky; top: 32px; background: #f8fafc; z-index: 9;">
-                        ${translations.percentage || '%'}
-                    </th>
-                    ` : ''}
+                <tr>
+                    <th>${currentLabel}</th>
+                    <th class="text-end">${translations.count || 'Count'}</th>
+                    ${classificationChartState.currentDataType === 'categories' ? `<th class="text-end">${translations.percentage || '%'}</th>` : ''}
                 </tr>
             </thead>
             <tbody>
     `;
     
-    filteredData.forEach((item, index) => {
-        const rowColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+    filteredData.forEach((item) => {
         tableHtml += `
-            <tr style="background: ${rowColor}; border-bottom: 1px solid #f1f5f9;">
-                <td style="padding: 0.5rem; color: #1e293b; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item.name || 'Unknown')}">
+            <tr>
+                <td class="chart-data-name" title="${escapeHtml(item.name || 'Unknown')}">
                     ${escapeHtml(item.name || 'Unknown')}
                 </td>
-                <td style="padding: 0.5rem; text-align: right; color: #475569; font-weight: 500;">
-                    ${(item.count || 0).toLocaleString()}
-                </td>
+                <td class="text-end chart-data-count">${(item.count || 0).toLocaleString()}</td>
                 ${classificationChartState.currentDataType === 'categories' ? `
-                <td style="padding: 0.5rem; text-align: right; color: #64748b; font-size: 0.7rem;">
-                    ${item.percentage ? item.percentage.toFixed(1) + '%' : '-'}
-                </td>
+                    <td class="text-end chart-data-percent">${item.percentage ? item.percentage.toFixed(1) + '%' : '-'}</td>
                 ` : ''}
             </tr>
         `;
     });
     
-    tableHtml += `
-            </tbody>
-        </table>
-    `;
-    
+    tableHtml += `</tbody></table>`;
     tableContainer.innerHTML = tableHtml;
 }
 
@@ -612,7 +593,7 @@ export function renderDuplicateWords() {
     
     if (!repeatedElements || repeatedElements.length === 0) {
         container.innerHTML = `
-            <div style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.875rem;">
+            <div class="chart-table-state">
                 ${translations.noDuplicateWords || 'No duplicate words found'}
             </div>
         `;
@@ -620,55 +601,34 @@ export function renderDuplicateWords() {
     }
     
     let html = `
-        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+        <table class="chart-data-table-grid duplicate-words-grid">
             <thead>
-                <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 10;">
-                    <th style="padding: 0.5rem; text-align: left; font-weight: 600; color: #475569;">
-                        ${translations.word || 'Word'}
-                    </th>
-                    <th style="padding: 0.5rem; text-align: right; font-weight: 600; color: #475569;">
-                        ${translations.count || 'Count'}
-                    </th>
-                    <th style="padding: 0.5rem; text-align: right; font-weight: 600; color: #475569;">
-                        ${translations.categories || 'Categories'}
-                    </th>
-                    <th style="padding: 0.5rem; text-align: left; font-weight: 600; color: #475569;">
-                        ${translations.categoryList || 'Category List'}
-                    </th>
+                <tr>
+                    <th>${translations.word || 'Word'}</th>
+                    <th class="text-end">${translations.count || 'Count'}</th>
+                    <th class="text-end">${translations.categories || 'Categories'}</th>
+                    <th>${translations.categoryList || 'Category List'}</th>
                 </tr>
             </thead>
             <tbody>
     `;
     
-    repeatedElements.forEach((item, index) => {
-        const rowColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+    repeatedElements.forEach((item) => {
         const categoriesList = item.categories && item.categories.length > 0 
             ? item.categories.join(', ') 
             : translations.noCategories || 'None';
         
         html += `
-            <tr style="background: ${rowColor}; border-bottom: 1px solid #f1f5f9;">
-                <td style="padding: 0.5rem; color: #1e293b; font-weight: 500;">
-                    ${escapeHtml(item.word || 'Unknown')}
-                </td>
-                <td style="padding: 0.5rem; text-align: right; color: #475569;">
-                    ${(item.count || 0).toLocaleString()}
-                </td>
-                <td style="padding: 0.5rem; text-align: right; color: #667eea; font-weight: 600;">
-                    ${item.category_count || 0}
-                </td>
-                <td style="padding: 0.5rem; color: #64748b; font-size: 0.7rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(categoriesList)}">
-                    ${escapeHtml(categoriesList)}
-                </td>
+            <tr>
+                <td class="chart-data-name">${escapeHtml(item.word || 'Unknown')}</td>
+                <td class="text-end chart-data-count">${(item.count || 0).toLocaleString()}</td>
+                <td class="text-end chart-data-count">${item.category_count || 0}</td>
+                <td class="chart-data-name" title="${escapeHtml(categoriesList)}">${escapeHtml(categoriesList)}</td>
             </tr>
         `;
     });
     
-    html += `
-            </tbody>
-        </table>
-    `;
-    
+    html += `</tbody></table>`;
     container.innerHTML = html;
 }
 

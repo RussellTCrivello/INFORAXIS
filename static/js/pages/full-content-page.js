@@ -101,11 +101,7 @@ async function renderBuffer() {
             const formatted = formatter.formatContentByType(text, fileType, filePath, fileId);
             if (formatted) {
                 elContent.innerHTML = formatted;
-                // Ensure proper styling for readability
-                elContent.style.width = '100%';
-                elContent.style.wordWrap = 'break-word';
-                elContent.style.overflowWrap = 'break-word';
-                elContent.style.whiteSpace = 'pre-wrap';
+                elContent.dataset.formatted = 'true';
                 // Attach image error handlers after DOM insertion
                 setTimeout(() => {
                     if (window.attachImageErrorHandlers && elContent) {
@@ -120,12 +116,10 @@ async function renderBuffer() {
         }
     }
     
-    // Fallback to plain text with proper formatting
-    elContent.innerHTML = escapeHtml(text);
-    elContent.style.width = '100%';
-    elContent.style.wordWrap = 'break-word';
-    elContent.style.overflowWrap = 'break-word';
-    elContent.style.whiteSpace = 'pre-wrap';
+    // Fallback to plain text; layout is governed by full-content.css and
+    // formatted-content.css so this never blows out the reader viewport.
+    elContent.textContent = text;
+    elContent.dataset.formatted = 'true';
     applyHighlights();
 }
 
@@ -169,9 +163,11 @@ async function ensureNext() {
     }
 }
 
-// Infinite scroll via IntersectionObserver
+// Infinite scroll via IntersectionObserver. Initialized after DOM nodes exist.
 let io = null;
-if (elReader && elSentinel) {
+function setupInfiniteScroll() {
+    if (!elReader || !elSentinel) return;
+    if (io) io.disconnect();
     io = new IntersectionObserver((entries) => {
         for (const e of entries) {
             if (e.isIntersecting) {
@@ -216,8 +212,9 @@ function initializeReader() {
         ensureNext();
     }
     
-    // Setup event listeners
+    // Setup fixed controls and the governed scroll viewport.
     setupEventListeners();
+    setupInfiniteScroll();
     
     // A search carried in from another interface (?q=) is located on open.
     restoreSearchState(searchQuery, caseSensitive, wholeWord);
@@ -411,66 +408,6 @@ async function restoreSearchState(query, caseSensitive, wholeWord) {
     if (optWhole) optWhole.checked = !!wholeWord;
     // Wait for the initial render before highlighting.
     setTimeout(runSearch, 300);
-}
-
-// Setup event listeners
-    setupEventListeners();
-}
-
-// --- Search ---
-let matchPositions = [];
-let currentMatch = -1;
-
-function buildRegex(q) {
-    if (!q) return null;
-    const w = optWhole && optWhole.checked ? `\\b${q}\\b` : q;
-    return new RegExp(w, optCase && optCase.checked ? 'g' : 'gi');
-}
-
-function computeMatches() {
-    if (!elContent || !elQ) return;
-    const text = elContent.textContent || '';
-    const rx = buildRegex(elQ.value.trim());
-    matchPositions = [];
-    if (!rx) return;
-    let m;
-    while ((m = rx.exec(text)) !== null) {
-        matchPositions.push({ start: m.index, end: m.index + m[0].length });
-        if (m[0].length === 0) rx.lastIndex++;
-    }
-}
-
-function applyHighlights() {
-    if (!elContent || !elQ) return;
-    const q = elQ.value.trim();
-    if (!q) {
-        return;
-    }
-    computeMatches();
-    if (matchPositions.length === 0) {
-        return;
-    }
-    const text = elContent.textContent;
-    let out = '';
-    let last = 0;
-    matchPositions.forEach((p, i) => {
-        out += escapeHtml(text.slice(last, p.start));
-        out += `<span class="hl${i === currentMatch ? ' current' : ''}">` + escapeHtml(text.slice(p.start, p.end)) + `</span>`;
-        last = p.end;
-    });
-    out += escapeHtml(text.slice(last));
-    elContent.innerHTML = out;
-}
-
-function gotoMatch(idx) {
-    if (matchPositions.length === 0) return;
-    currentMatch = (idx + matchPositions.length) % matchPositions.length;
-    applyHighlights();
-    const spans = elContent ? elContent.querySelectorAll('.hl') : [];
-    if (spans[currentMatch]) {
-        spans[currentMatch].scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    setStatus(`Match ${currentMatch + 1}/${matchPositions.length}`);
 }
 
 // Setup event listeners

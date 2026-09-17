@@ -1,0 +1,160 @@
+/* Batch analysis: fixed controls with scroll-contained file/progress data. */
+
+body[data-page-type="analysis-batch"] .analysis-view-navigation,
+body[data-page-type="analysis-batch"] .stat-card,
+body[data-page-type="analysis-batch"] .template-card,
+body[data-page-type="analysis-batch"] .history-item {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+    box-shadow: var(--shadow-xs);
+}
+
+body[data-page-type="analysis-batch"] .analysis-view-navigation {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+}
+
+body[data-page-type="analysis-batch"] .stat-card {
+    padding: 1rem;
+}
+
+body[data-page-type="analysis-batch"] .stat-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-white));
+    color: var(--primary-color);
+}
+
+body[data-page-type="analysis-batch"] .stat-card-icon-success {
+    background: color-mix(in srgb, var(--success-color) 10%, var(--bg-white));
+    color: var(--success-color);
+}
+
+body[data-page-type="analysis-batch"] .stat-card-icon-warning {
+    background: color-mix(in srgb, var(--warning-color) 13%, var(--bg-white));
+    color: var(--warning-color);
+}
+
+body[data-page-type="analysis-batch"] .stat-card-icon-danger {
+    background: color-mix(in srgb, var(--danger-color) 10%, var(--bg-white));
+    color: var(--danger-color);
+}
+
+body[data-page-type="analysis-batch"] .stat-card-title {
+    color: var(--text-light);
+    font-size: 0.72rem;
+    font-weight: 780;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+}
+
+body[data-page-type="analysis-batch"] .stat-card-value {
+    color: var(--text-heading);
+    font-size: 1.35rem;
+    font-weight: 820;
+}
+
+body[data-page-type="analysis-batch"] .table-scroll-panel,
+body[data-page-type="analysis-batch"] .file-progress-list,
+body[data-page-type="analysis-batch"] .history-timeline {
+    max-height: var(--ia-data-scroll-max-block, min(68vh, 54rem));
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+body[data-page-type="analysis-batch"] .table-scroll-panel {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+body[data-page-type="analysis-batch"] .table-scroll-panel table {
+    margin-bottom: 0;
+}
+
+body[data-page-type="analysis-batch"] .file-row,
+body[data-page-type="analysis-batch"] .failed-file-row {
+    vertical-align: middle;
+}
+
+body[data-page-type="analysis-batch"] .file-row:hover,
+body[data-page-type="analysis-batch"] .failed-file-row:hover {
+    background: var(--table-row-hover, color-mix(in srgb, var(--primary-color) 6%, var(--bg-white)));
+}
+
+body[data-page-type="analysis-batch"] .file-checkbox {
+    cursor: pointer;
+}
+
+body[data-page-type="analysis-batch"] .priority-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.22rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-pill);
+    background: var(--bg-section);
+    color: var(--text-light);
+    font-size: 0.72rem;
+    font-weight: 760;
+}
+
+body[data-page-type="analysis-batch"] .priority-medium {
+    border-color: color-mix(in srgb, var(--warning-color) 35%, var(--border-color));
+    background: color-mix(in srgb, var(--warning-color) 12%, var(--bg-white));
+    color: var(--warning-color);
+}
+
+body[data-page-type="analysis-batch"] .progress-tall {
+    height: 0.8rem;
+    border-radius: var(--radius-pill);
+    background: var(--border-light);
+}
+
+body[data-page-type="analysis-batch"] .progress-tall .progress-bar {
+    border-radius: inherit;
+}
+
+body[data-page-type="analysis-batch"] .resource-meter {
+    height: 0.55rem;
+    overflow: hidden;
+    border-radius: var(--radius-pill);
+    background: var(--border-light);
+}
+
+body[data-page-type="analysis-batch"] .resource-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--primary-color);
+}
+
+body[data-page-type="analysis-batch"] .resource-fill-cpu { background: var(--warning-color); }
+body[data-page-type="analysis-batch"] .resource-fill-memory { background: var(--info-color); }
+body[data-page-type="analysis-batch"] .resource-fill-disk { background: var(--success-color); }
+
+body[data-page-type="analysis-batch"] .template-card,
+body[data-page-type="analysis-batch"] .history-item {
+    padding: 0.85rem;
+}
+
+body[data-page-type="analysis-batch"] .template-card h6,
+body[data-page-type="analysis-batch"] .history-item h6 {
+    color: var(--text-heading);
+    font-weight: 780;
+}
+
+body[data-page-type="analysis-batch"] .retry-file-btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+    body[data-page-type="analysis-batch"] .page-header,
+    body[data-page-type="analysis-batch"] .analysis-view-navigation > div,
+    body[data-page-type="analysis-batch"] .stat-card > .d-flex {
+        align-items: stretch;
+    }
+}

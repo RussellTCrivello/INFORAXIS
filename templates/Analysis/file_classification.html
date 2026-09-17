@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('File Classification Analysis') }} - {{ _('File Analysis System') }}{% endblock %}
+{% block page_type %}file-classification{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/file-classification.css') }}" rel="stylesheet">
@@ -87,7 +88,7 @@
     </div>
     
     <!-- Statistics -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div class="classification-stats-grid">
         <div class="stat-card">
             <div class="stat-card-value" id="statTotalFiles">{{ stats.get('total_files', 0) }}</div>
             <div class="stat-card-title">{{ _('Total Files') }}</div>
@@ -219,7 +220,6 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='js/pages/file-classification-page.js') }}"></script>
 {% endblock %}
 

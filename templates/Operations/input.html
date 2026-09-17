@@ -23,8 +23,7 @@
           </ul>
 
           <div id="uploadSection">
-            <div id="dropZone" class="border border-2 border-dashed rounded p-5 text-center text-muted"
-                 style="cursor:pointer;">
+            <div id="dropZone" class="border border-2 border-dashed rounded p-5 text-center text-muted interactive-drop-zone">
               <i class="bi bi-cloud-arrow-up fs-1 d-block mb-2"></i>
               {{ _('Drag & drop files here, or click to browse') }}
               <input type="file" id="fileInput" multiple class="d-none">
@@ -56,7 +55,7 @@
             </div>
           </div>
           <details class="mt-2">
-            <summary class="text-primary" style="cursor:pointer;">{{ _('Create new source / side') }}</summary>
+            <summary class="text-primary disclosure-summary">{{ _('Create new source / side') }}</summary>
             <div class="row g-2 mt-2" id="newSourceForm">
               <div class="col-md-6"><input id="nsName" class="form-control" placeholder="{{ _('Source name *') }}"></div>
               <div class="col-md-6"><input id="nsJob" class="form-control" placeholder="{{ _('Job / role *') }}"></div>
@@ -186,8 +185,15 @@
     selected = Array.from(list);
     selected.forEach(f => {
       const li = document.createElement('li');
-      li.className = 'list-group-item py-1 small d-flex justify-content-between';
-      li.innerHTML = `<span>${f.name}</span><span class="text-muted">${(f.size/1048576).toFixed(2)} MB</span>`;
+      li.className = 'list-group-item py-1 small d-flex justify-content-between gap-2';
+      const name = document.createElement('span');
+      name.className = 'ia-truncate';
+      name.title = f.name;
+      name.textContent = f.name;
+      const size = document.createElement('span');
+      size.className = 'text-muted flex-shrink-0';
+      size.textContent = `${(f.size/1048576).toFixed(2)} MB`;
+      li.append(name, size);
       ul.appendChild(li);
     });
   }
@@ -203,8 +209,25 @@
   }
   function fill(id, rows) {
     const el = document.getElementById(id);
-    el.innerHTML = '<option value="">{{ _('-- select --') }}</option>' +
-      rows.map(r => `<option value="${r.name}">${r.name}</option>`).join('');
+    el.innerHTML = '';
+    el.appendChild(new Option({{ _('-- select --')|tojson }}, ''));
+    rows.forEach(r => {
+      const name = r && r.name ? String(r.name) : '';
+      if (name) el.appendChild(new Option(name, name));
+    });
+  }
+  function selectCreatedOption(id, name) {
+    const el = document.getElementById(id);
+    if (!el || !name) return;
+    if (!Array.from(el.options).some(option => option.value === name)) {
+      el.appendChild(new Option(name, name));
+    }
+    el.value = name;
+  }
+  function apiErrorMessage(data, fallback) {
+    if (!data) return fallback;
+    if (typeof data.error === 'string') return data.error;
+    return data.error?.message || data.message || fallback;
   }
   loadSelects();
 
@@ -219,31 +242,55 @@
   }).catch(() => {});
 
   // create source/side
-  document.getElementById('btnCreateSource').addEventListener('click', async () => {
+  document.getElementById('btnCreateSource').addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
     const body = {
       name: v('nsName'), job: v('nsJob'), country: v('nsCountry'),
       city: v('nsCity') || null, description: v('nsDesc') || null,
       importance: parseFloat(v('nsImportance') || '0.5')
     };
-    const r = await fetch('/api/input/sources', {method:'POST',
-      headers:{'Content-Type':'application/json', ...headers}, body: JSON.stringify(body)});
-    const d = await r.json();
-    msg(d.success ? {{ _('Source created.')|tojson }} : (d.error && d.error.message) || {{ _('Failed.')|tojson }}, d.success);
-    if (d.success) loadSelects();
+    window.InforaxisDataInterface?.setButtonBusy(btn, true, {label: {{ _('Creating')|tojson }}});
+    try {
+      const r = await fetch('/api/input/sources', {method:'POST',
+        headers:{'Content-Type':'application/json', ...headers}, body: JSON.stringify(body)});
+      const d = await r.json();
+      msg(d.success ? {{ _('Source created.')|tojson }} : apiErrorMessage(d, {{ _('Failed.')|tojson }}), d.success);
+      if (d.success) {
+        selectCreatedOption('sourceSelect', d.name || body.name);
+        ['nsName', 'nsJob', 'nsCountry', 'nsCity', 'nsDesc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        document.getElementById('nsImportance').value = '0.5';
+      }
+    } finally {
+      window.InforaxisDataInterface?.setButtonBusy(btn, false);
+    }
   });
-  document.getElementById('btnCreateSide').addEventListener('click', async () => {
+  document.getElementById('btnCreateSide').addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
     const body = {name: v('nsdName'), importance: parseFloat(v('nsdImportance') || '0.5')};
-    const r = await fetch('/api/input/sides', {method:'POST',
-      headers:{'Content-Type':'application/json', ...headers}, body: JSON.stringify(body)});
-    const d = await r.json();
-    msg(d.success ? {{ _('Side created.')|tojson }} : (d.error && d.error.message) || {{ _('Failed.')|tojson }}, d.success);
-    if (d.success) loadSelects();
+    window.InforaxisDataInterface?.setButtonBusy(btn, true, {label: {{ _('Creating')|tojson }}});
+    try {
+      const r = await fetch('/api/input/sides', {method:'POST',
+        headers:{'Content-Type':'application/json', ...headers}, body: JSON.stringify(body)});
+      const d = await r.json();
+      msg(d.success ? {{ _('Side created.')|tojson }} : apiErrorMessage(d, {{ _('Failed.')|tojson }}), d.success);
+      if (d.success) {
+        selectCreatedOption('sideSelect', d.name || body.name);
+        document.getElementById('nsdName').value = '';
+        document.getElementById('nsdImportance').value = '0.5';
+      }
+    } finally {
+      window.InforaxisDataInterface?.setButtonBusy(btn, false);
+    }
   });
 
   function v(id){ return document.getElementById(id).value.trim(); }
   function msg(text, ok) {
     const el = document.getElementById('inputMsg');
-    el.innerHTML = `<div class="alert ${ok ? 'alert-success' : 'alert-danger'} py-2">${text}</div>`;
+    el.innerHTML = '';
+    const alert = document.createElement('div');
+    alert.className = `alert ${ok ? 'alert-success' : 'alert-danger'} py-2`;
+    alert.textContent = text;
+    el.appendChild(alert);
   }
 
   function payload(dryRun) {

@@ -99,6 +99,7 @@ def register_sides_routes(app):
                                  total_sides=total_estimated,
                                  page=estimated_page,
                                  total_pages=total_pages,
+                                 limit=limit,
                                  query_time_ms=result.get('query_time_ms', 0))
         
         except Exception as e:

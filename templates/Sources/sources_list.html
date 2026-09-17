@@ -4,6 +4,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Sources Management') }}{% endblock %}
+{% block page_type %}sources-list{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/sources-list.css') }}" rel="stylesheet">
@@ -77,7 +78,7 @@
 <div class="row g-4 mb-2">
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon" style="background: var(--alert-info-bg); color: var(--primary-color);">
+            <div class="stat-card-icon stat-card-icon-primary">
                 <i class="bi bi-building"></i>
             </div>
             <div class="stat-card-content">
@@ -88,7 +89,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon" style="background: var(--alert-info-bg); color: var(--info-color, #06b6d4);">
+            <div class="stat-card-icon stat-card-icon-info">
                 <i class="bi bi-funnel"></i>
             </div>
             <div class="stat-card-content">
@@ -99,7 +100,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon" style="background: var(--alert-success-bg); color: var(--success-color);">
+            <div class="stat-card-icon stat-card-icon-success">
                 <i class="bi bi-eye"></i>
             </div>
             <div class="stat-card-content">
@@ -110,7 +111,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card">
-            <div class="stat-card-icon" style="background: var(--alert-warning-bg); color: var(--warning-color);">
+            <div class="stat-card-icon stat-card-icon-warning">
                 <i class="bi bi-table"></i>
             </div>
             <div class="stat-card-content">
@@ -226,13 +227,22 @@
         {% for source in sources|sort(attribute='importance', reverse=True) %}
         <div class="col-md-6 col-lg-4 col-xl-3 source-card-item" 
              data-name="{{ source.name|lower }}"
+             data-display-name="{{ source.name|e }}"
+             data-job="{{ (source.job or '')|e }}"
              data-importance="{{ source.importance }}"
              data-doc-count="{{ source.doc_count }}"
              data-id="{{ source.id }}"
              data-country="{{ (source.country or '')|lower }}"
+             data-country-label="{{ (source.country or '')|e }}"
              data-city="{{ (source.city or '')|lower }}"
+             data-city-label="{{ (source.city or '')|e }}"
              data-ownership="{{ (source.ownership or '')|lower }}"
-             data-access-status="{{ (source.access_status or '')|lower }}">
+             data-ownership-label="{{ (source.ownership or '')|e }}"
+             data-access-status="{{ (source.access_status or '')|lower }}"
+             data-access-status-label="{{ (source.access_status or '')|e }}"
+             data-category-name="{{ (source.category_name or '')|e }}"
+             data-category-id="{{ source.category_id or '' }}"
+             data-discovery-date="{% if source.date_source_discovery is string %}{{ source.date_source_discovery|e }}{% elif source.date_source_discovery %}{{ source.date_source_discovery.strftime('%Y-%m-%d')|e }}{% endif %}">
             <div class="id-card">
                 <div class="id-card-header">
                     <div class="id-card-icon">
@@ -536,7 +546,7 @@
 <!-- Pagination -->
 {% if cursor_pagination and total_pages >= 1 %}
     {% from "components/unified_pagination.html" import unified_pagination %}
-    {{ unified_pagination(page, total_pages, url_for, 'sources_list', {'search': search}, show_info=true, show_jump=true) }}
+    {{ unified_pagination(page, total_pages, url_for, 'sources_list', {'search': search, 'limit': limit|default(50)}, show_info=true, show_jump=true, total_items=total_estimated, per_page=limit|default(50), item_label=_('sources')) }}
     
     <script>
     // Override pagination navigation for cursor-based pagination
@@ -643,7 +653,7 @@
 
 
 <!-- Toast Container -->
-<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;" id="toastContainer"></div>
+<div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
 
 {% endblock %}
 
@@ -678,7 +688,24 @@
         "sourceUpdatedSuccessfully": _('Source updated successfully!'),
         "sourceCreatedSuccessfully": _('Source created successfully!'),
         "error": _('Error'),
-        "errorSavingSource": _('Error saving source')
+        "errorSavingSource": _('Error saving source'),
+        "view": _('View'),
+        "viewDetails": _('View Details'),
+        "duplicateSource": _('Duplicate Source'),
+        "exportData": _('Export Data'),
+        "viewCategoriesKeywords": _('View Categories & Keywords'),
+        "sourceActions": _('Source actions'),
+        "documents": _('Documents'),
+        "select": _('Select'),
+        "jobType": _('Job/Type'),
+        "location": _('Location'),
+        "importance": _('Importance'),
+        "access": _('Access'),
+        "category": _('Category'),
+        "discovery": _('Discovery'),
+        "source": _('Source'),
+        "actions": _('Actions'),
+        "ownership": _('Ownership')
     }
 }|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/sources-list-page.js') }}"></script>

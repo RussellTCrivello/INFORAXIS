@@ -6,9 +6,11 @@
 // Global state
 let currentMethod = 'rule_based';
 let isLoading = false;
+let initialized = false;
 
-// Initialize page
-document.addEventListener('DOMContentLoaded', function() {
+function initializeFileClassificationPage() {
+    if (initialized) return;
+    initialized = true;
     console.log('File classification page loaded');
     
     // Initialize tab switching
@@ -16,12 +18,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize method selector
     initializeMethodSelector();
-    
-    // Make functions available globally for onclick handlers
-    window.analyzeFolder = analyzeFolder;
-    window.analyzeFile = analyzeFile;
-    window.analyzeDatabase = analyzeDatabase;
-});
+}
+
+// Initialize page
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeFileClassificationPage, { once: true });
+} else {
+    initializeFileClassificationPage();
+}
+
+// Make functions available globally for onclick handlers immediately.
+window.analyzeFolder = analyzeFolder;
+window.analyzeFile = analyzeFile;
+window.analyzeDatabase = analyzeDatabase;
 
 // Tab switching
 function initializeTabs() {
@@ -89,6 +98,46 @@ function hideLoading() {
     isLoading = false;
 }
 
+
+function numericValue(...values) {
+    for (const value of values) {
+        const number = Number(value);
+        if (Number.isFinite(number)) return number;
+    }
+    return 0;
+}
+
+function normalizeClassificationData(data = {}) {
+    const classifications = Array.isArray(data.classifications) ? data.classifications : [];
+    const normalizedClassifications = classifications.map((cat) => ({
+        category: cat.category || 'Uncategorized',
+        fileCount: numericValue(cat.fileCount, cat.file_count),
+        totalKeywords: numericValue(cat.totalKeywords, cat.total_keywords),
+        percentage: numericValue(cat.percentage)
+    }));
+    const totalFiles = numericValue(data.totalFiles, data.total_files);
+    const categorizedFiles = numericValue(data.categorizedFiles, data.categorized_files);
+    const uncategorizedFiles = numericValue(data.uncategorizedFiles, data.uncategorized_files, totalFiles - categorizedFiles);
+    return {
+        ...data,
+        totalFiles,
+        categorizedFiles,
+        uncategorizedFiles: Math.max(0, uncategorizedFiles),
+        classifications: normalizedClassifications
+    };
+}
+
+function renderError(container, message) {
+    if (!container) return;
+    container.innerHTML = `
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>
+            Error: ${escapeHtml(message || 'Analysis failed')}
+        </div>
+    `;
+    container.style.display = 'block';
+}
+
 // Analyze folder
 async function analyzeFolder() {
     if (isLoading) return;
@@ -117,13 +166,7 @@ async function analyzeFolder() {
         }
     } catch (error) {
         console.error('Error analyzing folder:', error);
-        resultsDiv.innerHTML = `
-            <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                Error: ${error.message}
-            </div>
-        `;
-        resultsDiv.style.display = 'block';
+        renderError(resultsDiv, error.message);
     } finally {
         hideLoading();
     }
@@ -131,10 +174,11 @@ async function analyzeFolder() {
 
 // Display folder results
 function displayFolderResults(data, container) {
-    const classifications = data.classifications || [];
-    const totalFiles = data.total_files || 0;
-    const categorizedFiles = data.categorized_files || 0;
-    const uncategorizedFiles = totalFiles - categorizedFiles;
+    const normalized = normalizeClassificationData(data);
+    const classifications = normalized.classifications;
+    const totalFiles = normalized.totalFiles;
+    const categorizedFiles = normalized.categorizedFiles;
+    const uncategorizedFiles = normalized.uncategorizedFiles;
     
     let html = `
         <h4 class="mb-3"><i class="bi bi-graph-up me-2"></i>Analysis Results</h4>
@@ -228,13 +272,11 @@ async function analyzeFile() {
     resultsDiv.style.display = 'none';
     
     try {
-        // Get file details and classification
-        const [fileResponse, classificationResponse] = await Promise.all([
-            fetch(`/file/${fileId}`),
-            fetch(`/api/analytics/path/classifications?path=${encodeURIComponent(fileId)}&file_id=${fileId}`)
-        ]);
-        
-        const fileData = await fileResponse.json().catch(() => null);
+        // The classification endpoint carries the exact aggregate data this
+        // panel renders. Use the explicit file_id scope so the backend does not
+        // accidentally treat the numeric ID as a literal filesystem path.
+        const classificationResponse = await fetch(`/api/analytics/path/classifications?file_id=${encodeURIComponent(fileId)}`);
+        if (!classificationResponse.ok) throw new Error(`HTTP ${classificationResponse.status}`);
         const classificationData = await classificationResponse.json();
         
         if (classificationData.success) {
@@ -244,13 +286,7 @@ async function analyzeFile() {
         }
     } catch (error) {
         console.error('Error analyzing file:', error);
-        resultsDiv.innerHTML = `
-            <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                Error: ${error.message}
-            </div>
-        `;
-        resultsDiv.style.display = 'block';
+        renderError(resultsDiv, error.message);
     } finally {
         hideLoading();
     }
@@ -258,13 +294,14 @@ async function analyzeFile() {
 
 // Display file results
 function displayFileResults(data, fileId, container) {
-    const classifications = data.classifications || [];
+    const normalized = normalizeClassificationData(data);
+    const classifications = normalized.classifications;
     
     let html = `
         <h4 class="mb-3"><i class="bi bi-file-earmark-text me-2"></i>File Analysis Results</h4>
         <div class="alert alert-info">
             <i class="bi bi-info-circle me-2"></i>
-            File ID: ${fileId}
+            File ID: ${escapeHtml(fileId)}
         </div>
     `;
     
@@ -321,7 +358,7 @@ async function analyzeDatabase() {
     try {
         // For database analysis, we'll get overall statistics
         // This is a simplified version - you may want to create a dedicated endpoint
-        const response = await fetch(`/api/analytics/path/classifications?path=*&limit=${limit}`);
+        const response = await fetch(`/api/analytics/path/classifications?path=*&limit=${encodeURIComponent(limit)}`);
         const data = await response.json();
         
         if (data.success) {
@@ -331,13 +368,7 @@ async function analyzeDatabase() {
         }
     } catch (error) {
         console.error('Error analyzing database:', error);
-        resultsDiv.innerHTML = `
-            <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                Error: ${error.message}
-            </div>
-        `;
-        resultsDiv.style.display = 'block';
+        renderError(resultsDiv, error.message);
     } finally {
         hideLoading();
     }
@@ -345,8 +376,9 @@ async function analyzeDatabase() {
 
 // Display database results
 function displayDatabaseResults(data, limit, container) {
-    const classifications = data.classifications || [];
-    const totalFiles = data.total_files || 0;
+    const normalized = normalizeClassificationData(data);
+    const classifications = normalized.classifications;
+    const totalFiles = normalized.totalFiles;
     
     let html = `
         <h4 class="mb-3"><i class="bi bi-database me-2"></i>Database Analysis Results</h4>
@@ -406,5 +438,9 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+export default function init() {
+    initializeFileClassificationPage();
 }
 

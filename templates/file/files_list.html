@@ -255,7 +255,7 @@
         </div>
         <div class="d-flex align-items-center">
             <label for="perPageFiles" class="form-label me-2 mb-0">{{ _('Per Page:') }}</label>
-            <select id="perPageFiles" class="form-select form-select-sm" style="width: auto;" onchange="changeFilesPageSize()">
+            <select id="perPageFiles" class="form-select form-select-sm per-page-select" onchange="changeFilesPageSize()">
                 {% set current_limit = request.args.get('limit', '10') %}
                 <option value="10" {% if current_limit == '10' %}selected{% endif %}>10</option>
                 <option value="25" {% if current_limit == '25' %}selected{% endif %}>25</option>
@@ -306,8 +306,8 @@
                                 <span class="row-number">{{ row_number }}</span>
                             </td>
                             <td class="col-name">
-                                <span class="file-name" data-file-id="{{ file[0] }}">
-                                    <strong>{{ file[1][:50] }}{% if file[1]|length > 50 %}...{% endif %}</strong>
+                                <span class="file-name ia-truncate" data-file-id="{{ file[0] }}" title="{{ file[1] }}">
+                                    <strong>{{ file[1] }}</strong>
                                 </span>
                             </td>
                             <td class="col-type">
@@ -434,7 +434,7 @@
         {% if side_filter %}{% set _ = pagination_params.update({'side': side_filter}) %}{% endif %}
         {% if status_filter %}{% set _ = pagination_params.update({'status': status_filter}) %}{% endif %}
         {% if file_type_filter %}{% set _ = pagination_params.update({'file_type': file_type_filter}) %}{% endif %}
-        {{ unified_pagination(page|default(1), total_pages, url_for, 'files.files_list', pagination_params) }}
+        {{ unified_pagination(page|default(1), total_pages, url_for, 'files.files_list', pagination_params, total_items=total_files, per_page=limit|default(10), item_label=_('files')) }}
     {% endif %}
 </div>
 

@@ -60,54 +60,7 @@ function createAutocompleteContainer() {
     const parent = searchInput.parentElement;
     parent.appendChild(container);
     
-    // Add CSS if not already added
-    if (!document.getElementById('autocompleteStyles')) {
-        const style = document.createElement('style');
-        style.id = 'autocompleteStyles';
-        style.textContent = `
-            .autocomplete-container {
-                position: relative;
-            }
-            .autocomplete-dropdown {
-                z-index: 1000;
-                max-height: 300px;
-                overflow-y: auto;
-                border: 1px solid #dee2e6;
-                border-radius: 0.375rem;
-                background: white;
-                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-                margin-top: 2px;
-            }
-            .autocomplete-item {
-                cursor: pointer;
-                padding: 0.5rem 1rem;
-                border-bottom: 1px solid #f0f0f0;
-            }
-            .autocomplete-item:hover,
-            .autocomplete-item.active {
-                background-color: #f8f9fa;
-            }
-            .autocomplete-item:last-child {
-                border-bottom: none;
-            }
-            .autocomplete-item-type {
-                font-size: 0.75rem;
-                color: #6c757d;
-                margin-left: 0.5rem;
-            }
-            .autocomplete-item-count {
-                font-size: 0.75rem;
-                color: #6c757d;
-                float: right;
-            }
-            .search-highlight {
-                background-color: #fff3cd;
-                padding: 0.1rem 0.2rem;
-                border-radius: 0.2rem;
-            }
-        `;
-        document.head.appendChild(style);
-    }
+
 }
 
 /**

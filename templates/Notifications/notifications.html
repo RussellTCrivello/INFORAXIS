@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Notifications') }}{% endblock %}
+{% block page_type %}notifications{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/notifications.css') }}" rel="stylesheet">
@@ -174,6 +175,7 @@
         <div class="sub-tab-content" id="sub-tab-all-read">
             <div class="messages-list" id="messagesAllRead"></div>
         </div>
+        <div class="notifications-pagination" id="paginationAll" aria-label="{{ _('All notifications pagination') }}"></div>
     </div>
 
     <!-- Tab Content: Duplicate Files -->
@@ -258,6 +260,7 @@
         <div class="sub-tab-content" id="sub-tab-duplicates-read">
             <div class="messages-list" id="messagesDuplicatesRead"></div>
         </div>
+        <div class="notifications-pagination" id="paginationDuplicates" aria-label="{{ _('Duplicate notifications pagination') }}"></div>
     </div>
 
     <!-- Tab Content: Future Files -->
@@ -342,16 +345,17 @@
         <div class="sub-tab-content" id="sub-tab-future-read">
             <div class="messages-list" id="messagesFutureRead"></div>
         </div>
+        <div class="notifications-pagination" id="paginationFuture" aria-label="{{ _('Future notifications pagination') }}"></div>
     </div>
 </div>
 
 <!-- Message Detail Modal -->
-<div class="message-detail-modal" id="messageDetailModal" onclick="closeMessageDetail(event)">
-    <div class="message-detail-content" onclick="event.stopPropagation()">
+<div class="message-detail-modal" id="messageDetailModal" role="dialog" aria-modal="true" aria-labelledby="detailTitle" onclick="closeMessageDetail(event)">
+    <div class="message-detail-content" role="document" onclick="event.stopPropagation()">
         <div class="message-detail-header">
             <h3 id="detailTitle">{{ _('Notification Details') }}</h3>
-            <button class="message-detail-close" onclick="closeMessageDetail()">
-                <i class="bi bi-x-lg"></i>
+            <button class="message-detail-close" type="button" onclick="closeMessageDetail()" aria-label="{{ _('Close') }}">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
             </button>
         </div>
         <div class="message-detail-body" id="detailBody">

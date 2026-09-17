@@ -1,160 +1,193 @@
-/* --------------------------------------------------------------------------
-   Analyst classification control (shared)
-   --------------------------------------------------------------------------
-   Loaded by EVERY content display interface (File Detail, Full Content
-   Reader) so the analyst-classify card and its toast look identical
-   everywhere. Self-contained violet tokens (FR-1.4): the analyst (manual)
-   namespace is visually distinct from the blue/gray smart classification.
-   -------------------------------------------------------------------------- */
+/* ============================================================================
+   Shared analyst classification control
+   Compact manual-taxonomy panel for File Detail, Full Reader, Search results.
+   ============================================================================ */
 
 .analyst-classify {
-    --analyst-ink: #4c1d95;
-    --analyst-accent: #7c3aed;
-    --analyst-accent-strong: #6d28d9;
-    --analyst-soft: #ede9fe;
-    --analyst-border: #c4b5fd;
+    --analyst-accent: var(--primary-color);
+    --analyst-soft: color-mix(in srgb, var(--analyst-accent) 7%, var(--bg-white));
+    --analyst-border: color-mix(in srgb, var(--analyst-accent) 24%, var(--border-color));
+    --analyst-ink: color-mix(in srgb, var(--analyst-accent) 76%, var(--text-heading));
 
-    background: #fff;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.65rem;
+    min-width: 0;
+    padding: 0.82rem 0.9rem;
     border: 1px solid var(--analyst-border);
-    border-inline-start: 4px solid var(--analyst-accent);
-    border-radius: 0.75rem;
-    padding: 0.9rem 1rem;
+    border-inline-start: 3px solid var(--analyst-accent);
+    border-radius: var(--radius-lg);
+    background: var(--analyst-soft);
+    box-shadow: var(--shadow-xs);
+}
+
+.analyst-classify-compact {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.55rem 0.7rem;
+    padding: 0.65rem 0.75rem;
 }
 
 .analyst-classify-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
+    gap: 0.45rem;
+    min-width: 0;
     color: var(--analyst-ink);
-    margin-bottom: 0.6rem;
+    font-size: 0.84rem;
+    font-weight: 780;
+}
+
+.analyst-classify-header i {
+    color: var(--analyst-accent);
 }
 
 .analyst-namespace-tag {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    background: var(--analyst-soft);
-    color: var(--analyst-ink);
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.42rem;
     border: 1px solid var(--analyst-border);
-    border-radius: 999px;
-    padding: 0.1rem 0.5rem;
-    cursor: help;
+    border-radius: var(--radius-pill);
+    background: var(--bg-white);
+    color: var(--analyst-ink);
+    font-size: 0.64rem;
+    font-weight: 780;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
 }
 
 .analyst-classify-badges {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 0.6rem;
+    align-items: center;
+    gap: 0.38rem;
+    min-width: 0;
 }
 
-.analyst-classify .badge.analyst-category-badge {
-    background-color: var(--analyst-soft);
-    color: var(--analyst-ink);
-    border: 1px solid var(--analyst-border);
-    font-weight: 600;
+.analyst-category-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.3rem;
+    max-width: 100%;
+    padding: 0.22rem 0.5rem;
+    border: 1px solid var(--analyst-border);
+    border-radius: var(--radius-pill);
+    background: var(--bg-white) !important;
+    color: var(--analyst-ink) !important;
+    font-size: 0.76rem;
+    font-weight: 720;
+    line-height: 1.2;
+    box-shadow: none;
 }
 
 .badge-remove {
-    background: transparent;
-    border: none;
-    color: inherit;
-    font-size: 1rem;
+    display: inline-grid;
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--danger-color) 9%, transparent);
+    color: var(--danger-color);
+    font: inherit;
     line-height: 1;
-    padding: 0 0.15rem;
-    margin-inline-start: 0.15rem;
-    cursor: pointer;
-    opacity: 0.7;
 }
 
 .badge-remove:hover,
 .badge-remove:focus-visible {
-    opacity: 1;
-    color: #b91c1c;
+    background: var(--danger-color);
+    color: var(--text-white);
+    outline: none;
 }
 
-.analyst-classify-empty {
-    color: #6c757d;
-    font-size: 0.875rem;
-}
-
+.analyst-classify-empty,
 .analyst-classify-readonly-note {
-    color: #6c757d;
-    font-size: 0.8rem;
     margin: 0;
+    color: var(--text-light);
+    font-size: 0.8rem;
+    line-height: 1.4;
 }
 
 .analyst-classify-controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+    display: grid;
+    grid-template-columns: minmax(10rem, 1.1fr) minmax(10rem, 1fr) auto auto;
     align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
 }
 
-.analyst-classify-controls select,
-.analyst-classify-controls input {
-    flex: 1 1 12rem;
-    min-width: 10rem;
-    max-width: 18rem;
+.analyst-classify-controls .form-select,
+.analyst-classify-controls .form-control {
+    min-width: 0;
+    height: var(--control-height-sm);
+    font-size: 0.8rem;
 }
 
 .btn-analyst-assign {
+    border-color: color-mix(in srgb, var(--analyst-accent) 34%, var(--border-color));
     background: var(--analyst-accent);
-    border-color: var(--analyst-accent);
-    color: #fff;
-    font-weight: 600;
+    color: var(--text-white);
 }
 
 .btn-analyst-assign:hover,
-.btn-analyst-assign:focus {
-    background: var(--analyst-accent-strong);
-    border-color: var(--analyst-accent-strong);
-    color: #fff;
+.btn-analyst-assign:focus-visible {
+    background: color-mix(in srgb, var(--analyst-accent) 86%, var(--text-heading));
+    color: var(--text-white);
 }
 
-/* Compact variant (reader header toolbar) */
-.analyst-classify-compact {
-    padding: 0.55rem 0.8rem;
-    margin-bottom: 0.75rem;
-}
-
-.analyst-classify-compact .analyst-classify-header {
-    margin-bottom: 0.4rem;
-    font-size: 0.9rem;
-}
-
-/* Toast (appended to <body> by JS — outside the page containers where the
-   scoped tokens live, so values are defined explicitly here). */
-.analyst-action-toast {
-    --analyst-ink: #4c1d95;
-    --analyst-accent: #7c3aed;
+.analyst-action-toast,
+.analyst-classify-toast {
     position: fixed;
-    bottom: 1.5rem;
-    inset-inline-end: 1.5rem;
-    background: var(--analyst-ink);
-    color: #fff;
-    padding: 0.7rem 1.1rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 10px 24px rgba(76, 29, 149, 0.28);
+    inset-block-start: 1rem;
+    inset-inline-end: 1rem;
+    z-index: var(--z-toast, 1085);
+    max-width: min(26rem, calc(100vw - 2rem));
+    padding: 0.72rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--success-color) 30%, var(--border-color));
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--success-color) 8%, var(--bg-white));
+    color: var(--success-color);
+    font-size: 0.84rem;
+    font-weight: 720;
+    box-shadow: var(--shadow-md);
     opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 180ms ease-out, transform 180ms ease-out;
-    z-index: 1080;
     pointer-events: none;
-    max-width: 380px;
-    font-size: 0.88rem;
+    transform: translateY(-0.35rem);
+    transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
 }
 
-.analyst-action-toast.visible {
+.analyst-action-toast.visible,
+.analyst-classify-toast.visible {
     opacity: 1;
     transform: translateY(0);
 }
 
-.analyst-action-toast.toast-error {
-    background: #b91c1c;
+.analyst-action-toast.toast-error,
+.analyst-classify-toast.toast-error {
+    border-color: color-mix(in srgb, var(--danger-color) 34%, var(--border-color));
+    background: color-mix(in srgb, var(--danger-color) 8%, var(--bg-white));
+    color: var(--danger-color);
+}
+
+@media (max-width: 991.98px) {
+    .analyst-classify,
+    .analyst-classify-compact {
+        grid-template-columns: 1fr;
+    }
+
+    .analyst-classify-controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .analyst-classify-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .analyst-classify-controls .btn {
+        width: 100%;
+    }
 }

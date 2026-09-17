@@ -157,14 +157,15 @@ export async function apiGet(url, params = {}, options = {}) {
  * @param {string} url - API endpoint URL
  * @param {Object} data - Request body data
  * @param {Object} options - Additional fetch options
+ * @param {number} timeout - Optional request timeout in milliseconds
  * @returns {Promise<Object>} JSON response data
  */
-export async function apiPost(url, data = {}, options = {}) {
+export async function apiPost(url, data = {}, options = {}, timeout) {
     const response = await apiRequest(url, {
         method: 'POST',
         body: JSON.stringify(data),
         ...options
-    });
+    }, timeout);
     return response.json();
 }
 

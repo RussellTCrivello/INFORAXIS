@@ -542,6 +542,130 @@ def chunked_upload_chunk(upload_id, chunk_index):
         logger.error(f"Error uploading chunk: {e}", exc_info=True)
         return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
 
+
+@files_bp.route('/upload/chunked/<upload_id>/complete', methods=['POST'])
+def chunked_upload_complete(upload_id):
+    """Assemble uploaded chunks, verify integrity, and optionally queue processing."""
+    session_info = _upload_sessions.get(upload_id)
+    if not session_info:
+        return jsonify({'success': False, 'error': 'Upload session not found'}), 404
+
+    try:
+        total_chunks = int(session_info['total_chunks'])
+        uploaded_chunks = session_info.get('uploaded_chunks') or set()
+        missing_chunks = [
+            index for index in range(total_chunks)
+            if index not in uploaded_chunks
+            or not os.path.exists(os.path.join(session_info['session_dir'], f'chunk_{index}'))
+        ]
+        if missing_chunks:
+            return jsonify({
+                'success': False,
+                'error': f'Missing chunks: {missing_chunks[:10]}',
+                'missing_chunks': missing_chunks
+            }), 400
+
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        completed_dir = os.path.join(upload_folder, 'chunked_completed')
+        os.makedirs(completed_dir, exist_ok=True)
+
+        safe_filename = secure_filename(session_info.get('filename') or '') or f'upload_{upload_id}'
+        assembled_path = os.path.join(completed_dir, f'{upload_id}_{safe_filename}')
+
+        digest = hashlib.sha256()
+        with open(assembled_path, 'wb') as output_file:
+            for index in range(total_chunks):
+                chunk_path = os.path.join(session_info['session_dir'], f'chunk_{index}')
+                with open(chunk_path, 'rb') as chunk_file:
+                    while True:
+                        data = chunk_file.read(1024 * 1024)
+                        if not data:
+                            break
+                        digest.update(data)
+                        output_file.write(data)
+
+        expected_size = int(session_info.get('total_size') or 0)
+        actual_size = os.path.getsize(assembled_path)
+        if expected_size and actual_size != expected_size:
+            try:
+                os.remove(assembled_path)
+            except OSError:
+                pass
+            return jsonify({
+                'success': False,
+                'error': 'Assembled file size mismatch',
+                'expected_size': expected_size,
+                'actual_size': actual_size
+            }), 400
+
+        expected_hash = (session_info.get('file_hash') or '').lower()
+        actual_hash = digest.hexdigest()
+        if expected_hash and actual_hash != expected_hash:
+            try:
+                os.remove(assembled_path)
+            except OSError:
+                pass
+            return jsonify({
+                'success': False,
+                'error': 'File hash verification failed',
+                'expected_hash': expected_hash,
+                'actual_hash': actual_hash
+            }), 400
+
+        response_payload = {
+            'success': True,
+            'upload_id': upload_id,
+            'filename': session_info['filename'],
+            'file_path': assembled_path,
+            'file_size': actual_size,
+            'hash': actual_hash,
+            'processing_started': False,
+            'message': 'Upload complete'
+        }
+
+        if session_info.get('auto_analyze'):
+            try:
+                from Api.task_manager import get_task_manager
+
+                task_manager = get_task_manager()
+                task_id = task_manager.create_task(
+                    file_path=assembled_path,
+                    source_id=session_info['source_id'],
+                    side_id=session_info['side_id'],
+                    task_name=f"Process uploaded file: {safe_filename}"
+                )
+                response_payload.update({
+                    'task_id': task_id,
+                    'processing_started': True,
+                    'message': 'Upload complete and processing started'
+                })
+            except RuntimeError as exc:
+                logger.warning("Chunked upload %s completed but processing was not queued: %s", upload_id, exc)
+                response_payload.update({
+                    'warning': client_safe_message(exc, subsystem='Api.blueprints.files'),
+                    'message': 'Upload complete; processing queue is currently full'
+                })
+            except Exception as exc:
+                logger.error("Chunked upload %s completed but processing startup failed: %s", upload_id, exc, exc_info=True)
+                response_payload.update({
+                    'warning': 'Upload complete, but processing could not be started automatically',
+                    'message': 'Upload complete; automatic processing failed'
+                })
+
+        try:
+            if os.path.exists(session_info['session_dir']):
+                shutil.rmtree(session_info['session_dir'])
+        except Exception as exc:
+            logger.warning("Failed to cleanup completed chunk directory for %s: %s", upload_id, exc)
+        _upload_sessions.pop(upload_id, None)
+
+        logger.info("Completed chunked upload session: %s -> %s", upload_id, assembled_path)
+        return jsonify(response_payload), 202 if response_payload.get('processing_started') else 200
+
+    except Exception as e:
+        logger.error(f"Error completing chunked upload: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
 @files_bp.route('/upload/chunked/<upload_id>/cancel', methods=['POST'])
 def chunked_upload_cancel(upload_id):
     """Cancel a chunked upload session"""

@@ -1,17 +1,26 @@
 /**
  * Chart Responsiveness Helper
- * Ensures all Chart.js charts are properly responsive on all screen sizes
- * and support RTL/LTR layouts
+ * Keeps Chart.js charts responsive without wrapping the Chart constructor or
+ * writing layout dimensions inline. Page-level CSS owns chart height; this
+ * helper only applies safe defaults, registers one resize listener, and offers
+ * utilities for dynamically-created charts.
  */
 
 (function() {
     'use strict';
-    
-    // Default responsive configuration for all charts
+
+    const state = window.__InforaxisChartResponsiveState || {
+        bootstrapped: false,
+        resizeHandlerAttached: false,
+        delayedInitScheduled: false,
+        resizeTimeout: null
+    };
+    window.__InforaxisChartResponsiveState = state;
+
     const defaultResponsiveConfig = {
         responsive: true,
         maintainAspectRatio: false,
-        resizeDelay: 0,
+        resizeDelay: 120,
         plugins: {
             legend: {
                 labels: {
@@ -36,8 +45,7 @@
             }
         }
     };
-    
-    // Mobile-specific chart configuration
+
     const mobileChartConfig = {
         plugins: {
             legend: {
@@ -79,231 +87,175 @@
             }
         }
     };
-    
-    /**
-     * Apply responsive configuration to a chart
-     */
-    function applyResponsiveConfig(chart, isMobile) {
-        if (!chart || !chart.options) return;
-        
-        // Merge default responsive config
-        Object.assign(chart.options, defaultResponsiveConfig);
-        
-        // Apply mobile-specific config if on mobile
-        if (isMobile) {
-            if (chart.options.plugins) {
-                Object.assign(chart.options.plugins, mobileChartConfig.plugins);
-            } else {
-                chart.options.plugins = mobileChartConfig.plugins;
+
+    function mergeDefaults(target = {}, source = {}) {
+        Object.entries(source).forEach(([key, value]) => {
+            if (target[key] === false || target[key] === null) return;
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                target[key] = mergeDefaults(target[key] || {}, value);
+            } else if (target[key] === undefined) {
+                target[key] = value;
             }
-            
-            if (chart.options.scales) {
-                Object.assign(chart.options.scales, mobileChartConfig.scales);
-            }
+        });
+        return target;
+    }
+
+    function isMobileViewport() {
+        return window.innerWidth <= 768;
+    }
+
+    function chartEntries() {
+        if (typeof Chart === 'undefined') return [];
+
+        if (Chart.instances instanceof Map) {
+            return Array.from(Chart.instances.values()).filter(Boolean);
         }
-        
-        // Ensure responsive is enabled
+
+        if (Chart.instances && typeof Chart.instances === 'object') {
+            return Object.values(Chart.instances).filter(Boolean);
+        }
+
+        return Array.from(document.querySelectorAll('canvas')).map((canvas) => {
+            try {
+                return typeof Chart.getChart === 'function' ? Chart.getChart(canvas) : null;
+            } catch (error) {
+                return null;
+            }
+        }).filter(Boolean);
+    }
+
+    /**
+     * Apply responsive configuration to a chart.
+     */
+    function applyResponsiveConfig(chart, isMobile = isMobileViewport()) {
+        if (!chart || !chart.options) return;
+
+        mergeDefaults(chart.options, defaultResponsiveConfig);
+
+        if (isMobile) {
+            mergeDefaults(chart.options, mobileChartConfig);
+        }
+
         chart.options.responsive = true;
         chart.options.maintainAspectRatio = false;
-        
-        // Update the chart
-        chart.update('none');
+        chart.options.resizeDelay = Math.max(Number(chart.options.resizeDelay) || 0, defaultResponsiveConfig.resizeDelay);
+
+        if (typeof chart.update === 'function') {
+            chart.update('none');
+        }
     }
-    
+
     /**
-     * Make a chart container responsive
+     * Mark a chart container as responsive without overriding its height.
      */
     function makeChartContainerResponsive(container) {
-        if (!container) return;
-        
-        const canvas = container.querySelector('canvas');
+        if (!container || !(container instanceof HTMLElement)) return;
+
+        const canvas = container.matches('canvas') ? container : container.querySelector('canvas');
         if (!canvas) return;
-        
-        // Ensure container has proper styling
-        if (!container.classList.contains('chart-container') && 
-            !container.classList.contains('chart-container-layout')) {
-            container.classList.add('chart-container');
+
+        const targetContainer = canvas === container ? canvas.parentElement : container;
+        if (!targetContainer || !(targetContainer instanceof HTMLElement)) return;
+
+        if (!targetContainer.classList.contains('chart-container') && !targetContainer.classList.contains('chart-container-layout')) {
+            targetContainer.classList.add('chart-container');
         }
-        
-        // Set container height based on screen size
-        const isMobile = window.innerWidth <= 768;
-        const isTablet = window.innerWidth > 768 && window.innerWidth <= 1024;
-        
-        if (container.classList.contains('large')) {
-            container.style.height = isMobile ? '250px' : (isTablet ? '350px' : '400px');
-        } else {
-            container.style.height = isMobile ? '200px' : (isTablet ? '250px' : '300px');
-        }
-        
-        // Ensure canvas fills container
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
+
+        targetContainer.classList.add('ia-chart-responsive');
+        canvas.classList.add('ia-chart-canvas');
     }
-    
+
+    function applyChartDefaults() {
+        if (typeof Chart === 'undefined' || !Chart.defaults) return;
+
+        Chart.defaults.responsive = true;
+        Chart.defaults.maintainAspectRatio = false;
+        Chart.defaults.resizeDelay = Math.max(Number(Chart.defaults.resizeDelay) || 0, defaultResponsiveConfig.resizeDelay);
+    }
+
     /**
-     * Initialize responsive behavior for all charts
+     * Initialize responsive behavior for all charts.
      */
-    function initChartResponsiveness() {
-        // Check if Chart.js is loaded
+    function initChartResponsiveness(root = document) {
         if (typeof Chart === 'undefined') {
-            console.warn('Chart.js not loaded, chart responsiveness will be applied when Chart.js is available');
             return;
         }
-        
-        // Find all chart containers
-        const chartContainers = document.querySelectorAll('.chart-container, .chart-container-layout, [id*="Chart"], [id*="chart"]');
-        
-        chartContainers.forEach(container => {
-            makeChartContainerResponsive(container);
-            
-            // Find canvas and get chart instance
-            const canvas = container.querySelector('canvas');
-            if (canvas && canvas.chart) {
-                const chart = canvas.chart;
-                const isMobile = window.innerWidth <= 768;
-                applyResponsiveConfig(chart, isMobile);
+
+        applyChartDefaults();
+
+        const chartContainers = root.querySelectorAll?.('.chart-container, .chart-container-layout, .chart-card, .dashboard-chart, canvas') || [];
+        chartContainers.forEach((container) => {
+            if (container instanceof HTMLElement) {
+                makeChartContainerResponsive(container);
             }
         });
+
+        chartEntries().forEach((chart) => {
+            makeChartContainerResponsive(chart.canvas?.parentElement || chart.canvas);
+            applyResponsiveConfig(chart, isMobileViewport());
+        });
     }
-    
-    /**
-     * Handle window resize for charts
-     */
-    let resizeTimeout;
+
     function handleResize() {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            initChartResponsiveness();
-            
-            // Resize all existing charts
-            if (typeof Chart !== 'undefined' && window.chartInstances) {
-                Object.values(window.chartInstances).forEach(chart => {
-                    if (chart && typeof chart.resize === 'function') {
-                        chart.resize();
-                    }
-                });
-            }
-        }, 150);
-    }
-    
-    /**
-     * Override Chart.js Chart constructor to automatically apply responsive config
-     */
-    function enhanceChartConstructor() {
-        if (typeof Chart === 'undefined') return;
-        
-        const OriginalChart = Chart;
-        
-        // Store original constructor
-        const ChartConstructor = function(ctx, config) {
-            const isMobile = window.innerWidth <= 768;
-            
-            // Merge responsive config into provided config
-            if (config && config.options) {
-                Object.assign(config.options, defaultResponsiveConfig);
-                
-                if (isMobile) {
-                    if (config.options.plugins) {
-                        Object.assign(config.options.plugins, mobileChartConfig.plugins);
-                    } else {
-                        config.options.plugins = mobileChartConfig.plugins;
-                    }
-                    
-                    if (config.options.scales) {
-                        Object.assign(config.options.scales, mobileChartConfig.scales);
-                    }
+        window.clearTimeout(state.resizeTimeout);
+        state.resizeTimeout = window.setTimeout(() => {
+            initChartResponsiveness(document);
+            chartEntries().forEach((chart) => {
+                if (chart && typeof chart.resize === 'function') {
+                    chart.resize();
                 }
-            } else if (config) {
-                config.options = Object.assign({}, defaultResponsiveConfig);
-                if (isMobile) {
-                    config.options.plugins = mobileChartConfig.plugins;
-                    config.options.scales = mobileChartConfig.scales;
-                }
-            }
-            
-            // Call original constructor
-            const chart = new OriginalChart(ctx, config);
-            
-            // Store reference for later resizing
-            if (!window.chartInstances) {
-                window.chartInstances = {};
-            }
-            if (ctx && ctx.id) {
-                window.chartInstances[ctx.id] = chart;
-            }
-            
-            // Make container responsive
-            if (ctx && ctx.parentElement) {
-                makeChartContainerResponsive(ctx.parentElement);
-            }
-            
-            return chart;
-        };
-        
-        // Copy static methods and properties
-        Object.setPrototypeOf(ChartConstructor, OriginalChart);
-        Object.assign(ChartConstructor, OriginalChart);
-        ChartConstructor.prototype = OriginalChart.prototype;
-        
-        // Replace global Chart
-        window.Chart = ChartConstructor;
+            });
+        }, 180);
     }
-    
-    /**
-     * Initialize when DOM is ready
-     */
+
+    function scheduleDelayedInit() {
+        if (state.delayedInitScheduled) return;
+        state.delayedInitScheduled = true;
+        window.setTimeout(() => initChartResponsiveness(document), 500);
+    }
+
     function init() {
-        // Wait for Chart.js to load
-        if (typeof Chart !== 'undefined') {
-            enhanceChartConstructor();
-            initChartResponsiveness();
-        } else {
-            // Try again after a delay
-            setTimeout(() => {
-                if (typeof Chart !== 'undefined') {
-                    enhanceChartConstructor();
-                    initChartResponsiveness();
-                }
-            }, 100);
+        if (state.bootstrapped) {
+            initChartResponsiveness(document);
+            return;
         }
-        
-        // Handle window resize
-        window.addEventListener('resize', handleResize);
-        
-        // Handle orientation change
-        window.addEventListener('orientationchange', function() {
-            setTimeout(handleResize, 200);
-        });
+
+        state.bootstrapped = true;
+        initChartResponsiveness(document);
+
+        if (!state.resizeHandlerAttached) {
+            window.addEventListener('resize', handleResize, { passive: true });
+            window.addEventListener('orientationchange', () => window.setTimeout(handleResize, 200), { passive: true });
+            state.resizeHandlerAttached = true;
+        }
+
+        scheduleDelayedInit();
     }
-    
-    // Initialize when DOM is ready
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', init, { once: true });
     } else {
         init();
     }
-    
-    // Also initialize after a short delay to catch dynamically loaded charts
-    setTimeout(init, 500);
-    
-    // Export utility functions for manual use
-    window.ChartResponsive = {
+
+    const api = {
         applyConfig: applyResponsiveConfig,
         makeContainerResponsive: makeChartContainerResponsive,
         init: initChartResponsiveness,
         defaultConfig: defaultResponsiveConfig,
         mobileConfig: mobileChartConfig
     };
+
+    window.__InforaxisChartResponsiveApi = api;
+    window.ChartResponsive = api;
 })();
 
-// Export for ES modules (functions are exposed via window.ChartResponsive after IIFE executes)
 const ChartResponsiveModule = {
-    get applyConfig() { return window.ChartResponsive?.applyConfig; },
-    get makeContainerResponsive() { return window.ChartResponsive?.makeContainerResponsive; },
-    get init() { return window.ChartResponsive?.init; },
-    get defaultConfig() { return window.ChartResponsive?.defaultConfig; },
-    get mobileConfig() { return window.ChartResponsive?.mobileConfig; }
+    get applyConfig() { return window.__InforaxisChartResponsiveApi?.applyConfig; },
+    get makeContainerResponsive() { return window.__InforaxisChartResponsiveApi?.makeContainerResponsive; },
+    get init() { return window.__InforaxisChartResponsiveApi?.init; },
+    get defaultConfig() { return window.__InforaxisChartResponsiveApi?.defaultConfig; },
+    get mobileConfig() { return window.__InforaxisChartResponsiveApi?.mobileConfig; }
 };
 
 export default ChartResponsiveModule;
-

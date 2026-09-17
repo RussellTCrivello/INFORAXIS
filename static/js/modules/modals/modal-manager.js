@@ -218,7 +218,7 @@ export async function loadItemsForModal(section, page = 1, search = '') {
     }
 
     // Show loading
-    listElement.innerHTML = '<div class="empty-state" style="padding: 2rem; text-align: center; color: #64748b;">Loading...</div>';
+    listElement.innerHTML = '<div class="empty-state modal-state">Loading...</div>';
 
     // Build API URL and params based on section
     let apiUrl = '';
@@ -263,7 +263,7 @@ export async function loadItemsForModal(section, page = 1, search = '') {
                 break;
             default:
                 console.error(`Unknown section: ${section}`);
-                listElement.innerHTML = `<div class="empty-state" style="padding: 2rem; text-align: center; color: #ef4444;">Unknown section: ${section}</div>`;
+                listElement.innerHTML = `<div class="empty-state modal-state modal-state-error">Unknown section: ${section}</div>`;
                 return;
         }
         
@@ -331,7 +331,7 @@ export async function loadItemsForModal(section, page = 1, search = '') {
                 errorMessage = error.toString();
             }
         }
-        listElement.innerHTML = `<div class="empty-state" style="padding: 2rem; text-align: center; color: #ef4444;">Error loading items: ${errorMessage}</div>`;
+        listElement.innerHTML = `<div class="empty-state modal-state modal-state-error">Error loading items: ${errorMessage}</div>`;
     }
 }
 
@@ -346,7 +346,7 @@ export function renderItemsList(listId, items, section) {
     if (!listElement) return;
 
     if (items.length === 0) {
-        listElement.innerHTML = `<div class="empty-state" style="padding: 2rem; text-align: center; color: #64748b;">${translations.noItemsFound || 'No items found'}</div>`;
+        listElement.innerHTML = `<div class="empty-state modal-state">${translations.noItemsFound || 'No items found'}</div>`;
         return;
     }
 
@@ -464,7 +464,7 @@ export async function submitAddItem(section) {
         // Show loading state
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite;"></i> ${translations.submitting || 'Submitting...'}`;
+            submitBtn.innerHTML = `<i class="bi bi-arrow-repeat ia-spin"></i> ${translations.submitting || 'Submitting...'}`;
         }
 
         let data = {};
@@ -827,7 +827,7 @@ export async function submitAddWordsCategorys() {
         // Show loading state
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite;"></i> ${translations.submitting || 'Submitting...'}`;
+            submitBtn.innerHTML = `<i class="bi bi-arrow-repeat ia-spin"></i> ${translations.submitting || 'Submitting...'}`;
         }
 
         const wordId = document.getElementById('wordsCategorysWordId')?.value;
@@ -2468,9 +2468,9 @@ export function openAddKeywordModalFromArchives() {
         
         selectedWordsContainer.style.display = 'block';
         selectedWordsList.innerHTML = archivesSelectedWords.map((word, index) => `
-            <span class="badge bg-primary d-flex align-items-center gap-1" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;" data-word-id="${word.id}" data-word-text="${escapeHtml(word.text)}">
+            <span class="badge bg-primary d-flex align-items-center gap-1 archives-selected-word-badge" data-word-id="${word.id}" data-word-text="${escapeHtml(word.text)}">
                 ${escapeHtml(word.text)}
-                <button type="button" class="btn-close btn-close-white" style="font-size: 0.6rem;" onclick="removeArchivesSelectedWord(${index})" aria-label="Remove"></button>
+                <button type="button" class="btn-close btn-close-white archives-selected-word-remove" onclick="removeArchivesSelectedWord(${index})" aria-label="Remove"></button>
             </span>
         `).join('');
     }

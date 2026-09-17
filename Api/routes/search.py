@@ -103,6 +103,7 @@ def register_search_routes(app):
                              query=query,
                              results=results,
                              page=page,
+                             per_page=per_page,
                              total_pages=total_pages,
                              total_results=total_results,
                              analyst_scope=analyst_scope)

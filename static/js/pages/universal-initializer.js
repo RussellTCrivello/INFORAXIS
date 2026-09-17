@@ -21,27 +21,34 @@ const pageDetectors = [
         // Map routes to page types
         if (path.includes('/files') && !path.match(/\/file\/\d+/)) return 'files-list';
         if (path.match(/\/file\/\d+/)) return 'file-detail';
-        if (path.includes('/keywords') && !path.match(/\/keyword\/\d+/)) return 'keywords-list';
-        if (path.match(/\/keyword\/\d+/)) return 'keyword-detail';
+        if (path.match(/\/keywords\/\d+/)) return 'keyword-detail';
+        if (path.includes('/keywords')) return 'keywords-list';
         if (path.match(/\/categories\/\d+\/words/)) return 'category-words';  // Must be before general /words check
-        if (path.includes('/words') && !path.match(/\/word\/\d+/)) return 'words-list';
-        if (path.match(/\/word\/\d+/)) return 'word-detail';
-        if (path.includes('/sources') && !path.match(/\/source\/\d+/)) return 'sources-list';
-        if (path.match(/\/source\/\d+/)) return 'source-detail';
-        if (path.includes('/sides') && !path.match(/\/side\/\d+/)) return 'sides-list';
-        if (path.match(/\/side\/\d+/)) return 'side-detail';
+        if (path.match(/\/words\/\d+/)) return 'word-detail';
+        if (path.includes('/words')) return 'words-list';
+        if (path.match(/\/sources\/\d+\/categories-keywords/)) return 'source-categories-keywords';
+        if (path.match(/\/sources\/\d+/)) return 'source-detail';
+        if (path.includes('/sources')) return 'sources-list';
+        if (path.match(/\/sides\/\d+\/categories-keywords/)) return 'side-categories-keywords';
+        if (path.match(/\/sides\/\d+/)) return 'side-detail';
+        if (path.includes('/sides')) return 'sides-list';
         if (path === '/search/enhanced') return 'search-enhanced';
         if (path === '/search/advanced') return 'search-advanced';
+        if (path.includes('/search/saved')) return 'saved-searches';
         if (path === '/search') return 'search';
         if (path === '/upload') return 'upload';
         if (path === '/' || path === '/dashboard') return 'dashboard';
         if (path.includes('/dashboard/comprehensive')) return 'comprehensive-dashboard';
+        if (path.includes('/dashboard/charts')) return 'charts-dashboard';
         if (path.includes('/notifications')) return 'notifications';
+        if (path.includes('/settings')) return 'settings';
+        if (path.includes('/analyst')) return 'analyst-categorization';
         if (path.includes('/import') || path.includes('/export')) return 'import-export';
         if (path.includes('/analysis/batch')) return 'analysis-batch';
+        if (path.includes('/analysis/classification') || path.includes('/file-classification')) return 'file-classification';
         if (path.includes('/email-words')) return 'email-words';
         if (path.includes('/archives')) return 'archives';
-        if (path.includes('/analysis/path')) return 'path-analysis';
+        if (path.includes('/analytics/path-analysis') || path.includes('/analysis/path')) return 'path-analysis';
         
         return 'default';
     }}
@@ -53,26 +60,76 @@ const pageHandlers = {
     'file-detail': () => import('./file-detail-page.js'),
     'keywords-list': () => import('./keywords-list-page.js'),
     'keyword-detail': () => import('./keyword-detail-page.js'),
+    'categories-list': () => import('./categories-list-page.js'),
     'category-words': () => import('./category-words-page.js'),
     'words-list': () => import('./words-list-page.js'),
     'word-detail': () => import('./word-detail-page.js'),
     'sources-list': () => import('./sources-list-page.js'),
     'source-detail': () => import('./source-detail-page.js'),
+    'source-categories-keywords': () => import('./source-categories-keywords-page.js'),
     'sides-list': () => import('./sides-list-page.js'),
     'side-detail': () => import('./side-detail-page.js'),
+    'side-categories-keywords': () => import('./side-categories-keywords-page.js'),
     'search': () => import('./search-page.js'),
     'search-enhanced': () => import('./search-enhanced-page.js'),
     'search-advanced': () => import('./search-advanced-page.js'),
+    'saved-searches': () => import('./saved-searches-page.js'),
     'upload': () => import('./upload-page.js'),
     'dashboard': () => import('./dashboard-page.js'),
     'comprehensive-dashboard': () => import('./comprehensive-dashboard-page.js'),
+    'charts-dashboard': () => import('./charts-dashboard-page.js'),
+    'file-classification': () => import('./file-classification-page.js'),
+    'analyst-categorization': () => import('./analyst-categorization-page.js'),
     'notifications': () => import('./notifications-page.js'),
+    'settings': () => Promise.resolve({ default: () => {} }),
+    'full-content': () => import('./full-content-page.js'),
     'import-export': () => import('./import-export-page.js'),
     'analysis-batch': () => import('./analysis-batch-page.js'),
     'email-words': () => import('./email-words-page.js'),
     'archives': () => import('./archives-page.js'),
     'path-analysis': () => import('./path-analysis-page.js'),
+    'concurrency-workspace': () => import('./concurrency-dashboard-page.js'),
+    'import-workspace': () => import('./import-center-page.js'),
+    'users-workspace': () => import('./users-page.js'),
     'default': () => Promise.resolve({ default: () => {} }) // No-op for default
+};
+
+const pageScriptFiles = {
+    'files-list': 'files-list-page.js',
+    'file-detail': 'file-detail-page.js',
+    'keywords-list': 'keywords-list-page.js',
+    'keyword-detail': 'keyword-detail-page.js',
+    'categories-list': 'categories-list-page.js',
+    'category-words': 'category-words-page.js',
+    'words-list': 'words-list-page.js',
+    'word-detail': 'word-detail-page.js',
+    'sources-list': 'sources-list-page.js',
+    'source-detail': 'source-detail-page.js',
+    'source-categories-keywords': 'source-categories-keywords-page.js',
+    'sides-list': 'sides-list-page.js',
+    'side-detail': 'side-detail-page.js',
+    'side-categories-keywords': 'side-categories-keywords-page.js',
+    'search': 'search-page.js',
+    'search-enhanced': 'search-enhanced-page.js',
+    'search-advanced': 'search-advanced-page.js',
+    'saved-searches': 'saved-searches-page.js',
+    'upload': 'upload-page.js',
+    'dashboard': 'dashboard-page.js',
+    'comprehensive-dashboard': 'comprehensive-dashboard-page.js',
+    'charts-dashboard': 'charts-dashboard-page.js',
+    'file-classification': 'file-classification-page.js',
+    'analyst-categorization': 'analyst-categorization-page.js',
+    'notifications': 'notifications-page.js',
+    'settings': '',
+    'full-content': 'full-content-page.js',
+    'import-export': 'import-export-page.js',
+    'analysis-batch': 'analysis-batch-page.js',
+    'email-words': 'email-words-page.js',
+    'archives': 'archives-page.js',
+    'path-analysis': 'path-analysis-page.js',
+    'concurrency-workspace': 'concurrency-dashboard-page.js',
+    'import-workspace': 'import-center-page.js',
+    'users-workspace': 'users-page.js'
 };
 
 /**
@@ -91,12 +148,33 @@ function detectPageType() {
     return 'default';
 }
 
+function hasExplicitPageModule(pageType) {
+    const scriptFile = pageScriptFiles[pageType];
+    if (!scriptFile) return false;
+
+    return Array.from(document.scripts).some((script) => {
+        const src = script.getAttribute('src') || '';
+        return src.includes(`/js/pages/${scriptFile}`) || src.includes(`/static/js/pages/${scriptFile}`);
+    });
+}
+
+function hasBasePageScript() {
+    return Array.from(document.scripts).some((script) => {
+        const src = script.getAttribute('src') || '';
+        return src.includes('/js/pages/base-page.js') || src.includes('/static/js/pages/base-page.js');
+    });
+}
+
 /**
  * Initialize page
  */
 export async function initializePage() {
-    // Always initialize base page functionality first
-    initBasePage();
+    // base-page.js is already loaded by base.html. Only use the lightweight
+    // fallback handler on pages that include the universal initializer without
+    // the global base script to avoid duplicate menu listeners and intervals.
+    if (!hasBasePageScript()) {
+        initBasePage();
+    }
     
     // Detect page type
     const pageType = detectPageType();
@@ -106,6 +184,12 @@ export async function initializePage() {
         return;
     }
     
+    // If the template already included this page module, let that module's own
+    // DOMContentLoaded hooks run and avoid a second dynamic init/warning pass.
+    if (hasExplicitPageModule(pageType)) {
+        return;
+    }
+
     // Get page handler
     const handler = pageHandlers[pageType];
     if (!handler) {

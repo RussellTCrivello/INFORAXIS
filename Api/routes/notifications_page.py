@@ -70,13 +70,17 @@ def register_notification_page_routes(app):
             notification_service.refresh_notifications()
             
             # Get query parameters
-            page = request.args.get('page', 1, type=int)
-            per_page = request.args.get('per_page', 20, type=int)
+            page = max(1, request.args.get('page', 1, type=int))
+            per_page = max(1, min(request.args.get('per_page', 20, type=int), 100))
             search = request.args.get('search', '').strip()
             source_id = request.args.get('source_id', type=int)
             side_id = request.args.get('side_id', type=int)
             notification_type = request.args.get('type', '')
             show_read = request.args.get('show_read', 'false').lower() == 'true'
+            explicit_read_status = request.args.get('read_status')
+            read_status = (explicit_read_status or 'all').strip().lower()
+            if read_status not in {'all', 'unread', 'read'}:
+                read_status = 'all'
             sort_by = request.args.get('sort_by', 'created_at')  # created_at, priority, title
             sort_order = request.args.get('sort_order', 'desc')  # asc, desc
             
@@ -99,10 +103,11 @@ def register_notification_page_routes(app):
                 query += f" AND type IN ({placeholders})"
                 params.extend(type_list)
             
-            # Filter by read/unread status
-            # When show_read is True, we get all notifications (both read and unread)
-            # When show_read is False, we only get unread notifications
-            if not show_read:
+            # Backward compatibility: legacy callers used show_read=false to
+            # request unread-only records. Newer paginated workspaces send an
+            # explicit read_status so the server can return full read/unread
+            # summary counts while paginating only the active sub-view.
+            if not explicit_read_status and not show_read:
                 query += " AND read = FALSE"
             
             # Filter out dismissed notifications - we don't want to show dismissed ones
@@ -190,8 +195,13 @@ def register_notification_page_routes(app):
                                         fetch="one"
                                     )
                                     if hash_info:
-                                        file_source_id = hash_info[0][0] if not file_source_id else file_source_id
-                                        file_side_id = hash_info[0][1] if not file_side_id else file_side_id
+                                        # execute_query(..., fetch="one") returns a single
+                                        # row/tuple in this codebase, not a list containing a
+                                        # row. Older code indexed it as hash_info[0][0], which
+                                        # made source/side filtering silently drop notifications
+                                        # whose metadata did not already carry source_id/side_id.
+                                        file_source_id = hash_info[0] if not file_source_id else file_source_id
+                                        file_side_id = hash_info[1] if not file_side_id and len(hash_info) > 1 else file_side_id
                         except Exception:
                             pass  # If query fails, use metadata values or skip filter
                     
@@ -218,6 +228,21 @@ def register_notification_page_routes(app):
             else:  # created_at (default)
                 notifications.sort(key=lambda x: x.created_at, reverse=reverse_order)
             
+            # Capture full filtered counts before pagination so the UI badges and
+            # summary chips report the true result set, not just the current
+            # page or active read-status sub-view.
+            summary = {
+                'total': len(notifications),
+                'unread': len([n for n in notifications if not n.read]),
+                'read': len([n for n in notifications if n.read]),
+            }
+
+            if explicit_read_status:
+                if read_status == 'unread':
+                    notifications = [n for n in notifications if not n.read]
+                elif read_status == 'read':
+                    notifications = [n for n in notifications if n.read]
+
             # Paginate
             total = len(notifications)
             start = (page - 1) * per_page
@@ -332,8 +357,11 @@ def register_notification_page_routes(app):
                     'page': page,
                     'per_page': per_page,
                     'total': total,
-                    'pages': (total + per_page - 1) // per_page if total > 0 else 0
-                }
+                    'pages': (total + per_page - 1) // per_page if total > 0 else 0,
+                    'total_pages': (total + per_page - 1) // per_page if total > 0 else 1
+                },
+                'summary': summary,
+                'read_status': read_status if explicit_read_status else ('all' if show_read else 'unread')
             })
             
         except Exception as e:

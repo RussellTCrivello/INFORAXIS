@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Enhanced Search') }}{% endblock %}
+{% block page_type %}search-enhanced{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/search-enhanced.css') }}" rel="stylesheet">
@@ -96,7 +97,7 @@
                         <label class="form-check-label" for="searchAllData">
                             <i class="bi bi-database me-1"></i>
                             <strong>{{ _('Search All Data') }}</strong>
-                            <small class="d-block text-muted" style="font-size: 0.75rem;">
+                            <small class="d-block text-muted helper-text-xs">
                                 {{ _('Search files, categories, keywords, sources, sides, words, and titles') }}
                             </small>
                         </label>
@@ -124,7 +125,7 @@
                             {{ _('Analyst-Categorized Files Only') }}
                         </option>
                     </select>
-                    <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                    <small class="text-muted d-block mt-1 helper-text-xs">
                         {{ _('By analyst categorization status - independent of smart categorization') }}
                     </small>
                 </div>

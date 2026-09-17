@@ -66,15 +66,7 @@ export function setFileViewMode(mode) {
     
     // Update toggle buttons
     document.querySelectorAll('.file-view-toggle .view-toggle-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.getAttribute('data-view') === mode) {
-            btn.classList.add('active');
-            btn.style.background = '#3b82f6';
-            btn.style.color = 'white';
-        } else {
-            btn.style.background = 'transparent';
-            btn.style.color = '#64748b';
-        }
+        btn.classList.toggle('active', btn.getAttribute('data-view') === mode);
     });
     
     // Reload current file view with new mode

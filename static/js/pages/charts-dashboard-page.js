@@ -5,9 +5,12 @@
 
 // Load translations from JSON script tag
 let translations = {};
+let chartsDashboardInitialized = false;
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Load translations from JSON script tag
+function initializeChartsDashboard() {
+    if (chartsDashboardInitialized) return;
+    chartsDashboardInitialized = true;
+
     const pageDataEl = document.getElementById('charts-dashboard-page-data');
     if (pageDataEl) {
         try {
@@ -17,9 +20,25 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error parsing charts dashboard page data:', e);
         }
     }
-    
+
     console.log('Charts dashboard page loaded');
-});
+    console.log('Initializing charts dashboard...');
+
+    // Load filter options first
+    loadFilterOptions().then(() => {
+        console.log('Filter options loaded, loading initial data...');
+        // Load all sections on page load because this dashboard intentionally
+        // displays all chart sections in one view.
+        loadDataForSection('files', 'charts');
+        loadDataForSection('categories', 'charts');
+        loadDataForSection('keywords', 'charts');
+        loadDataForSection('sources', 'charts');
+        loadDataForSection('sides', 'charts');
+        loadDataForSection('words', 'charts');
+    }).catch(error => {
+        console.error('Error during initialization:', error);
+    });
+}
 
 
 // ===== GLOBAL STATE =====
@@ -185,23 +204,9 @@ const CONFIG = {
 };
 
 // ===== INITIALIZATION =====
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing charts dashboard...');
-    
-    // Load filter options first
-    loadFilterOptions().then(() => {
-        console.log('Filter options loaded, loading initial data...');
-        // Load all sections on page load
-        loadDataForSection('files', 'charts');
-        loadDataForSection('categories', 'charts');
-        loadDataForSection('keywords', 'charts');
-        loadDataForSection('sources', 'charts');
-        loadDataForSection('sides', 'charts');
-        loadDataForSection('words', 'charts');
-    }).catch(error => {
-        console.error('Error during initialization:', error);
-    });
-});
+// See direct module fallback at the bottom of the file. Keeping the actual
+// start after all module constants/functions are initialized prevents temporal
+// dead-zone failures when this module is dynamically imported after DOM ready.
 
 // ===== FILTER OPTIONS LOADING =====
 async function loadFilterOptions() {
@@ -1140,13 +1145,12 @@ function showEmptyChartState(canvasId, message) {
     // Hide canvas
     canvas.style.display = 'none';
     
-    // Create empty state
+    // Create empty state using the shared chart workspace surface.
     const emptyStateDiv = document.createElement('div');
-    emptyStateDiv.className = 'empty-state';
-    emptyStateDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 500px; padding: 2rem;';
+    emptyStateDiv.className = 'empty-state chart-empty-state';
     emptyStateDiv.innerHTML = `
-        <i class="bi bi-inbox" style="font-size: 3rem; color: var(--text-muted); margin-bottom: 1rem;" aria-hidden="true"></i>
-        <p style="color: var(--text-light); font-size: 1.1rem; margin: 0;">${message || translations.noDataAvailable || 'No data available'}</p>
+        <i class="bi bi-inbox" aria-hidden="true"></i>
+        <p>${message || translations.noDataAvailable || 'No data available'}</p>
     `;
     
     chartContainer.appendChild(emptyStateDiv);
@@ -1155,3 +1159,13 @@ function showEmptyChartState(canvasId, message) {
 // Make functions globally available
 window.applyFilters = applyFilters;
 window.resetFilters = resetFilters;
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeChartsDashboard, { once: true });
+} else {
+    initializeChartsDashboard();
+}
+
+export default function init() {
+    initializeChartsDashboard();
+}
