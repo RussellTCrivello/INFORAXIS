@@ -2,6 +2,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Search') }}{% endblock %}
+{% block page_type %}search{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/search-workspace.css') }}">

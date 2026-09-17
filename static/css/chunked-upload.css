@@ -7,6 +7,10 @@
     gap: 0.5rem;
 }
 
+.chunked-file-input[hidden] {
+    display: none;
+}
+
 .upload-item {
     display: grid;
     gap: 0.5rem;

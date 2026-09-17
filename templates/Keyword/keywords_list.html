@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Keywords Management') }}{% endblock %}
+{% block page_type %}keywords-list{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/fmas.css') }}" rel="stylesheet" />

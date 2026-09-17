@@ -1581,3 +1581,9 @@ if (typeof window !== 'undefined') {
     window.applyFilters = applyFilters;
     window.resetFilters = resetFilters;
 }
+
+// Direct module fallback: this template loads the page module explicitly while
+// the universal initializer intentionally skips explicit page scripts to avoid
+// double initialization. Keep the guarded self-start here so the dashboard is
+// live in both loading modes.
+init();

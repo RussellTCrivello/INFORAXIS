@@ -133,16 +133,22 @@ class PageTipsManager {
         
         if (!content || !icon) return;
         
+        const container = document.getElementById('pageTipsContainer');
+
         if (this.tipsVisible) {
             content.classList.remove('collapsed');
             content.hidden = false;
             content.setAttribute('aria-hidden', 'false');
             icon.classList.remove('rotated');
+            container?.classList.remove('page-tips-collapsed');
+            container?.setAttribute('data-tips-state', 'expanded');
         } else {
             content.classList.add('collapsed');
             content.hidden = true;
             content.setAttribute('aria-hidden', 'true');
             icon.classList.add('rotated');
+            container?.classList.add('page-tips-collapsed');
+            container?.setAttribute('data-tips-state', 'collapsed');
         }
 
         if (toggleBtn) {
@@ -156,26 +162,21 @@ class PageTipsManager {
             return;
         }
 
-        // STRICT RULE: If enabled, show; if disabled, hide completely
+        // STRICT RULE: If enabled, show; if disabled, hide completely.
+        // The template only renders the component when the server-side
+        // interface setting allows it, so the enabled path must not depend on
+        // JavaScript-only visibility classes.
         if (this.tipsEnabled) {
-            // ENABLED: Show tips - mark as initialized and remove ALL hiding styles and attributes
             container.classList.add('tips-initialized');
-            container.style.display = '';
-            container.style.visibility = '';
             container.removeAttribute('hidden');
             container.removeAttribute('style');
             container.setAttribute('data-tips-hidden', 'false');
             container.classList.remove('tips-disabled');
         } else {
-            // DISABLED: Hide completely - use multiple methods to ensure it's completely hidden
-            // Don't add tips-initialized class to keep it hidden
-            container.style.display = 'none';
-            container.style.visibility = 'hidden';
             container.setAttribute('hidden', 'true');
             container.setAttribute('data-tips-hidden', 'true');
             container.classList.add('tips-disabled');
             container.classList.remove('tips-initialized');
-            // Also set inline style as final fallback
             container.style.setProperty('display', 'none', 'important');
         }
     }

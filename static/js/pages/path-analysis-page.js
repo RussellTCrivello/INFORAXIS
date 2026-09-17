@@ -25,9 +25,12 @@ let availableSides = [];
 let currentLoadingPath = null; // Track which path is currently being loaded
 let abortControllers = {}; // Track AbortControllers for each data type
 let expandedPaths = new Set(); // Track expanded paths for persistence
+let pathAnalysisInitialized = false;
 
 // 🚀 OPTIMIZED: Initialize on page load with error handling
-document.addEventListener('DOMContentLoaded', function() {
+function initializePathAnalysisPage() {
+    if (pathAnalysisInitialized) return;
+    pathAnalysisInitialized = true;
     // Load translations from JSON script tag
     const pageDataEl = document.getElementById('path-analysis-page-data');
     if (pageDataEl) {
@@ -89,7 +92,15 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
         }
     }, true);
-});
+
+    setupModalOverlayHandlers();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializePathAnalysisPage, { once: true });
+} else {
+    initializePathAnalysisPage();
+}
 
 // 🚀 FIXED: Load filters (sources and sides) with proper response handling
 async function loadFilters() {
@@ -2584,7 +2595,7 @@ function closeCategoryModal() {
 }
 
 // Close modal when clicking outside
-document.addEventListener('DOMContentLoaded', function() {
+function setupModalOverlayHandlers() {
     const modal = document.getElementById('categoryFilesModal');
     if (modal) {
         modal.addEventListener('click', function(e) {
@@ -2611,7 +2622,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-});
+}
 
 // Load category words analysis
 async function loadCategoryWordsAnalysis(pathName) {
@@ -3126,6 +3137,10 @@ function closeCategoryWordsModal() {
 if (typeof window !== 'undefined') {
     window.closeCategoryModal = closeCategoryModal;
     window.closeCategoryWordsModal = closeCategoryWordsModal;
+}
+
+export default function init() {
+    initializePathAnalysisPage();
 }
 
 function showError() {

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Side Details') }}{% endblock %}
+{% block page_type %}side-detail{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/entity-detail.css') }}">

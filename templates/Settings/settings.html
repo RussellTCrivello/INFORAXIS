@@ -2,6 +2,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Settings') }}{% endblock %}
+{% block page_type %}settings{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/Settings.css') }}" rel="stylesheet">
@@ -153,7 +154,7 @@
                                         <label class="form-label small text-muted">{{ _('Or Use Bootstrap Icon') }}</label>
                                         <div class="input-group">
                                             <span class="input-group-text">
-                                                <i id="appIconPreview" class="{{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }}"></i>
+                                                <i id="appIconPreview" class="bi {{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }}"></i>
                                             </span>
                                             <input type="text" class="form-control"
                                                    id="appIcon"
@@ -180,13 +181,13 @@
                                          src="{{ user_settings.get('system', 'app_logo') }}"
                                          alt="Logo"
                                          class="branding-preview-logo">
-                                    <i id="appBrandingPreviewIcon" class="{{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }} branding-preview-icon" style="display: none;"></i>
+                                    <i id="appBrandingPreviewIcon" class="bi {{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }} branding-preview-icon" style="display: none;"></i>
                                     {% else %}
                                     <img id="appBrandingPreviewLogo"
                                          src=""
                                          alt="Logo"
                                          class="branding-preview-logo" style="display: none;">
-                                    <i id="appBrandingPreviewIcon" class="{{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }} branding-preview-icon"></i>
+                                    <i id="appBrandingPreviewIcon" class="bi {{ user_settings.get('system', 'app_icon', 'bi-file-earmark-text') }} branding-preview-icon"></i>
                                     {% endif %}
                                 </div>
                                 <div>

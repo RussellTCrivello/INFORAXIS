@@ -39,13 +39,20 @@ const SELECTOR = {
         '.search-view-navigation',
         '.search-toolbar',
         '.search-toolbar-side',
+        '.filter-section',
+        '.filter-controls-grid',
         '.analysis-view-navigation',
         '.dashboard-navigation',
         '.tab-navigation',
+        '.analysis-tabs',
+        '.notifications-tabs',
+        '.sub-tabs',
+        '.settings-tabs',
         '.path-tree-actions',
         '.analyst-classify-controls',
         '.analyst-filters',
         '.analyst-pagination',
+        '.control-panel',
         '.chart-controls-wrapper',
         '.chart-toolbar',
         '.chart-actions',
@@ -88,6 +95,7 @@ const SELECTOR = {
         '.cards-grid',
         '.ia-record-list',
         '.files-grid',
+        '.files-grid-scroll',
         '.files-container',
         '.data-grid',
         '.result-list',
@@ -95,9 +103,16 @@ const SELECTOR = {
         '.results-grid',
         '.search-results-card',
         '.file-reports-grid',
+        '.storage-details-panel',
         '.notifications-list',
+        '.messages-list',
+        '.analyst-table-wrap',
+        '.analyst-category-list',
+        '.analyst-audit-list',
         '.path-tree',
         '.path-tree-container',
+        '.word-cloud',
+        '.category-words-grid',
         '.word-search-results',
         '.category-search-results'
     ].join(','),
@@ -1332,8 +1347,31 @@ function initializeWorkspaceShell() {
     setupGlobalSelectionContext();
 }
 
+let commandRestoreFocus = null;
+
+function isBlockingOverlayOpen() {
+    return !!document.querySelector([
+        '.modal.show',
+        '.modal.active',
+        '.modal-overlay.active',
+        '.archives-modal.active',
+        '.message-detail-modal.active',
+        '.preview-modal.active',
+        '.offcanvas.show'
+    ].join(','));
+}
+
 function collectCommandPaletteItems() {
-    const commands = [
+    const commands = [];
+    const seen = new Set();
+    const addCommand = (item) => {
+        const key = `${item.meta || ''}::${item.title || ''}`.toLowerCase();
+        if (!item.title || seen.has(key)) return;
+        seen.add(key);
+        commands.push(item);
+    };
+
+    [
         {
             title: 'Focus table search',
             meta: 'Workspace',
@@ -1347,22 +1385,23 @@ function collectCommandPaletteItems() {
         { title: 'Switch to dark theme', meta: 'Theme', icon: 'bi-moon-stars', action: () => applyWorkspaceTheme('dark') },
         { title: 'Use system theme', meta: 'Theme', icon: 'bi-circle-half', action: () => applyWorkspaceTheme('system') },
         { title: 'Reset workspace preferences', meta: 'Workspace', icon: 'bi-arrow-counterclockwise', action: resetWorkspacePreferences }
-    ];
+    ].forEach(addCommand);
 
     document.querySelectorAll('.sidebar a[href], .navbar a[href], a.nav-link[href]').forEach((link) => {
         const title = textOf(link);
         const href = link.getAttribute('href');
         if (!title || !href || href === '#' || href.startsWith('javascript:')) return;
-        commands.push({ title, meta: 'Navigate', icon: 'bi-arrow-right-circle', action: () => { window.location.href = href; } });
+        addCommand({ title, meta: 'Navigate', icon: 'bi-arrow-right-circle', action: () => { window.location.href = href; } });
     });
 
     document.querySelectorAll('button, a.btn, [role="button"]').forEach((button) => {
         if (button.offsetParent === null) return;
+        if (button.matches('[data-ia-open-command], .sidebar-command-btn, .ia-command-trigger')) return;
+        if (button.closest('.ia-command-palette, .ia-context-bar, .page-tips-header')) return;
         const title = textOf(button);
         if (!title || title.length > 64) return;
         if (!/add|create|new|import|export|save|upload|filter|analyze|analysis/i.test(title)) return;
-        if (button.closest('.ia-command-palette, .ia-context-bar')) return;
-        commands.push({
+        addCommand({
             title,
             meta: 'Action',
             icon: /add|create|new/i.test(title) ? 'bi-plus-circle' : /export|download/i.test(title) ? 'bi-download' : 'bi-lightning-charge',
@@ -1410,8 +1449,10 @@ function renderCommandPalette(query = '') {
     palette._iaCommands = filtered;
 }
 
-function openCommandPalette() {
+function openCommandPalette(opener = document.activeElement) {
     const palette = ensureCommandPalette();
+    if (isBlockingOverlayOpen() && palette.hidden) return;
+    commandRestoreFocus = opener instanceof HTMLElement ? opener : document.activeElement;
     palette.hidden = false;
     document.body.classList.add('ia-command-open');
     const input = palette.querySelector('#iaCommandInput');
@@ -1420,10 +1461,14 @@ function openCommandPalette() {
     window.setTimeout(() => input.focus({ preventScroll: true }), 30);
 }
 
-function closeCommandPalette() {
+function closeCommandPalette({ restoreFocus = true } = {}) {
     const palette = ensureCommandPalette();
     palette.hidden = true;
     document.body.classList.remove('ia-command-open');
+    if (restoreFocus && commandRestoreFocus && document.contains(commandRestoreFocus)) {
+        try { commandRestoreFocus.focus({ preventScroll: true }); } catch (error) { /* ignore */ }
+    }
+    commandRestoreFocus = null;
 }
 
 function moveCommandSelection(direction) {
@@ -1448,13 +1493,21 @@ function runSelectedCommand() {
 }
 
 function injectCommandTrigger() {
+    const existingLaunchers = document.querySelectorAll('[data-ia-open-command]:not(.ia-command-trigger), .sidebar-command-btn');
+    if (existingLaunchers.length) {
+        document.querySelectorAll('.page-header > .ia-command-trigger').forEach((trigger) => trigger.remove());
+        return;
+    }
+
     const header = document.querySelector('.page-header');
     if (!header || header.querySelector('.ia-command-trigger')) return;
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'ia-command-trigger';
+    trigger.dataset.iaOpenCommand = 'true';
+    trigger.dataset.iaDerived = 'header';
+    trigger.setAttribute('aria-label', 'Open command palette');
     trigger.innerHTML = '<i class="bi bi-command" aria-hidden="true"></i><span>Command</span><kbd>⌘K</kbd>';
-    trigger.addEventListener('click', openCommandPalette);
     header.appendChild(trigger);
 }
 
@@ -1464,9 +1517,10 @@ function setupCommandPalette() {
     const input = palette.querySelector('#iaCommandInput');
     input.addEventListener('input', () => renderCommandPalette(input.value));
     document.addEventListener('click', (event) => {
-        if (event.target.closest('[data-ia-open-command]')) {
+        const launcher = event.target.closest('[data-ia-open-command]');
+        if (launcher) {
             event.preventDefault();
-            openCommandPalette();
+            openCommandPalette(launcher);
         }
     });
     palette.addEventListener('click', (event) => {
@@ -1480,8 +1534,9 @@ function setupCommandPalette() {
     document.addEventListener('keydown', (event) => {
         const isCommandShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
         if (isCommandShortcut) {
+            if (isBlockingOverlayOpen() && palette.hidden) return;
             event.preventDefault();
-            openCommandPalette();
+            openCommandPalette(document.activeElement);
             return;
         }
         if (palette.hidden) return;

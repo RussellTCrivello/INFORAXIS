@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Enhanced Search') }}{% endblock %}
+{% block page_type %}search-enhanced{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/search-enhanced.css') }}" rel="stylesheet">

@@ -19,7 +19,8 @@ const analystState = {
     perPage: 25,
     total: 0,
     totalPages: 1,
-    canCategorize: false
+    canCategorize: false,
+    initialized: false
 };
 
 function analystT(key, fallback) {
@@ -394,6 +395,8 @@ function exportAnalystCsv() {
 // ---- Init -------------------------------------------------------------
 
 function initAnalystCategorizationPage() {
+    if (analystState.initialized) return;
+    analystState.initialized = true;
     analystInitState();
 
     // Enter key in filter inputs applies the filters

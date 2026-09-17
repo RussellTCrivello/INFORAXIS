@@ -99,6 +99,27 @@
     cursor: pointer;
 }
 
+.email-file-result:hover,
+.email-file-result:focus-visible {
+    background: color-mix(in srgb, var(--primary-color) 5%, var(--bg-white));
+    outline: none;
+}
+
+.email-file-open-btn {
+    white-space: nowrap;
+}
+
+.email-file-results-list .min-width-0 {
+    min-width: 0;
+}
+
+.email-file-results-list .bg-outline-primary,
+.email-file-results-list .bg-outline-secondary {
+    border: 1px solid var(--border-color);
+    background: var(--bg-white);
+    color: var(--text-light);
+}
+
 .toast-container-global {
     position: fixed;
     top: 1.25rem;

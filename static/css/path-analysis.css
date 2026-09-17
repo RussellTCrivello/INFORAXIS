@@ -35,11 +35,70 @@
     overflow: hidden;
 }
 
+.path-layout {
+    display: grid;
+    grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+    gap: 1rem;
+    min-height: min(74vh, 56rem);
+}
+
+.path-tree-card,
+.files-section,
+.analytics-section {
+    min-width: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+    box-shadow: var(--shadow-xs);
+}
+
+.path-tree-card {
+    align-self: start;
+    overflow: hidden;
+}
+
+.path-tree-card > .path-tree,
+.path-tree-card .path-tree-container {
+    max-height: var(--ia-data-scroll-max-block, min(68vh, 54rem));
+    overflow: auto;
+}
+
+.analytics-section,
+.files-section {
+    padding: 1rem;
+}
+
 .path-stats-grid,
 .path-metrics-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
     gap: 0.75rem;
+}
+
+.path-stat-card,
+.path-metric-card {
+    padding: 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-white);
+    box-shadow: var(--shadow-xs);
+}
+
+.path-stat-value,
+.path-metric-value {
+    color: var(--text-heading);
+    font-size: 1.28rem;
+    font-weight: 820;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.path-stat-label,
+.path-metric-label {
+    margin-top: 0.25rem;
+    color: var(--text-light);
+    font-size: 0.76rem;
+    font-weight: 700;
 }
 
 .path-actions,
@@ -515,4 +574,76 @@
 
 .breadcrumb-current {
     font-weight: 700;
+}
+
+.modal-file-card {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-white);
+    cursor: pointer;
+}
+
+.modal-file-card + .modal-file-card {
+    margin-top: 0.55rem;
+}
+
+.modal-file-card:hover,
+.modal-file-card:focus-within {
+    border-color: color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
+    background: color-mix(in srgb, var(--primary-color) 5%, var(--bg-white));
+}
+
+.modal-file-header,
+.modal-file-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.modal-file-header {
+    align-items: flex-start;
+}
+
+.modal-file-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-white));
+    color: var(--primary-color);
+}
+
+.modal-file-info {
+    min-width: 0;
+}
+
+.modal-file-name {
+    overflow: hidden;
+    color: var(--text-heading);
+    font-weight: 760;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.modal-file-meta {
+    flex-wrap: wrap;
+    margin-top: 0.18rem;
+    color: var(--text-light);
+    font-size: 0.76rem;
+}
+
+@media (max-width: 991.98px) {
+    .path-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .path-tree-card > .path-tree,
+    .path-tree-card .path-tree-container {
+        max-height: min(45vh, 24rem);
+    }
 }

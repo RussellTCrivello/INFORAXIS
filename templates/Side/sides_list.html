@@ -4,6 +4,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Sides Management') }}{% endblock %}
+{% block page_type %}sides-list{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/sides-list.css') }}" rel="stylesheet">

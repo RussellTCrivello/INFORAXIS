@@ -1,30 +1,23 @@
-/* Page tips: cleaned low-noise help surface. */
+/* Page tips: compact, server-rendered help drawer.
+   The server decides whether the component exists; JavaScript only synchronizes
+   collapse state. Keep the surface visible without waiting for JS so enabling
+   Page Tips never produces a blank/hidden block when scripts are delayed. */
 
 .page-tips-container {
-    margin-bottom: 1rem;
-    visibility: hidden;
-    opacity: 0;
-    transition: none;
+    margin-bottom: 0.85rem;
+    contain: layout paint;
 }
 
-.page-tips-container.tips-initialized {
-    visibility: visible;
-    opacity: 1;
-    transition: opacity var(--motion-base, 180ms) var(--ease-out, ease), transform var(--motion-base, 180ms) var(--ease-out, ease);
-}
-
-.page-tips-container[data-tips-hidden="true"] {
+.page-tips-container[data-tips-hidden="true"],
+.page-tips-container.tips-disabled {
     display: none !important;
 }
 
-.page-tips-card,
-.tips-section,
-.tips-info,
-.tips-warning,
-.tips-note {
+.page-tips-card {
+    overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--info-color, #3b82f6) 18%, var(--border-color, #e3e9f2));
     border-radius: var(--radius-lg, 0.95rem);
-    background: color-mix(in srgb, var(--info-color, #3b82f6) 4%, var(--bg-white, #fff));
+    background: color-mix(in srgb, var(--info-color, #3b82f6) 3%, var(--bg-white, #fff));
     color: var(--text-dark, #172033);
     box-shadow: var(--shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.04));
 }
@@ -34,8 +27,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.78rem 0.9rem;
-    border-bottom: 1px solid var(--border-light, #eef2f7);
+    min-height: 2.65rem;
+    padding: 0.62rem 0.82rem;
 }
 
 .page-tips-header h5,
@@ -44,23 +37,44 @@
     align-items: center;
     gap: 0.45rem;
     margin: 0;
+    min-width: 0;
     color: var(--text-heading, #0f172a);
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     font-weight: 780;
+    line-height: 1.25;
 }
 
 .page-tips-header .btn-link {
+    display: inline-grid;
+    flex: 0 0 auto;
+    width: 1.85rem;
+    height: 1.85rem;
+    place-items: center;
+    border-radius: var(--radius-sm, 0.5rem);
     color: var(--text-light, #5f6f85) !important;
     text-decoration: none;
 }
 
-.page-tips-content,
-.tips-section {
-    padding: 0.85rem 0.95rem;
+.page-tips-header .btn-link:hover,
+.page-tips-header .btn-link:focus-visible {
+    background: color-mix(in srgb, var(--info-color, #3b82f6) 10%, transparent);
+    color: var(--info-color, #3b82f6) !important;
+    outline: none;
+}
+
+.page-tips-content {
+    display: grid;
+    gap: 0.55rem;
+    max-height: min(42vh, 26rem);
+    overflow: auto;
+    padding: 0.72rem 0.82rem 0.82rem;
+    border-top: 1px solid var(--border-light, #eef2f7);
+    overscroll-behavior: contain;
 }
 
 .page-tips-content.collapsed,
-.page-tips-content[hidden] {
+.page-tips-content[hidden],
+.page-tips-collapsed .page-tips-content {
     display: none;
 }
 
@@ -72,20 +86,59 @@
     transform: rotate(180deg);
 }
 
-.tips-section {
-    margin-bottom: 1rem;
+.tips-section,
+.tips-info,
+.tips-warning,
+.tips-note {
+    padding: 0.62rem 0.72rem;
+    border: 1px solid var(--border-light, #eef2f7);
+    border-inline-start: 3px solid color-mix(in srgb, var(--info-color, #3b82f6) 72%, var(--border-color, #e3e9f2));
+    border-radius: var(--radius-md, 0.7rem);
+    background: color-mix(in srgb, var(--bg-white, #fff) 82%, var(--bg-section, #f8fafc));
+    color: var(--text-dark, #172033);
+    box-shadow: none;
+}
+
+.tips-info { border-inline-start-color: var(--info-color, #3b82f6); }
+.tips-warning { border-inline-start-color: var(--warning-color, #f59e0b); }
+.tips-note { border-inline-start-color: var(--primary-color, #4f46e5); }
+
+.tips-section-title i {
+    color: color-mix(in srgb, var(--info-color, #3b82f6) 78%, var(--text-light, #5f6f85));
 }
 
 .tips-list {
-    margin: 0.55rem 0 0;
-    padding-inline-start: 1.15rem;
+    margin: 0.48rem 0 0;
+    padding-inline-start: 1.05rem;
     color: var(--text-light, #5f6f85);
+    font-size: 0.82rem;
+    line-height: 1.42;
 }
 
 .tips-list li + li {
-    margin-top: 0.28rem;
+    margin-top: 0.24rem;
 }
 
-.page-tips-collapsed .page-tips-content {
-    display: none;
+.tips-info,
+.tips-warning,
+.tips-note {
+    color: var(--text-light, #5f6f85);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.tips-info strong,
+.tips-warning strong,
+.tips-note strong {
+    color: var(--text-heading, #0f172a);
+}
+
+@media (max-width: 575.98px) {
+    .page-tips-header {
+        align-items: flex-start;
+    }
+
+    .page-tips-content {
+        max-height: min(56vh, 30rem);
+    }
 }

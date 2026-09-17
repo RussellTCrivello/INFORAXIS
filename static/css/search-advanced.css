@@ -20,6 +20,11 @@
     padding: 1rem;
 }
 
+.search-header .page-title {
+    margin-bottom: 0.18rem;
+    font-size: clamp(1.18rem, 1.8vw, 1.55rem);
+}
+
 .search-logo {
     display: inline-flex;
     align-items: center;
@@ -73,6 +78,12 @@
     color: var(--text-heading) !important;
     font-size: clamp(1rem, 1.4vw, 1.22rem);
     font-weight: 650;
+}
+
+.search-box-divider {
+    width: 1px;
+    height: 1.7rem;
+    background: var(--border-light);
 }
 
 .search-options,
@@ -233,9 +244,9 @@
 }
 
 .loading-overlay {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    z-index: 10;
+    z-index: 1070;
     display: none;
     place-items: center;
     background: color-mix(in srgb, var(--bg-white) 72%, transparent);

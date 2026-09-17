@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Analyst Categorization') }} - {{ _('File Analysis System') }}{% endblock %}
+{% block page_type %}analyst-categorization{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/analyst-categorization.css') }}" rel="stylesheet">

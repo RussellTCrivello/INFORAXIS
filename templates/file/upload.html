@@ -2,6 +2,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('CLI File Processor') }}{% endblock %}
+{% block page_type %}upload{% endblock %}
 
 {% block extra_css %}
 <!-- Chunked Upload Styles -->
@@ -210,16 +211,20 @@
     window.ChunkedUploadClient = ChunkedUploadClient;
     window.ChunkedUploadUI = ChunkedUploadUI;
     
-    // Initialize chunked upload UI if container exists
+    // Initialize chunked upload UI if container exists. Guarded because the
+    // upload workspace can be initialized by both explicit and universal module
+    // loading in development/test harnesses.
     document.addEventListener('DOMContentLoaded', function() {
         const container = document.getElementById('chunked-upload-container');
-        if (container) {
+        if (container && !window.__chunkedUploadInitialized) {
             try {
-                const uploadUI = new ChunkedUploadUI('chunked-upload-container', {
+                window.__chunkedUploadInitialized = true;
+                window.chunkedUploadUI = new ChunkedUploadUI('chunked-upload-container', {
                     chunkSize: 5 * 1024 * 1024  // 5MB chunks
                 });
                 console.log('✅ Chunked upload initialized successfully');
             } catch (error) {
+                window.__chunkedUploadInitialized = false;
                 console.error('Error initializing chunked upload:', error);
             }
         }

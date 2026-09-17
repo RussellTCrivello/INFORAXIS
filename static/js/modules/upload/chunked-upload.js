@@ -324,19 +324,23 @@ class ChunkedUploadUI {
         this.container.innerHTML = `
             <div class="chunked-upload-container">
                 <div class="upload-controls">
-                    <input type="file" id="chunked-file-input" multiple style="display: none;">
-                    <button class="btn btn-primary" onclick="document.getElementById('chunked-file-input').click()">
-                        <i class="bi bi-upload"></i> Select Files
+                    <input type="file" id="chunked-file-input" class="chunked-file-input" multiple hidden>
+                    <button class="btn btn-primary" type="button" data-chunked-select-files>
+                        <i class="bi bi-upload" aria-hidden="true"></i> Select Files
                     </button>
-                    <span class="upload-info"></span>
+                    <span class="upload-info" aria-live="polite"></span>
                 </div>
                 <div class="upload-list" id="chunked-upload-list"></div>
             </div>
         `;
         
-        // Setup file input handler
+        // Setup file input handler without inline JavaScript so the chunked
+        // uploader follows the same enterprise event-binding pattern as the
+        // rest of the upload workspace.
         const fileInput = document.getElementById('chunked-file-input');
-        fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+        const selectButton = this.container.querySelector('[data-chunked-select-files]');
+        selectButton?.addEventListener('click', () => fileInput?.click());
+        fileInput?.addEventListener('change', (e) => this.handleFileSelect(e));
     }
     
     async handleFileSelect(event) {
@@ -384,21 +388,37 @@ class ChunkedUploadUI {
     
     addUploadToUI(uploadId, file) {
         const list = document.getElementById('chunked-upload-list');
+        if (!list) return;
         
         const uploadDiv = document.createElement('div');
         uploadDiv.id = `upload-${uploadId}`;
         uploadDiv.className = 'upload-item';
-        uploadDiv.innerHTML = `
-            <div class="upload-item-header">
-                <span class="file-name">${file.name}</span>
-                <span class="file-size">${ChunkedUploadClient.formatFileSize(file.size)}</span>
-            </div>
-            <div class="progress">
-                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-            </div>
-            <div class="upload-status">Preparing...</div>
-        `;
-        
+
+        const header = document.createElement('div');
+        header.className = 'upload-item-header';
+        const name = document.createElement('span');
+        name.className = 'file-name';
+        name.textContent = file.name;
+        const size = document.createElement('span');
+        size.className = 'file-size';
+        size.textContent = ChunkedUploadClient.formatFileSize(file.size);
+        header.append(name, size);
+
+        const progress = document.createElement('div');
+        progress.className = 'progress';
+        const progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar';
+        progressBar.setAttribute('role', 'progressbar');
+        progressBar.setAttribute('aria-valuemin', '0');
+        progressBar.setAttribute('aria-valuemax', '100');
+        progressBar.setAttribute('aria-valuenow', '0');
+        progress.appendChild(progressBar);
+
+        const status = document.createElement('div');
+        status.className = 'upload-status';
+        status.textContent = 'Preparing...';
+
+        uploadDiv.append(header, progress, status);
         list.appendChild(uploadDiv);
         
         this.uploads.set(uploadId, {
@@ -416,6 +436,7 @@ class ChunkedUploadUI {
         
         progressBar.style.width = `${progressData.progress}%`;
         progressBar.textContent = `${Math.round(progressData.progress)}%`;
+        progressBar.setAttribute('aria-valuenow', String(Math.round(progressData.progress)));
         
         statusDiv.textContent = `Uploading chunk ${progressData.uploadedChunks}/${progressData.totalChunks}...`;
     }

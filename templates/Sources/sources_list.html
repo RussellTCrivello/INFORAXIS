@@ -4,6 +4,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Sources Management') }}{% endblock %}
+{% block page_type %}sources-list{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/sources-list.css') }}" rel="stylesheet">

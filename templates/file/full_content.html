@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ file[1] }} - {{ _('Reader') }}{% endblock %}
+{% block page_type %}full-content{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/full-content.css') }}" rel="stylesheet">

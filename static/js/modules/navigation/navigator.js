@@ -13,10 +13,20 @@ import { loadItemView, loadItemFilesWithFilters } from '../views/item-view.js';
 import { updateSidebarActiveState } from '../ui/sidebar.js';
 import { initEventDelegation } from './event-delegation.js';
 
+let navigationInitialized = false;
+
 /**
  * Initialize navigation
  */
 export function initNavigation() {
+    if (navigationInitialized) {
+        console.debug('Navigation already initialized, skipping duplicate root load');
+        return;
+    }
+    navigationInitialized = true;
+    if (typeof window !== 'undefined') {
+        window.__fmsNavigationInitialized = true;
+    }
     console.log('Initializing navigation...');
     
     // Initialize global event delegation first

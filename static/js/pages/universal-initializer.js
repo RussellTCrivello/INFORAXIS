@@ -39,9 +39,13 @@ const pageDetectors = [
         if (path === '/upload') return 'upload';
         if (path === '/' || path === '/dashboard') return 'dashboard';
         if (path.includes('/dashboard/comprehensive')) return 'comprehensive-dashboard';
+        if (path.includes('/dashboard/charts')) return 'charts-dashboard';
         if (path.includes('/notifications')) return 'notifications';
+        if (path.includes('/settings')) return 'settings';
+        if (path.includes('/analyst')) return 'analyst-categorization';
         if (path.includes('/import') || path.includes('/export')) return 'import-export';
         if (path.includes('/analysis/batch')) return 'analysis-batch';
+        if (path.includes('/analysis/classification') || path.includes('/file-classification')) return 'file-classification';
         if (path.includes('/email-words')) return 'email-words';
         if (path.includes('/archives')) return 'archives';
         if (path.includes('/analytics/path-analysis') || path.includes('/analysis/path')) return 'path-analysis';
@@ -56,6 +60,7 @@ const pageHandlers = {
     'file-detail': () => import('./file-detail-page.js'),
     'keywords-list': () => import('./keywords-list-page.js'),
     'keyword-detail': () => import('./keyword-detail-page.js'),
+    'categories-list': () => import('./categories-list-page.js'),
     'category-words': () => import('./category-words-page.js'),
     'words-list': () => import('./words-list-page.js'),
     'word-detail': () => import('./word-detail-page.js'),
@@ -72,7 +77,12 @@ const pageHandlers = {
     'upload': () => import('./upload-page.js'),
     'dashboard': () => import('./dashboard-page.js'),
     'comprehensive-dashboard': () => import('./comprehensive-dashboard-page.js'),
+    'charts-dashboard': () => import('./charts-dashboard-page.js'),
+    'file-classification': () => import('./file-classification-page.js'),
+    'analyst-categorization': () => import('./analyst-categorization-page.js'),
     'notifications': () => import('./notifications-page.js'),
+    'settings': () => Promise.resolve({ default: () => {} }),
+    'full-content': () => import('./full-content-page.js'),
     'import-export': () => import('./import-export-page.js'),
     'analysis-batch': () => import('./analysis-batch-page.js'),
     'email-words': () => import('./email-words-page.js'),
@@ -89,6 +99,7 @@ const pageScriptFiles = {
     'file-detail': 'file-detail-page.js',
     'keywords-list': 'keywords-list-page.js',
     'keyword-detail': 'keyword-detail-page.js',
+    'categories-list': 'categories-list-page.js',
     'category-words': 'category-words-page.js',
     'words-list': 'words-list-page.js',
     'word-detail': 'word-detail-page.js',
@@ -105,7 +116,12 @@ const pageScriptFiles = {
     'upload': 'upload-page.js',
     'dashboard': 'dashboard-page.js',
     'comprehensive-dashboard': 'comprehensive-dashboard-page.js',
+    'charts-dashboard': 'charts-dashboard-page.js',
+    'file-classification': 'file-classification-page.js',
+    'analyst-categorization': 'analyst-categorization-page.js',
     'notifications': 'notifications-page.js',
+    'settings': '',
+    'full-content': 'full-content-page.js',
     'import-export': 'import-export-page.js',
     'analysis-batch': 'analysis-batch-page.js',
     'email-words': 'email-words-page.js',

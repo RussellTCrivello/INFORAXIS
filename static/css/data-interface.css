@@ -1505,6 +1505,118 @@ table.ia-table tbody tr[tabindex="0"]:focus-visible {
     color: var(--text-light, #64748b);
 }
 
+/* Shared custom controls emitted by legacy templates after the old page CSS was
+   removed. These mirror Bootstrap button density without requiring template
+   rewrites and keep analogous actions visually consistent across dashboards,
+   path analysis, advanced search and file classification. */
+.tab-button,
+.analysis-tab,
+.btn-control,
+.btn-filter,
+.search-btn,
+.tree-controls-btn,
+.search-help-toggle,
+.btn-clear-search,
+.btn-clear-search-main,
+.btn-clear-all-filters,
+.btn-lucky,
+.sub-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.38rem;
+    min-height: var(--control-height-sm, 2rem);
+    padding: 0.36rem 0.66rem;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: var(--radius-sm, 0.5rem);
+    background: var(--bg-white, #fff);
+    color: var(--text-light, #64748b);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-decoration: none;
+}
+
+.tab-button:hover,
+.tab-button:focus-visible,
+.tab-button.active,
+.tab-button[aria-selected="true"],
+.analysis-tab:hover,
+.analysis-tab:focus-visible,
+.analysis-tab.active,
+.btn-control:hover,
+.btn-control:focus-visible,
+.btn-control.active,
+.btn-filter:hover,
+.btn-filter:focus-visible,
+.search-btn:hover,
+.search-btn:focus-visible,
+.tree-controls-btn:hover,
+.tree-controls-btn:focus-visible,
+.search-help-toggle:hover,
+.search-help-toggle:focus-visible,
+.btn-lucky:hover,
+.btn-lucky:focus-visible,
+.sub-tab-btn:hover,
+.sub-tab-btn:focus-visible,
+.sub-tab-btn.active {
+    border-color: color-mix(in srgb, var(--primary-color, #4f46e5) 34%, var(--border-color, #e2e8f0));
+    background: color-mix(in srgb, var(--primary-color, #4f46e5) 7%, var(--bg-white, #fff));
+    color: var(--primary-color, #4f46e5);
+    outline: none;
+}
+
+.btn-filter-primary,
+.search-btn,
+.btn-search-main {
+    border-color: var(--primary-color, #4f46e5);
+    background: var(--primary-color, #4f46e5);
+    color: #fff;
+}
+
+.btn-filter-primary:hover,
+.search-btn:hover,
+.btn-search-main:hover {
+    background: color-mix(in srgb, var(--primary-color, #4f46e5) 88%, #000);
+    color: #fff;
+}
+
+.btn-filter-secondary,
+.btn-clear-all-filters,
+.btn-clear-search,
+.btn-clear-search-main {
+    background: var(--bg-section, #f8fafc);
+}
+
+.btn-clear-search,
+.btn-clear-search-main {
+    width: 2rem;
+    padding: 0;
+    border-radius: var(--radius-pill, 999px);
+}
+
+.btn-clear-all-filters:hover,
+.btn-clear-search:hover,
+.btn-clear-search-main:hover {
+    border-color: color-mix(in srgb, var(--danger-color, #ef4444) 34%, var(--border-color, #e2e8f0));
+    background: color-mix(in srgb, var(--danger-color, #ef4444) 7%, var(--bg-white, #fff));
+    color: var(--danger-color, #ef4444);
+}
+
+.tab-navigation,
+.dashboard-navigation,
+.analysis-view-navigation,
+.search-view-navigation,
+.notifications-tabs,
+.analysis-tabs,
+.settings-tabs,
+.sub-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
 /* Command/search palette. */
 .ia-command-trigger {
     display: inline-flex;
@@ -1543,7 +1655,7 @@ table.ia-table tbody tr[tabindex="0"]:focus-visible {
 .ia-command-palette {
     position: fixed;
     inset: 0;
-    z-index: 1090;
+    z-index: 1110;
 }
 
 .ia-command-palette[hidden] { display: none !important; }
@@ -1557,7 +1669,10 @@ table.ia-table tbody tr[tabindex="0"]:focus-visible {
 
 .ia-command-dialog {
     position: relative;
+    display: flex;
+    flex-direction: column;
     width: min(680px, calc(100vw - 1.5rem));
+    max-height: calc(100dvh - 2rem);
     margin: min(12vh, 6rem) auto 0;
     border: 1px solid color-mix(in srgb, var(--border-color, #e2e8f0) 85%, transparent);
     border-radius: 1rem;
@@ -1574,6 +1689,7 @@ table.ia-table tbody tr[tabindex="0"]:focus-visible {
 
 .ia-command-search-row {
     display: grid;
+    flex: 0 0 auto;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.7rem;
@@ -1597,9 +1713,12 @@ table.ia-table tbody tr[tabindex="0"]:focus-visible {
 }
 
 .ia-command-results {
+    flex: 1 1 auto;
     max-height: min(56vh, 30rem);
+    min-height: 0;
     overflow: auto;
     padding: 0.42rem;
+    overscroll-behavior: contain;
 }
 
 .ia-command-item {
@@ -1661,6 +1780,7 @@ table.ia-table tbody tr[tabindex="0"]:focus-visible {
 
 .ia-command-footer {
     display: flex;
+    flex: 0 0 auto;
     flex-wrap: wrap;
     gap: 0.55rem;
     padding: 0.58rem 0.9rem;
@@ -1670,6 +1790,110 @@ table.ia-table tbody tr[tabindex="0"]:focus-visible {
 }
 
 body.ia-command-open {
+    overflow: hidden;
+}
+
+/* Custom overlay/dialog contract used by path analysis and notifications.
+   Bootstrap modals keep their own styling; this scopes only the project-owned
+   overlay shells that were previously unstyled after the legacy CSS cleanup. */
+.modal-overlay,
+.message-detail-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(2, 6, 23, 0.42);
+    backdrop-filter: blur(3px);
+}
+
+.modal-overlay.active,
+.modal-overlay.show,
+.message-detail-modal.active,
+.message-detail-modal.show {
+    display: flex;
+}
+
+.modal-overlay .modal-container,
+.message-detail-content {
+    display: flex;
+    flex-direction: column;
+    width: min(1040px, calc(100vw - 2rem));
+    max-height: min(86dvh, 54rem);
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: var(--radius-xl, 1.1rem);
+    background: var(--bg-white, #fff);
+    color: var(--text-dark, #1e293b);
+    box-shadow: var(--shadow-lg, 0 24px 70px rgba(15, 23, 42, 0.22));
+}
+
+.modal-overlay .modal-header,
+.message-detail-header,
+.message-detail-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.82rem 0.95rem;
+    border-bottom: 1px solid var(--border-light, #f1f5f9);
+}
+
+.message-detail-actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--border-light, #f1f5f9);
+    border-bottom: 0;
+}
+
+.modal-overlay .modal-title,
+.message-detail-header h3,
+.message-detail-section h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    min-width: 0;
+    color: var(--text-heading, #0f172a);
+    font-size: 1rem;
+    font-weight: 780;
+}
+
+.modal-overlay .modal-body,
+.message-detail-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.95rem;
+    overscroll-behavior: contain;
+}
+
+.modal-close-btn,
+.message-detail-close {
+    display: inline-grid;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    place-items: center;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: var(--radius-sm, 0.5rem);
+    background: var(--bg-white, #fff);
+    color: var(--text-light, #64748b);
+}
+
+.modal-close-btn:hover,
+.modal-close-btn:focus-visible,
+.message-detail-close:hover,
+.message-detail-close:focus-visible {
+    border-color: color-mix(in srgb, var(--danger-color, #ef4444) 34%, var(--border-color, #e2e8f0));
+    color: var(--danger-color, #ef4444);
+    outline: none;
+}
+
+body.ia-modal-open {
     overflow: hidden;
 }
 
@@ -1879,7 +2103,13 @@ body.ia-command-open {
 .results-container,
 .similar-groups-container,
 .file-reports-grid,
-.notifications-list {
+.notifications-list,
+.messages-list,
+.analyst-table-wrap,
+.analyst-category-list,
+.analyst-audit-list,
+.storage-details-panel,
+.files-grid-scroll {
     min-height: 0;
     overflow: auto;
 }
@@ -1887,7 +2117,13 @@ body.ia-command-open {
 .results-container,
 .similar-groups-container,
 .file-reports-grid,
-.notifications-list {
+.notifications-list,
+.messages-list,
+.analyst-table-wrap,
+.analyst-category-list,
+.analyst-audit-list,
+.storage-details-panel,
+.files-grid-scroll {
     max-height: var(--ia-data-scroll-max-block);
     overscroll-behavior: contain;
 }

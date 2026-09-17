@@ -6,9 +6,11 @@
 // Global state
 let currentMethod = 'rule_based';
 let isLoading = false;
+let initialized = false;
 
-// Initialize page
-document.addEventListener('DOMContentLoaded', function() {
+function initializeFileClassificationPage() {
+    if (initialized) return;
+    initialized = true;
     console.log('File classification page loaded');
     
     // Initialize tab switching
@@ -16,12 +18,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize method selector
     initializeMethodSelector();
-    
-    // Make functions available globally for onclick handlers
-    window.analyzeFolder = analyzeFolder;
-    window.analyzeFile = analyzeFile;
-    window.analyzeDatabase = analyzeDatabase;
-});
+}
+
+// Initialize page
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeFileClassificationPage, { once: true });
+} else {
+    initializeFileClassificationPage();
+}
+
+// Make functions available globally for onclick handlers immediately.
+window.analyzeFolder = analyzeFolder;
+window.analyzeFile = analyzeFile;
+window.analyzeDatabase = analyzeDatabase;
 
 // Tab switching
 function initializeTabs() {
@@ -228,13 +237,11 @@ async function analyzeFile() {
     resultsDiv.style.display = 'none';
     
     try {
-        // Get file details and classification
-        const [fileResponse, classificationResponse] = await Promise.all([
-            fetch(`/file/${fileId}`),
-            fetch(`/api/analytics/path/classifications?path=${encodeURIComponent(fileId)}&file_id=${fileId}`)
-        ]);
-        
-        const fileData = await fileResponse.json().catch(() => null);
+        // The classification endpoint carries the data this panel renders. Avoid
+        // an extra /file/{id} request here because that route returns the full
+        // detail page in normal navigation and added synchronous work with no UI use.
+        const classificationResponse = await fetch(`/api/analytics/path/classifications?path=${encodeURIComponent(fileId)}&file_id=${fileId}`);
+        if (!classificationResponse.ok) throw new Error(`HTTP ${classificationResponse.status}`);
         const classificationData = await classificationResponse.json();
         
         if (classificationData.success) {
@@ -406,5 +413,9 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+export default function init() {
+    initializeFileClassificationPage();
 }
 

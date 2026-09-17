@@ -26,6 +26,7 @@ const notificationsPage = {
 
 // Track if already initialized to prevent double initialization
 let initialized = false;
+let badgeRefreshInterval = null;
 
 // Initialize page function
 function initializeNotificationsPage() {
@@ -48,7 +49,9 @@ function initializeNotificationsPage() {
     
     notificationsPage.loadTabData('all');
     notificationsPage.updateNotificationBadge();
-    setInterval(() => notificationsPage.updateNotificationBadge(), 30000);
+    if (!badgeRefreshInterval) {
+        badgeRefreshInterval = setInterval(() => notificationsPage.updateNotificationBadge(), 30000);
+    }
 }
 
 // Export default init function for universal-initializer.js
@@ -121,24 +124,23 @@ window.scanForNotifications = async function() {
                 alert(message);
             }
             
-            // Refresh notifications after a short delay to allow backend to finish
+            // Refresh only the relevant tab after the backend finishes. The old
+            // flow loaded all three tabs and then switchTab loaded one of them a
+            // second time, which made scans feel stalled on large notification sets.
             setTimeout(() => {
-                // Force reload all tabs to ensure notifications are visible
-                notificationsPage.loadTabData('all');
-                notificationsPage.loadTabData('duplicates');
-                notificationsPage.loadTabData('future');
                 notificationsPage.updateNotificationBadge();
-                
-                // Switch to appropriate tab based on results
-                if (data.duplicates_found > 0) {
-                    notificationsPage.switchTab('duplicates');
-                } else if (data.future_dates_found > 0) {
-                    notificationsPage.switchTab('future');
+                const targetTab = data.duplicates_found > 0
+                    ? 'duplicates'
+                    : data.future_dates_found > 0
+                        ? 'future'
+                        : notificationsPage.currentTab;
+
+                if (targetTab !== notificationsPage.currentTab) {
+                    notificationsPage.switchTab(targetTab);
                 } else {
-                    // If no specific results, stay on current tab but refresh
-                    notificationsPage.loadTabData(notificationsPage.currentTab);
+                    notificationsPage.loadTabData(targetTab);
                 }
-            }, 1000); // Increased delay to ensure backend has finished processing
+            }, 750);
         } else {
             throw new Error(data.error || data.message || 'Scan failed');
         }
@@ -827,4 +829,9 @@ document.addEventListener('keydown', function(e) {
         notificationsPage.closeMessageDetail();
     }
 });
+
+// Direct module fallback: notifications.html includes this module explicitly,
+// and the universal initializer skips explicit scripts to prevent duplicate
+// work. Start the guarded initializer here as well.
+init();
 
