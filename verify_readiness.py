@@ -533,6 +533,72 @@ def _():
     return f"limiter enabled with {len(limits)} default limit(s)"
 
 
+# ---------------------------------------------------------------------------
+# Compute control (gateway compute-control layer)
+# ---------------------------------------------------------------------------
+@check("compute", "Compute gateway selects a device honestly")
+def _():
+    from core.compute import ExecutionMode, WorkloadKind, get_compute_gateway
+
+    gateway = get_compute_gateway()
+    report = gateway.mode_report()
+    placement = {k.value: gateway.select_device(k).as_dict() for k in WorkloadKind}
+    # A device may only be selected when the probe found a usable backend.
+    for kind, decision in placement.items():
+        if decision["device"] != "cpu":
+            assert decision["backend"], f"{kind} placed on a device with no backend"
+    usable = report["usable_accelerators"]
+    return (f"mode={report['requested_mode']} effective={report['effective_mode']} "
+            f"accelerators={usable or 'none (CPU only is what this host provides)'}")
+
+
+@check("compute", "Accelerator claims match measured hardware")
+def _():
+    from core.compute import detect_hardware
+
+    inventory = detect_hardware()
+    claimed = [i.kind for i in inventory.available_accelerators]
+    for kind, info in inventory.accelerators.items():
+        if info.available:
+            assert info.backend, f"{kind} claims availability without a runtime"
+        else:
+            assert info.detail, f"{kind} unavailable without an explanation"
+    return (f"cpu={inventory.cpu.name}; accelerators reported usable: "
+            f"{claimed or 'none'}")
+
+
+@check("compute", "Back-pressure refuses work instead of growing without bound",
+       critical=False)
+def _():
+    from core.compute import BackpressureError, ComputeGateway, HardwareInventory
+
+    inventory = HardwareInventory(probe=False)
+    inventory.cpu.compute_units = 2
+    gateway = ComputeGateway(inventory=inventory, max_concurrency=1, queue_depth=1,
+                             admission_timeout_s=0.05)
+    refused = False
+    with gateway.admit():
+        try:
+            with gateway.admit():
+                pass
+        except BackpressureError:
+            refused = True
+    assert refused, "queue saturation did not produce back-pressure"
+    return f"back-pressure engaged; peak queue depth {gateway.stats.peak_queue_depth}"
+
+
+@check("compute", "Compute is isolated from gateway/network cores", critical=False)
+def _():
+    from core.compute import ComputeGateway, HardwareInventory
+
+    inventory = HardwareInventory(probe=False)
+    inventory.cpu.compute_units = 8
+    gateway = ComputeGateway(inventory=inventory)
+    report = gateway.apply_isolation()
+    return (f"reserved {gateway.reserved_gateway_cores} core(s) for the gateway; "
+            f"affinity={report['affinity']} nice={report['nice']}")
+
+
 def main(argv=None) -> int:
     import argparse
 

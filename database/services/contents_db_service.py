@@ -274,6 +274,32 @@ class ContentDBService:
             date_creation = date.today()
         return self.sides_repo.insert_info_sides(name, importance, date_creation)
 
+    def get_or_create_source(self, name: str, importance: float = 1.0,
+                             country: str = "", job: str = "") -> Optional[int]:
+        """Return the id of ``name``, creating the source if it is missing.
+
+        Uses the repository's ``INSERT ... ON CONFLICT (name) DO UPDATE ...
+        RETURNING id`` upsert, so concurrent workers storing their first file
+        of an ingestion cannot race each other into
+        ``duplicate key value violates unique constraint "sources_name_key"``
+        - the previous read-then-insert pattern made every worker but the
+        winner fail, which cost the file its real source (the code fell back to
+        ``__FALLBACK_SOURCE__``).
+        """
+        row = self.sources_repo.get_or_create_source(
+            name, job or "", importance, country or "", date.today()
+        )
+        return _as_id(row)
+
+    def get_or_create_side(self, name: str, importance: float = 1.0) -> Optional[int]:
+        """Return the id of ``name``, creating the side if it is missing.
+
+        Concurrency-safe counterpart of :meth:`create_side` (see
+        :meth:`get_or_create_source`).
+        """
+        row = self.sides_repo.get_or_create_side(name, importance, date.today())
+        return _as_id(row)
+
     # ============================================================
     # HASH OPERATIONS
     # ============================================================

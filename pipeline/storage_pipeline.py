@@ -167,9 +167,23 @@ class StoragePipeline:
         # NOTE: DatabaseHub may not exist - it's optional for storage functionality
         # Storage works with db_service alone, db_hub is only needed for advanced features
         # CRITICAL FIX: Use shared DatabaseHub instance to prevent connection pool exhaustion
+        db_hub_owned = db_hub is not None
         if db_hub is None:
             # Use singleton pattern to prevent multiple connection pools
             with StoragePipeline._shared_db_hub_lock:
+                if StoragePipeline._shared_db_hub is not None:
+                    # Re-check readiness: the shared hub is dropped when the
+                    # database configuration changes (settings/config.py
+                    # invalidate_database_connections) or when a caller closed
+                    # it.  Rebuilding it here self-heals the pipeline instead
+                    # of leaving every later store without a hub - the previous
+                    # behaviour that silently degraded duplicate detection and
+                    # triggered per-file "connection unhealthy" handling.
+                    try:
+                        if not StoragePipeline._shared_db_hub.db._pool:
+                            StoragePipeline._shared_db_hub = None
+                    except Exception:
+                        StoragePipeline._shared_db_hub = None
                 if StoragePipeline._shared_db_hub is None:
                     try:
                         from database import DatabaseHub
@@ -188,6 +202,11 @@ class StoragePipeline:
                 db_hub = StoragePipeline._shared_db_hub
         
         self.db_hub = db_hub
+        #: True when this pipeline created its own hub and may therefore close
+        #: it.  The class-shared hub is owned by the pipeline class: a nested
+        #: reader that closes it would break every other reader in the process
+        #: (the "Database connection unhealthy, attempting reconnect..." loop).
+        self.db_hub_owned = db_hub_owned
         
         # Store source and side names (optional in constructor, but mandatory in _store_file_sync)
         # No defaults - source and side must be explicitly provided
@@ -202,6 +221,13 @@ class StoragePipeline:
         #: lets the reader classify a resolved duplicate as "nothing new was
         #: stored" instead of counting it as a fresh success.  Bounded by
         #: :data:`_OUTCOME_KEEP`.
+        #: name -> id caches for source/side resolution (see _resolve_source_id).
+        #: Small by construction: a run uses a handful of names, and each entry
+        #: is one integer.  Invalidated on reconnect/reconfiguration.
+        self._source_id_cache: Dict[str, int] = {}
+        self._side_id_cache: Dict[str, int] = {}
+        self._entity_lock = threading.Lock()
+
         self._store_outcomes: "OrderedDict[str, str]" = OrderedDict()
         self._outcome_lock = threading.Lock()
 
@@ -249,6 +275,97 @@ class StoragePipeline:
         s['consistency_issues'] = issues
         return s
     
+    # ------------------------------------------------------------------
+    # Source / side resolution (cached, keyed)
+    # ------------------------------------------------------------------
+    def _resolve_source_id(self, name: str) -> Optional[int]:
+        """Return the id for ``name``, creating it if needed.
+
+        Cached per name: a run stores thousands of files under one source, and
+        the previous implementation re-read the entire ``sources`` table for
+        each of them.  On a cache miss the repository's ``ON CONFLICT`` upsert
+        resolves-or-creates in one statement, so concurrent workers cannot
+        race (which used to cost the file its real source).
+        """
+        with self._entity_lock:
+            cached = self._source_id_cache.get(name)
+        if cached is not None:
+            return cached
+        try:
+            source_id = self.db_service.get_or_create_source(name=name, importance=1.0)
+        except Exception as exc:
+            logger.error(f"Failed to resolve source '{name}': {exc}")
+            source_id = None
+        if source_id:
+            with self._entity_lock:
+                self._source_id_cache[name] = source_id
+            logger.debug(f"Resolved source: {name} (ID: {source_id})")
+            return source_id
+
+        # Fallback chain, preserved from the previous implementation: a known
+        # fallback source, then whatever source exists, so a file is never lost
+        # because its declared source could not be created.
+        try:
+            fallback_name = "__FALLBACK_SOURCE__"
+            fallback_id = self.db_service.get_or_create_source(
+                name=fallback_name, importance=0.5
+            )
+            if fallback_id:
+                with self._entity_lock:
+                    self._source_id_cache[fallback_name] = fallback_id
+                logger.warning(f"Using fallback source '{fallback_name}' (ID: {fallback_id})")
+                return fallback_id
+        except Exception as fallback_error:
+            logger.error(f"Failed to create fallback source: {fallback_error}")
+        try:
+            existing = self.db_service.get_all_sources()
+            if existing:
+                logger.warning(f"Using first available source (ID: {existing[0][0]}) as last resort")
+                return existing[0][0]
+        except Exception as exc:
+            logger.debug(f"Could not list sources: {exc}")
+        logger.error("No sources available and cannot create one - file cannot be stored")
+        return None
+
+    def _resolve_side_id(self, name: str) -> Optional[int]:
+        """Return the id for ``name``, creating it if needed (see above)."""
+        with self._entity_lock:
+            cached = self._side_id_cache.get(name)
+        if cached is not None:
+            return cached
+        try:
+            side_id = self.db_service.get_or_create_side(name=name, importance=1.0)
+        except Exception as exc:
+            logger.error(f"Failed to resolve side '{name}': {exc}")
+            side_id = None
+        if side_id:
+            with self._entity_lock:
+                self._side_id_cache[name] = side_id
+            logger.debug(f"Resolved side: {name} (ID: {side_id})")
+            return side_id
+
+        try:
+            fallback_name = "__FALLBACK_SIDE__"
+            fallback_id = self.db_service.get_or_create_side(
+                name=fallback_name, importance=0.5
+            )
+            if fallback_id:
+                with self._entity_lock:
+                    self._side_id_cache[fallback_name] = fallback_id
+                logger.warning(f"Using fallback side '{fallback_name}' (ID: {fallback_id})")
+                return fallback_id
+        except Exception as fallback_error:
+            logger.error(f"Failed to create fallback side: {fallback_error}")
+        try:
+            existing = self.db_service.get_all_sides()
+            if existing:
+                logger.warning(f"Using first available side (ID: {existing[0][0]}) as last resort")
+                return existing[0][0]
+        except Exception as exc:
+            logger.debug(f"Could not list sides: {exc}")
+        logger.error("No sides available and cannot create one - file cannot be stored")
+        return None
+
     def _store_file_sync(
         self,
         file_info: Dict[str, Any],
@@ -291,114 +408,47 @@ class StoragePipeline:
             logger.warning(f"Using fallback side name '{effective_side_name}' to ensure file is stored")
         
         # Get or create source and side using ContentDBService
-        # First, try to get existing sources/sides
-        all_sources = self.db_service.get_all_sources()
-        source_id = None
-        for sid, sname in all_sources:
-            if sname == effective_source_name:
-                source_id = sid
-                break
-        
-        # Create source if it doesn't exist
+        #
+        # Resolution is cached per name and done with a single keyed statement.
+        # The previous code called ``get_all_sources()`` (an unbounded
+        # ``SELECT`` over the whole table) and then linearly searched it - on
+        # *every stored file*.  Cost therefore grew with database cardinality
+        # times file count: with 100k sources and 10M files that is a terabyte
+        # of row transfer and a python-level scan per file.  The names used by a
+        # run are stable, so one lookup per name is enough, and the upsert is
+        # already concurrency-safe.
+        source_id = self._resolve_source_id(effective_source_name)
         if source_id is None:
-            try:
-                source_id = self.db_service.create_source(
-                    name=effective_source_name,
-                    country="",
-                    job="",
-                    importance=1.0
-                )
-                logger.info(f"Created new source: {effective_source_name} (ID: {source_id})")
-            except Exception as e:
-                logger.error(f"Failed to create source '{effective_source_name}': {e}")
-                # CRITICAL: Don't return None - try to use a fallback source or create with retry
-                # Attempt to get/create a fallback source
-                try:
-                    fallback_source_name = "__FALLBACK_SOURCE__"
-                    all_sources = self.db_service.get_all_sources()
-                    for sid, sname in all_sources:
-                        if sname == fallback_source_name:
-                            source_id = sid
-                            logger.warning(f"Using fallback source '{fallback_source_name}' (ID: {source_id})")
-                            break
-                    if source_id is None:
-                        source_id = self.db_service.create_source(
-                            name=fallback_source_name,
-                            country="",
-                            job="",
-                            importance=0.5
-                        )
-                        logger.warning(f"Created fallback source '{fallback_source_name}' (ID: {source_id})")
-                except Exception as fallback_error:
-                    logger.error(f"Failed to create fallback source: {fallback_error}")
-                    # Last resort: use first available source or fail gracefully
-                    all_sources = self.db_service.get_all_sources()
-                    if all_sources:
-                        source_id = all_sources[0][0]
-                        logger.warning(f"Using first available source (ID: {source_id}) as last resort")
-                    else:
-                        logger.error("No sources available and cannot create one - file cannot be stored")
-                        self.stats['files_failed'] += 1
-                        return None
-        
-        # Get or create side
-        all_sides = self.db_service.get_all_sides()
-        side_id = None
-        for sid, sname in all_sides:
-            if sname == effective_side_name:
-                side_id = sid
-                break
-        
-        # Create side if it doesn't exist
+            self.stats['files_failed'] += 1
+            return None
+
+        side_id = self._resolve_side_id(effective_side_name)
         if side_id is None:
-            try:
-                side_id = self.db_service.create_side(
-                    name=effective_side_name,
-                    importance=1.0
-                )
-                logger.info(f"Created new side: {effective_side_name} (ID: {side_id})")
-            except Exception as e:
-                logger.error(f"Failed to create side '{effective_side_name}': {e}")
-                # CRITICAL: Don't return None - try to use a fallback side or create with retry
-                # Attempt to get/create a fallback side
-                try:
-                    fallback_side_name = "__FALLBACK_SIDE__"
-                    all_sides = self.db_service.get_all_sides()
-                    for sid, sname in all_sides:
-                        if sname == fallback_side_name:
-                            side_id = sid
-                            logger.warning(f"Using fallback side '{fallback_side_name}' (ID: {side_id})")
-                            break
-                    if side_id is None:
-                        side_id = self.db_service.create_side(
-                            name=fallback_side_name,
-                            importance=0.5
-                        )
-                        logger.warning(f"Created fallback side '{fallback_side_name}' (ID: {side_id})")
-                except Exception as fallback_error:
-                    logger.error(f"Failed to create fallback side: {fallback_error}")
-                    # Last resort: use first available side or fail gracefully
-                    all_sides = self.db_service.get_all_sides()
-                    if all_sides:
-                        side_id = all_sides[0][0]
-                        logger.warning(f"Using first available side (ID: {side_id}) as last resort")
-                    else:
-                        logger.error("No sides available and cannot create one - file cannot be stored")
-                        self.stats['files_failed'] += 1
-                        return None
+            self.stats['files_failed'] += 1
+            return None
+
         max_retries = 2
         retry_count = 0
         
         while retry_count <= max_retries:
             try:
-                # Check database connection health (only if db_hub is available)
-                # CRITICAL: Don't fail if connection check fails - retry will handle it
+                # Reconnect only when the database link is genuinely gone.
+                #
+                # The previous check treated *load* as failure: when the pool
+                # was busy (or the pool object had already been closed by
+                # another component) it declared the database unhealthy and
+                # called ``_reconnect()``, which tore down and rebuilt the pool
+                # from the callback of a store transaction.  With several
+                # workers doing this repeatedly the rebuilds multiplied
+                # connections until PostgreSQL answered
+                # "FATAL: sorry, too many clients already".  ``rebuild_pool``
+                # keeps a usable pool untouched, is rate-limited across
+                # threads, and is verified by a health check, so a reconnect
+                # can no longer be triggered by a busy pool.
                 if self.db_hub:
-                    if not self.db_hub._check_connection_health():
-                        logger.warning("Database connection unhealthy, attempting reconnect...")
-                        if not self.db_hub._reconnect():
+                    try:
+                        if not self.db_hub.db.rebuild_pool():
                             logger.error("Failed to reconnect to database - will retry in outer loop")
-                            # Don't return None here - let retry logic handle it
                             if retry_count >= max_retries:
                                 # Only fail after all retries exhausted
                                 logger.error("All retries exhausted - cannot store file")
@@ -407,6 +457,8 @@ class StoragePipeline:
                             retry_count += 1
                             time.sleep(1.0 * retry_count)
                             continue
+                    except Exception as hub_err:
+                        logger.debug(f"Connection health check unavailable: {hub_err}")
                 
                 # Extract metadata and content (with validation)
                 metadata = result.get('Metadata', {})

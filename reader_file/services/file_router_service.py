@@ -547,6 +547,12 @@ class FileRouterService:
                         duplicates_count = storage_stats.get('duplicates', 0)
                         failed_count = storage_stats.get('failed', 0)
                         
+                        # Report the real reason nothing new was stored.  When
+                        # every child turned out to be an already-stored
+                        # duplicate, storage is working exactly as intended;
+                        # the old wording blamed storage_source/storage_side
+                        # and sent the operator looking for a configuration
+                        # error that did not exist.
                         if stored_count > 0:
                             self.logger.info(
                                 f"✅ Stored {stored_count} extracted files to database during parallel processing "
@@ -556,6 +562,11 @@ class FileRouterService:
                             self.logger.warning(
                                 f"⚠ {failed_count} extracted files failed to store during parallel processing. "
                                 f"Check logs for details."
+                            )
+                        elif duplicates_count > 0:
+                            self.logger.info(
+                                f"✅ All {duplicates_count} extracted files were already stored in the database "
+                                f"(nothing new to store)."
                             )
                         else:
                             self.logger.warning(

@@ -6,6 +6,7 @@ from where it left off after power outages, device shutdowns, or other interrupt
 """
 
 import json
+import time
 import hashlib
 import threading
 from pathlib import Path
@@ -14,6 +15,9 @@ from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
+
+#: First line of a journal file: identifies the run it belongs to.
+JOURNAL_HEADER = "#inforaxis-journal-v1"
 
 
 class CheckpointManager:
@@ -53,6 +57,28 @@ class CheckpointManager:
         self._processed_files: Set[str] = set()
         self._processed_count = 0
         self._last_save_count = 0
+
+        # Incremental (append-only) persistence.
+        #
+        # Rewriting the full processed set on every save is O(n^2) I/O over a
+        # run: at a million files each save wrote a million identifiers, tens
+        # of thousands of times - hundreds of gigabytes of checkpoint traffic
+        # that grows as the run proceeds (measured as progressive slowdown).
+        # Identifiers are now appended to a journal; the snapshot file is only
+        # rewritten when the journal is compacted (bounded, amortised O(n)).
+        self.journal_file = self.checkpoint_file.with_suffix(
+            self.checkpoint_file.suffix + '.journal'
+        )
+        self._journal_handle = None
+        self._journal_pending = 0
+        self._journal_last_flush = 0.0
+        #: Flush the journal at least this often, so a crash (process kill)
+        #: costs at most this many seconds of re-processing rather than the
+        #: whole interval between saves.
+        self.journal_flush_interval = 5.0
+        #: Rewrite the snapshot (and clear the journal) once this many
+        #: identifiers have accumulated in it.
+        self.compact_after = 20000
         
         # Background thread for non-blocking checkpoint saves
         self._save_thread = None
@@ -95,10 +121,141 @@ class CheckpointManager:
         # Use hash for consistent length and to handle long paths
         return hashlib.sha256(identifier.encode('utf-8')).hexdigest()
     
+    # ------------------------------------------------------------------
+    # Incremental persistence
+    # ------------------------------------------------------------------
+    def _journal_header(self) -> str:
+        """Identity of the run a journal belongs to.
+
+        The journal is replayed on resume, so it must only ever be applied to
+        the same folder/source/side combination the snapshot is validated
+        against - otherwise a resume with different storage settings would skip
+        files that were never stored under the current source.
+        """
+        folder = str(self.folder_path).replace('\\', '/').lower()
+        return f"{JOURNAL_HEADER}|{folder}|{self.storage_source}|{self.storage_side}"
+
+    def _append_journal_locked(self, file_id: str) -> None:
+        """Append one identifier to the journal (caller holds ``self._lock``)."""
+        try:
+            if self._journal_handle is None:
+                self.checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
+                is_new = not self.journal_file.exists() or self.journal_file.stat().st_size == 0
+                self._journal_handle = open(self.journal_file, 'a', encoding='utf-8')
+                if is_new:
+                    self._journal_handle.write(self._journal_header() + "\n")
+            self._journal_handle.write(file_id + "\n")
+            self._journal_pending += 1
+            now = time.time()
+            if (self._journal_pending >= self.auto_save_interval
+                    or now - self._journal_last_flush >= self.journal_flush_interval):
+                self._journal_handle.flush()
+                self._journal_pending = 0
+                self._journal_last_flush = now
+        except Exception as exc:
+            logger.warning(f"Checkpoint journal write failed (non-critical): {exc}")
+            self._journal_handle = None
+
+    def _close_journal_locked(self) -> None:
+        """Flush and close the journal handle (caller holds ``self._lock``)."""
+        if self._journal_handle is not None:
+            try:
+                self._journal_handle.flush()
+                self._journal_handle.close()
+            except Exception:
+                pass
+            self._journal_handle = None
+            self._journal_pending = 0
+
+    def _replay_journal(self) -> int:
+        """Load identifiers appended since the snapshot; returns the new count.
+
+        This is what makes a crash survivable: the snapshot is only rewritten at
+        a compaction point (or at the end of a run), so a run that dies early
+        has *all* of its progress in the journal.  The journal is therefore
+        replayed whether or not a snapshot exists - the previous implementation
+        only reached this code when a snapshot was present, which meant a crash
+        before the first compaction silently discarded every processed
+        identifier and the "resumed" run redid the entire corpus.
+        """
+        loaded = 0
+        expected_header = self._journal_header()
+        try:
+            if not self.journal_file.exists():
+                with self._lock:
+                    return self._processed_count
+            with open(self.journal_file, 'r', encoding='utf-8') as fh:
+                for line in fh:
+                    value = line.strip()
+                    if not value:
+                        continue
+                    if value.startswith(JOURNAL_HEADER):
+                        if value != expected_header:
+                            logger.warning(
+                                "Checkpoint journal belongs to a different "
+                                "folder/source/side (%s); ignoring it", value
+                            )
+                            with self._lock:
+                                return self._processed_count
+                        continue
+                    if value not in self._processed_files:
+                        self._processed_files.add(value)
+                        loaded += 1
+        except Exception as exc:
+            logger.warning(f"Checkpoint journal could not be read ({exc}); "
+                           f"resuming from the last snapshot")
+            return self._processed_count
+        return self._processed_count + loaded
+
+    def _write_snapshot_locked(self) -> None:
+        """Write the full snapshot and truncate the journal (atomic)."""
+        processed_files_list = list(self._processed_files)
+        processed_count = self._processed_count
+        folder_path_str = str(self.folder_path)
+        source = self.storage_source
+        side = self.storage_side
+
+        data = {
+            'folder_path': folder_path_str,
+            'storage_source': source,
+            'storage_side': side,
+            'processed_files': processed_files_list,
+            'processed_count': processed_count,
+            'last_updated': datetime.now().isoformat(),
+            'version': '1.0'  # For future compatibility
+        }
+
+        self._close_journal_locked()
+        temp_file = self.checkpoint_file.with_suffix('.tmp')
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, separators=(',', ':'), ensure_ascii=False)
+        temp_file.replace(self.checkpoint_file)
+        # Drop the journal only after the snapshot that contains it is in place.
+        try:
+            if self.journal_file.exists():
+                self.journal_file.unlink()
+        except Exception as exc:
+            logger.debug(f"Could not clear checkpoint journal: {exc}")
+
+        self._last_save_count = processed_count
+        logger.debug(f"Checkpoint snapshot written: {processed_count} files processed")
+
     def _load_checkpoint(self) -> None:
-        """Load checkpoint state from file if it exists."""
+        """Load checkpoint state from file if it exists.
+
+        A missing snapshot is *not* a missing checkpoint: the journal may hold
+        everything processed so far (see :meth:`_replay_journal`).
+        """
         if not self.checkpoint_file.exists():
-            logger.info(f"No existing checkpoint found at {self.checkpoint_file}")
+            if self.journal_file.exists():
+                self._processed_count = self._replay_journal()
+                self._last_save_count = self._processed_count
+                logger.info(
+                    f"No snapshot at {self.checkpoint_file}; resumed "
+                    f"{self._processed_count} files from the journal"
+                )
+            else:
+                logger.info(f"No existing checkpoint found at {self.checkpoint_file}")
             return
         
         try:
@@ -147,6 +304,12 @@ class CheckpointManager:
                 f"Loaded checkpoint: {len(self._processed_files)} files already processed "
                 f"(from {data.get('last_updated', 'unknown')})"
             )
+
+            # Replay the journal written since the snapshot.  A journal that
+            # cannot be read is not fatal: the snapshot alone is still a
+            # consistent (if slightly older) resume point.
+            self._processed_count = self._replay_journal()
+            self._last_save_count = self._processed_count
             
         except json.JSONDecodeError as e:
             logger.error(f"Invalid checkpoint file format: {e}. Starting fresh.")
@@ -182,59 +345,44 @@ class CheckpointManager:
             self._save_event.set()
     
     def _save_checkpoint_sync(self) -> None:
-        """
-        Synchronously save checkpoint state to file.
-        
-        OPTIMIZED: Minimal I/O, compact JSON format, error handling.
+        """Persist checkpoint state.
+
+        Cheap by design: the identifiers processed since the last compaction are
+        already durable in the append-only journal, so the common case is just a
+        flush.  The full snapshot is rewritten only when the journal has grown
+        past ``compact_after`` (or when ``compact=True`` is requested, as
+        :meth:`finalize` does when the run ends).  Rewriting the whole set on
+        every save is what made checkpoint I/O quadratic in the number of
+        processed files.
         """
         try:
-            # Ensure checkpoint directory exists
-            self.checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Get current state (with minimal lock time)
             with self._lock:
-                processed_files_list = list(self._processed_files)
-                processed_count = self._processed_count
-                folder_path_str = str(self.folder_path)
-                source = self.storage_source
-                side = self.storage_side
-            
-            # OPTIMIZATION: Use compact JSON (no indentation) to reduce I/O
-            data = {
-                'folder_path': folder_path_str,
-                'storage_source': source,
-                'storage_side': side,
-                'processed_files': processed_files_list,
-                'processed_count': processed_count,
-                'last_updated': datetime.now().isoformat(),
-                'version': '1.0'  # For future compatibility
-            }
-            
-            # Write to temporary file first, then rename (atomic operation)
-            # OPTIMIZATION: Use compact JSON format (no indent) for faster I/O
-            temp_file = self.checkpoint_file.with_suffix('.tmp')
-            try:
-                with open(temp_file, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, separators=(',', ':'), ensure_ascii=False)  # Compact format
-                
-                # Atomic rename
-                temp_file.replace(self.checkpoint_file)
-                
-                # Update last save count (with lock)
-                with self._lock:
-                    self._last_save_count = processed_count
-                
-                logger.debug(f"Checkpoint saved: {processed_count} files processed")
-            except IOError as io_err:
-                # I/O errors are non-critical - don't block processing
-                logger.warning(f"Checkpoint I/O error (non-critical): {io_err}")
-            except Exception as save_err:
-                logger.warning(f"Checkpoint save error (non-critical): {save_err}")
-            
+                pending = len(self._processed_files) - self._last_save_count
+                if pending >= 0 and self._processed_count >= self.compact_after \
+                        and self._journal_pending == 0 and pending > 0:
+                    # Journal has reached a compaction point: fold it into the
+                    # snapshot once.
+                    self._write_snapshot_locked()
+                    logger.debug(f"Checkpoint compacted: {self._processed_count} files processed")
+                    return
+                self._close_journal_locked()
+                self._last_save_count = self._processed_count
+                logger.debug(f"Checkpoint saved: {self._processed_count} files processed "
+                             f"(journal)")
         except Exception as e:
             # Don't let checkpoint errors interfere with processing
             logger.warning(f"Checkpoint save failed (non-critical): {e}")
-    
+
+    def compact(self) -> None:
+        """Fold the journal into a fresh snapshot (used at the end of a run)."""
+        try:
+            with self._lock:
+                if not self._processed_files:
+                    return
+                self._write_snapshot_locked()
+        except Exception as e:
+            logger.warning(f"Checkpoint compaction failed (non-critical): {e}")
+
     def _background_save_worker(self) -> None:
         """Background thread worker for non-blocking checkpoint saves."""
         while not self._shutdown:
@@ -279,13 +427,18 @@ class CheckpointManager:
             if file_id not in self._processed_files:
                 self._processed_files.add(file_id)
                 self._processed_count += 1
-                
+
+                # O(1) durability: the identifier goes to the append-only
+                # journal, so each processed file costs one short line of I/O
+                # instead of a rewrite of every identifier seen so far.
+                self._append_journal_locked(file_id)
+
                 # OPTIMIZATION: Increase save interval to reduce I/O overhead
                 # Save less frequently to avoid system overload
                 # Check if we need to save (but don't save in lock)
                 if self._processed_count - self._last_save_count >= self.auto_save_interval:
                     should_save = True
-        
+
         # Trigger background save if needed (non-blocking, lazy thread start)
         if should_save:
             try:
@@ -383,8 +536,9 @@ class CheckpointManager:
         if self._save_thread and self._save_thread.is_alive():
             self._save_thread.join(timeout=5.0)
         
-        # Final synchronous save to ensure everything is saved
-        self._save_checkpoint_sync()
+        # Final compaction: the snapshot contains everything the journal held,
+        # so a resume after this run needs a single file to read.
+        self.compact()
         
         with self._lock:
             logger.info(

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
@@ -194,8 +195,27 @@ def detect_file_type_with_confidence(
         (b'\x7FELF','.elf',4),(b'\xCA\xFE\xBA\xBE','.mach-o',4),(b'MZ','.exe',2),(b'#!','.sh',2),(b'wOFF','.woff',4),(b'\x00\x01\x00\x00\x00','.ttf',5),
     ]
     
+    #: Extensions that name the same format, mapped from the extension the
+    #: signature table reports to the spellings a file may declare.  A JPEG is
+    #: commonly written ``.jpg`` or ``.jpeg``; reporting the canonical ``.jpg``
+    #: for a file that declares ``.jpeg`` is not a contradiction, and treating
+    #: it as one made every ``.jpeg`` file in a corpus emit a "declared
+    #: extension .jpeg contradicted by content signature .jpg" warning (five
+    #: such warnings per image in the production log).
+    #:
+    #: Only spellings that resolve to a registered reader belong here: the
+    #: declared alias is reported back as the file's type, so an alias with no
+    #: reader (``.jfif``) would divert the file away from the reader that
+    #: handles its content.
+    extension_aliases = {'.jpg': ('.jpeg',), '.tiff': ('.tif',), '.mpeg': ('.mpg',)}
+
     for sig, ext, ml in sigs:
         if len(data) >= ml and data.startswith(sig):
+            declared_extension = os.path.splitext(str(path))[1].lower() if path else ''
+            for canonical, aliases in extension_aliases.items():
+                if ext == canonical and declared_extension in aliases:
+                    ext = declared_extension
+                    break
             if sig == b'PK\x03\x04' and len(data) > 500:
                 s = data[:4096].decode('latin-1', errors='ignore').lower()
                 # OOXML / EPUB containers are ZIPs; name them by payload so the

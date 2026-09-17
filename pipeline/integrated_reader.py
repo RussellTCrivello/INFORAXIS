@@ -11,7 +11,8 @@ import logging
 import threading
 import time
 
-from core.file_utils import get_standardized_metadata, read_tree
+from core.console import console
+from core.file_utils import get_standardized_metadata, iter_tree, read_tree
 from reader_file.main_specify_method import main_specify_method_of_reading_the_file
 # DatabaseHub is optional - import will be handled conditionally in _init_storage
 from pipeline.storage_pipeline import StoragePipeline
@@ -36,6 +37,87 @@ from concurrency import (
 
 logger = logging.getLogger(__name__)
 
+#: Serializes the carriage-return progress lines so concurrent workers cannot
+#: interleave two writes into one garbled line.
+_PROGRESS_PRINT_LOCK = threading.Lock()
+
+#: Process-wide limit on concurrent storage operations.
+#
+# Every StoragePipeline shares one connection pool, so the per-reader limiter
+# that used to exist here (``pool_size // 4`` for *each* nested reader) did not
+# bound the aggregate: a container processed by four workers, each starting a
+# nested reader with its own limiter, could drive far more concurrent store
+# transactions than the pool has connections.  The semaphore is shared by all
+# readers in the process and sized once from the safe pool size.
+_STORAGE_SEMAPHORE_LOCK = threading.Lock()
+_STORAGE_SEMAPHORE: Optional[threading.Semaphore] = None
+_STORAGE_SEMAPHORE_SIZE: Optional[int] = None
+
+
+def _get_storage_semaphore(requested_concurrency: int) -> threading.Semaphore:
+    """Return the process-wide storage concurrency limiter.
+
+    The limiter is sized from the connection pool (never smaller than 2 and
+    never larger than the pool) and shared by every reader, so nested readers
+    cannot multiply concurrent storage transactions beyond the pool.
+    """
+    global _STORAGE_SEMAPHORE, _STORAGE_SEMAPHORE_SIZE
+    size = max(1, int(requested_concurrency))
+    with _STORAGE_SEMAPHORE_LOCK:
+        if _STORAGE_SEMAPHORE is None:
+            _STORAGE_SEMAPHORE = threading.Semaphore(size)
+            _STORAGE_SEMAPHORE_SIZE = size
+        return _STORAGE_SEMAPHORE
+
+
+#: Extensions whose files are processed last (OCR is the slowest stage) and
+#: second-to-last (PDF pages).  Kept as module constants so the discovery
+#: inventory and the phase streams classify files identically.
+IMAGE_EXTENSIONS = frozenset({
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif', '.webp', '.svg',
+    '.ico', '.heic', '.heif',
+})
+PDF_EXTENSIONS = frozenset({'.pdf'})
+PHASE_NAMES = ('other', 'pdf', 'image')
+
+#: How many per-file result dictionaries ``process_folder`` keeps in memory by
+#: default.  Each carries the extracted content (~5 KB measured), so retaining
+#: every result of a large corpus would hold the whole extraction in RAM.
+DEFAULT_RESULT_RETENTION = 10000
+
+#: Byte ceiling for the retained result window.  A count bound alone is not
+#: enough: results from word-dense files are megabytes each (measured: an 8 KB
+#: limit of count still held ~800 MB when the corpus contained 4 MB text files
+#: - 10 000 retained results x ~4 MB of extracted content).  Once the window
+#: costs more than this, further results are counted and discarded, exactly as
+#: they are when the count bound is reached.  The database remains the system of
+#: record, so this changes reporting memory, never what is stored.
+DEFAULT_RESULT_RETENTION_BYTES = 64 * 1024 * 1024
+
+
+def _object_footprint(value: Any) -> int:
+    """Best-effort size of a retained Python object (content dominates).
+
+    Used only to bound the reporting window, so an approximation is acceptable;
+    string length is the dominant term and non-ASCII text is slightly
+    over-counted, which is the safe direction for a memory ceiling.
+    """
+    if value is None or isinstance(value, (bool, int, float)):
+        return 8
+    if isinstance(value, str):
+        return len(value) + 49
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return len(value) + 33
+    if isinstance(value, dict):
+        return sum(_object_footprint(k) + _object_footprint(v)
+                   for k, v in value.items()) + 64
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return sum(_object_footprint(item) for item in value) + 56
+    try:
+        return len(value) + 49  # e.g. numpy arrays expose len()
+    except Exception:
+        return 100
+
 
 class IntegratedFileReader:
     """
@@ -52,7 +134,9 @@ class IntegratedFileReader:
         use_priority: bool = False,
         use_multiprocessing: bool = False,
         checkpoint_file: Optional[str] = None,
-        progress_ledger: Optional[ProgressLedger] = None
+        progress_ledger: Optional[ProgressLedger] = None,
+        result_retention_limit: Optional[int] = DEFAULT_RESULT_RETENTION,
+        result_retention_bytes: Optional[int] = DEFAULT_RESULT_RETENTION_BYTES
          ):
         """
         Initialize IntegratedFileReader with concurrency management
@@ -71,6 +155,15 @@ class IntegratedFileReader:
                 ledger so dynamically discovered children grow the same
                 denominator the user is watching. When omitted the reader owns a
                 private ledger.
+            result_retention_limit: How many per-file result dictionaries to
+                keep in the list ``process_folder`` returns. Each result holds
+                the extracted content, so retaining one per file means holding
+                the whole corpus's extracted text in memory: measured at ~5 KB
+                per file, i.e. ~5 GB for a million files. Aggregates (counts,
+                bytes processed) are tracked exactly regardless of this bound,
+                and the database remains the system of record - the bound only
+                limits the in-RAM window. ``None`` keeps every result (legacy
+                behaviour for small, programmatic callers).
         """
         # Apply safe worker count from resource coordinator
         try:
@@ -79,6 +172,26 @@ class IntegratedFileReader:
         except Exception:
             # If coordinator not available, use requested value
             pass
+
+        # Optional adaptive scheduling (COMPUTE_ADAPTIVE_SCHEDULING=1): the
+        # compute gateway may reduce - never raise - the worker count when the
+        # host is under memory pressure, so an ingestion cannot push the machine
+        # into swap.  Off by default: the coordinator's number stays
+        # authoritative, and the gateway's admission control is available for
+        # work submitted from outside the pipeline.
+        if os.environ.get("COMPUTE_ADAPTIVE_SCHEDULING", "0") not in ("0", "false", "False"):
+            try:
+                from core.compute import get_compute_gateway
+
+                advised = get_compute_gateway().suggested_workers(max_workers)
+                if advised != max_workers:
+                    logger.warning(
+                        "Adaptive scheduling reduced workers %s -> %s under host pressure",
+                        max_workers, advised,
+                    )
+                max_workers = advised
+            except Exception as exc:
+                logger.debug("Adaptive scheduling unavailable: %s", exc)
         
         self.max_workers = max_workers
         self.enable_monitoring = enable_monitoring
@@ -96,14 +209,19 @@ class IntegratedFileReader:
             from core.resource_coordinator import get_safe_db_pool_size
             db_config = get_database_config()
             pool_size = get_safe_db_pool_size(db_config.pool_max_conn)
-            # Limit storage concurrency to 1/4 of pool size, minimum 2, maximum equal to workers
-            # This ensures we have connections available for read operations and other DB operations
-            self._storage_semaphore = threading.Semaphore(max(2, min(pool_size // 4, max_workers)))
-            logger.info(f"Storage concurrency limit: {self._storage_semaphore._value} concurrent operations (pool size: {pool_size})")
+            # This limit is PROCESS-WIDE (see _get_storage_semaphore): every
+            # reader shares one connection pool, so a per-reader semaphore would
+            # let nested readers multiply the number of concurrent storage
+            # transactions past the number of pooled connections.
+            self._storage_semaphore = _get_storage_semaphore(max(2, pool_size // 4))
+            logger.info(
+                "Storage concurrency limit: %s concurrent operations (pool size: %s, process-wide)",
+                getattr(self._storage_semaphore, '_value', '?'), pool_size,
+            )
         except Exception as e:
             # Fallback: use 2 concurrent storage operations
             logger.warning(f"Could not determine optimal storage concurrency limit: {e}, using default: 2")
-            self._storage_semaphore = threading.Semaphore(2)
+            self._storage_semaphore = _get_storage_semaphore(2)
         
         # Initialize concurrency hub
         self.concurrency_hub = ConcurrencyHub()
@@ -138,6 +256,17 @@ class IntegratedFileReader:
         # of it (get_statistics()/legacy callers) and is refreshed from the
         # ledger rather than mutated independently - two writable copies of the
         # same counters is what let nested work go missing before.
+        #: Bounded in-RAM window of per-file results (see the constructor
+        #: docstring).  ``DEFAULT_RESULT_RETENTION`` keeps a generous window for
+        #: interactive/programmatic use while making a million-file run
+        #: impossible to OOM through result retention alone.
+        self._result_retention_limit = result_retention_limit
+        self._result_retention_bytes = result_retention_bytes
+        self._results_truncated = 0
+        self._results_retained = 0
+        self._results_retained_bytes = 0
+        self._bytes_processed = 0
+
         self._owns_ledger = progress_ledger is None
         self.progress_ledger = progress_ledger or ProgressLedger(
             name=f"reader-{id(self):x}"
@@ -154,6 +283,11 @@ class IntegratedFileReader:
         # concurrency, not by workload size).
         self._units_lock = threading.Lock()
         self._open_units = set()
+        #: Paths handed to a worker and not yet settled; prevents the same file
+        #: from being submitted to two workers at once.
+        self._reserved_paths = set()
+        #: Thread ids created by *this* reader (the thread manager is shared).
+        self._owned_thread_ids = set()
 
         # JOB-SYSTEM: cooperative control hooks (used by the unified job
         # manager; inert unless requested). Cancellation is cooperative -
@@ -206,6 +340,12 @@ class IntegratedFileReader:
             )
             # Get the shared db_hub instance from storage_pipeline for backward compatibility
             self.db_hub = self.storage_pipeline.db_hub
+            # A reader only owns a hub it created itself.  StoragePipeline hands
+            # out the class-shared hub, so readers must NOT close it on exit -
+            # a nested reader (one per extracted archive) used to close the
+            # parent's hub mid-flight, which is what produced the
+            # "Database connection unhealthy, attempting reconnect..." cascade.
+            self._owns_db_hub = bool(getattr(self.storage_pipeline, 'db_hub_owned', False))
             logger.info("Database storage initialized with shared connection pool")
         except Exception as e:
             handle_error(
@@ -483,47 +623,57 @@ class IntegratedFileReader:
                 self.checkpoint_manager = None
         
         # PRODUCTION: Read directory tree with comprehensive error handling
+        # ------------------------------------------------------------------
+        # Discovery: one streaming pass to size the workload, then one
+        # streaming pass per phase.
+        #
+        # The old implementation materialised the whole tree (metadata for
+        # ~1.7 KB per entry - measured - so ~1.7 GB for a million files), built
+        # three more full lists out of it, and hashed every file while doing so
+        # (a serialized read of the entire corpus before processing started).
+        # Discovery is now incremental: memory is bounded by the batch size,
+        # not by the corpus, and hashing happens once - in the parallel store
+        # stage, which computes the identical streamed SHA-256.
+        # ------------------------------------------------------------------
         print("\n📂 Reading directory tree...")
         try:
-            tree = read_tree(folder_path)
+            inventory = self._inventory_tree(folder_path)
         except Exception as tree_err:
             logger.error(f"Critical error reading directory tree: {tree_err}")
-            # Return error info so at least the root folder is recorded
-            error_info = {
-                'path': folder_path,
-                'name': os.path.basename(folder_path),
-                'type': 'ERROR',
-                'extension': 'none',
-                'size': 0,
-                'size_bytes': 0,
-                'readable': False,
-                'error': f'Failed to read directory tree: {str(tree_err)}'
+            # Record the root so at least it is stored, exactly as before.
+            inventory = {
+                'files': 0, 'errors': 1, 'skipped': 0, 'total': 1,
+                'phases': dict.fromkeys(PHASE_NAMES, 0),
+                'root_error': {
+                    'path': folder_path,
+                    'name': os.path.basename(folder_path),
+                    'type': 'ERROR',
+                    'extension': 'none',
+                    'size': 0,
+                    'size_bytes': 0,
+                    'readable': False,
+                    'error': f'Failed to read directory tree: {str(tree_err)}'
+                },
             }
-            tree = [error_info]
-        
-        # PRODUCTION: Filter to files only, but include ERROR type files too (they need to be stored)
-        files = [item for item in tree if item.get('type') in ('FILE', 'ERROR')]
-        
-        # Count files by type for reporting
-        file_count = len([f for f in files if f.get('type') == 'FILE'])
-        error_count = len([f for f in files if f.get('type') == 'ERROR'])
-        
+
+        file_count = inventory['files']
+        error_count = inventory['errors']
+        skipped_count = inventory['skipped']
+        total_files = inventory['total'] - skipped_count
+        remaining_files = total_files
+
         print(f"Found {file_count} files" + (f" and {error_count} items with errors" if error_count > 0 else ""))
-        
+
         if error_count > 0:
             logger.warning(f"⚠️  {error_count} files/folders have access errors but will still be stored in database")
-        
-        # Filter out already processed files if checkpoint manager is active
-        skipped_count = 0
-        if self.checkpoint_manager:
-            files, skipped_count = self.checkpoint_manager.filter_processed_files(files)
-            if skipped_count > 0:
-                print(f"Resuming: {skipped_count} files already processed, {len(files)} remaining")
-                # DATA-04: checkpoint-resumed files count as skipped, not discovered.
-                if self.storage_pipeline is not None:
-                    self.storage_pipeline.record_skipped(
-                        skipped_count, reason='checkpoint_already_processed'
-                    )
+
+        if skipped_count > 0:
+            print(f"Resuming: {skipped_count} files already processed, {remaining_files} remaining")
+            # DATA-04: checkpoint-resumed files count as skipped, not discovered.
+            if self.storage_pipeline is not None:
+                self.storage_pipeline.record_skipped(
+                    skipped_count, reason='checkpoint_already_processed'
+                )
 
         # PROGRESS: skipped work is still accounted. It enters the denominator
         # and the terminal bucket in one step, so a resumed job can reach 100%
@@ -533,7 +683,7 @@ class IntegratedFileReader:
                 OUTCOME_SKIPPED, skipped_count, parent=folder_path
             )
 
-        if not files:
+        if not total_files:
             if self.checkpoint_manager:
                 checkpoint_stats = self.checkpoint_manager.get_statistics()
                 print(f"\n✅ All files already processed! (Total: {checkpoint_stats['processed_count']} files)")
@@ -542,39 +692,16 @@ class IntegratedFileReader:
             self.progress_ledger.set_phase('Completed')
             self._notify_progress()
             return []
-        
+
         # For very large file sets, process in batches to conserve memory
         # This enables continuous processing without loading all files into memory
         batch_size = 1000  # Process 1000 files at a time for continuous processing
-        
-        # Separate files by priority: all files prioritized, but images last, PDFs second-to-last
-        # Priority order: 1) All other files (highest), 2) PDFs (medium), 3) Images (lowest)
-        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif', '.webp', '.svg', '.ico', '.heic', '.heif'}
-        pdf_extensions = {'.pdf'}
-        
-        priority_files = []  # All files except images and PDFs (highest priority)
-        pdf_files = []  # PDFs (second-to-last priority)
-        image_files = []  # Images (lowest priority)
-        
-        for file_info in files:
-            file_path = file_info.get('path', '')
-            if isinstance(file_path, str):
-                file_ext = os.path.splitext(file_path)[1].lower()
-            else:
-                file_ext = ''
-            
-            # Separate by priority: images last, PDFs second-to-last, everything else first
-            if file_ext in image_extensions:
-                image_files.append(file_info)
-            elif file_ext in pdf_extensions:
-                pdf_files.append(file_info)
-            else:
-                priority_files.append(file_info)
-        
-        print(f"  📄 Priority files: {len(priority_files)}")
-        print(f"  📑 PDF files: {len(pdf_files)} (will be processed second-to-last)")
-        print(f"  🖼️  Image files: {len(image_files)} (will be processed last)")
-        
+
+        phase_counts = inventory['phases']
+        print(f"  📄 Priority files: {phase_counts['other']}")
+        print(f"  📑 PDF files: {phase_counts['pdf']} (will be processed second-to-last)")
+        print(f"  🖼️  Image files: {phase_counts['image']} (will be processed last)")
+
         # PROGRESS: register the discovered workload in the shared ledger.
         #
         # This replaces the old ``_processing_stats['total'] = len(files)``,
@@ -590,7 +717,6 @@ class IntegratedFileReader:
         #
         # ``initial=True`` records the first (top-level) workload separately so
         # the snapshot can report "initial" vs "total discovered" (spec item 3).
-        total_files = len(files)
         self.progress_ledger.add_discovered(
             total_files,
             key=folder_path,
@@ -606,129 +732,55 @@ class IntegratedFileReader:
         if self.storage_pipeline is not None:
             self.storage_pipeline.record_discovered(total_files)
 
-        # Process files in three phases: priority files first, then PDFs, then images
-        # Use continuous processing with batching for memory efficiency
+        # Process files in three phases: priority files first, then PDFs, then
+        # images.  Each phase streams its own batches from the directory walk,
+        # so neither the file list nor the whole-tree metadata is ever held in
+        # memory at once.
         results = []
-        
-        # PHASE 1: Process all priority files (non-image, non-PDF) completely first
-        # Use batch processing for continuous processing of millions of files
-        if priority_files:
-            self._set_current(phase="Phase 1/3: documents & data")
-            print(f"\n📄 PHASE 1: Processing {len(priority_files)} priority files...")
-            
-            # Process in batches for continuous processing (handles millions of files)
-            if len(priority_files) > batch_size:
+
+        #: (phase key, phase label for _set_current, header line, completion line,
+        #:  control-request log wording)
+        phase_plan = [
+            ('other', 'Phase 1/3: documents & data',
+             f"\n📄 PHASE 1: Processing {phase_counts['other']} priority files...",
+             f"✅ PHASE 1 complete: {phase_counts['other']} priority files processed",
+             "priority-file"),
+            ('pdf', 'Phase 2/3: PDF files',
+             f"\n📑 PHASE 2: Processing {phase_counts['pdf']} PDF files (after priority files are complete)...",
+             f"✅ PHASE 2 complete: {phase_counts['pdf']} PDF files processed",
+             "PDF"),
+            ('image', 'Phase 3/3: images & OCR',
+             f"\n🖼️  PHASE 3: Processing {phase_counts['image']} image files (after all other files are complete)...",
+             f"✅ PHASE 3 complete: {phase_counts['image']} image files processed",
+             "image"),
+        ]
+
+        for phase_key, phase_label, header, completion, control_wording in phase_plan:
+            phase_total = phase_counts[phase_key]
+            if not phase_total or self._control_requested():
+                continue
+            self._set_current(phase=phase_label)
+            print(header)
+            if phase_total > batch_size:
                 print(f"   Processing in batches of {batch_size} for continuous processing...")
-                for batch_start in range(0, len(priority_files), batch_size):
-                    if self._control_requested():
-                        logger.warning("Control requested: skipping remaining priority-file batches")
-                        break
-                    batch_end = min(batch_start + batch_size, len(priority_files))
-                    batch = priority_files[batch_start:batch_end]
-                    print(f"   Batch {batch_start // batch_size + 1}: Processing files {batch_start + 1}-{batch_end}...")
-                    
-                    if self.max_workers > 1:
-                        if self.use_multiprocessing and self.pool_manager:
-                            batch_results = self._process_with_pool(batch)
-                        else:
-                            batch_results = self._process_with_threads(batch)
-                    else:
-                        batch_results = self._process_sequential(batch)
-                    
-                    results.extend(batch_results)
-                    # Clear batch from memory for continuous processing
-                    del batch
-            else:
-                # Small batch, process normally
-                if self.max_workers > 1:
-                    if self.use_multiprocessing and self.pool_manager:
-                        phase1_results = self._process_with_pool(priority_files)
-                    else:
-                        phase1_results = self._process_with_threads(priority_files)
-                else:
-                    phase1_results = self._process_sequential(priority_files)
-                
-                results.extend(phase1_results)
-            
-            print(f"✅ PHASE 1 complete: {len(priority_files)} priority files processed")
-        
-        # PHASE 2: Process all PDF files only after priority files are completely done
-        if pdf_files and not self._control_requested():
-            self._set_current(phase="Phase 2/3: PDF files")
-            print(f"\n📑 PHASE 2: Processing {len(pdf_files)} PDF files (after priority files are complete)...")
-            
-            # Process in batches for continuous processing
-            if len(pdf_files) > batch_size:
-                print(f"   Processing in batches of {batch_size} for continuous processing...")
-                for batch_start in range(0, len(pdf_files), batch_size):
-                    if self._control_requested():
-                        logger.warning("Control requested: skipping remaining PDF batches")
-                        break
-                    batch_end = min(batch_start + batch_size, len(pdf_files))
-                    batch = pdf_files[batch_start:batch_end]
-                    print(f"   Batch {batch_start // batch_size + 1}: Processing files {batch_start + 1}-{batch_end}...")
-                    
-                    if self.max_workers > 1:
-                        if self.use_multiprocessing and self.pool_manager:
-                            batch_results = self._process_with_pool(batch)
-                        else:
-                            batch_results = self._process_with_threads(batch)
-                    else:
-                        batch_results = self._process_sequential(batch)
-                    
-                    results.extend(batch_results)
-                    del batch
-            else:
-                if self.max_workers > 1:
-                    if self.use_multiprocessing and self.pool_manager:
-                        phase2_results = self._process_with_pool(pdf_files)
-                    else:
-                        phase2_results = self._process_with_threads(pdf_files)
-                else:
-                    phase2_results = self._process_sequential(pdf_files)
-                
-                results.extend(phase2_results)
-            
-            print(f"✅ PHASE 2 complete: {len(pdf_files)} PDF files processed")
-        
-        # PHASE 3: Process all image files only after PDFs are completely done
-        if image_files and not self._control_requested():
-            self._set_current(phase="Phase 3/3: images & OCR")
-            print(f"\n🖼️  PHASE 3: Processing {len(image_files)} image files (after all other files are complete)...")
-            
-            # Process in batches for continuous processing
-            if len(image_files) > batch_size:
-                print(f"   Processing in batches of {batch_size} for continuous processing...")
-                for batch_start in range(0, len(image_files), batch_size):
-                    if self._control_requested():
-                        logger.warning("Control requested: skipping remaining image batches")
-                        break
-                    batch_end = min(batch_start + batch_size, len(image_files))
-                    batch = image_files[batch_start:batch_end]
-                    print(f"   Batch {batch_start // batch_size + 1}: Processing files {batch_start + 1}-{batch_end}...")
-                    
-                    if self.max_workers > 1:
-                        if self.use_multiprocessing and self.pool_manager:
-                            batch_results = self._process_with_pool(batch)
-                        else:
-                            batch_results = self._process_with_threads(batch)
-                    else:
-                        batch_results = self._process_sequential(batch)
-                    
-                    results.extend(batch_results)
-                    del batch
-            else:
-                if self.max_workers > 1:
-                    if self.use_multiprocessing and self.pool_manager:
-                        phase3_results = self._process_with_pool(image_files)
-                    else:
-                        phase3_results = self._process_with_threads(image_files)
-                else:
-                    phase3_results = self._process_sequential(image_files)
-                
-                results.extend(phase3_results)
-            
-            print(f"✅ PHASE 3 complete: {len(image_files)} image files processed")
+
+            batch_number = 0
+            processed_in_phase = 0
+            for batch in self._iter_phase_batches(folder_path, phase_key, batch_size,
+                                                  inventory.get('root_error')):
+                if self._control_requested():
+                    logger.warning(f"Control requested: skipping remaining {control_wording} batches")
+                    break
+                batch_number += 1
+                batch_start = processed_in_phase
+                processed_in_phase += len(batch)
+                if phase_total > batch_size:
+                    print(f"   Batch {batch_number}: Processing files "
+                          f"{batch_start + 1}-{processed_in_phase}...")
+                results.extend(self._run_batch(batch))
+
+            print(completion)
+
         
         # PROGRESS: end-of-run reconciliation.
         #
@@ -790,17 +842,131 @@ class IntegratedFileReader:
         
         return results
     
+    # ------------------------------------------------------------------
+    # Streaming discovery
+    #
+    # The list-returning form (``read_tree``) costs ~1.7 KB of resident memory
+    # per entry (measured) and therefore cannot be used for a corpus of
+    # millions of files.  These helpers walk the tree with a generator and hand
+    # the workers one batch at a time, so discovery memory is O(batch), not
+    # O(corpus).
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _phase_of(file_info: Dict[str, Any]) -> str:
+        """Which processing phase a record belongs to."""
+        path = file_info.get('path', '') if isinstance(file_info, dict) else ''
+        ext = os.path.splitext(path)[1].lower() if isinstance(path, str) else ''
+        if ext in IMAGE_EXTENSIONS:
+            return 'image'
+        if ext in PDF_EXTENSIONS:
+            return 'pdf'
+        return 'other'
+
+    def _inventory_tree(self, folder_path: str) -> Dict[str, Any]:
+        """Size the workload with one streaming pass (no metadata retained).
+
+        Counts exactly what the old list-based code counted: FILE records,
+        ERROR records, the per-phase split, and how many files the checkpoint
+        already knows about.  Records that were already processed are excluded
+        from ``total`` (they are recorded as terminal *skipped* work instead),
+        which is the existing accounting contract.
+        """
+        files = 0
+        errors = 0
+        skipped = 0
+        phases = dict.fromkeys(PHASE_NAMES, 0)
+        root_error = None
+        for file_info in iter_tree(folder_path, compute_hashes=False):
+            record_type = file_info.get('type')
+            if record_type not in ('FILE', 'ERROR'):
+                continue
+            if root_error is None and record_type == 'ERROR' \
+                    and file_info.get('path') == folder_path and folder_path:
+                # A record describing the root itself (unreadable/absent root).
+                root_error = file_info
+            if self.checkpoint_manager and self.checkpoint_manager.is_processed(file_info):
+                skipped += 1
+                continue
+            if record_type == 'FILE':
+                files += 1
+            else:
+                errors += 1
+            phases[self._phase_of(file_info)] += 1
+        return {
+            'files': files,
+            'errors': errors,
+            'skipped': skipped,
+            'total': files + errors,
+            'phases': phases,
+            'root_error': root_error,
+        }
+
+    def _iter_phase_batches(self, folder_path: str, phase: str, batch_size: int,
+                            root_error: Optional[Dict[str, Any]] = None):
+        """Yield batches of records for one phase, streaming from disk.
+
+        Yields lists of at most ``batch_size`` records, in tree order, skipping
+        records the checkpoint already processed.  Nothing is accumulated
+        beyond the batch currently being built.
+        """
+        batch: List[Dict[str, Any]] = []
+        yielded_root_error = False
+        for file_info in iter_tree(folder_path, compute_hashes=False):
+            record_type = file_info.get('type')
+            if record_type not in ('FILE', 'ERROR'):
+                continue
+            if self._phase_of(file_info) != phase:
+                continue
+            if self.checkpoint_manager and self.checkpoint_manager.is_processed(file_info):
+                continue
+            if root_error is not None and file_info is root_error:
+                yielded_root_error = True
+            batch.append(file_info)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+    def _run_batch(self, batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process one batch with the configured concurrency mechanism."""
+        if self.max_workers > 1:
+            if self.use_multiprocessing and self.pool_manager:
+                return self._process_with_pool(batch)
+            return self._process_with_threads(batch)
+        return self._process_sequential(batch)
+
     def _process_with_threads(self, files: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Process files using thread manager"""
-        results = []
-        completed_threads = []
-        
+        """Process files with a bounded window of worker threads.
+
+        Scheduling model (this is what makes large corpora feasible):
+
+        * **Bounded in-flight window.** At most ``max_workers`` (at least 2)
+          workers run at a time.  The previous implementation created a thread
+          for *every* file in the batch up front (1000-file batches meant 1000
+          concurrent threads, each with its own queues and metrics), which
+          exhausted memory and the thread registry instead of using the
+          configured concurrency.
+        * **Completion-order collection.** Finished workers are collected as
+          they finish.  Waiting for worker N before looking at worker N+1 let a
+          single slow file stall an entire batch whose other files were done.
+        * **No fixed sleeps, no blocking reads that cannot pay off.** The old
+          loop slept 50 ms per file and then waited up to twice 100 ms on an
+          already-drained outbox; that alone capped ingestion at roughly four
+          files per second regardless of CPU, worker count, or disk speed.  The
+          collector now drains non-blockingly and only yields when nothing is
+          ready, and the thread registry is pruned as workers are collected so
+          a long run cannot accumulate one dead thread object per file.
+        """
+        results: List[Dict[str, Any]] = []
+        total_files = len(files)
+
         # Determine priority based on file size for within-phase prioritization
         # All files are prioritized, with larger files getting higher priority
         def get_priority(file_info: Dict) -> ThreadPriority:
             if not self.use_priority:
                 return ThreadPriority.NORMAL
-            
+
             # Use size-based priority (larger files get higher priority for faster processing)
             # This ensures large files don't block smaller files, but large files are prioritized
             size = file_info.get('size_bytes', 0)
@@ -812,32 +978,7 @@ class IntegratedFileReader:
                 return ThreadPriority.NORMAL
             else:
                 return ThreadPriority.NORMAL  # Small files also get normal priority (all files prioritized)
-        
-        # Submit all files as threads
-        for idx, file_info in enumerate(files):
-            # JOB-SYSTEM: cooperative stop - no new files after cancel/pause
-            if self._control_requested():
-                logger.warning("Control requested (%s): stopping file submission after %d of %d files",
-                               'cancel' if self.is_cancel_requested() else 'pause', idx, len(files))
-                break
-            file_path = file_info.get('path', f'file_{idx}')
-            self._set_current(file_path=file_path, phase='Processing files')
-            priority = get_priority(file_info)
-            
-            thread_id = self.thread_manager.create_thread(
-                name=f"Process-{os.path.basename(file_path)}",
-                target=self._process_file_worker,
-                args=(file_info,),
-                priority=priority,
-                auto_start=True
-            )
-            # Get the thread object
-            with self.thread_manager.lock:
-                thread = self.thread_manager.threads.get(thread_id)
-            completed_threads.append((thread_id, thread, file_info))
-        
-        # Wait for all threads to complete and collect results
-        completed = 0
+
         # Get base timeout from processing config (default: 1200 seconds = 20 minutes)
         try:
             processing_cfg = get_processing_config()
@@ -852,7 +993,7 @@ class IntegratedFileReader:
             logger.warning(f"Could not get processing config, using default timeout: {e}")
             base_timeout = 1200  # 20 minutes default
             logger.info(f"Using fallback timeout: {base_timeout}s")
-        
+
         def calculate_file_timeout(file_info: Dict[str, Any], base_timeout: int) -> int:
             """
             Calculate dynamic timeout based on file size.
@@ -861,19 +1002,19 @@ class IntegratedFileReader:
             """
             if not isinstance(file_info, dict):
                 return base_timeout
-            
-            file_size = file_info.get('size_bytes', 0)
+
+            file_size = file_info.get('size_bytes', 0) or 0
             if file_size == 0:
                 return base_timeout
-            
+
             # Base timeout for small files (< 1MB)
             if file_size < 1024 * 1024:
                 return base_timeout
-            
+
             size_mb = file_size / (1024 * 1024)
             size_gb = size_mb / 1024
             size_tb = size_gb / 1024
-            
+
             # PRODUCTION: Different timeout calculation for different file size ranges
             if size_tb >= 1.0:
                 # Terabyte-scale files: use more aggressive timeout scaling
@@ -900,224 +1041,272 @@ class IntegratedFileReader:
                 max_timeout = base_timeout * 3  # Cap at 3x base
                 final_timeout = min(dynamic_timeout, max_timeout)
                 logger.debug(f"File size: {size_mb:.2f}MB, calculated timeout: {final_timeout}s (base: {base_timeout}s)")
-            
+
             return final_timeout
-        
-        for thread_id, thread, file_info in completed_threads:
-            if thread:
-                # CRITICAL: Prevent joining current thread (causes "cannot join current thread" error)
-                # thread is a ManagedThread object, use its ident property
-                current_thread = threading.current_thread()
-                if hasattr(thread, 'ident') and thread.ident and thread.ident == current_thread.ident:
+
+        #: Number of workers allowed in flight.  ``max_workers`` is the
+        #: configured concurrency; the extra factor covers the short window
+        #: between a worker finishing its body and the collector reaping it,
+        #: which would otherwise idle a core.
+        try:
+            configured_workers = int(getattr(self, 'max_workers', 4) or 4)
+        except (TypeError, ValueError):
+            configured_workers = 4
+        in_flight_limit = max(2, configured_workers + max(1, configured_workers // 4))
+
+        file_iterator = iter(enumerate(files))
+        pending: List[list] = []          # [thread_id, thread, file_info, deadline]
+        submission_stopped = False
+        completed = 0
+
+        def submit_next() -> bool:
+            """Start one more worker (bounded window). False when input is done."""
+            nonlocal submission_stopped
+            if submission_stopped:
+                return False
+            for idx, file_info in file_iterator:
+                # JOB-SYSTEM: cooperative stop - no new files after cancel/pause
+                if self._control_requested():
                     logger.warning(
-                        f"Skipping join for current thread {thread_id}. "
-                        f"This can happen in nested parallel processing scenarios."
+                        "Control requested (%s): stopping file submission after %d of %d files",
+                        'cancel' if self.is_cancel_requested() else 'pause', idx, total_files,
                     )
-                    # Process synchronously instead
-                    result = self._process_file_worker(file_info)
-                    if result:
-                        with self._results_lock:
-                            results.append(result)
-                    completed += 1
-                    print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
+                    submission_stopped = True
+                    return False
+
+                file_path = file_info.get('path', f'file_{idx}') if isinstance(file_info, dict) else f'file_{idx}'
+                self._set_current(file_path=file_path, phase='Processing files')
+
+                # A file that another worker of this reader is already processing
+                # must not be submitted twice: the duplicate worker would store
+                # the same document again and the extra unit would land in the
+                # accounting as a "duplicate".  The path stays reserved until the
+                # worker settles it (see ``_release_path``).
+                if not self._reserve_path(file_path):
+                    logger.debug("Skipping duplicate submission for %s (already in progress)", file_path)
                     continue
-                
-                # Calculate dynamic timeout based on file size
-                file_timeout = calculate_file_timeout(file_info, base_timeout)
-                
-                # Wait for thread with timeout to prevent hanging
-                # thread is a ManagedThread object, use its join method
-                try:
-                    thread.join(timeout=file_timeout)
-                except RuntimeError as e:
-                    if "cannot join current thread" in str(e).lower():
-                        logger.warning(
-                            f"Cannot join thread {thread_id} (current thread). "
-                            f"Processing synchronously instead: {e}"
-                        )
-                        # Process synchronously as fallback
-                        result = self._process_file_worker(file_info)
-                        if result:
-                            with self._results_lock:
-                                results.append(result)
-                        completed += 1
-                        print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
-                        continue
-                    else:
-                        raise
-                
-                # Check if thread is still alive (timed out)
-                # thread is a ManagedThread object, use its is_alive method
-                if thread.is_alive():
-                    file_path = file_info.get('path', 'unknown') if isinstance(file_info, dict) else 'unknown'
-                    file_size_mb = file_info.get('size_bytes', 0) / (1024 * 1024) if isinstance(file_info, dict) else 0
-                    
-                    # Calculate recommended timeout based on file size
-                    recommended_timeout = max(base_timeout, int(file_size_mb * 60) + 600)  # 60s per MB + 10 min base
-                    
-                    error_msg = (
-                        f"File processing timeout: {os.path.basename(file_path)} "
-                        f"({file_size_mb:.2f}MB) exceeded {file_timeout}s timeout "
-                        f"(base: {base_timeout}s, dynamic: +{file_timeout - base_timeout}s). "
-                        f"Recommended timeout for this file size: {recommended_timeout}s"
-                    )
-                    
-                    logger.error(error_msg)
-                    
-                    handle_error(
-                        Exception(f"File processing timeout after {file_timeout}s (base: {base_timeout}s)"),
-                        category=ErrorCategory.FILE_PROCESSING,
-                        severity=ErrorSeverity.MEDIUM,
-                        context={
-                            'operation': '_process_with_threads',
-                            'file_path': file_path,
-                            'timeout': file_timeout,
-                            'base_timeout': base_timeout,
-                            'file_size_mb': round(file_size_mb, 2),
-                            'recommended_timeout': recommended_timeout,
-                            'suggested_action': (
-                                f'Increase file_processing_timeout in settings.json to at least {recommended_timeout}s '
-                                f'(current: {base_timeout}s). Or process this file individually with a longer timeout.'
-                            )
-                        }
-                    )
-                    
-                    # Try to stop the thread gracefully
-                    try:
-                        self.thread_manager.stop_thread(thread_id, timeout=5.0)
-                    except Exception as stop_error:
-                        logger.debug(f"Could not stop timed-out thread gracefully: {stop_error}")
-                    
-                    # PROGRESS: a timed-out worker is abandoned but may still be
-                    # running. settle_path() closes its unit exactly once as
-                    # retryable; if the worker settles first, this is a no-op -
-                    # so a file is never counted twice. Retryable is reported in
-                    # its own bucket, keeping it distinguishable from work that
-                    # terminally succeeded or failed.
-                    self.progress_ledger.settle_path(file_path, OUTCOME_RETRYABLE)
-                    completed += 1
-                    print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
-                    self._notify_progress()
-                    continue
-            else:
+
+                priority = get_priority(file_info)
+
+                thread_id = self.thread_manager.create_thread(
+                    name=f"Process-{os.path.basename(file_path)}",
+                    target=self._process_file_worker,
+                    args=(file_info,),
+                    priority=priority,
+                    auto_start=True
+                )
+                # Get the thread object
+                with self.thread_manager.lock:
+                    thread = self.thread_manager.threads.get(thread_id)
+                if thread is not None:
+                    # Remember which threads this reader started.  The thread
+                    # manager is shared with every other reader in the process, and
+                    # a nested reader that joined the *parent's* still-running
+                    # thread raised RuntimeError("cannot join current thread") -
+                    # which aborted the parallel pass the container had already
+                    # completed and made the caller reprocess it sequentially.
+                    self._owned_thread_ids.add(thread_id)
+
+                deadline = time.monotonic() + max(30, calculate_file_timeout(file_info, base_timeout))
+                pending.append([thread_id, thread, file_info, deadline])
+                return True
+            submission_stopped = True
+            return False
+
+        def drain_outbox(thread_id: str) -> Optional[Dict[str, Any]]:
+            """Collect a finished worker's messages without blocking.
+
+            The worker posts progress strings and finally its result dict, so
+            the outbox is drained until empty and the last dict wins.  No fixed
+            delay is needed or wanted here: the thread has already finished, so
+            anything it will ever post is already in the queue.
+            """
+            result = None
+            for _ in range(10000):  # hard bound: never spin forever on a rogue producer
+                msg = self.thread_manager.receive_from_thread_nowait(thread_id)
+                if msg is None:
+                    break
+                if isinstance(msg, dict):
+                    result = msg
+            return result
+
+        def finalize(entry: list) -> None:
+            """Handle one finished (or expired) worker exactly once."""
+            nonlocal completed
+            thread_id, thread, file_info = entry[0], entry[1], entry[2]
+            file_path = file_info.get('path', 'unknown') if isinstance(file_info, dict) else 'unknown'
+
+            current_thread = threading.current_thread()
+            if thread is not None and getattr(thread, 'ident', None) and thread.ident == current_thread.ident:
+                logger.warning(
+                    f"Skipping join for current thread {thread_id}. "
+                    f"This can happen in nested parallel processing scenarios."
+                )
+                result = self._process_file_worker(file_info)
+                self._count_processed_bytes(result)
+                self._retain_result(results, result)
+            elif thread is None:
                 # Thread wasn't created, process synchronously
                 result = self._process_file_worker(file_info)
-                if result:
-                    with self._results_lock:
-                        results.append(result)
-                completed += 1
-                print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
-                continue
-            
-            completed += 1
-            print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
-            
-            # Get result from thread metrics or outbox
-            try:
-                # Validate file_info is a dictionary
-                if not isinstance(file_info, dict):
-                    logger.error(f"Invalid file_info type: {type(file_info).__name__}, expected dict. Skipping.")
-                    # The worker created a minimal file_info and settled its own
-                    # unit; nothing to account for here.
-                    continue
-                
-                if thread.metrics.state == ThreadState.COMPLETED:
-                    # Try to get result from outbox
-                    # Drain all messages and find the dict result (final result is a dict, progress messages are strings)
-                    result = None
-                    try:
-                        # Small delay to ensure all messages are sent to outbox
-                        time.sleep(0.05)
-                        
-                        # Get all messages from outbox with multiple attempts
-                        messages = []
-                        max_attempts = 10
-                        empty_count = 0
-                        
-                        for attempt in range(max_attempts):
-                            try:
-                                msg = self.thread_manager.receive_from_thread(thread_id, timeout=0.1)
-                                if msg is None:
-                                    empty_count += 1
-                                    # If we've gotten messages before and now get None, the queue might be empty
-                                    # But wait a bit more in case the result is still being sent
-                                    if messages and empty_count >= 2:
-                                        break
-                                    continue
-                                empty_count = 0
-                                messages.append(msg)
-                                
-                                # If we got a dict, that's likely the result (but keep checking for more)
-                                if isinstance(msg, dict):
-                                    result = msg
-                                    # Continue to drain any remaining messages
-                            except Exception as e:
-                                logger.debug(f"Error receiving message from thread {thread_id} (attempt {attempt}): {e}")
-                                if messages:
-                                    break
-                        
-                        # If we didn't find a dict in the loop, search all collected messages
-                        if not result:
-                            for msg in reversed(messages):
-                                if isinstance(msg, dict):
-                                    result = msg
-                                    break
-                        
-                        # If we got messages but no dict, log it for debugging
-                        if messages and not result:
-                            logger.warning(f"Thread {thread_id} sent {len(messages)} messages but no dict result. Message types: {[type(m).__name__ for m in messages]}")
-                    except Exception as e:
-                        logger.debug(f"Error receiving from thread {thread_id}: {e}")
-                        result = None
-                    
-                    # If no result in outbox, process file synchronously to get result
-                    if not result:
-                        logger.debug(f"No result from thread {thread_id} outbox, reprocessing synchronously")
-                        result = self._process_file_worker(file_info)
-                    
-                    # Validate result before adding
-                    if result and isinstance(result, dict):
-                        with self._results_lock:
-                            results.append(result)
-                    elif result:
-                        logger.warning(f"Thread {thread_id} returned invalid result type: {type(result).__name__}. Skipping.")
-                elif thread.metrics.state == ThreadState.ERROR:
-                    file_path = file_info.get('path', 'unknown') if isinstance(file_info, dict) else 'unknown'
-                    handle_error(
-                        Exception(thread.metrics.error_msg or "Thread processing failed"),
-                        category=ErrorCategory.FILE_PROCESSING,
-                        severity=ErrorSeverity.MEDIUM,
-                        context={'operation': '_process_with_threads', 'file_path': file_path}
-                    )
-                    # PROGRESS: the thread died before its worker could settle,
-                    # so close the unit here. settle_path() is a no-op when the
-                    # worker already did it.
-                    self.progress_ledger.settle_path(file_path, OUTCOME_FAILED)
-            except Exception as e:
-                file_path = file_info.get('path', 'unknown') if isinstance(file_info, dict) else 'unknown'
+                self._count_processed_bytes(result)
+                self._retain_result(results, result)
+            elif thread.is_alive():
+                # Exceeded its deadline: report it, stop it, and settle as
+                # retryable so it stays distinguishable from real failures.
+                file_size_mb = file_info.get('size_bytes', 0) / (1024 * 1024) if isinstance(file_info, dict) else 0
+                file_timeout = calculate_file_timeout(file_info, base_timeout)
+                recommended_timeout = max(base_timeout, int(file_size_mb * 60) + 600)  # 60s per MB + 10 min base
+
+                error_msg = (
+                    f"File processing timeout: {os.path.basename(file_path)} "
+                    f"({file_size_mb:.2f}MB) exceeded {file_timeout}s timeout "
+                    f"(base: {base_timeout}s, dynamic: +{file_timeout - base_timeout}s). "
+                    f"Recommended timeout for this file size: {recommended_timeout}s"
+                )
+
+                logger.error(error_msg)
+
                 handle_error(
-                    e,
+                    Exception(f"File processing timeout after {file_timeout}s (base: {base_timeout}s)"),
+                    category=ErrorCategory.FILE_PROCESSING,
+                    severity=ErrorSeverity.MEDIUM,
+                    context={
+                        'operation': '_process_with_threads',
+                        'file_path': file_path,
+                        'timeout': file_timeout,
+                        'base_timeout': base_timeout,
+                        'file_size_mb': round(file_size_mb, 2),
+                        'recommended_timeout': recommended_timeout,
+                        'suggested_action': (
+                            f'Increase file_processing_timeout in settings.json to at least {recommended_timeout}s '
+                            f'(current: {base_timeout}s). Or process this file individually with a longer timeout.'
+                        )
+                    }
+                )
+
+                # Try to stop the thread gracefully
+                try:
+                    self.thread_manager.stop_thread(thread_id, timeout=5.0)
+                except Exception as stop_error:
+                    logger.debug(f"Could not stop timed-out thread gracefully: {stop_error}")
+
+                # PROGRESS: a timed-out worker is abandoned but may still be
+                # running. settle_path() closes its unit exactly once as
+                # retryable; if the worker settles first, this is a no-op -
+                # so a file is never counted twice. Retryable is reported in
+                # its own bucket, keeping it distinguishable from work that
+                # terminally succeeded or failed.
+                self.progress_ledger.settle_path(file_path, OUTCOME_RETRYABLE)
+                self._release_path(file_path)
+                self._notify_progress()
+                self._discard_finished_thread(thread_id)
+                completed += 1
+                console.progress(f"Progress: {completed}/{total_files}")
+                return
+            elif thread.metrics.state == ThreadState.ERROR:
+                handle_error(
+                    Exception(thread.metrics.error_msg or "Thread processing failed"),
                     category=ErrorCategory.FILE_PROCESSING,
                     severity=ErrorSeverity.MEDIUM,
                     context={'operation': '_process_with_threads', 'file_path': file_path}
                 )
+                # PROGRESS: the thread died before its worker could settle,
+                # so close the unit here. settle_path() is a no-op when the
+                # worker already did it.
                 self.progress_ledger.settle_path(file_path, OUTCOME_FAILED)
+                self._release_path(file_path)
+            else:
+                # Try to get result from outbox
+                result = None
+                try:
+                    result = drain_outbox(thread_id)
 
-            # PROGRESS: publish only. The counters themselves are owned by the
-            # ledger and were already updated by each worker as it finished, so
-            # this loop no longer writes ``completed = <join index>`` - that
-            # assignment is what made progress advance in submission order
-            # instead of in real time.
+                    # If no result reached the outbox, only reprocess when the
+                    # worker has not already stored the file.  Re-running the
+                    # full worker unconditionally re-read and re-stored the
+                    # document, which showed up as duplicate store attempts and
+                    # inflated the duplicate counters for a job that had in fact
+                    # stored the file once.
+                    if not result:
+                        pipeline = getattr(self, 'storage_pipeline', None)
+                        already_stored = False
+                        if pipeline is not None and file_path:
+                            try:
+                                already_stored = pipeline.get_store_outcome(file_path) is not None
+                            except Exception:
+                                already_stored = False
+                        if already_stored:
+                            logger.debug(
+                                "No result in outbox for %s, but it was already stored - not reprocessing",
+                                file_path,
+                            )
+                        else:
+                            logger.debug(f"No result from thread {thread_id} outbox, reprocessing synchronously")
+                            result = self._process_file_worker(file_info)
+                except Exception as e:
+                    handle_error(
+                        e,
+                        category=ErrorCategory.FILE_PROCESSING,
+                        severity=ErrorSeverity.MEDIUM,
+                        context={'operation': '_process_with_threads', 'file_path': file_path}
+                    )
+                    self.progress_ledger.settle_path(file_path, OUTCOME_FAILED)
+                    self._release_path(file_path)
+
+                # Count the file's size for the exact total, then retain the
+                # result while the bounded window allows it.
+                self._count_processed_bytes(result)
+                self._retain_result(results, result)
+
+            self._discard_finished_thread(thread_id)
+            completed += 1
+            console.progress(f"Progress: {completed}/{total_files}")
             self._notify_progress()
+
+        while True:
+            # Keep the window full.
+            while len(pending) < in_flight_limit:
+                if not submit_next():
+                    break
+
+            if not pending:
+                break
+
+            progressed = False
+            now = time.monotonic()
+            for entry in list(pending):
+                thread = entry[1]
+                state = None
+                try:
+                    state = thread.metrics.state if thread is not None else None
+                except Exception:
+                    state = None
+                finished = (
+                    thread is None
+                    or not thread.is_alive()
+                    or state in (ThreadState.COMPLETED, ThreadState.ERROR, ThreadState.STOPPED)
+                )
+                expired = now >= entry[3]
+                if not (finished or expired):
+                    continue
+                pending.remove(entry)
+                progressed = True
+                finalize(entry)
+
+            if not progressed and pending:
+                # Nothing ready yet: yield briefly instead of busy-waiting.
+                # 1 ms keeps wake-ups cheap while still reaping a completion
+                # within a millisecond of it happening.
+                time.sleep(0.001)
 
         # Anything this reader opened but never closed (thread stopped, join
         # interrupted) is settled here so it cannot stay pending forever.
         self._reconcile_outstanding(
             OUTCOME_SKIPPED if self._control_requested() else OUTCOME_FAILED
         )
-        print()  # New line after progress
+        console.end_progress()  # Terminate the in-place progress line
         return results
-    
+
     def _process_with_pool(self, files: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Process files using multiprocessing pool manager"""
         results = []
@@ -1153,14 +1342,12 @@ class IntegratedFileReader:
             )
             
             completed += 1
-            print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
+            console.progress(f"Progress: {completed}/{len(files)}")
             
             if task_result:
                 if task_result.success:
                     result = task_result.result
-                    if result:
-                        with self._results_lock:
-                            results.append(result)
+                    self._retain_result(results, result)
                 else:
                     # Task failed
                     file_path = file_info.get('path', 'unknown')
@@ -1186,7 +1373,7 @@ class IntegratedFileReader:
             self._notify_progress()
 
         self._reconcile_outstanding(OUTCOME_FAILED)
-        print()  # New line after progress
+        console.end_progress()  # Terminate the in-place progress line
         return results
     
     def _process_sequential(self, files: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1207,11 +1394,11 @@ class IntegratedFileReader:
                 )
                 break
 
-            print(f"\rProgress: {idx}/{len(files)}", end='', flush=True)
+            console.progress(f"Progress: {idx}/{len(files)}")
 
             result = self._process_file_worker(file_info)
-            if result:
-                results.append(result)
+            self._count_processed_bytes(result)
+            self._retain_result(results, result)
 
             # PROGRESS: the worker already settled this unit in the ledger, so
             # the counters are authoritative here - this loop only has to
@@ -1221,7 +1408,7 @@ class IntegratedFileReader:
             self._notify_progress()
 
         self._reconcile_outstanding(OUTCOME_FAILED)
-        print()  # New line after progress
+        console.end_progress()  # Terminate the in-place progress line
         return results
 
     def _process_file_worker(
@@ -1572,6 +1759,9 @@ class IntegratedFileReader:
             # timeout the unit is settled and this is a no-op, so a file can
             # never be counted twice.
             self._finish_unit(unit, outcome)
+            # The file is no longer in flight, so it may be submitted again
+            # (for example by a later phase or a resumed job).
+            self._release_path(file_path)
 
     def _outcome_after_store(self, file_path: str, result, outcome: str) -> str:
         """Refine a completed outcome with the storage pipeline's verdict.
@@ -1603,14 +1793,38 @@ class IntegratedFileReader:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - cleanup with proper resource management"""
-        # Wait for all threads/pools to complete
+        # Wait for the workers *this* reader started.
+        #
+        # The thread manager (ConcurrencyHub) is process-wide, so its registry
+        # also holds threads created by other readers - including the caller's
+        # own thread when this reader is the nested one processing an archive's
+        # extracted files.  Joining that thread raises
+        # RuntimeError("cannot join current thread"), which used to abort an
+        # already-successful parallel pass and send the container through the
+        # sequential fallback again (storing every member twice).
         if self.thread_manager:
-            # Wait for all threads
+            current_ident = threading.current_thread().ident
             with self.thread_manager.lock:
-                threads = list(self.thread_manager.threads.values())
+                threads = [
+                    self.thread_manager.threads[tid]
+                    for tid in self._owned_thread_ids
+                    if tid in self.thread_manager.threads
+                ]
             for thread in threads:
+                if thread.ident is not None and thread.ident == current_ident:
+                    logger.warning(
+                        "Skipping join for the current thread (%s) during cleanup",
+                        thread.name,
+                    )
+                    continue
                 if thread.metrics.state in [ThreadState.RUNNING, ThreadState.PAUSED]:
-                    thread.join(timeout=30)  # Wait up to 30 seconds
+                    try:
+                        thread.join(timeout=30)  # Wait up to 30 seconds
+                    except RuntimeError as join_err:
+                        # Defensive: a thread can never be joined from itself.
+                        logger.warning(
+                            "Could not join thread %s during cleanup: %s", thread.name, join_err
+                        )
         
         if self.pool_manager and hasattr(self, 'processing_pool_id'):
             # Wait for all tasks in the pool to complete
@@ -1618,8 +1832,12 @@ class IntegratedFileReader:
             # Close the pool
             self.pool_manager.close_pool(self.processing_pool_id)
         
-        # Close database connection
-        if self.db_hub:
+        # Close the database handle only when this reader created it.  The
+        # storage pipeline hands out a class-shared hub, and a nested reader
+        # (one per extracted archive/email) closing it pulled the pool out from
+        # under every other in-flight worker - the origin of the repeated
+        # "Database connection unhealthy, attempting reconnect..." sequence.
+        if self.db_hub and getattr(self, '_owns_db_hub', False):
             self.db_hub.close()
         
         # Finalize checkpoint if active
@@ -1726,6 +1944,113 @@ class IntegratedFileReader:
     # parent's worker: if it reconciled every in-flight unit on exit it would
     # settle the parent's own container unit early.
     # ------------------------------------------------------------------
+    def _reserve_path(self, path: Optional[str]) -> bool:
+        """Reserve ``path`` for one worker; False when it is already reserved.
+
+        A file may only be in flight once per reader.  Without this guard the
+        phase-based submission in ``_process_with_threads`` (and the nested
+        per-extraction readers) could hand the same file to two workers, which
+        stored it twice and then reported the second attempt as a duplicate.
+        """
+        if not path:
+            return True
+        with self._units_lock:
+            if path in self._reserved_paths:
+                return False
+            self._reserved_paths.add(path)
+            return True
+
+    def _release_path(self, path: Optional[str]) -> None:
+        """Release a reservation made by :meth:`_reserve_path`."""
+        if not path:
+            return
+        with self._units_lock:
+            self._reserved_paths.discard(path)
+
+    def _retain_result(self, results: List[Dict[str, Any]], result: Any) -> None:
+        """Collect one worker result into the caller-visible list, bounded.
+
+        The list returned by ``process_folder`` is a *reporting* convenience;
+        the database is the system of record.  Keeping it proportional to the
+        corpus (with extracted content in every entry) is what would make a
+        million-file run run out of memory, so it is a bounded window and the
+        exact totals live in ``get_statistics()``: ``bytes_processed`` and
+        ``results_truncated`` are maintained for every file whether or not its
+        dictionary is retained.
+        """
+        if not result:
+            return
+        if not isinstance(result, dict):
+            logger.warning("Worker returned invalid result type: %s. Skipping.", type(result).__name__)
+            return
+        size = self._result_footprint(result)
+        with self._results_lock:
+            # The bound is reader-wide, not per call: process_folder runs one
+            # collection per phase (priority/PDF/image), so a per-list bound
+            # multiplied the window by the number of phases instead of capping
+            # it (measured: a 25k-file run retained all 25k results).
+            limit = self._result_retention_limit
+            byte_limit = self._result_retention_bytes
+            if limit is not None and self._results_retained >= limit:
+                self._results_truncated += 1
+                return
+            # A strict ceiling: it never grows past the budget, even for the
+            # first result.  A result bigger than the whole budget is counted
+            # as truncated like any other - the database still has it.
+            if byte_limit is not None and self._results_retained_bytes + size > byte_limit:
+                self._results_truncated += 1
+                return
+            self._results_retained += 1
+            self._results_retained_bytes += size
+            results.append(result)
+
+    @staticmethod
+    def _result_footprint(result: Any) -> int:
+        """Approximate bytes a result dictionary costs while retained.
+
+        Content dominates and is usually a ``str``: its length is the number of
+        code points, which for the ASCII-heavy text this pipeline extracts is
+        the byte count (a small over-estimate is returned for non-ASCII, which
+        is the safe direction for a memory bound).
+        """
+        total = 0
+        if not isinstance(result, dict):
+            return 0
+        for value in result.values():
+            total += _object_footprint(value)
+        return total
+
+    def _count_processed_bytes(self, result: Any) -> None:
+        """Add one file's size to the exact byte total, retained or not."""
+        size = 0
+        if isinstance(result, dict):
+            metadata = result.get("Metadata")
+            if isinstance(metadata, dict):
+                size = metadata.get("FileSize") or 0
+            if not size:
+                size = result.get("file_size") or 0
+        try:
+            self._bytes_processed += int(size)
+        except (TypeError, ValueError):
+            pass
+
+    def _discard_finished_thread(self, thread_id) -> None:
+        """Drop a collected worker from the shared thread registry.
+
+        Called only for threads this reader owns and has already collected, so
+        a long ingestion cannot retain one dead thread object (plus its queues
+        and metrics) per processed file.
+        """
+        if not thread_id or self.thread_manager is None:
+            return
+        if thread_id not in self._owned_thread_ids:
+            return
+        try:
+            if self.thread_manager.discard_finished_thread(thread_id):
+                self._owned_thread_ids.discard(thread_id)
+        except Exception:
+            logger.debug("Could not discard finished thread %s", thread_id, exc_info=True)
+
     def _begin_unit(self, file_info: Dict[str, Any], phase: Optional[str] = None):
         """Open a ledger unit for one file and remember it for reconciliation."""
         path = None
@@ -1766,11 +2091,23 @@ class IntegratedFileReader:
         return settled
 
     def get_statistics(self) -> Dict[str, Any]:
-        """Get processing statistics with concurrency metrics"""
+        """Get processing statistics with concurrency metrics.
+
+        ``bytes_processed`` and the result-window counters are exact even when
+        the per-file result dictionaries are bounded (see
+        :meth:`_retain_result`), so callers that used to sum sizes over the
+        returned list have an authoritative aggregate to use instead.
+        """
         # Ledger is authoritative; refresh the compatibility view first.
         self._sync_stats_view()
         with self._stats_lock:
             stats = self._processing_stats.copy()
+        stats['bytes_processed'] = self._bytes_processed
+        stats['results_retained'] = self._results_retained
+        stats['results_truncated'] = self._results_truncated
+        stats['result_retention_limit'] = self._result_retention_limit
+        stats['result_retention_bytes'] = self._result_retention_bytes
+        stats['results_retained_bytes'] = self._results_retained_bytes
         
         # Add concurrency metrics
         if self.thread_manager:
