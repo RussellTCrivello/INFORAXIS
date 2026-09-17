@@ -33,7 +33,7 @@ Runtime/browser inspection could not be completed in the sandbox because Flask i
 
 | Area | Current finding | Risk interpretation |
 | --- | ---: | --- |
-| CSS files | 40 total, 39 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Good coverage, but several global/page boundaries are blurred. |
+| CSS files | 41 total, 40 scanned by `scripts/audit_ui_design.py` after excluding Bootstrap | Good coverage, but several global/page boundaries are blurred. |
 | Template inline `style="..."`/`style='...'` attributes | 104 | Mostly runtime visibility/progress/theme swatches; the two base-page visual hits are favicon SVG stop-color attributes. |
 | Template `<style>` blocks | 2 | Both are in `templates/base.html` for runtime custom CSS/theme injection and should remain controlled. |
 | JavaScript inline style literals (`style="..."` / `style='...'`) | 42 | Several are dynamic/progress states, but some are still presentational. |
@@ -385,6 +385,10 @@ It is acceptable functionally, but it does not match the advanced data-analysis 
 **Recommended action**
 
 Promote Users to the data-interface workbench pattern: filters for role/status, saved views, row selection, bulk activation/deactivation where permissions allow, and enterprise modal states.
+
+**Follow-up now applied**
+
+User administration now uses a dedicated governance workspace shell, stable search/role/status filters, an enhanced accounts table region, a compact capability workbench, DOM-safe row rendering, delegated row actions, translated labels, and the shared confirmation/message system where available.
 
 ## 7. P1 / design-system and CSS architecture issues
 
