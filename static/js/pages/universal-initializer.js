@@ -72,6 +72,9 @@ const pageHandlers = {
     'email-words': () => import('./email-words-page.js'),
     'archives': () => import('./archives-page.js'),
     'path-analysis': () => import('./path-analysis-page.js'),
+    'concurrency-workspace': () => import('./concurrency-dashboard-page.js'),
+    'import-workspace': () => import('./import-center-page.js'),
+    'users-workspace': () => import('./users-page.js'),
     'default': () => Promise.resolve({ default: () => {} }) // No-op for default
 };
 

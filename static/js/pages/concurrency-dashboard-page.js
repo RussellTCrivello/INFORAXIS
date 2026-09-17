@@ -361,3 +361,7 @@ if (document.readyState === 'loading') {
 } else {
     initConcurrencyDashboard();
 }
+
+export default function init() {
+    return Promise.resolve();
+}

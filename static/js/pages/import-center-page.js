@@ -278,3 +278,7 @@ if (document.readyState === 'loading') {
 } else {
     initImportCenter();
 }
+
+export default function init() {
+    return Promise.resolve();
+}
