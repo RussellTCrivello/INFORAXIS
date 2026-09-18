@@ -879,24 +879,75 @@ def identify(path: str, declared_name: Optional[str] = None, deep: bool = True,
     return result
 
 
+#: Control bytes that never appear in ordinary text (tab, newline, form feed
+#: and carriage return excluded).  DEL counts too.  These are the same signal
+#: the discrepancy analysis calls "NUL/control bytes with no textual
+#: structure".
+_NON_TEXT_CONTROL_BYTES = frozenset(
+    byte for byte in range(0x20) if byte not in (0x09, 0x0A, 0x0C, 0x0D)
+) | {0x7F}
+
+#: Share of control bytes above which a sample is not treated as text at all.
+_CONTROL_BYTE_TOLERANCE = 0.02
+
+#: Minimum text-likeness for the weak text detection to fire.
+_TEXT_LIKENESS_THRESHOLD = 0.85
+
+
 def _text_likeness(data: bytes) -> Optional[float]:
     """Score how much a byte string looks like text (``None`` if binary).
 
-    A NUL byte is the decisive tell for a binary payload; the score then weighs
-    printable ASCII, whitespace and UTF-8-multi-byte structure. A file declared
-    ``.txt`` that contains NULs is *not* text and must not be parsed as such.
+    A NUL byte is the decisive tell for a binary payload, and *other* control
+    bytes count against a payload rather than being ignored: text that is worth
+    reading as text does not carry ``0x01``-``0x08`` runs. Ignoring them made a
+    payload like ``b"\x01\x02\x03\x04 bytes with no known magic"`` score 0.87
+    and get promoted to ``text/plain``, so an unidentifiable binary file was
+    stored as a successfully processed text document instead of being recorded
+    as an unsupported type - the "degraded extraction reported as success" case
+    this pipeline has to avoid, and a change in stored classification rather
+    than in capability.
+
+    The score still weighs printable ASCII, whitespace and UTF-8-multi-byte
+    structure, so accented or non-Latin text is unaffected.
     """
     sample = data[: SNIFF_HEADER_SIZE]
     if not sample:
         return None
     if b"\x00" in sample:
         return None
+    control = sum(1 for b in sample if b in _NON_TEXT_CONTROL_BYTES)
+    if control and (control / len(sample)) > _CONTROL_BYTE_TOLERANCE:
+        # More than an accidental stray control byte: no textual structure to
+        # parse, whatever the extension claims.
+        return None
     printable = sum(1 for b in sample if 32 <= b < 127 or b in (9, 10, 13))
     high = sum(1 for b in sample if b >= 128)
-    score = (printable + high * 0.5) / len(sample)
-    if high and (printable + high * 0.5) / len(sample) < 0.6:
+    # Non-ASCII bytes are text when they form valid UTF-8 (an accented or
+    # non-Latin document), and ambiguous when they do not (a legacy codepage, or
+    # a binary payload that happens to be high-bit). The previous fixed 0.5
+    # weight rejected perfectly ordinary ``.txt`` content such as
+    # "café naïve résumé": the bytes are text, but the score said otherwise.
+    high_weight = 1.0 if _decodes_as_utf8(sample) else 0.5
+    score = (printable + high * high_weight) / len(sample)
+    if high and score < 0.6:
         return None
-    return score if score >= 0.85 else None
+    return score if score >= _TEXT_LIKENESS_THRESHOLD else None
+
+
+def _decodes_as_utf8(sample: bytes) -> bool:
+    """Whether ``sample`` is valid UTF-8, tolerating a truncated final char.
+
+    The sample is a fixed-size prefix, so it can end mid-sequence; an
+    incremental decoder with ``final=False`` treats that tail as incomplete
+    rather than invalid.
+    """
+    try:
+        import codecs
+
+        codecs.getincrementaldecoder("utf-8")(errors="strict").decode(sample, final=False)
+        return True
+    except Exception:
+        return False
 
 
 def _finish(result: DetectionResult) -> DetectionResult:

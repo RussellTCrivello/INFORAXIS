@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import pathlib
 import sys
+import tempfile
 
 import pytest
 
@@ -25,14 +26,141 @@ os.environ.setdefault("FLASK_SECRET_KEY", "test-secret-key-not-for-production-01
 os.environ.setdefault("FLASK_ENV", "development")
 
 
+def _probe(settings: dict, timeout: int = 5):
+    """Can we actually connect with these settings? ``(ok, reason)``.
+
+    Resolving a server address is not the same as reaching one. A wrong port
+    or host silently connects to *something else* - on a workstation that
+    usually means the application's own PostgreSQL, which answers with
+    "fe_sendauth: no password supplied" or an authentication failure. Probing
+    turns that into a precise answer instead of a wall of identical tracebacks
+    from tests that never had a chance to run.
+    """
+    try:
+        import psycopg2
+    except Exception as exc:  # pragma: no cover - dependency missing
+        return False, f"psycopg2 unavailable ({exc})"
+    try:
+        # Probe the *maintenance* database. The test database does not exist
+        # until the bootstrap creates it, so probing it would fail on a
+        # perfectly healthy server ("database ... does not exist") and skip
+        # the whole suite.
+        conn = psycopg2.connect(
+            dbname="postgres",
+            user=settings.get("user") or "postgres",
+            password=settings.get("password") or "",
+            host=settings.get("host") or "localhost",
+            port=int(settings.get("port") or 5432),
+            connect_timeout=timeout,
+        )
+        conn.close()
+        return True, ""
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def _pgserver_settings(server, db_name: str):
+    """Settings for a pgserver instance, including the raw URI for diagnosis."""
+    uri = server.get_uri()
+    return pg_connection_settings(server, db_name), uri
+
+
+def _candidate_databases(db_name: str):
+    """Every reachable PostgreSQL this suite may use, best candidate first.
+
+    Ordered so the disposable server wins when it works, and an explicitly
+    configured server is honoured when it does not:
+
+      1. pgserver's own instance (hermetic, trust authentication);
+      2. ``DB_HOST``/``DB_PORT``/``DB_USER``/``DB_PASSWORD`` from the
+         environment;
+      3. the application's configured database (``get_database_config``).
+
+    ``bootstrap_database`` creates and migrates a *test-named* database, so
+    pointing the suite at an existing server does not touch application data.
+    """
+    candidates = []
+
+    try:
+        import pgserver
+
+        data_dir = pathlib.Path(tempfile.mkdtemp(prefix="pgdata_"))
+        server = pgserver.get_server(str(data_dir))
+        settings, uri = _pgserver_settings(server, db_name)
+        candidates.append((settings, "pgserver", server, uri))
+    except Exception as exc:
+        candidates.append((None, "pgserver", None,
+                           f"could not start a disposable server: "
+                           f"{type(exc).__name__}: {exc}"))
+
+    if os.environ.get("DB_HOST"):
+        candidates.append((
+            {
+                "host": os.environ.get("DB_HOST"),
+                "port": int(os.environ.get("DB_PORT") or 5432),
+                "user": os.environ.get("DB_USER") or "postgres",
+                "password": os.environ.get("DB_PASSWORD") or "",
+                "database": db_name,
+            },
+            "environment (DB_HOST/DB_PORT/DB_USER)", None, "from environment",
+        ))
+
+    try:
+        from settings import get_database_config
+
+        configured = get_database_config()
+        candidates.append((
+            {
+                "host": getattr(configured, "host", None),
+                "port": int(getattr(configured, "port", 5432) or 5432),
+                "user": getattr(configured, "user", None) or "postgres",
+                "password": getattr(configured, "password", "") or "",
+                "database": db_name,
+            },
+            "application configuration", None, "from settings",
+        ))
+    except Exception:
+        pass
+
+    return candidates
+
+
 @pytest.fixture(scope="session")
-def pg_server(tmp_path_factory):
-    """Start a disposable PostgreSQL server (pgserver bundles the binaries)."""
-    pgserver = pytest.importorskip("pgserver")
-    data_dir = tmp_path_factory.mktemp("pgdata")
-    server = pgserver.get_server(str(data_dir))
-    yield server
-    # Server cleanup handled by pgserver/tmp lifetime.
+def pg_settings(tmp_path_factory):
+    """A reachable PostgreSQL, found by probing rather than assuming.
+
+    Skips - once, with the reason - when nothing is reachable, instead of
+    letting every database test fail individually with the same error.
+    """
+    db_name = f"file_analysis_test_{os.getpid()}"
+    attempts = []
+    for settings, source, server, detail in _candidate_databases(db_name):
+        if settings is None:
+            attempts.append(f"{source}: {detail}")
+            continue
+        ok, reason = _probe(settings)
+        if ok:
+            pytest.pg_server_instance = server  # reused by the pg_server fixture
+            return settings
+        attempts.append(
+            f"{source}: {settings.get('host')}:{settings.get('port')} -> {reason}"
+            + (f" (uri: {detail})" if detail != "from environment" else ""))
+
+    pytest.skip(
+        "No reachable PostgreSQL for the integration suite. Tried:\n  - "
+        + "\n  - ".join(attempts)
+        + "\nPoint the suite at a server with DB_HOST/DB_PORT/DB_USER/DB_PASSWORD "
+          "(a test-named database is created on it; application data is not touched)."
+    )
+
+
+@pytest.fixture(scope="session")
+def pg_server(pg_settings):
+    """The disposable server, when one could be reached (else the suite skips)."""
+    server = getattr(pytest, "pg_server_instance", None)
+    if server is None:
+        pytest.skip("no disposable PostgreSQL server available in this environment")
+    return server
 
 
 def pg_connection_settings(server, db_name: str) -> dict:
@@ -69,16 +197,6 @@ def pg_connection_settings(server, db_name: str) -> dict:
         "password": urllib.parse.unquote(parsed.password or ""),
         "database": db_name,
     }
-
-
-@pytest.fixture(scope="session")
-def pg_settings(pg_server):
-    """Where the disposable server is listening, as a connection dict.
-
-    Exposed as a fixture so every test that needs the server's address gets the
-    same platform-correct answer instead of re-parsing the URI itself.
-    """
-    return pg_connection_settings(pg_server, f"file_analysis_test_{os.getpid()}")
 
 
 @pytest.fixture(scope="session")
