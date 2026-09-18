@@ -1,4 +1,10 @@
 # Document, artifact and compute architecture
+> **Selecting the execution policy:** the compute mode (CPU-only,
+> GPU-only, automatic) is chosen by the operator on the command line or
+> in the project configuration, with a documented precedence, startup
+> reporting and per-workload recording. See
+> [compute-modes.md](../configuration/compute-modes.md).
+
 
 This document describes the processing architecture as implemented, and states
 plainly which parts are **verified on this machine**, which are **measured**, and

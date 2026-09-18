@@ -1452,6 +1452,17 @@ def main():
     record_command_line_action("SYSTEM", "Application started", {"log_file": str(log_file)})
     safe_print(f"[INFO] Action recording started: {log_file}\n")
     
+    # Compute policy: report the effective mode and the layer that set it, and
+    # refuse up front when the selection cannot be honoured on this host.
+    if apply_compute_mode(None) != 0:
+        safe_print("\n[ERROR] Cannot start: the selected compute mode cannot be "
+                   "honoured. Fix the configuration and start again.")
+        try:
+            stop_action_recording()
+        except Exception:
+            pass
+        return 1
+
     # Display mode
     mode = "THREADED" if USE_THREADING else "SEQUENTIAL"
     safe_print(f"[INFO] Processing Mode: {mode}")
@@ -1664,6 +1675,76 @@ def main():
         if is_recording_enabled():
             safe_print(f"\n[INFO] Action recording stopped. Log saved to: {log_file}")
 
+def extract_compute_mode_flag(argv):
+    """Pull ``--compute-mode VALUE`` (or ``--compute-mode=VALUE``) out of argv.
+
+    The interactive front-end has no argument parser, so the policy flag is
+    extracted here and applied before either front-end runs. Returns
+    ``(value_or_None, remaining_argv)``; raises ValueError when the flag is
+    present without a value so the caller can report it.
+    """
+    rest, value = [], None
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--compute-mode":
+            if i + 1 >= len(argv):
+                raise ValueError("--compute-mode requires a value "
+                                 "(cpu, gpu, cpu+gpu or auto)")
+            value = argv[i + 1]
+            i += 2
+            continue
+        if arg.startswith("--compute-mode="):
+            value = arg.split("=", 1)[1]
+            i += 1
+            continue
+        rest.append(arg)
+        i += 1
+    return value, rest
+
+
+def apply_compute_mode(value=None, *, quiet=False, printer=None):
+    """Resolve, report and validate the compute policy. Returns an exit code.
+
+    This is the single application point for the operator's mode selection:
+    the command line (``--compute-mode``) is pinned first, then the effective
+    mode is reported with the configuration layer it came from, the host's
+    ability to honour it is checked *before* any work starts, and a mode that
+    cannot be honoured fails here with an actionable error instead of
+    degrading silently. Returns 0 when the run may proceed, 1 otherwise.
+    """
+    from core.compute import policy as compute_policy
+
+    printer = printer or safe_print
+    try:
+        if value is not None:
+            selection = compute_policy.set_mode_override(
+                value, source=f"command line (--compute-mode {value})"
+            )
+        else:
+            selection = compute_policy.mode_selection()
+    except compute_policy.ComputeModeError as exc:
+        printer(f"[ERROR] {exc}")
+        return 1
+
+    support = compute_policy.mode_support(selection)
+    compute_policy.record(selection, support)
+    if not quiet:
+        compute_policy.emit(selection, support, printer=printer)
+    if not support.ok:
+        if quiet:
+            # ``emit`` was suppressed, so the reason must still be visible.
+            printer(f"[ERROR] {support.problem}")
+            if support.action:
+                printer(f"[ACTION] {support.action}")
+        return 1
+    if support.degraded and not quiet:
+        printer(f"[WARNING] {support.problem}")
+        if support.action:
+            printer(f"[ACTION] {support.action}")
+    return 0
+
+
 def cli_main(argv=None) -> int:
     """Non-interactive CLI entry point (thin adapter over IngestionService).
 
@@ -1692,6 +1773,14 @@ def cli_main(argv=None) -> int:
     parser.add_argument("--side", required=True, help="Side name for storage")
     parser.add_argument("--workers", type=int, default=0,
                         help="Worker threads (0 = configured default)")
+    parser.add_argument("--compute-mode", dest="compute_mode", default=None,
+                        metavar="MODE",
+                        help="Compute policy: cpu (CPU-only), gpu (GPU-only, "
+                             "strict - refuses rather than substituting the "
+                             "CPU), cpu+gpu (both worker sets) or auto "
+                             "(automatic routing). Overrides "
+                             "processing.compute_mode in data/settings.json; "
+                             "default: the configured value, else auto.")
     parser.add_argument("--checkpoint", default=None,
                         help="Checkpoint name for crash recovery/resume")
     parser.add_argument("--no-recursive", action="store_true",
@@ -1702,6 +1791,16 @@ def cli_main(argv=None) -> int:
     parser.add_argument("--quiet", action="store_true", help="Suppress progress output")
     parser.add_argument("--verbose", action="store_true", help="Verbose logging")
     args = parser.parse_args(argv)
+
+    # The compute policy is applied before anything else: an impossible
+    # request (e.g. GPU-ONLY on a host with no GPU) must fail here, not after
+    # files have been read, and the selected mode must be visible at startup.
+    policy_exit = apply_compute_mode(
+        args.compute_mode, quiet=args.quiet,
+        printer=(lambda line: None) if output_json else None,
+    )
+    if policy_exit:
+        return policy_exit
 
     output_json = args.json or args.format == "json"
 
@@ -1775,6 +1874,9 @@ def cli_main(argv=None) -> int:
         return 3
 
     failed = int(result.stats.get("files_failed") or 0)
+    from core.compute import policy as compute_policy
+
+    compute_record = compute_policy.result_block()
     payload = {
         "success": True,
         "path": request.path,
@@ -1786,18 +1888,38 @@ def cli_main(argv=None) -> int:
             "duplicates": result.stats.get("files_duplicates"),
             "failed": failed,
         },
+        # The compute policy travels with the results: requested mode, its
+        # configuration layer, the devices that actually executed work and any
+        # fallback or capability refusal.
+        "compute": compute_record,
     }
-    _emit(payload, f"[OK] Ingestion complete: {payload['summary']}")
+    actual = ", ".join(f"{device} x{count}"
+                       for device, count in sorted(compute_record["actual_devices"].items()))
+    summary_line = (f"[OK] Ingestion complete: {payload['summary']} | "
+                    f"Compute Mode: {compute_record['mode_label']}"
+                    + (f" | Actual Device: {actual}" if actual else ""))
+    _emit(payload, summary_line)
     return 2 if failed else 0
 
 if __name__ == "__main__":
-    # Dispatch: flags -> non-interactive service adapter (cli_main);
-    # no flags -> legacy interactive flow (deprecated, kept for
-    # terminal-only environments).
-    if any(a.startswith("-") for a in sys.argv[1:]):
-        sys.exit(cli_main())
+    # Dispatch: any flag -> non-interactive service adapter (cli_main);
+    # policy-only or no flags -> legacy interactive flow (deprecated, kept for
+    # terminal-only environments). ``--compute-mode`` is accepted by both
+    # front-ends, so it is recognised here rather than being mistaken for an
+    # ingestion flag with missing --path/--source/--side.
     try:
-        main()
+        _requested_mode, _remaining = extract_compute_mode_flag(sys.argv[1:])
+    except ValueError as _mode_error:
+        safe_print(f"[ERROR] {_mode_error}")
+        sys.exit(1)
+
+    if any(a.startswith("-") for a in _remaining):
+        sys.exit(cli_main())
+    if _requested_mode is not None:
+        if apply_compute_mode(_requested_mode) != 0:
+            sys.exit(1)
+    try:
+        sys.exit(main() or 0)
     
     except KeyboardInterrupt:
         print("\n\nInterrupted by user. Exiting...")

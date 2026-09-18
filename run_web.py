@@ -110,6 +110,26 @@ def _run_main():
     if debug_mode:
         print("[WARNING] Flask debug mode is ENABLED - development use only")
 
+    # Compute policy: report the effective mode (and the layer that set it)
+    # before serving. The web application still starts when the configured mode
+    # cannot be honoured - an operator must be able to reach the UI to fix the
+    # setting - but the problem is stated here and every workload that requires
+    # the missing device is refused by the gateway rather than silently run on
+    # the CPU.
+    try:
+        from core.compute import policy as compute_policy
+
+        selection = compute_policy.mode_selection()
+        support = compute_policy.mode_support(selection)
+        compute_policy.record(selection, support)
+        compute_policy.emit(selection, support, printer=print)
+        if not support.ok:
+            print(f"[WARNING] {support.problem}")
+            if support.action:
+                print(f"[ACTION] {support.action}")
+    except Exception as policy_exc:  # never block startup over the banner
+        print(f"[WARNING] Compute policy could not be resolved: {policy_exc}")
+
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', '5000'))
     print(f"[OK] Starting web server on http://127.0.0.1:{port} (press CTRL+C to stop)")

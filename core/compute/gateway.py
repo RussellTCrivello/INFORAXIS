@@ -629,10 +629,55 @@ class ComputeGateway:
                 )
 
         backend = self._backend_for(decision, workload)
+        downgrade_reason = None
+
+        # A device can be present and still have nothing that can execute *this*
+        # workload on it (a verified GPU with no GPU implementation registered
+        # for the stage). Reaching the CPU callable in that state without saying
+        # so is the silent substitution this layer forbids, and it used to be
+        # exactly what happened: the placement record said
+        # ``selected_device=gpu, actual_device=cpu, fallback_reason=None``.
+        # The decision is therefore downgraded *here*, explicitly, with its
+        # reason - and strict GPU mode refuses instead.
+        if backend is None and decision.accelerated:
+            reason = (f"no executable {decision.device} backend is registered for "
+                      f"workload '{workload.value}'")
+            if requires_accelerator_in(self.mode, workload, CPU):
+                if self.allow_cpu_fallback:
+                    self._record_fallback(
+                        workload, self.mode,
+                        f"{reason}; COMPUTE_GPU_FALLBACK is set, so the CPU ran it",
+                    )
+                else:
+                    with self._lock:
+                        self.stats.capability_errors += 1
+                        self.stats.submitted = max(0, self.stats.submitted - 1)
+                        self._record_execution_locked(
+                            workload, selected_device=decision.device,
+                            actual_device=None, backend=None,
+                            duration_s=0.0, outcome="capability_error",
+                            fallback_reason=reason, mode=self.mode,
+                        )
+                    raise DeviceUnavailableError(
+                        f"execution mode '{self.mode.value}' requires an accelerator "
+                        f"for workload '{workload.value}', but {reason}. "
+                        f"Detected devices: {self._detected_devices_summary()}. "
+                        f"Either provide the accelerator path or request a different "
+                        f"mode (cpu / cpu+gpu / auto); set COMPUTE_GPU_FALLBACK=1 to "
+                        f"permit an explicit CPU fallback.",
+                        workload=workload.value,
+                        requested_mode=self.mode.value,
+                        detected=self._detected_devices_summary(),
+                    )
+            self._record_fallback(workload, self.mode, reason)
+            decision = DeviceDecision(workload=workload, device=CPU, backend="cpu",
+                                      reason=reason, accelerated=False)
+            downgrade_reason = reason
+
         t_exec = time.perf_counter()
         error = False
         actual_device = CPU
-        fallback_reason = None
+        fallback_reason = downgrade_reason
         try:
             if backend is not None:
                 # The backend receives the same arguments as the CPU callable
@@ -892,12 +937,20 @@ def configured_limits() -> Dict[str, Any]:
 
 
 def _configured_mode() -> ExecutionMode:
-    """Execution mode from the environment / settings, defaulting to AUTO."""
-    value = configured_limits()["mode"]
-    try:
-        return ExecutionMode.parse(value)
-    except ValueError:
-        logger.warning("Ignoring invalid compute mode %r", value)
+    """The effective mode, resolved by the operator-facing policy layer.
+
+    Precedence (see :mod:`core.compute.policy`): command line
+    (``--compute-mode``) > environment (``COMPUTE_MODE``) > project
+    configuration (``processing.compute_mode``) > default (``auto``).
+
+    Resolution lives in one place so the CLI, the web application and the
+    gateway can never disagree about which mode was selected. The mode is a
+    user-controlled policy: nothing here changes it because of load, missing
+    hardware or measured performance.
+    """
+    from .policy import mode_selection
+
+    return mode_selection().mode
     return ExecutionMode.AUTO
 
 

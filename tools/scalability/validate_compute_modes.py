@@ -28,7 +28,15 @@ Modes exercised:
 
     gateway            : process-wide gateway, requested mode (default AUTO)
     cpu                : COMPUTE_MODE=cpu
-    gpu                : COMPUTE_MODE=gpu  (expected: graceful CPU fallback)
+    gpu                : COMPUTE_MODE=gpu  (strict: GPU required). A workload
+                         with a GPU implementation must run on the GPU; on a
+                         host that has none the correct outcome is an explicit
+                         refusal, which this validator accepts *and reports* -
+                         a silent CPU substitution fails the run.
+    gpu+fallback       : COMPUTE_MODE=gpu + COMPUTE_GPU_FALLBACK=1 (the explicit
+                         opt-in that permits recorded CPU execution under the
+                         gpu policy - kept separate so the two can never be
+                         confused)
     cpu+gpu            : COMPUTE_MODE=cpu+gpu
     bypass             : COMPUTE_GATEWAY=0 (the layer switched off entirely)
 
@@ -53,12 +61,19 @@ HERE = Path(__file__).resolve().parent
 PROJECT_ROOT = HERE.parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+#: (name, child environment, refusal_allowed)
+#:
+#: ``refusal_allowed`` marks the modes whose *correct* behaviour on a host
+#: without the required device is an explicit refusal. It is not a licence to
+#: skip work: a refusal is reported in the validation report, and any mode that
+#: runs must match the bypass reference object for object.
 MODES = (
-    ("cpu", {"COMPUTE_MODE": "cpu"}),
-    ("auto", {"COMPUTE_MODE": "auto"}),
-    ("gpu", {"COMPUTE_MODE": "gpu"}),
-    ("cpu+gpu", {"COMPUTE_MODE": "cpu+gpu"}),
-    ("bypass", {"COMPUTE_GATEWAY": "0"}),
+    ("cpu", {"COMPUTE_MODE": "cpu"}, False),
+    ("auto", {"COMPUTE_MODE": "auto"}, False),
+    ("gpu", {"COMPUTE_MODE": "gpu"}, True),
+    ("gpu+fallback", {"COMPUTE_MODE": "gpu", "COMPUTE_GPU_FALLBACK": "1"}, False),
+    ("cpu+gpu", {"COMPUTE_MODE": "cpu+gpu"}, False),
+    ("bypass", {"COMPUTE_GATEWAY": "0"}, False),
 )
 
 
@@ -83,11 +98,22 @@ def main(argv=None) -> int:
                         "--seed", "31337"], check=True, timeout=1800)
 
     results = {}
-    for name, env in MODES:
+    refusals = {}
+    for name, env, refusal_allowed in MODES:
         pgdata = workdir / f"pg_{name.replace('+', '_')}"
-        fingerprints = _fingerprint_with_env(corpus, pgdata, env)
+        fingerprints = _fingerprint_with_env(corpus, pgdata, env,
+                                             refusal_allowed=refusal_allowed)
+        if fingerprints is None:
+            refusals[name] = (
+                "the selected compute mode refused to run: the device it "
+                "requires is not available on this host (see the child run's "
+                "summary.json and action log)"
+            )
+            print(f"{name:>12}: refused by compute policy - required device "
+                  f"unavailable (explicit, not substituted)", flush=True)
+            continue
         results[name] = fingerprints
-        print(f"{name:>8}: {len(fingerprints)} stored objects fingerprinted",
+        print(f"{name:>12}: {len(fingerprints)} stored objects fingerprinted",
               flush=True)
 
     reference_name = "bypass"
@@ -113,6 +139,7 @@ def main(argv=None) -> int:
     report = {
         "corpus": str(corpus),
         "objects_fingerprinted": {k: len(v) for k, v in results.items()},
+        "refused_by_policy": refusals,
         "reference": reference_name,
         "identical": not failures,
         "differences": failures,
@@ -124,8 +151,15 @@ def main(argv=None) -> int:
     return 0 if not failures else 1
 
 
-def _fingerprint_with_env(corpus: Path, pgdata: Path, env: dict) -> dict:
-    """Fingerprint a run, applying the mode's environment to a child process."""
+def _fingerprint_with_env(corpus: Path, pgdata: Path, env: dict,
+                          refusal_allowed: bool = False) -> dict | None:
+    """Fingerprint a run, applying the mode's environment to a child process.
+
+    Returns ``None`` when ``refusal_allowed`` and the child exited non-zero -
+    the mode declined to run because its required device is absent, which is
+    the documented behaviour for a strict mode on such a host. Any other
+    non-zero exit is still a failure.
+    """
     out = pgdata.parent / f"run_{pgdata.name}"
     child_env = dict(os.environ)
     child_env.pop("COMPUTE_MODE", None)
@@ -142,6 +176,8 @@ def _fingerprint_with_env(corpus: Path, pgdata: Path, env: dict) -> dict:
     # failure even if its rows happen to match: "identical because the work was
     # skipped" is exactly the outcome this validator exists to rule out.
     if completed.returncode != 0:
+        if refusal_allowed:
+            return None
         raise RuntimeError(f"{pgdata.name}: ingest exited with "
                            f"{completed.returncode}; see {out}/summary.json")
     summary_path = Path(out) / "summary.json"

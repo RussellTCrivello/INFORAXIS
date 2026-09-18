@@ -49,11 +49,35 @@ initialize_system()
 if __name__ == '__main__':
     # Compatibility adapter: with arguments -> non-interactive service run;
     # with no arguments -> the legacy interactive flow (deprecated).
-    from apps.cli.main import cli_main, main
+    #
+    # ``--compute-mode`` is a global processing policy, accepted by both
+    # front-ends: on its own it preselects the mode and still opens the
+    # interactive flow, which is how the operator switches policy for a
+    # manual run without editing data/settings.json.
+    from apps.cli.main import cli_main, extract_compute_mode_flag, main
 
-    if len(sys.argv) > 1:
+    try:
+        requested_mode, remaining = extract_compute_mode_flag(sys.argv[1:])
+    except ValueError as mode_error:
+        print(f"[ERROR] {mode_error}")
+        sys.exit(1)
+
+    if any(arg.startswith('-') for arg in remaining):
+        # The non-interactive adapter parses and applies the flag itself.
         sys.exit(cli_main())
-    main()
+
+    if requested_mode is not None:
+        # Pin the policy without printing: the interactive flow reports the
+        # effective mode (and refuses an impossible one) once, at startup.
+        try:
+            from core.compute.policy import set_mode_override
+
+            set_mode_override(requested_mode,
+                              source=f"command line (--compute-mode {requested_mode})")
+        except ValueError as mode_error:
+            print(f"[ERROR] {mode_error}")
+            sys.exit(1)
+    sys.exit(main() or 0)
 else:
     # When imported by multiprocessing child process, ensure path is set up
     setup_project_path()
