@@ -756,6 +756,43 @@ class OfficeFileReader(BaseReader):
         }
 
 
+    #: Suffixes openpyxl accepts when it is handed a *path*.  Anything else has
+    #: to be handed an open binary stream - see ``_load_workbook_by_content``.
+    _OPENPYXL_PATH_SUFFIXES = (".xlsx", ".xlsm", ".xltx", ".xltm")
+
+    def _load_workbook_by_content(self, filepath, openpyxl):
+        """Open a spreadsheet by its bytes, not by its filename.
+
+        openpyxl refuses a *path* whose extension is not one of its supported
+        formats before it looks at the content:
+
+            openpyxl does not support .docx file format, please check you can
+            open it with Excel first. Supported formats are:
+            .xlsx,.xlsm,.xltx,.xltm
+
+        That is the error a real corpus produced for an attachment named
+        ``attachment_00520.docx`` whose bytes are an xlsx workbook - the router
+        had already resolved the content-verified type to ``.xlsx`` and sent it
+        here, and the reader then failed the file because of its *name*,
+        storing it with no text at all.
+
+        The extension check is skipped for file-like objects, so a stream is
+        passed whenever the declared name is not a supported spreadsheet
+        suffix. Content wins over the name, which is the whole point of
+        content-based routing; files whose names are already correct keep the
+        exact code path they had before.
+        """
+        suffix = os.path.splitext(filepath)[1].lower()
+        if suffix in self._OPENPYXL_PATH_SUFFIXES:
+            return openpyxl.load_workbook(filepath, data_only=True)
+        logger.info(
+            "Opening %s as a spreadsheet by content (declared suffix %r is not "
+            "a supported openpyxl path suffix)",
+            os.path.basename(filepath), suffix or "(none)",
+        )
+        with open(filepath, "rb") as handle:
+            return openpyxl.load_workbook(handle, data_only=True)
+
     def read_xlsx_file(self, filepath):
         """Independent XLSX reader function with image extraction and OCR."""
         try:
@@ -770,7 +807,7 @@ class OfficeFileReader(BaseReader):
             if not os.path.exists(filepath):
                 return {"error": "File not found", "filepath": filepath}
             
-            workbook = openpyxl.load_workbook(filepath, data_only=True)
+            workbook = self._load_workbook_by_content(filepath, openpyxl)
             
             result = {
                 "filepath": filepath,

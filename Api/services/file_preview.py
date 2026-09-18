@@ -4,6 +4,7 @@ Handles in-browser preview of images, PDFs, and documents
 """
 
 import logging
+import os
 from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 import mimetypes
@@ -312,7 +313,17 @@ class FilePreviewService:
             }
         
         try:
-            wb = openpyxl.load_workbook(file_path, read_only=True)
+            # Read by content when the name is not a supported spreadsheet
+            # suffix: openpyxl refuses a *path* by extension before it looks at
+            # the bytes, so a spreadsheet stored under an inherited container
+            # name (e.g. ``attachment_00520.docx``) previewed as an error even
+            # though the ingestion pipeline had identified it as xlsx. The
+            # extension check does not apply to file-like objects.
+            if os.path.splitext(file_path)[1].lower() in ('.xlsx', '.xlsm', '.xltx', '.xltm'):
+                wb = openpyxl.load_workbook(file_path, read_only=True)
+            else:
+                with open(file_path, 'rb') as handle:
+                    wb = openpyxl.load_workbook(handle, read_only=True)
             if len(wb.sheetnames) > 0:
                 ws = wb[wb.sheetnames[0]]
                 

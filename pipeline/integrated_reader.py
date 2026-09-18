@@ -731,7 +731,19 @@ class IntegratedFileReader:
         # not by the corpus, and hashing happens once - in the parallel store
         # stage, which computes the identical streamed SHA-256.
         # ------------------------------------------------------------------
-        print("\n📂 Reading directory tree...")
+        # A nested reader is a sub-run *inside* one container's file (archive
+        # members, email attachments, embedded objects). Run-level reporting -
+        # discovery totals, phase headers, the processing summary - belongs to
+        # the reader that owns the run: a nested reader shares the parent's
+        # ledger, so printing "Total files found: 19 566" and "RUN INCOMPLETE:
+        # 19 543 discovered file(s) were not processed" once per container
+        # reported the parent's backlog as if every sub-run had failed, which
+        # made a healthy 19 566-file run read as hundreds of broken ones. The
+        # nested reader still reports its own per-file results and metrics, and
+        # the router prints each container's storage outcome after it returns.
+        nested_run = bool(self._container_path)
+        if not nested_run:
+            print("\n📂 Reading directory tree...")
         try:
             inventory = self._inventory_tree(folder_path)
         except Exception as tree_err:
@@ -758,13 +770,15 @@ class IntegratedFileReader:
         total_files = inventory['total'] - skipped_count
         remaining_files = total_files
 
-        print(f"Found {file_count} files" + (f" and {error_count} items with errors" if error_count > 0 else ""))
+        if not nested_run:
+            print(f"Found {file_count} files" + (f" and {error_count} items with errors" if error_count > 0 else ""))
 
         if error_count > 0:
             logger.warning(f"⚠️  {error_count} files/folders have access errors but will still be stored in database")
 
         if skipped_count > 0:
-            print(f"Resuming: {skipped_count} files already processed, {remaining_files} remaining")
+            if not nested_run:
+                print(f"Resuming: {skipped_count} files already processed, {remaining_files} remaining")
             # DATA-04: checkpoint-resumed files count as skipped, not discovered.
             if self.storage_pipeline is not None:
                 self.storage_pipeline.record_skipped(
@@ -780,7 +794,7 @@ class IntegratedFileReader:
             )
 
         if not total_files:
-            if self.checkpoint_manager:
+            if self.checkpoint_manager and not nested_run:
                 checkpoint_stats = self.checkpoint_manager.get_statistics()
                 print(f"\n✅ All files already processed! (Total: {checkpoint_stats['processed_count']} files)")
             # Still publish: the ledger may hold skipped/terminal work and the
@@ -794,9 +808,10 @@ class IntegratedFileReader:
         batch_size = 1000  # Process 1000 files at a time for continuous processing
 
         phase_counts = inventory['phases']
-        print(f"  📄 Priority files: {phase_counts['other']}")
-        print(f"  📑 PDF files: {phase_counts['pdf']} (will be processed second-to-last)")
-        print(f"  🖼️  Image files: {phase_counts['image']} (will be processed last)")
+        if not nested_run:
+            print(f"  📄 Priority files: {phase_counts['other']}")
+            print(f"  📑 PDF files: {phase_counts['pdf']} (will be processed second-to-last)")
+            print(f"  🖼️  Image files: {phase_counts['image']} (will be processed last)")
 
         # PROGRESS: register the discovered workload in the shared ledger.
         #
@@ -856,9 +871,10 @@ class IntegratedFileReader:
             if not phase_total or self._control_requested():
                 continue
             self._set_current(phase=phase_label)
-            print(header)
-            if phase_total > batch_size:
-                print(f"   Processing in batches of {batch_size} for continuous processing...")
+            if not nested_run:
+                print(header)
+                if phase_total > batch_size:
+                    print(f"   Processing in batches of {batch_size} for continuous processing...")
 
             batch_number = 0
             processed_in_phase = 0
@@ -870,12 +886,13 @@ class IntegratedFileReader:
                 batch_number += 1
                 batch_start = processed_in_phase
                 processed_in_phase += len(batch)
-                if phase_total > batch_size:
+                if phase_total > batch_size and not nested_run:
                     print(f"   Batch {batch_number}: Processing files "
                           f"{batch_start + 1}-{processed_in_phase}...")
                 results.extend(self._run_batch(batch))
 
-            print(completion)
+            if not nested_run:
+                print(completion)
 
         
         # PROGRESS: end-of-run reconciliation.
@@ -956,34 +973,37 @@ class IntegratedFileReader:
         # discovered - archive members, email attachments and embedded objects -
         # not from the top-level tree the folders happened to contain.
         ledger_view = final_stats.get('ledger', {}) or {}
-        print("\n📊 Processing Summary:")
-        print(f"   Total files found: {final_stats.get('total', total_files)}")
-        nested = ledger_view.get('files_nested', 0)
-        if nested:
-            print(f"   of which nested (extracted from {ledger_view.get('containers_opened', 0)} "
-                  f"container(s)): {nested}")
-        print(f"   Files processed: {processed_count}")
-        if failed_count > 0:
-            print(f"   Files with issues: {failed_count}")
-        if self._partial_run or ledger_view.get('files_pending'):
-            # Never let a partial run read as a success.
-            print(f"   ⚠️  RUN INCOMPLETE: {ledger_view.get('files_pending', 0)} "
-                  f"discovered file(s) were not processed")
-        if final_stats.get('skipped'):
-            print(f"   Files skipped (already processed): {final_stats['skipped']}")
-        if final_stats.get('unsupported'):
-            print(f"   Files unsupported by any reader: {final_stats['unsupported']}")
-        retained = final_stats.get('results_retained')
-        if retained is not None and final_stats.get('results_truncated'):
-            print(f"   Per-file results retained in memory: {retained} "
-                  f"({final_stats['results_truncated']} released after reporting; "
-                  f"all were stored)")
-        if self.enable_storage and self.storage_pipeline:
-            storage_stats = self.get_storage_statistics()
-            print(f"   Files stored in database: {storage_stats.get('completed', 0)}")
-            print(f"   Duplicate files: {storage_stats.get('duplicates', 0)}")
-            print(f"   Storage failures: {storage_stats.get('failed', 0)}")
-        
+        # The container's outcome is reported by the router that opened it; a
+        # nested summary here would restate the parent's ledger (see nested_run).
+        if not nested_run:
+            print("\n📊 Processing Summary:")
+            print(f"   Total files found: {final_stats.get('total', total_files)}")
+            nested = ledger_view.get('files_nested', 0)
+            if nested:
+                print(f"   of which nested (extracted from {ledger_view.get('containers_opened', 0)} "
+                      f"container(s)): {nested}")
+            print(f"   Files processed: {processed_count}")
+            if failed_count > 0:
+                print(f"   Files with issues: {failed_count}")
+            if self._partial_run or ledger_view.get('files_pending'):
+                # Never let a partial run read as a success.
+                print(f"   ⚠️  RUN INCOMPLETE: {ledger_view.get('files_pending', 0)} "
+                      f"discovered file(s) were not processed")
+            if final_stats.get('skipped'):
+                print(f"   Files skipped (already processed): {final_stats['skipped']}")
+            if final_stats.get('unsupported'):
+                print(f"   Files unsupported by any reader: {final_stats['unsupported']}")
+            retained = final_stats.get('results_retained')
+            if retained is not None and final_stats.get('results_truncated'):
+                print(f"   Per-file results retained in memory: {retained} "
+                      f"({final_stats['results_truncated']} released after reporting; "
+                      f"all were stored)")
+            if self.enable_storage and self.storage_pipeline:
+                storage_stats = self.get_storage_statistics()
+                print(f"   Files stored in database: {storage_stats.get('completed', 0)}")
+                print(f"   Duplicate files: {storage_stats.get('duplicates', 0)}")
+                print(f"   Storage failures: {storage_stats.get('failed', 0)}")
+
         return results
     
     # ------------------------------------------------------------------
