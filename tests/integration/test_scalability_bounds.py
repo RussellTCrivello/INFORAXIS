@@ -95,6 +95,78 @@ class TestDiscoveryStreaming:
         assert first == second, "discovery order must be stable between runs"
         assert len(first) >= 200
 
+    def test_discovery_survives_a_filesystem_without_usable_inodes(self, tmp_path,
+                                                                   monkeypatch):
+        """A volume that reports ``st_ino == 0`` must not truncate the walk.
+
+        Windows volumes (and some network, FAT and virtual mounts) report zero
+        for every inode.  The walk keeps a visited-directory set for cycle
+        safety; if those zeros are used as identities, every directory shares
+        one key, the walk descends into the first directory it meets and
+        silently skips every other directory *and all the files inside them*.
+        Measured before the fix: a 200-file tree yielded 15 entries and 0 files,
+        so nearly the whole corpus never reached a worker.
+
+        This reproduces the condition on any platform and requires the full
+        tree to be enumerated regardless.
+        """
+        root = tmp_path / "corpus"
+        count = 200
+        written = _build_tree(root, count)
+
+        import core.file_utils as file_utils
+
+        real_scandir = os.scandir
+        real_stat = os.stat
+
+        class _ZeroInoStat:
+            def __init__(self, st):
+                self._st = st
+
+            def __getattr__(self, name):
+                return 0 if name == "st_ino" else getattr(self._st, name)
+
+        class _ZeroInoEntry:
+            def __init__(self, entry):
+                self._entry = entry
+
+            def __getattr__(self, name):
+                return getattr(self._entry, name)
+
+            def stat(self, follow_symlinks=True):
+                return _ZeroInoStat(
+                    self._entry.stat(follow_symlinks=follow_symlinks))
+
+        class _ZeroInoScandir:
+            def __init__(self, path):
+                self._handle = real_scandir(path)
+
+            def __enter__(self):
+                self._handle.__enter__()
+                return self
+
+            def __exit__(self, *exc):
+                return self._handle.__exit__(*exc)
+
+            def __iter__(self):
+                for entry in self._handle:
+                    yield _ZeroInoEntry(entry)
+
+            def close(self):
+                return self._handle.close()
+
+        monkeypatch.setattr(file_utils.os, "scandir", _ZeroInoScandir)
+        monkeypatch.setattr(file_utils.os, "stat",
+                            lambda path, *a, **k: _ZeroInoStat(real_stat(path, *a, **k)))
+
+        entries = list(iter_tree(str(root)))
+        files = [e for e in entries if e.get("type") != "DIRECTORY"]
+        assert len(files) == written, (
+            "discovery lost files on a filesystem with no usable inode: "
+            f"{len(files)} of {written}")
+        # Directories must still be walked exactly once - cycle safety intact.
+        assert len(entries) == written + 64, len(entries)
+
     def test_deferred_hashing_uses_the_sentinel_not_a_fake_digest(self, tmp_path):
         """Deep paths must not fabricate hashes when hashing is deferred."""
         target = tmp_path / "corpus"

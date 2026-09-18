@@ -1852,113 +1852,6 @@ class StoragePipeline:
 
         return provenance or None
 
-#: Provenance kept about identification. Bounded on purpose: the DB copy must
-#: stay small enough to write for millions of artifacts, so long lists are
-#: truncated with an explicit count rather than silently dropped.
-_DETECTION_SCALAR_KEYS = (
-    "declared_name", "declared_extension", "detected_extension",
-    "detection_method", "detection_confidence", "extension_mismatch",
-    "format_id", "format_family", "mime_type", "format_version",
-)
-_DETECTION_LIST_LIMIT = 25
-
-
-def _detection_search_text(content: Dict[str, Any]) -> str:
-    """Flatten identity metadata into searchable lines (or '' when absent)."""
-    record = _detection_record(content)
-    if not record:
-        return ""
-    lines = []
-    labels = {
-        "declared_name": "Original name",
-        "declared_extension": "Declared extension",
-        "detected_extension": "Detected extension",
-        "format_id": "Format",
-        "format_family": "Format family",
-        "mime_type": "MIME type",
-        "format_version": "Format version",
-        "detection_method": "Identification method",
-        "detection_confidence": "Identification confidence",
-    }
-    for key, label in labels.items():
-        if record.get(key):
-            lines.append(f"{label}: {record[key]}")
-    if record.get("extension_mismatch"):
-        lines.append("Extension mismatch: content contradicts the file name")
-    for discrepancy in record.get("discrepancies") or ():
-        if isinstance(discrepancy, dict) and discrepancy.get("kind"):
-            lines.append(
-                f"Discrepancy ({discrepancy.get('severity', 'info')}): "
-                f"{discrepancy['kind']} "
-                f"{discrepancy.get('declared')} -> {discrepancy.get('detected')} "
-                f"{discrepancy.get('detail', '')}".strip())
-    features = record.get("features") or {}
-    if isinstance(features, dict):
-        for key in ("macros_present", "encrypted", "variant", "application",
-                    "entry_count", "nested_documents", "has_xml_signature"):
-            if features.get(key) not in (None, False, 0, ""):
-                lines.append(f"Container feature - {key}: {features[key]}")
-    return "\n".join(lines)
-
-
-def _detection_record(content: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """The stored identity record for one artifact, or None when absent.
-
-    Accepts both shapes that exist in the pipeline: the reader service's
-    ``type_detection`` decision and the richer ``format_identification`` block a
-    reader may attach. Nothing is invented: a field is recorded only when the
-    identifier produced it.
-    """
-    decision = content.get("type_detection")
-    identification = content.get("format_identification")
-    if not isinstance(decision, dict):
-        decision = {}
-    if not isinstance(identification, dict):
-        identification = decision.get("format_identification")
-    if not isinstance(identification, dict):
-        identification = {}
-
-    merged: Dict[str, Any] = {}
-    for key in _DETECTION_SCALAR_KEYS:
-        value = decision.get(key)
-        if value is None:
-            value = identification.get(key)
-        if value is not None:
-            merged[key] = value
-
-    features = identification.get("features") or decision.get("format_features")
-    if isinstance(features, dict) and features:
-        trimmed: Dict[str, Any] = {}
-        for key, value in features.items():
-            if isinstance(value, (list, tuple, set)):
-                items = list(value)
-                if len(items) > _DETECTION_LIST_LIMIT:
-                    trimmed[key] = items[:_DETECTION_LIST_LIMIT]
-                    trimmed[f"{key}_total"] = len(items)
-                else:
-                    trimmed[key] = items
-            elif isinstance(value, (str, int, float, bool)) or value is None:
-                trimmed[key] = value
-        merged["features"] = trimmed
-
-    evidence = identification.get("evidence")
-    if isinstance(evidence, (list, tuple)) and evidence:
-        merged["evidence"] = list(evidence)[:_DETECTION_LIST_LIMIT]
-
-    discrepancies = decision.get("format_discrepancies") or identification.get("discrepancies")
-    if isinstance(discrepancies, (list, tuple)) and discrepancies:
-        merged["discrepancies"] = [
-            item if isinstance(item, dict) else {"kind": str(item)}
-            for item in list(discrepancies)[:_DETECTION_LIST_LIMIT]
-        ]
-
-    confidence = identification.get("confidence")
-    if confidence and "detection_confidence" not in merged:
-        merged["detection_confidence"] = confidence
-
-    return merged or None
-
-
     @staticmethod
     def _ocr_provenance(content: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """OCR provenance for either an image result or a multi-page PDF."""
@@ -3158,3 +3051,111 @@ def _detection_record(content: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         # Close database connection if needed
         # Currently db_hub is managed externally, so just log
         logger.info("Storage pipeline shutdown")
+
+#: Provenance kept about identification. Bounded on purpose: the DB copy must
+#: stay small enough to write for millions of artifacts, so long lists are
+#: truncated with an explicit count rather than silently dropped.
+_DETECTION_SCALAR_KEYS = (
+    "declared_name", "declared_extension", "detected_extension",
+    "detection_method", "detection_confidence", "extension_mismatch",
+    "format_id", "format_family", "mime_type", "format_version",
+)
+_DETECTION_LIST_LIMIT = 25
+
+
+def _detection_search_text(content: Dict[str, Any]) -> str:
+    """Flatten identity metadata into searchable lines (or '' when absent)."""
+    record = _detection_record(content)
+    if not record:
+        return ""
+    lines = []
+    labels = {
+        "declared_name": "Original name",
+        "declared_extension": "Declared extension",
+        "detected_extension": "Detected extension",
+        "format_id": "Format",
+        "format_family": "Format family",
+        "mime_type": "MIME type",
+        "format_version": "Format version",
+        "detection_method": "Identification method",
+        "detection_confidence": "Identification confidence",
+    }
+    for key, label in labels.items():
+        if record.get(key):
+            lines.append(f"{label}: {record[key]}")
+    if record.get("extension_mismatch"):
+        lines.append("Extension mismatch: content contradicts the file name")
+    for discrepancy in record.get("discrepancies") or ():
+        if isinstance(discrepancy, dict) and discrepancy.get("kind"):
+            lines.append(
+                f"Discrepancy ({discrepancy.get('severity', 'info')}): "
+                f"{discrepancy['kind']} "
+                f"{discrepancy.get('declared')} -> {discrepancy.get('detected')} "
+                f"{discrepancy.get('detail', '')}".strip())
+    features = record.get("features") or {}
+    if isinstance(features, dict):
+        for key in ("macros_present", "encrypted", "variant", "application",
+                    "entry_count", "nested_documents", "has_xml_signature"):
+            if features.get(key) not in (None, False, 0, ""):
+                lines.append(f"Container feature - {key}: {features[key]}")
+    return "\n".join(lines)
+
+
+def _detection_record(content: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The stored identity record for one artifact, or None when absent.
+
+    Accepts both shapes that exist in the pipeline: the reader service's
+    ``type_detection`` decision and the richer ``format_identification`` block a
+    reader may attach. Nothing is invented: a field is recorded only when the
+    identifier produced it.
+    """
+    decision = content.get("type_detection")
+    identification = content.get("format_identification")
+    if not isinstance(decision, dict):
+        decision = {}
+    if not isinstance(identification, dict):
+        identification = decision.get("format_identification")
+    if not isinstance(identification, dict):
+        identification = {}
+
+    merged: Dict[str, Any] = {}
+    for key in _DETECTION_SCALAR_KEYS:
+        value = decision.get(key)
+        if value is None:
+            value = identification.get(key)
+        if value is not None:
+            merged[key] = value
+
+    features = identification.get("features") or decision.get("format_features")
+    if isinstance(features, dict) and features:
+        trimmed: Dict[str, Any] = {}
+        for key, value in features.items():
+            if isinstance(value, (list, tuple, set)):
+                items = list(value)
+                if len(items) > _DETECTION_LIST_LIMIT:
+                    trimmed[key] = items[:_DETECTION_LIST_LIMIT]
+                    trimmed[f"{key}_total"] = len(items)
+                else:
+                    trimmed[key] = items
+            elif isinstance(value, (str, int, float, bool)) or value is None:
+                trimmed[key] = value
+        merged["features"] = trimmed
+
+    evidence = identification.get("evidence")
+    if isinstance(evidence, (list, tuple)) and evidence:
+        merged["evidence"] = list(evidence)[:_DETECTION_LIST_LIMIT]
+
+    discrepancies = decision.get("format_discrepancies") or identification.get("discrepancies")
+    if isinstance(discrepancies, (list, tuple)) and discrepancies:
+        merged["discrepancies"] = [
+            item if isinstance(item, dict) else {"kind": str(item)}
+            for item in list(discrepancies)[:_DETECTION_LIST_LIMIT]
+        ]
+
+    confidence = identification.get("confidence")
+    if confidence and "detection_confidence" not in merged:
+        merged["detection_confidence"] = confidence
+
+    return merged or None
+
+

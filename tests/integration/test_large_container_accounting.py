@@ -275,12 +275,20 @@ class TestRawTextSanitisation:
         pgdata = tempfile.mkdtemp(prefix='nul_pg_')
         pgserver.initdb(["-U", "postgres", "-A", "trust", "-E", "UTF8"], pgdata=pgdata)
         server = pgserver.get_server(pgdata)
-        import urllib.parse
 
         import psycopg2
 
-        host = urllib.parse.parse_qs(urllib.parse.urlparse(server.get_uri()).query)["host"][0]
-        conn = psycopg2.connect(host=host, port=5432, user="postgres", dbname="postgres")
+        # Platform-correct address: pgserver advertises a unix-socket directory
+        # on POSIX and a TCP host on Windows. Parsing the URI here and assuming
+        # the socket shape made this test read the *database name* as a host and
+        # fail with "Network is down" on Windows; the shared helper resolves it
+        # the same way the rest of the suite does.
+        from conftest import pg_connection_settings
+
+        settings = pg_connection_settings(server, "postgres")
+        conn = psycopg2.connect(host=settings["host"], port=settings["port"],
+                                user=settings["user"], password=settings["password"],
+                                dbname="postgres")
         try:
             with conn, conn.cursor() as cur:
                 cur.execute("CREATE TABLE t (v text)")

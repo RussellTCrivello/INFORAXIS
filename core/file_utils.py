@@ -301,12 +301,46 @@ def iter_tree(path: str, compute_hashes: bool = True) -> Iterator[Dict[str, Any]
             yield info
         return
 
-    #: Directories already visited, keyed by (device, inode).  Bounding the
-    #: guard to directories keeps loop safety without holding one entry per
-    #: file for the whole walk.
+    def _directory_identity(stat_result) -> Optional[tuple]:
+        """Identity of a directory for cycle detection, or None when unusable.
+
+        ``(st_dev, st_ino)`` is only a real identity when the filesystem reports
+        a usable inode.  Windows volumes - and some network, FAT and virtual
+        mounts - report ``st_ino == 0`` for every entry.  Treating those zeros as
+        inode numbers gives every directory the *same* key, so the walk visits
+        the first directory it meets and silently skips every other directory
+        and all the files inside them: a nested tree collapses to a handful of
+        entries, and the files that were never enumerated are files the pipeline
+        can never process.  Zero (or a missing value) therefore means "identity
+        unavailable", and the caller falls back to the resolved real path, which
+        still catches symlink, bind-mount and hardlinked-root cycles.
+        """
+        try:
+            if not stat_result or not stat_result.st_ino:
+                return None
+            return (stat_result.st_dev, stat_result.st_ino)
+        except Exception:
+            return None
+
+    def _real_directory_path(directory: str) -> str:
+        """Canonical path of a directory, used when no inode identity exists."""
+        try:
+            return os.path.realpath(directory)
+        except Exception:
+            return os.path.abspath(directory)
+
+    #: Directories already visited, keyed by (device, inode) where the
+    #: filesystem reports one, otherwise by canonical path.  Bounding the guard
+    #: to directories keeps loop safety without holding one entry per file for
+    #: the whole walk.
     visited_dirs = set()
+    visited_paths = set()
     try:
-        visited_dirs.add((root_stat.st_dev, root_stat.st_ino))
+        root_key = _directory_identity(root_stat)
+        if root_key is not None:
+            visited_dirs.add(root_key)
+        else:
+            visited_paths.add(_real_directory_path(str(root_path)))
     except Exception:
         pass
 
@@ -348,16 +382,24 @@ def iter_tree(path: str, compute_hashes: bool = True) -> Iterator[Dict[str, Any]
                 if info.get("type") == "DIRECTORY" and not entry.is_symlink():
                     # Track the real identity of the directory, not its path:
                     # two names for the same directory (bind mount, hardlinked
-                    # tree root) must not be walked twice.
+                    # tree root) must not be walked twice.  When the filesystem
+                    # cannot supply an inode, identity falls back to the
+                    # canonical path - never to a shared zero value, which would
+                    # make every directory look like the same one.
                     try:
                         st = entry.stat(follow_symlinks=False)
-                        key = (st.st_dev, st.st_ino)
                     except OSError:
-                        key = None
-                    if key is None or key not in visited_dirs:
-                        if key is not None:
+                        st = None
+                    key = _directory_identity(st)
+                    if key is not None:
+                        if key not in visited_dirs:
                             visited_dirs.add(key)
-                        subdirectories.append(entry_path)
+                            subdirectories.append(entry_path)
+                    else:
+                        real = _real_directory_path(entry_path)
+                        if real not in visited_paths:
+                            visited_paths.add(real)
+                            subdirectories.append(entry_path)
             except PermissionError as perm_err:
                 yield _error_metadata(getattr(entry, "name", str(entry)),
                                       getattr(entry, "path", str(entry)), "none",

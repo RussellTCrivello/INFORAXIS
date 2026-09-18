@@ -35,21 +35,63 @@ def pg_server(tmp_path_factory):
     # Server cleanup handled by pgserver/tmp lifetime.
 
 
-@pytest.fixture(scope="session")
-def pg_db(pg_server, tmp_path_factory):
-    """Create a fresh application database and run the migration bootstrap."""
+def pg_connection_settings(server, db_name: str) -> dict:
+    """Connection settings for the disposable PostgreSQL server.
+
+    pgserver describes the server differently per platform, and the earlier
+    code assumed the Linux/POSIX shape:
+
+        POSIX   postgresql://postgres:@/postgres?host=/run/pgdata   (unix socket)
+        Windows postgresql://postgres:@localhost:5432/postgres      (TCP)
+
+    Taking ``parsed.path`` as a fallback host therefore handed the *database
+    name* (``/postgres``) to psycopg2 as a socket directory.  On Windows that
+    makes every database test fail with "connection to server on socket
+    /postgres/.sPGSQL.5432 failed: Network is down" - not a code defect, but it
+    hides every real defect behind it, so the parsing has to be right.
+
+    Resolution order:
+      1. an explicit ``host`` query parameter (the POSIX socket directory),
+      2. the host in the URI authority (``localhost`` on Windows),
+      3. ``localhost`` as a last resort - never a path component, which is
+         never a host.
+    """
     import urllib.parse
 
-    db_name = f"file_analysis_test_{os.getpid()}"
-    uri = pg_server.get_uri()
-    # pgserver URI shape: postgresql://postgres:@/postgres?host=/path/to/socket
-    parsed = urllib.parse.urlparse(uri)
+    parsed = urllib.parse.urlparse(server.get_uri())
     query = urllib.parse.parse_qs(parsed.query)
-    host_dir = query.get("host", [parsed.path])[0]
-    os.environ["DB_HOST"] = host_dir
-    os.environ["DB_PORT"] = "5432"
-    os.environ["DB_USER"] = "postgres"
-    os.environ["DB_PASSWORD"] = ""
+    host = query.get("host", [None])[0] or parsed.hostname or "localhost"
+    port = parsed.port or 5432
+    return {
+        "host": host,
+        "port": int(port),
+        "user": urllib.parse.unquote(parsed.username or "postgres"),
+        "password": urllib.parse.unquote(parsed.password or ""),
+        "database": db_name,
+    }
+
+
+@pytest.fixture(scope="session")
+def pg_settings(pg_server):
+    """Where the disposable server is listening, as a connection dict.
+
+    Exposed as a fixture so every test that needs the server's address gets the
+    same platform-correct answer instead of re-parsing the URI itself.
+    """
+    return pg_connection_settings(pg_server, f"file_analysis_test_{os.getpid()}")
+
+
+@pytest.fixture(scope="session")
+def pg_db(pg_settings, tmp_path_factory):
+    """Create a fresh application database and run the migration bootstrap."""
+    cfg = dict(pg_settings)
+    db_name = cfg["database"]
+    host_dir = cfg["host"]
+
+    os.environ["DB_HOST"] = str(cfg["host"])
+    os.environ["DB_PORT"] = str(cfg["port"])
+    os.environ["DB_USER"] = str(cfg["user"])
+    os.environ["DB_PASSWORD"] = str(cfg["password"])
     os.environ["DB_NAME"] = db_name
 
     # Reset ALL cached settings/config singletons from any earlier import.
@@ -70,6 +112,33 @@ def pg_db(pg_server, tmp_path_factory):
                     setattr(mod, attr, None)
                 except Exception:
                     pass
+
+    # The same staleness applies one layer up: Api.utils.utils keeps a
+    # module-level ``DatabaseHub`` (and its query cache) built from whatever
+    # configuration existed on first use. If anything touched it before the
+    # DB_* variables above were set, every later search keeps talking to the
+    # default server ("connection to server at localhost:5432 failed:
+    # Connection refused") even though the fixtures are pointed somewhere else.
+    # Clearing it here is what makes search results reflect the test database.
+    try:
+        import Api.utils.utils as _api_utils
+
+        for attr in ("_query_executor", "_query_cache"):
+            if hasattr(_api_utils, attr):
+                try:
+                    setattr(_api_utils, attr, None)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # Drop any pooled connections opened against the previous configuration.
+    try:
+        from database.database.database import reset_connection_pools
+
+        reset_connection_pools()
+    except Exception:
+        pass
 
     from database.bootstrap import bootstrap_database
 
