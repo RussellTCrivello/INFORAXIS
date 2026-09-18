@@ -1399,21 +1399,42 @@ class ContentDBService:
         """
         return self.hashs_repo.get_duplicate_document(hash_value, source_id, side_id)
 
-    @staticmethod
-    def _note_optional_failure(result, step, error, file_name, path_id):
+    def _note_optional_failure(self, result, step, error, file_name, path_id):
         """Record a contained failure of a derived-data step.
 
-        The document is still stored; the warning is logged loudly and carried
-        in the result so monitoring can spot systematic degradation instead of
-        the failure being silently swallowed.
+        The document is still stored, but it is **not** a clean success: the
+        warning is logged loudly, carried in the result, and - because a row
+        that says "processed" while its display text is missing is exactly the
+        "reported successful despite incomplete content" defect - the row's
+        status is set to ``partial`` with the failing step named. The update
+        runs in the same transaction as the insert.
         """
         message = f"{step} step failed: {type(error).__name__}: {error}"
         result['warnings'].append(message)
         logger.error(
             "Optional %s step failed for file '%s' (path_id=%s), the document "
-            "itself is stored: %s",
+            "itself is stored with partial data: %s",
             step, file_name, path_id, error,
         )
+        if not path_id:
+            return
+        # In a savepoint, so a rejected status write can never abort the
+        # transaction that holds the document itself: an exception here used to
+        # poison the whole store and lose the file (measured with an injected
+        # raw-text failure before the savepoint existed).
+        try:
+            with self.savepoint():
+                self.paths_repo.mark_partial(
+                    path_id,
+                    f"{step} step failed: {type(error).__name__}: {error}",
+                )
+        except TransactionAbortedError:
+            raise
+        except Exception as mark_error:  # never let bookkeeping hide the data
+            logger.warning(
+                "Could not record partial status for path_id=%s: %s",
+                path_id, mark_error,
+            )
 
     # ============================================================
     # PUNCTUATION OPERATIONS

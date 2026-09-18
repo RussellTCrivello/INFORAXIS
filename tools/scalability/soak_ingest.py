@@ -68,27 +68,100 @@ def _json_default(value):
     return str(value)
 
 
-class Capture(logging.Handler):
-    """Every record the pipeline emits, with level and logger name."""
+#: Log message substrings the summary reports counts for. Fixed set, so the
+#: counters stay bounded no matter how many records arrive.
+LOG_NEEDLES = (
+    "retry", "pool exhausted", "too many clients", "reconnect",
+    "no engine is available", "failed to store", "no files were stored",
+    "traceback", "out of memory", "memoryerror",
+)
 
-    def __init__(self):
+
+def _normalise_message(message: str, corpus_root: str = "") -> str:
+    """Collapse a log message to a countable pattern.
+
+    Counts must be honest (every record is classified) while staying bounded in
+    memory: digits, hex ids and absolute paths are normalised so that "stored
+    /a/b/file_123.txt" and "stored /a/b/file_456.txt" share one pattern.
+    """
+    import re
+
+    text = message.replace(corpus_root, "<corpus>") if corpus_root else message
+    text = re.sub(r"/[\w./-]{20,}", "<path>", text)
+    text = re.sub(r"\b[0-9a-f]{16,}\b", "<hex>", text)
+    text = re.sub(r"\d+", "N", text)
+    return text[:160]
+
+
+class Capture(logging.Handler):
+    """Full log capture with **bounded** memory.
+
+    Every record is written to a JSONL file and folded into counters; nothing is
+    kept in a Python list. The first version of this harness appended every
+    record to a list, which grew linearly with the corpus (measured: ~450 MB
+    after 78 000 files) and therefore shows up in the process RSS -- the harness
+    would have been measuring itself rather than the pipeline it exists to
+    measure.
+    """
+
+    #: Cap on distinct message patterns kept individually; the rest are counted
+    #: in ``patterns_overflow`` so totals remain exact.
+    MAX_PATTERNS = 2000
+
+    def __init__(self, path, corpus_root: str = ""):
         super().__init__(level=logging.DEBUG)
-        self.records = []
+        self.corpus_root = corpus_root
         self._lock = threading.Lock()
+        self._stream = open(path, "w", encoding="utf-8")
+        self.levels = {}
+        self.needles = {needle: 0 for needle in LOG_NEEDLES}
+        self.patterns = {}
+        self.patterns_overflow = 0
+        self.total = 0
 
     def emit(self, record):
         try:
-            msg = record.getMessage()
+            message = record.getMessage()
         except Exception:
-            msg = "<unformattable>"
+            message = "<unformattable>"
+        message = message[:400]
         with self._lock:
-            self.records.append({
-                "level": record.levelname,
-                "logger": record.name,
-                "msg": msg[:400],
-                "thread": record.threadName,
-                "t": round(time.time() - START, 3),
-            })
+            self.total += 1
+            self.levels[record.levelname] = self.levels.get(record.levelname, 0) + 1
+            pattern = _normalise_message(message, self.corpus_root)
+            if pattern in self.patterns:
+                self.patterns[pattern] += 1
+            elif len(self.patterns) < self.MAX_PATTERNS:
+                self.patterns[pattern] = 1
+            else:
+                self.patterns_overflow += 1
+            lowered = message.lower()
+            for needle in LOG_NEEDLES:
+                if needle in lowered:
+                    self.needles[needle] += 1
+            try:
+                self._stream.write(json.dumps({
+                    "level": record.levelname,
+                    "logger": record.name,
+                    "msg": message,
+                    "thread": record.threadName,
+                    "t": round(time.time() - START, 3),
+                }) + "\n")
+            except Exception:
+                pass
+
+    def close(self):
+        try:
+            self._stream.flush()
+            self._stream.close()
+        except Exception:
+            pass
+        super().close()
+
+    def top_patterns(self, limit=25):
+        with self._lock:
+            ordered = sorted(self.patterns.items(), key=lambda kv: -kv[1])
+            return ordered[:limit]
 
 
 class Sampler(threading.Thread):
@@ -140,9 +213,45 @@ class Sampler(threading.Thread):
                 continue
 
 
+def _live_server_pid(pgdata):
+    """PID of a postgres already running on ``pgdata``, if any.
+
+    ``pgserver.get_server()`` happily returns a handle to a server that is
+    *already running* on the directory.  That is what a crash/resume run wants,
+    but it silently poisons a run whose author believes it starts from a fresh
+    database: the rows left by the previous run make the new run detect its own
+    files as duplicates ("already processed"), because they genuinely are
+    already stored.  Measured once: a 100 020-file run reported 79 068
+    duplicates purely because a killed run's server was still alive on the
+    deleted data directory.  A run is therefore always explicit about which of
+    the two it is (``--allow-existing-db``).
+    """
+    import subprocess
+
+    try:
+        out = subprocess.run(["pgrep", "-af", "postgres -D %s" % pgdata],
+                             capture_output=True, text=True).stdout
+    except OSError:
+        return None
+    for line in out.splitlines():
+        if pgdata in line and "-D %s" % pgdata in line:
+            return int(line.split()[0])
+    return None
+
+
 def _start_server(args):
     """Start (or reuse) the database this run measures against."""
     if args.pgdata:
+        live_pid = _live_server_pid(args.pgdata)
+        if live_pid is not None and not args.allow_existing_db:
+            raise SystemExit(
+                "refusing to reuse %s: a postgres server (pid %d) is already "
+                "running on it, so the tables may hold another run's rows.\n"
+                "  * for a fresh measurement: stop that server and delete %s\n"
+                "  * for a crash/resume run: pass --allow-existing-db\n"
+                "  * pgserver may also be reusing a data directory you deleted: "
+                "check `pgrep -af postgres`." % (args.pgdata, live_pid, args.pgdata)
+            )
         if not os.path.exists(os.path.join(args.pgdata, "PG_VERSION")):
             os.makedirs(args.pgdata, exist_ok=True)
             pgserver.initdb(["-U", "postgres", "-A", "trust", "-E", "UTF8"],
@@ -237,6 +346,10 @@ def main(argv=None) -> int:
     ap.add_argument("--sample-interval", type=float, default=1.0)
     ap.add_argument("--pgdata", default=None,
                     help="reuse an existing pgserver data directory (crash/resume)")
+    ap.add_argument("--allow-existing-db", action="store_true",
+                    help="permit a pgdata directory that already has a live "
+                         "server (crash/resume); without this the harness "
+                         "refuses, because the rows would be another run's")
     args = ap.parse_args(argv)
 
     out_dir = Path(args.out)
@@ -257,9 +370,37 @@ def main(argv=None) -> int:
 
     bootstrap_database(db_cfg)
 
+    #: Proof of which database the numbers came from: pid + start time + the
+    #: row count at t0.  A "fresh" run must show 0; a crash/resume run must show
+    #: the rows the crashed run left behind.
+    db_identity = {"pgdata": args.pgdata, "started_with_rows": None}
+    try:
+        import psycopg2
+        with psycopg2.connect(connect_timeout=5, **db_cfg) as _c, _c.cursor() as _cur:
+            _cur.execute("SELECT pg_backend_pid(), pg_postmaster_start_time()")
+            backend_pid, start_time = _cur.fetchone()
+            _cur.execute("SELECT count(*) FROM paths")
+            db_identity.update({
+                "backend_pid": backend_pid,
+                "server_start_time": str(start_time),
+                "started_with_rows": int(_cur.fetchone()[0]),
+            })
+            if db_identity["started_with_rows"] and not args.allow_existing_db:
+                raise SystemExit(
+                    "refusing to measure on a non-empty database: paths already "
+                    "holds %d row(s). Its files would be reported as duplicates "
+                    "of work this run never did. Use a new --pgdata/DB, or pass "
+                    "--allow-existing-db for a deliberate crash/resume run."
+                    % db_identity["started_with_rows"]
+                )
+    except SystemExit:
+        raise
+    except Exception as exc:
+        db_identity["identity_error"] = str(exc)
+
     corpus_files, corpus_bytes = _corpus_inventory(args.corpus)
 
-    capture = Capture()
+    capture = Capture(out_dir / "records.jsonl", corpus_root=str(Path(args.corpus).resolve()))
     logging.getLogger().addHandler(capture)
     logging.getLogger().setLevel(logging.DEBUG)
 
@@ -318,11 +459,25 @@ def main(argv=None) -> int:
     sampler.join(timeout=5)
 
     db_facts = _db_facts(db_cfg)
-    records = capture.records
+    db_facts["identity"] = db_identity
 
     # ---- throughput at increasing progress points --------------------------
-    progress = [(r["t"], r["msg"]) for r in records
-                if isinstance(r.get("msg"), str) and r["msg"].startswith("Progress: ")]
+    #
+    # Read the captured log back from disk: keeping the records in memory would
+    # have made the harness's own footprint grow with the corpus (see Capture).
+    progress = []
+    try:
+        with open(out_dir / "records.jsonl", "r", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    continue
+                message = entry.get("msg")
+                if isinstance(message, str) and message.startswith("Progress: "):
+                    progress.append((entry.get("t", 0.0), message))
+    except OSError:
+        progress = []
     rates = {}
     if progress:
         marks = []
@@ -344,10 +499,10 @@ def main(argv=None) -> int:
                     rates[f"rate_{name}_fps"] = round(
                         (window[-1][1] - window[0][1]) / span, 2)
 
-    levels = Counter(r["level"] for r in records)
+    levels = capture.levels
 
     def log_count(needle):
-        return sum(1 for r in records if needle.lower() in r["msg"].lower())
+        return capture.needles.get(needle.lower(), 0)
 
     summary = {
         "label": args.label,
@@ -387,7 +542,8 @@ def main(argv=None) -> int:
         "log_counts": {
             "errors": levels.get("ERROR", 0),
             "warnings": levels.get("WARNING", 0),
-            "total_records": len(records),
+            "total_records": capture.total,
+            "distinct_patterns": len(capture.patterns) + (1 if capture.patterns_overflow else 0),
             "retry": log_count("retry"),
             "ocr_unavailable": log_count("no engine is available"),
             "storage_failures": log_count("FAILED TO STORE"),
@@ -401,8 +557,14 @@ def main(argv=None) -> int:
         json.dumps(summary, indent=1, default=_json_default))
     (out_dir / "samples.json").write_text(
         json.dumps(sampler.samples, indent=1, default=_json_default))
-    (out_dir / "records.json").write_text(
-        json.dumps(records[:200000], indent=1, default=_json_default))
+    (out_dir / "log_patterns.json").write_text(json.dumps({
+        "total_records": capture.total,
+        "levels": capture.levels,
+        "needles": capture.needles,
+        "patterns_overflow": capture.patterns_overflow,
+        "top_patterns": capture.top_patterns(),
+    }, indent=1, default=_json_default))
+    capture.close()
     print(json.dumps({k: v for k, v in summary.items()
                       if k not in ("stats", "ledger", "db", "storage_stats")},
                      indent=1, default=_json_default))

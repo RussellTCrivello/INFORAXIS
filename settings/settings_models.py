@@ -191,6 +191,22 @@ class ProcessingSettings:
     # max_file_size_mb removed - no file size limitations
     max_depth: int = 10
     file_processing_timeout: int = 1200  # 20 minutes
+    #: Hard ceiling on one file's time budget, in seconds (default 24 h). The
+    #: budget itself is base + bytes/observed-rate; this only bounds a single
+    #: pathological file. Raise it to process a file that needs longer, rather
+    #: than raising file_processing_timeout for every file.
+    max_file_timeout_s: int = 86400
+    # Compute-control layer (see core/compute). Defaults preserve the previous
+    # behaviour exactly: automatic device routing, with the concurrency and
+    # limits derived from the machine rather than configured. 0 / -1 / empty
+    # mean "derive from this host"; setting a value caps it.
+    compute_mode: str = "auto"             # cpu | gpu | cpu+gpu | auto
+    compute_max_concurrency: int = 0       # 0 = derived from host cores
+    compute_reserved_gateway_cores: int = -1  # -1 = derived (never starves the gateway)
+    compute_queue_depth: int = 0           # 0 = derived
+    compute_memory_budget_mb: int = 0      # 0 = a share of free memory
+    compute_latency_budget_s: float = 10.0  # admission back-pressure threshold
+    compute_isolation: bool = True         # keep compute off gateway/network cores
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

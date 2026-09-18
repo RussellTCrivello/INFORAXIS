@@ -166,13 +166,47 @@ class TestSubmission:
             gateway.submit(WorkloadKind.OCR, boom)
         assert gateway.stats.failed == 1
 
-    def test_fallback_is_recorded_when_the_mode_cannot_be_honoured(self):
+    def test_gpu_mode_refuses_instead_of_substituting_the_cpu(self):
+        """Strict mode: the requested device is honoured or refused.
+
+        Silently handing back CPU results for a workload the operator asked to
+        run on the GPU is the substitution this contract forbids; the old
+        behaviour (run on CPU, note a fallback) is only available as an explicit
+        opt-in.
+        """
+        from core.compute.routing import DeviceUnavailableError
+
         gateway = ComputeGateway(inventory=_inventory({GPU: False}),
                                  mode=ExecutionMode.GPU_ONLY)
-        gateway.submit(WorkloadKind.OCR, lambda: "cpu")
+        with pytest.raises(DeviceUnavailableError) as excinfo:
+            gateway.submit(WorkloadKind.OCR, lambda: "cpu")
+
+        error = excinfo.value
+        assert error.requested_mode == "gpu"
+        assert error.workload == WorkloadKind.OCR.value
+        assert error.detected["devices"]["gpu"]["available"] is False
+        assert gateway.stats.capability_errors == 1
+        assert gateway.stats.completed == 0, (
+            "no work may be reported as completed when it was refused"
+        )
+        assert gateway.mode_report()["strict_gpu_mode"] is True
+
+    def test_opt_in_cpu_fallback_restores_the_old_behaviour_explicitly(self):
+        gateway = ComputeGateway(inventory=_inventory({GPU: False}),
+                                 mode=ExecutionMode.GPU_ONLY)
+        gateway.allow_cpu_fallback = True
+        assert gateway.submit(WorkloadKind.OCR, lambda: "cpu") == "cpu"
         assert gateway.stats.fallbacks >= 1
         events = gateway.mode_report()["fallback_events"]
-        assert events and events[-1]["used"] == CPU
+        assert events and "COMPUTE_GPU_FALLBACK" in events[-1]["reason"]
+
+    def test_gpu_mode_still_runs_workloads_that_have_no_gpu_path(self):
+        """Hashing has no accelerator implementation, so the CPU is not a
+        substitution for it - it is the only implementation."""
+        gateway = ComputeGateway(inventory=_inventory({GPU: False}),
+                                 mode=ExecutionMode.GPU_ONLY)
+        assert gateway.submit(WorkloadKind.HASHING, lambda: "digest") == "digest"
+        assert gateway.stats.completed == 1
 
 
 # ---------------------------------------------------------------------------
@@ -282,3 +316,137 @@ class TestMonitoring:
         assert set(status["workload_placement"]) == {k.value for k in WorkloadKind}
         assert status["allocation"]["concurrency"] >= 1
         assert "stats" in status and "inventory" in status
+
+
+# ---------------------------------------------------------------------------
+# Accelerator backends: verified before use, never assumed
+# ---------------------------------------------------------------------------
+class TestAcceleratorBackends:
+    @staticmethod
+    def _backend(kind="fpga", workloads=None, self_test=None, run=None):
+        from core.compute.gateway import AcceleratorBackend
+
+        return AcceleratorBackend(
+            kind=kind,
+            name=f"{kind}-test-backend",
+            self_test=self_test or (lambda: True),
+            run=run or (lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            workloads=frozenset(workloads or {WorkloadKind.OCR}),
+        )
+
+    def test_backend_is_only_usable_after_its_self_test_passes(self):
+        gateway = ComputeGateway(inventory=_inventory({FPGA: False}))
+        assert gateway.register_accelerator_backend(self._backend()) is True
+        assert gateway.available_accelerators[FPGA] is True
+        assert gateway.verified_backends() == {FPGA: "fpga-test-backend"}
+
+    def test_failing_self_test_keeps_the_backend_out_of_use(self):
+        gateway = ComputeGateway(inventory=_inventory({FPGA: False}))
+
+        def broken():
+            raise RuntimeError("no bitstream loaded")
+
+        assert gateway.register_accelerator_backend(self._backend(self_test=broken)) is False
+        assert gateway.available_accelerators.get(FPGA, False) is False
+        assert gateway.verified_backends() == {}
+
+    def test_self_test_returning_false_is_also_a_refusal(self):
+        gateway = ComputeGateway(inventory=_inventory({FPGA: False}))
+        assert gateway.register_accelerator_backend(
+            self._backend(self_test=lambda: False)) is False
+        assert gateway.select_device(WorkloadKind.OCR).device == CPU
+
+    def test_verified_backend_receives_work_and_output_is_unchanged(self):
+        gateway = ComputeGateway(inventory=_inventory({FPGA: False}),
+                                 mode=ExecutionMode.AUTO)
+        seen = []
+
+        def run(fn, *args, **kwargs):
+            seen.append(args)
+            return fn(*args, **kwargs)  # must produce the CPU result
+
+        gateway.register_accelerator_backend(self._backend(run=run))
+        result = gateway.submit(WorkloadKind.OCR, lambda a, b: a * b, 6, 7)
+        assert result == 42
+        assert seen == [(6, 7)], "verified backend was not used"
+        assert gateway.select_device(WorkloadKind.OCR).device == FPGA
+
+    def test_backend_failure_falls_back_to_cpu_and_is_recorded(self):
+        gateway = ComputeGateway(inventory=_inventory({FPGA: False}))
+
+        def exploding(fn, *args, **kwargs):
+            raise RuntimeError("device lost")
+
+        gateway.register_accelerator_backend(self._backend(run=exploding))
+        result = gateway.submit(WorkloadKind.OCR, lambda: "cpu-result")
+        assert result == "cpu-result"
+        assert gateway.stats.fallbacks >= 1
+        events = gateway.mode_report()["fallback_events"]
+        assert any("ran on CPU" in event["reason"] for event in events)
+
+    def test_backend_only_serves_the_workloads_it_declares(self):
+        gateway = ComputeGateway(inventory=_inventory({FPGA: False}))
+        gateway.register_accelerator_backend(self._backend(workloads={WorkloadKind.OCR}))
+        # Hashing must stay on the CPU even with a verified backend registered:
+        # a device may never change a digest.
+        assert gateway.select_device(WorkloadKind.HASHING).device == CPU
+
+    def test_cpu_only_mode_ignores_a_verified_backend(self):
+        gateway = ComputeGateway(inventory=_inventory({FPGA: False}),
+                                 mode=ExecutionMode.CPU_ONLY)
+        gateway.register_accelerator_backend(self._backend())
+        assert gateway.select_device(WorkloadKind.OCR).device == CPU
+
+
+# ---------------------------------------------------------------------------
+# Configuration from project settings / environment
+# ---------------------------------------------------------------------------
+class TestConfiguration:
+    def test_limits_come_from_settings_when_present(self, monkeypatch):
+        import core.compute.gateway as gateway_module
+
+        class _Processing:
+            compute_mode = "cpu"
+            compute_max_concurrency = 3
+            compute_reserved_gateway_cores = 1
+            compute_queue_depth = 7
+            compute_memory_budget_mb = 256
+            compute_latency_budget_s = 2.5
+            compute_isolation = False
+
+        class _Settings:
+            processing = _Processing()
+
+        monkeypatch.setattr(gateway_module, "_processing_settings", lambda: _Settings.processing)
+        for name in ("COMPUTE_MODE", "COMPUTE_MAX_CONCURRENCY", "COMPUTE_RESERVED_CORES",
+                     "COMPUTE_QUEUE_DEPTH", "COMPUTE_MEMORY_BUDGET_MB",
+                     "COMPUTE_LATENCY_BUDGET_S", "COMPUTE_ISOLATION"):
+            monkeypatch.delenv(name, raising=False)
+        limits = gateway_module.configured_limits()
+        assert limits["mode"] == "cpu"
+        assert limits["max_concurrency"] == 3
+        assert limits["queue_depth"] == 7
+        assert limits["memory_budget_mb"] == 256
+        assert limits["isolation"] is False
+
+    def test_environment_overrides_settings(self, monkeypatch):
+        import core.compute.gateway as gateway_module
+
+        class _Processing:
+            compute_mode = "auto"
+            compute_max_concurrency = 3
+
+        monkeypatch.setattr(gateway_module, "_processing_settings", lambda: _Processing())
+        monkeypatch.setenv("COMPUTE_MODE", "gpu")
+        monkeypatch.setenv("COMPUTE_MAX_CONCURRENCY", "5")
+        limits = gateway_module.configured_limits()
+        assert limits["mode"] == "gpu"
+        assert limits["max_concurrency"] == 5
+
+    def test_invalid_environment_value_is_ignored_not_fatal(self, monkeypatch):
+        import core.compute.gateway as gateway_module
+
+        monkeypatch.setattr(gateway_module, "_processing_settings", lambda: None)
+        monkeypatch.setenv("COMPUTE_MAX_CONCURRENCY", "not-a-number")
+        limits = gateway_module.configured_limits()
+        assert limits["max_concurrency"] == 0

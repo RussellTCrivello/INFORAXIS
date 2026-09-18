@@ -30,7 +30,6 @@ if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
 from core.file_utils import (
-    read_tree,
     create_standardized_result
 )
 
@@ -378,6 +377,29 @@ class FileRouterService:
         
         return results
     
+    def _collect_extraction_files(self, extraction_path: str):
+        """Stream an extracted tree into ``(file_entries, directory_count)``.
+
+        Uses the streaming walker with hashing deferred, so no full metadata
+        tree is built and members are not hashed twice (the store stage hashes
+        the bytes it actually reads). Memory is bounded by the number of file
+        entries, which the archive policy caps, instead of by
+        ``files + directories`` with a metadata dictionary each.
+        """
+        files = []
+        dir_count = 0
+        try:
+            from core.file_utils import iter_tree
+
+            for entry in iter_tree(extraction_path, compute_hashes=False):
+                if entry.get('type') == 'FILE':
+                    files.append(entry)
+                else:
+                    dir_count += 1
+        except Exception as exc:
+            self.logger.warning("Could not enumerate %s: %s", extraction_path, exc)
+        return files, dir_count
+
     def _process_extracted_files(
         self,
         extraction_path: str,
@@ -439,8 +461,15 @@ class FileRouterService:
             }
         )
         
-        tree = read_tree(extraction_path)
-        file_list = [item for item in tree if item.get('type') == 'FILE']
+        # One streaming pass over the extracted tree: entries are produced
+        # lazily and only the file entries are kept, with metadata built from a
+        # DirEntry and no hashing. The previous `read_tree()` built a full
+        # metadata dictionary for every directory and file (including a hash of
+        # each member, which the store stage computes anyway) and was the most
+        # expensive step of archive handling: 1.7 KB/entry measured, times up to
+        # policy.max_files (10 000) members per container.
+        file_list, dir_count = self._collect_extraction_files(extraction_path)
+        file_count = len(file_list)
 
         # PROGRESS: grow the shared denominator now, keyed by extraction_path.
         # The key makes this idempotent - the nested IntegratedFileReader below
@@ -448,23 +477,23 @@ class FileRouterService:
         # ledger reconciles the difference rather than counting these twice.
         # ``parent=parent_file`` keeps recursive descendants attributable to the
         # container they came from.
-        if progress_ledger is not None and file_list:
+        if progress_ledger is not None and file_count:
             try:
                 progress_ledger.add_discovered(
-                    len(file_list), key=extraction_path,
+                    file_count, key=extraction_path,
                     parent=parent_file, depth=depth + 1,
                 )
                 progress_ledger.set_phase(
                     f"Expanding {extraction_type.replace('_', ' ')}: "
-                    f"{os.path.basename(parent_file)} (+{len(file_list)} nested)"
+                    f"{os.path.basename(parent_file)} (+{file_count} nested)"
                 )
             except Exception as ledger_exc:
                 self.logger.debug(f"Progress ledger update failed: {ledger_exc}")
 
-        print(f"Total Files:   {len(file_list)}")
+        print(f"Total Files:   {file_count}")
         print(f"{'─'*70}\n")
 
-        if not file_list:
+        if not file_count:
             record_command_line_action(
                 "EXTRACTION_COMPLETE",
                 f"No files extracted from {extraction_type}",
@@ -482,24 +511,30 @@ class FileRouterService:
                 "extracted_files": []
             }
         
-        # Check system load before using parallel processing
-        system_overloaded = False
+        # Resource pressure reduces *how many* workers a sub-tree uses. It never
+        # switches the sub-tree to one-at-a-time: that fallback (triggered by the
+        # old CPU-based overload flag) turned every extracted archive into a
+        # crawl - a 19 566-attachment PST running strictly serially - while
+        # removing no load at all, because the serial path still blocks on the
+        # same disk and database.
+        degraded_workers = None
         try:
             from core.resource_coordinator import get_resource_coordinator
             coordinator = get_resource_coordinator()
-            if coordinator._system_overload:
-                system_overloaded = True
+            if coordinator.is_system_overloaded():
+                degraded_workers = max(2, min(4, len(file_list)))
                 self.logger.warning(
-                    "System is overloaded. Using sequential processing for extracted files "
-                    "to prevent freezing and thread conflicts."
+                    "Resource pressure active: processing %d extracted files with "
+                    "%d worker(s) instead of sequential processing",
+                    len(file_list), degraded_workers,
                 )
         except Exception as e:
             self.logger.debug(f"Could not check system load: {e}")
-        
-        # Use parallel processing if enabled AND system is not overloaded
-        # Also disable parallel for nested extractions (extracted files from extracted files)
-        # to prevent thread conflicts
-        if use_parallel and len(file_list) > 1 and not system_overloaded and depth < 2:
+
+        # Parallelism is only disabled for nested extractions of nested
+        # extractions (depth >= 2), where the recursion, not the resource
+        # budget, is the constraint.
+        if use_parallel and len(file_list) > 1 and depth < 2:
             try:
                 from pipeline.integrated_reader import IntegratedFileReader
                 
@@ -518,8 +553,15 @@ class FileRouterService:
                         f"✅ Storage enabled for extracted files: Source='{storage_source}', Side='{storage_side}'"
                     )
                 
-                # Reduce workers for extracted files to prevent overload
-                max_workers = min(4, max(2, len(file_list) // 10 + 1))
+                # Size the pool to the work: more files means more workers, up
+                # to the reader's own safe ceiling. The old formula topped out
+                # at 4 regardless, and dropped to 2 under load.
+                from core.resource_coordinator import get_safe_worker_count
+                desired = min(8, max(2, len(file_list) // 10 + 1))
+                max_workers = get_safe_worker_count(desired) or desired
+                max_workers = max(1, min(max_workers, len(file_list)))
+                if degraded_workers:
+                    max_workers = min(max_workers, degraded_workers)
                 
                 # IntegratedFileReader creates its own storage_pipeline internally
                 # We just need to pass storage_source and storage_side
@@ -530,6 +572,12 @@ class FileRouterService:
                     'enable_storage': enable_storage_for_extracted,
                     'storage_source': storage_source,
                     'storage_side': storage_side,
+                    # CONTAINER-LINK: this reader's units belong to the container
+                    # that published them. Without it the ledger cannot tell a
+                    # container with 19 566 attachments still to process from a
+                    # finished one, and the run-level sweep wrote the remaining
+                    # children off as "never reached a worker".
+                    'container_path': parent_file,
                     # PROGRESS: share the parent's ledger. Without this the
                     # nested reader kept private counters and no callback, so
                     # every archive member / attachment / embedded object was

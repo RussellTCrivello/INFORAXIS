@@ -20,6 +20,7 @@ from pipeline.progress_ledger import (
     OUTCOME_COMPLETED,
     OUTCOME_FAILED,
     OUTCOME_RETRYABLE,
+    OUTCOME_CANCELLED,
     OUTCOME_SKIPPED,
     OUTCOME_UNSUPPORTED,
     ProgressLedger,
@@ -80,6 +81,71 @@ IMAGE_EXTENSIONS = frozenset({
 PDF_EXTENSIONS = frozenset({'.pdf'})
 PHASE_NAMES = ('other', 'pdf', 'image')
 
+#: Timeout model.  ``MIN_ASSUMED_BYTES_PER_S`` is the slowest per-byte rate the
+#: budget assumes when nothing has been measured yet; ``OBSERVED_RATE_SAFETY_FACTOR``
+#: divides this run's real throughput to leave room for a file that is much
+#: harder than average; ``MAX_FILE_TIMEOUT_S`` bounds one file's budget
+#: (configurable via ``processing.max_file_timeout_s``).
+def file_timeout_seconds(file_info, base_timeout, observed_bytes_per_s=0.0,
+                         max_timeout=None):
+    """Time budget for one file: a base cost plus a per-byte cost.
+
+    Per-byte cost dominates for large files, and it is measurable - this run
+    knows how many bytes it has processed and how long it has been running, so
+    the budget is derived from the observed rate (slowed by a safety factor for
+    a file that is harder than average) with a floor. The previous formula
+    (30 s per MB below 1 GB, 60 s per GB, 1 h per TB, capped at 3x/10x/20x base)
+    gave a real 2.1 GB PST 1 322 s - less than reading it takes - while printing
+    a recommendation of 125 555 s for the same file, and at 5 TB it recommends
+    years. Containers with nested work still in flight are additionally extended
+    on measured progress (see IntegratedFileReader._deadline_extended).
+    """
+    try:
+        file_size = int(file_info.get('size_bytes', 0) or 0) if isinstance(file_info, dict) else 0
+    except (TypeError, ValueError):
+        file_size = 0
+    if file_size <= 0:
+        return base_timeout
+
+    assumed_rate = max(MIN_ASSUMED_BYTES_PER_S,
+                       float(observed_bytes_per_s or 0.0) / OBSERVED_RATE_SAFETY_FACTOR)
+    budget = base_timeout + (file_size / assumed_rate)
+    ceiling = MAX_FILE_TIMEOUT_S if max_timeout is None else float(max_timeout)
+    return int(max(base_timeout, min(budget, ceiling)))
+
+
+def recommended_timeout_seconds(file_info, base_timeout, observed_bytes_per_s=0.0):
+    """What this file needs at the rate the run is *achieving*.
+
+    Operator-facing, so it reflects measurement rather than a constant: the old
+    "60 s per MB + 10 min" rule produced 34 h for a 2 GB file and would produce
+    years for 5 TB.
+    """
+    try:
+        size = int(file_info.get('size_bytes', 0) or 0) if isinstance(file_info, dict) else 0
+    except (TypeError, ValueError):
+        size = 0
+    rate = float(observed_bytes_per_s or 0.0) or MIN_ASSUMED_BYTES_PER_S
+    return int(base_timeout + (size / rate))
+
+
+MIN_ASSUMED_BYTES_PER_S = 1024 * 1024
+OBSERVED_RATE_SAFETY_FACTOR = 4.0
+MAX_FILE_TIMEOUT_S = 24 * 3600.0
+
+
+def _configured_max_file_timeout() -> float:
+    """``processing.max_file_timeout_s``, falling back to the default ceiling."""
+    try:
+        from settings.config import get_processing_config
+
+        value = getattr(get_processing_config(), 'max_file_timeout_s', None)
+        if value:
+            return float(value)
+    except Exception:
+        pass
+    return MAX_FILE_TIMEOUT_S
+
 #: How many per-file result dictionaries ``process_folder`` keeps in memory by
 #: default.  Each carries the extracted content (~5 KB measured), so retaining
 #: every result of a large corpus would hold the whole extraction in RAM.
@@ -135,6 +201,8 @@ class IntegratedFileReader:
         use_multiprocessing: bool = False,
         checkpoint_file: Optional[str] = None,
         progress_ledger: Optional[ProgressLedger] = None,
+        container_path: Optional[str] = None,
+        max_file_timeout_s: Optional[float] = None,
         result_retention_limit: Optional[int] = DEFAULT_RESULT_RETENTION,
         result_retention_bytes: Optional[int] = DEFAULT_RESULT_RETENTION_BYTES
          ):
@@ -155,6 +223,13 @@ class IntegratedFileReader:
                 ledger so dynamically discovered children grow the same
                 denominator the user is watching. When omitted the reader owns a
                 private ledger.
+            container_path: For a nested reader: the path of the container file
+                (the archive / PST / email / document) whose extracted members
+                this reader is processing. Every unit this reader settles is
+                attributed back to that container, so the ledger can tell a
+                container that is still working through 19 000 attachments from
+                one that is finished - the distinction the run-level sweep needs
+                before it may declare anything terminal.
             result_retention_limit: How many per-file result dictionaries to
                 keep in the list ``process_folder`` returns. Each result holds
                 the extracted content, so retaining one per file means holding
@@ -250,6 +325,9 @@ class IntegratedFileReader:
         # Thread synchronization
         self._results_lock = threading.Lock()
         self._stats_lock = threading.Lock()
+        # Admission control is observable from construction onward; the window is
+        # re-sized by _process_with_threads when the real worker count is known.
+        self._ensure_admission(max(2, int(max_workers or 4)))
 
         # PROGRESS: the ledger is the single source of truth for work
         # accounting. ``_processing_stats`` is kept as a compatibility *view*
@@ -268,6 +346,23 @@ class IntegratedFileReader:
         self._bytes_processed = 0
 
         self._owns_ledger = progress_ledger is None
+        #: The container this reader's work belongs to (None for a top-level run).
+        self._container_path = container_path
+        #: Hard ceiling on one file's budget. Configurable through
+        #: ``processing.max_file_timeout_s``: raising it is the supported way to
+        #: process a file that legitimately needs longer than the default.
+        self.max_file_timeout_s = float(
+            max_file_timeout_s or _configured_max_file_timeout()
+        )
+        #: Set when work was discovered but never processed: the run is partial
+        #: and every completion message must say so (see process_folder).
+        self._partial_run = False
+        #: Rate-model inputs for the timeout budget (see
+        #: _observed_bytes_per_second): bytes and files that finished, measured
+        #: from the start of this reader's run.
+        self._run_started_monotonic = time.monotonic()
+        self._run_completed_bytes = 0
+        self._run_completed_files = 0
         self.progress_ledger = progress_ledger or ProgressLedger(
             name=f"reader-{id(self):x}"
         )
@@ -591,7 +686,8 @@ class IntegratedFileReader:
         finally:
             with self._units_lock:
                 self._open_units.discard(unit)
-            unit.settle(outcome)
+            self.progress_ledger.settle(unit, outcome,
+                                        container=self._container_path)
             self._set_current(phase='Completed')
             self._notify_progress()
     
@@ -793,34 +889,60 @@ class IntegratedFileReader:
             OUTCOME_SKIPPED if self._control_requested() else OUTCOME_FAILED
         )
         if self._owns_ledger:
+            # Nested readers running inside this reader's worker threads publish
+            # children as they go.  Before deciding anything about work that has
+            # not reached a terminal state, the run waits for those containers:
+            # the old code settled them immediately as "never reached a worker /
+            # skipped", which is how a 2.1 GB PST's 19 013 remaining attachments
+            # were written off while the nested reader was still working through
+            # them - and the run then reported success.
+            self._wait_for_live_containers()
+
             snapshot = self.progress_ledger.snapshot()
             outstanding = snapshot.get('files_pending', 0)
-            if outstanding > 0:
-                # Cancel/pause cut a submission loop short, so these files were
-                # discovered but never entered a worker. They are terminal work
-                # now (skipped) - leaving them pending would mean the indicator
-                # could never honestly reach 100% for a cancelled job.
+            if outstanding > 0 and self.is_cancel_requested():
+                # A user-requested cancel stops the rest, and says so with the
+                # state that means exactly that.
                 logger.warning(
-                    "%d discovered file(s) never reached a worker; recording as skipped",
+                    "%d discovered file(s) were not processed before cancel",
                     outstanding,
                 )
-                # abandon(), not record(): these units are already in the
-                # denominator, so only their terminal state is missing.
-                self.progress_ledger.abandon(outstanding, OUTCOME_SKIPPED)
+                self.progress_ledger.abandon(outstanding, OUTCOME_CANCELLED)
+            elif outstanding > 0:
+                # Nothing cancelled: work was discovered and never ran.  That is
+                # a failure, not a skip - reporting it as skipped hid a real
+                # loss of coverage behind an innocuous word.
+                logger.error(
+                    "%d discovered file(s) never reached a worker and were not "
+                    "processed; recording as failed (partial run)",
+                    outstanding,
+                )
+                self.progress_ledger.abandon(outstanding, OUTCOME_FAILED)
+                self._partial_run = True
             self.progress_ledger.set_phase(
                 'Cancelled' if self.is_cancel_requested()
                 else 'Paused' if self.is_pause_requested()
+                else 'Completed with unprocessed work' if outstanding > 0
                 else 'Completed'
             )
             self._notify_progress()
 
-        # PRODUCTION: Final verification - ensure all files were processed
-        processed_count = len([r for r in results if r])
-        failed_count = total_files - processed_count
-        
+        # Final verification against the *accounting*, not against the retained
+        # window. ``results`` is deliberately bounded (DEFAULT_RESULT_RETENTION /
+        # DEFAULT_RESULT_RETENTION_BYTES) so that a large corpus cannot be pinned
+        # in memory; deriving the processed/failed counts from its length made a
+        # 40 000-file run report 30 000 files as "possibly unprocessed" purely
+        # because its results had been released. The ledger is the source of
+        # truth for both numbers.
+        final_stats = self.get_statistics()
+        processed_count = int(final_stats.get('completed', 0) or 0)
+        failed_count = int(final_stats.get('failed', 0) or 0)
         if failed_count > 0:
-            logger.warning(f"⚠️  {failed_count} files may not have been processed. Check logs for details.")
-            print(f"\n⚠️  Warning: {failed_count} files may not have been fully processed")
+            logger.warning(
+                "⚠️  %d file(s) could not be processed; see the error log for the "
+                "specific cause of each.", failed_count,
+            )
+            print(f"\n⚠️  Warning: {failed_count} files could not be processed")
         
         # Finalize checkpoint if checkpoint manager is active
         if self.checkpoint_manager:
@@ -829,11 +951,33 @@ class IntegratedFileReader:
             print(f"\n💾 Checkpoint saved: {checkpoint_stats['processed_count']} files processed")
         
         # PRODUCTION: Final summary
+        #
+        # Counts come from the ledger, which includes everything the run
+        # discovered - archive members, email attachments and embedded objects -
+        # not from the top-level tree the folders happened to contain.
+        ledger_view = final_stats.get('ledger', {}) or {}
         print("\n📊 Processing Summary:")
-        print(f"   Total files found: {total_files}")
+        print(f"   Total files found: {final_stats.get('total', total_files)}")
+        nested = ledger_view.get('files_nested', 0)
+        if nested:
+            print(f"   of which nested (extracted from {ledger_view.get('containers_opened', 0)} "
+                  f"container(s)): {nested}")
         print(f"   Files processed: {processed_count}")
         if failed_count > 0:
             print(f"   Files with issues: {failed_count}")
+        if self._partial_run or ledger_view.get('files_pending'):
+            # Never let a partial run read as a success.
+            print(f"   ⚠️  RUN INCOMPLETE: {ledger_view.get('files_pending', 0)} "
+                  f"discovered file(s) were not processed")
+        if final_stats.get('skipped'):
+            print(f"   Files skipped (already processed): {final_stats['skipped']}")
+        if final_stats.get('unsupported'):
+            print(f"   Files unsupported by any reader: {final_stats['unsupported']}")
+        retained = final_stats.get('results_retained')
+        if retained is not None and final_stats.get('results_truncated'):
+            print(f"   Per-file results retained in memory: {retained} "
+                  f"({final_stats['results_truncated']} released after reporting; "
+                  f"all were stored)")
         if self.enable_storage and self.storage_pipeline:
             storage_stats = self.get_storage_statistics()
             print(f"   Files stored in database: {storage_stats.get('completed', 0)}")
@@ -936,6 +1080,29 @@ class IntegratedFileReader:
             return self._process_with_threads(batch)
         return self._process_sequential(batch)
 
+    def _ensure_admission(self, configured_window: int):
+        """The admission controller for this reader (created on first use).
+
+        Created eagerly enough that the live progress snapshot can always report
+        it - an operator must be able to see throttling whether or not the run
+        happens to be using the threaded worker window at that moment.
+        """
+        configured_window = max(1, int(configured_window))
+        controller = getattr(self, '_admission', None)
+        if controller is None:
+            try:
+                from core.compute.backpressure import AdmissionController
+
+                controller = AdmissionController(configured_window=configured_window)
+            except Exception as exc:  # never let a controller failure stop ingestion
+                logger.warning("Admission control unavailable (%s); window %d",
+                               exc, configured_window)
+                controller = None
+            self._admission = controller
+        elif configured_window != controller.configured_window:
+            controller.configured_window = configured_window
+        return controller
+
     def _process_with_threads(self, files: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Process files with a bounded window of worker threads.
 
@@ -995,54 +1162,17 @@ class IntegratedFileReader:
             logger.info(f"Using fallback timeout: {base_timeout}s")
 
         def calculate_file_timeout(file_info: Dict[str, Any], base_timeout: int) -> int:
-            """
-            Calculate dynamic timeout based on file size.
-            PRODUCTION-READY: Handles terabyte-scale files with appropriate timeouts.
-            Larger files get proportionally more time, with special handling for very large files.
-            """
-            if not isinstance(file_info, dict):
-                return base_timeout
+            """This reader's timeout budget (see ``file_timeout_seconds``)."""
+            return file_timeout_seconds(
+                file_info, base_timeout, self._observed_bytes_per_second(),
+                max_timeout=self.max_file_timeout_s,
+            )
 
-            file_size = file_info.get('size_bytes', 0) or 0
-            if file_size == 0:
-                return base_timeout
-
-            # Base timeout for small files (< 1MB)
-            if file_size < 1024 * 1024:
-                return base_timeout
-
-            size_mb = file_size / (1024 * 1024)
-            size_gb = size_mb / 1024
-            size_tb = size_gb / 1024
-
-            # PRODUCTION: Different timeout calculation for different file size ranges
-            if size_tb >= 1.0:
-                # Terabyte-scale files: use more aggressive timeout scaling
-                # Formula: base_timeout + (size_in_tb * 3600 seconds per TB) + buffer
-                # This allows 1 hour per TB, with minimum 2 hours for any TB file
-                extra_time = int(size_tb * 3600)  # 1 hour per TB
-                dynamic_timeout = max(base_timeout * 2, base_timeout + extra_time)  # Minimum 2x base
-                max_timeout = base_timeout * 20  # Cap at 20x base (e.g., 6.7 hours for 20min base)
-                final_timeout = min(dynamic_timeout, max_timeout)
-                logger.info(f"Terabyte file detected ({size_tb:.2f}TB), timeout: {final_timeout}s ({final_timeout/3600:.2f} hours)")
-            elif size_gb >= 1.0:
-                # Gigabyte-scale files: moderate scaling
-                # Formula: base_timeout + (size_in_gb * 60 seconds per GB)
-                extra_time = int(size_gb * 60)  # 60 seconds per GB
-                dynamic_timeout = base_timeout + extra_time
-                max_timeout = base_timeout * 10  # Cap at 10x base
-                final_timeout = min(dynamic_timeout, max_timeout)
-                logger.debug(f"Large file detected ({size_gb:.2f}GB), timeout: {final_timeout}s ({final_timeout/60:.1f} minutes)")
-            else:
-                # Megabyte-scale files: standard scaling
-                # Formula: base_timeout + (size_in_mb * 30 seconds per MB)
-                extra_time = int(size_mb * 30)  # 30 seconds per MB
-                dynamic_timeout = base_timeout + extra_time
-                max_timeout = base_timeout * 3  # Cap at 3x base
-                final_timeout = min(dynamic_timeout, max_timeout)
-                logger.debug(f"File size: {size_mb:.2f}MB, calculated timeout: {final_timeout}s (base: {base_timeout}s)")
-
-            return final_timeout
+        def recommend_timeout(file_info: Dict[str, Any]) -> int:
+            """This reader's recommendation for one file (see the module helper)."""
+            return recommended_timeout_seconds(
+                file_info, base_timeout, self._observed_bytes_per_second()
+            )
 
         #: Number of workers allowed in flight.  ``max_workers`` is the
         #: configured concurrency; the extra factor covers the short window
@@ -1053,6 +1183,15 @@ class IntegratedFileReader:
         except (TypeError, ValueError):
             configured_workers = 4
         in_flight_limit = max(2, configured_workers + max(1, configured_workers // 4))
+
+        # BACKPRESSURE-01: the window above is the ceiling, not a constant. On
+        # a host under memory or CPU pressure the same run must slow down rather
+        # than push the machine into swap: the admission controller measures the
+        # host and shrinks the window, recording the measurement that caused it.
+        # It can only ever shrink below the configured ceiling, work already in
+        # flight is never killed, and no file is dropped - submission pauses
+        # until the window drains, and every discovered artifact still settles.
+        admission = self._ensure_admission(in_flight_limit)
 
         file_iterator = iter(enumerate(files))
         pending: List[list] = []          # [thread_id, thread, file_info, deadline]
@@ -1107,8 +1246,18 @@ class IntegratedFileReader:
                     # completed and made the caller reprocess it sequentially.
                     self._owned_thread_ids.add(thread_id)
 
-                deadline = time.monotonic() + max(30, calculate_file_timeout(file_info, base_timeout))
-                pending.append([thread_id, thread, file_info, deadline])
+                window = max(30, calculate_file_timeout(file_info, base_timeout))
+                # Entry layout: thread_id, thread, file_info, deadline,
+                # terminal-count watermark, extensions granted, last progress.
+                # The watermark turns the deadline into a *stall* detector for
+                # containers: while the container's own children keep reaching a
+                # terminal state the deadline is pushed back, so a 2.1 GB PST
+                # with 19 566 attachments is not killed by a formula that knows
+                # nothing about the work it published.
+                pending.append([
+                    thread_id, thread, file_info, time.monotonic() + window,
+                    None, 0, time.monotonic(),
+                ])
                 return True
             submission_stopped = True
             return False
@@ -1155,13 +1304,25 @@ class IntegratedFileReader:
                 # retryable so it stays distinguishable from real failures.
                 file_size_mb = file_info.get('size_bytes', 0) / (1024 * 1024) if isinstance(file_info, dict) else 0
                 file_timeout = calculate_file_timeout(file_info, base_timeout)
-                recommended_timeout = max(base_timeout, int(file_size_mb * 60) + 600)  # 60s per MB + 10 min base
+                # The recommendation comes from what this run is achieving, not
+                # from a constant: the old 60 s/MB rule recommended 125 555 s
+                # (34 h) for the 2.1 GB PST and would recommend years for 5 TB.
+                recommended_timeout = max(base_timeout, recommend_timeout(file_info))
+                outstanding = self.progress_ledger.container_outstanding(file_path)
+                if outstanding:
+                    error_msg_extra = (
+                        f" The container still had {outstanding} nested unit(s) "
+                        f"outstanding when its window expired."
+                    )
+                else:
+                    error_msg_extra = ""
 
                 error_msg = (
                     f"File processing timeout: {os.path.basename(file_path)} "
                     f"({file_size_mb:.2f}MB) exceeded {file_timeout}s timeout "
                     f"(base: {base_timeout}s, dynamic: +{file_timeout - base_timeout}s). "
                     f"Recommended timeout for this file size: {recommended_timeout}s"
+                    f"{error_msg_extra}"
                 )
 
                 logger.error(error_msg)
@@ -1196,7 +1357,8 @@ class IntegratedFileReader:
                 # so a file is never counted twice. Retryable is reported in
                 # its own bucket, keeping it distinguishable from work that
                 # terminally succeeded or failed.
-                self.progress_ledger.settle_path(file_path, OUTCOME_RETRYABLE)
+                self.progress_ledger.settle_path(file_path, OUTCOME_RETRYABLE,
+                                    container=self._container_path)
                 self._release_path(file_path)
                 self._notify_progress()
                 self._discard_finished_thread(thread_id)
@@ -1213,7 +1375,8 @@ class IntegratedFileReader:
                 # PROGRESS: the thread died before its worker could settle,
                 # so close the unit here. settle_path() is a no-op when the
                 # worker already did it.
-                self.progress_ledger.settle_path(file_path, OUTCOME_FAILED)
+                self.progress_ledger.settle_path(file_path, OUTCOME_FAILED,
+                                    container=self._container_path)
                 self._release_path(file_path)
             else:
                 # Try to get result from outbox
@@ -1250,7 +1413,8 @@ class IntegratedFileReader:
                         severity=ErrorSeverity.MEDIUM,
                         context={'operation': '_process_with_threads', 'file_path': file_path}
                     )
-                    self.progress_ledger.settle_path(file_path, OUTCOME_FAILED)
+                    self.progress_ledger.settle_path(file_path, OUTCOME_FAILED,
+                                    container=self._container_path)
                     self._release_path(file_path)
 
                 # Count the file's size for the exact total, then retain the
@@ -1264,8 +1428,16 @@ class IntegratedFileReader:
             self._notify_progress()
 
         while True:
-            # Keep the window full.
-            while len(pending) < in_flight_limit:
+            # Keep the window full, up to whatever the host can currently take.
+            limit = in_flight_limit
+            if admission is not None:
+                try:
+                    limit = admission.window(in_flight=len(pending))
+                    self._admission = admission
+                except Exception as exc:
+                    logger.debug("Admission sample failed (%s); window unchanged", exc)
+                    limit = admission.configured_window
+            while len(pending) < limit:
                 if not submit_next():
                     break
 
@@ -1287,6 +1459,11 @@ class IntegratedFileReader:
                     or state in (ThreadState.COMPLETED, ThreadState.ERROR, ThreadState.STOPPED)
                 )
                 expired = now >= entry[3]
+                if expired and not finished and self._deadline_extended(entry, now):
+                    # The worker is alive and its container is still making
+                    # measurable progress: grant another window instead of
+                    # declaring a timeout.  A stalled worker still expires.
+                    expired = False
                 if not (finished or expired):
                     continue
                 pending.remove(entry)
@@ -1315,7 +1492,8 @@ class IntegratedFileReader:
             logger.error("Processing pool not available")
             # These files were discovered and registered, so they must still
             # reach a terminal state or the bar can never legitimately hit 100%.
-            self.progress_ledger.abandon(len(files), OUTCOME_FAILED)
+            self.progress_ledger.abandon(len(files), OUTCOME_FAILED,
+                                        container=self._container_path)
             self._notify_progress()
             return results
         
@@ -1357,7 +1535,8 @@ class IntegratedFileReader:
                         severity=ErrorSeverity.MEDIUM,
                         context={'operation': '_process_with_pool', 'file_path': file_path}
                     )
-                    self.progress_ledger.settle_path(file_path, OUTCOME_FAILED)
+                    self.progress_ledger.settle_path(file_path, OUTCOME_FAILED,
+                                    container=self._container_path)
             else:
                 # Timeout
                 file_path = file_info.get('path', 'unknown')
@@ -1367,7 +1546,8 @@ class IntegratedFileReader:
                     severity=ErrorSeverity.MEDIUM,
                     context={'operation': '_process_with_pool', 'file_path': file_path}
                 )
-                self.progress_ledger.settle_path(file_path, OUTCOME_RETRYABLE)
+                self.progress_ledger.settle_path(file_path, OUTCOME_RETRYABLE,
+                                    container=self._container_path)
 
             # PROGRESS: publish only; the ledger owns the counters.
             self._notify_progress()
@@ -1445,7 +1625,9 @@ class IntegratedFileReader:
             # Check for stop signal
             if check_stop and check_stop():
                 logger.info(f"Processing stopped for: {file_path}")
-                outcome = OUTCOME_SKIPPED
+                # Cancel/pause = the operator asked for this work to stop. It is
+                # not "skipped" (deliberately not processed) and not "failed".
+                outcome = OUTCOME_CANCELLED
                 return None
             
             # CRITICAL: Validate file_info but create minimal version if invalid to prevent data loss
@@ -1818,13 +2000,21 @@ class IntegratedFileReader:
                     )
                     continue
                 if thread.metrics.state in [ThreadState.RUNNING, ThreadState.PAUSED]:
-                    try:
-                        thread.join(timeout=30)  # Wait up to 30 seconds
-                    except RuntimeError as join_err:
-                        # Defensive: a thread can never be joined from itself.
-                        logger.warning(
-                            "Could not join thread %s during cleanup: %s", thread.name, join_err
-                        )
+                    # Wait for a worker that is still running before this reader
+                    # closes its storage. The 30 s cap used to abandon a long
+                    # file: __exit__ returned, the database handle was released,
+                    # and the still-running worker lost its storage - the run
+                    # then reported a partial result for a file that was
+                    # actually still being processed. Waiting is bounded by the
+                    # worker's own progress instead (see CONTAINER_STALL_GRACE_S),
+                    # so a hung thread cannot hold the reader open forever.
+                    if self._wait_for_thread(thread):
+                        continue
+                    logger.warning(
+                        "Thread %s is still running after waiting; it will be "
+                        "recorded as retryable rather than silently dropped",
+                        thread.name,
+                    )
         
         if self.pool_manager and hasattr(self, 'processing_pool_id'):
             # Wait for all tasks in the pool to complete
@@ -1885,6 +2075,14 @@ class IntegratedFileReader:
         """
         snapshot = self.progress_ledger.snapshot()
         self._sync_stats_view(snapshot)
+        # Admission state is part of progress: an operator watching a slow run
+        # must be able to see that it was throttled and by what measurement.
+        admission = getattr(self, '_admission', None)
+        if admission is not None:
+            try:
+                snapshot['admission'] = admission.snapshot()
+            except Exception:
+                pass
         return snapshot
 
     def _sync_stats_view(self, snapshot: Optional[Dict[str, Any]] = None) -> None:
@@ -1902,6 +2100,9 @@ class IntegratedFileReader:
             self._processing_stats['skipped'] = snap.get('files_skipped', 0)
             self._processing_stats['unsupported'] = snap.get('files_unsupported', 0)
             self._processing_stats['retryable'] = snap.get('files_retryable', 0)
+            self._processing_stats['cancelled'] = snap.get('files_cancelled', 0)
+            self._processing_stats['locked'] = snap.get('files_locked', 0)
+            self._processing_stats['unsupported'] = snap.get('files_unsupported', 0)
             self._processing_stats['nested'] = snap.get('files_nested', 0)
             self._processing_stats['initial_total'] = snap.get('files_initial', 0)
             self._processing_stats['pending'] = snap.get('files_pending', 0)
@@ -2020,6 +2221,20 @@ class IntegratedFileReader:
             total += _object_footprint(value)
         return total
 
+    def _observed_bytes_per_second(self) -> float:
+        """This run's measured throughput over files that actually completed.
+
+        Used by the timeout model so a budget reflects the machine and the
+        corpus in hand rather than a constant. Returns 0.0 until enough work has
+        completed for the number to mean anything.
+        """
+        elapsed = time.monotonic() - getattr(self, '_run_started_monotonic', time.monotonic())
+        processed = getattr(self, '_run_completed_bytes', 0) or 0
+        completed = getattr(self, '_run_completed_files', 0) or 0
+        if elapsed < 5.0 or completed < 3 or processed <= 0:
+            return 0.0
+        return processed / elapsed
+
     def _count_processed_bytes(self, result: Any) -> None:
         """Add one file's size to the exact byte total, retained or not."""
         size = 0
@@ -2031,6 +2246,8 @@ class IntegratedFileReader:
                 size = result.get("file_size") or 0
         try:
             self._bytes_processed += int(size)
+            self._run_completed_bytes += int(size)
+            self._run_completed_files += 1
         except (TypeError, ValueError):
             pass
 
@@ -2060,7 +2277,11 @@ class IntegratedFileReader:
             path=path,
             phase=phase or self._current_phase or 'Processing files',
             depth=0,
-            parent=None,
+            # Nested readers tag their units with the container that published
+            # them. The ledger's container counters are decremented by
+            # _finish_unit / _reconcile_outstanding, so "container X still has
+            # N units outstanding" is exact rather than inferred.
+            parent=self._container_path,
         )
         with self._units_lock:
             self._open_units.add(unit)
@@ -2072,7 +2293,143 @@ class IntegratedFileReader:
             return False
         with self._units_lock:
             self._open_units.discard(unit)
-        return unit.settle(outcome)
+        return self.progress_ledger.settle(unit, outcome,
+                                           container=self._container_path)
+
+    #: Minimum workers used when the system reports resource pressure. The
+    #: platform degrades *concurrency*, never to *serial*: dropping a
+    #: sub-tree to one file at a time is what made extracted archives crawls.
+    MIN_DEGRADED_WORKERS = 2
+
+    #: A container whose worker is alive past its deadline keeps its window
+    #: while this much of its published work reaches a terminal state per
+    #: window. The threshold is progress, not size: it scales to a 5 TB
+    #: container and to a million attachments without a magic byte rate.
+    CONTAINER_STALL_GRACE_S = 120.0
+
+    #: Hard ceiling on waiting for nested readers at the end of a run. The
+    #: normal exit is "no container has outstanding work"; this only bounds a
+    #: pathological container whose workers stopped without a trace.
+    CONTAINER_WAIT_MAX_S = 12 * 3600.0
+
+    def _deadline_extended(self, entry: list, now: float) -> bool:
+        """Extend a live worker's deadline while its container makes progress.
+
+        Returns True when the window was pushed back. Any *other* file in the
+        pool finishing must not keep a stuck container alive, so progress is
+        counted only as the container's own outstanding work going down.
+        """
+        thread_id, thread = entry[0], entry[1]
+        file_info = entry[2]
+        path = file_info.get('path') if isinstance(file_info, dict) else None
+
+        outstanding = self.progress_ledger.container_outstanding(path)
+        # Progress is measured on *this* container's outstanding work only:
+        # another file finishing elsewhere in the pool must never keep a stuck
+        # container alive (and a busy container must never be killed because
+        # other work is quiet).
+        progressed = entry[4] is None or outstanding < entry[4]
+        entry[4] = outstanding
+        if progressed:
+            entry[6] = now
+
+        stalled_for = now - entry[6]
+        if outstanding > 0 and stalled_for < self.CONTAINER_STALL_GRACE_S:
+            entry[3] = now + max(30.0, self._file_window(entry))
+            entry[5] += 1
+            if entry[5] == 1 or entry[5] % 10 == 0:
+                logger.info(
+                    "Extending deadline for %s: %d nested unit(s) still "
+                    "outstanding, %d extension(s) so far",
+                    os.path.basename(path) if path else '?', outstanding, entry[5],
+                )
+            return True
+        return False
+
+    def _file_window(self, entry: list) -> float:
+        """The base window for an entry (recomputed from its file info)."""
+        file_info = entry[2]
+        try:
+            return float(max(30, calculate_file_timeout(file_info, self.base_timeout)))
+        except Exception:
+            return 300.0
+
+    def _wait_for_thread(self, thread, poll_s: float = 0.25) -> bool:
+        """Wait for ``thread`` while it makes measurable progress.
+
+        Returns True when the thread finished, False when it stopped making
+        progress for ``CONTAINER_STALL_GRACE_S`` (a genuinely stuck worker).
+        """
+        import os as _os
+
+        container = thread.name.split('Process-', 1)[-1] if thread.name else None
+        last_seen = None
+        quiet_since = time.monotonic()
+        while thread.is_alive():
+            current = (self.progress_ledger.container_outstanding(container)
+                       if container else None)
+            if current != last_seen:
+                last_seen = current
+                quiet_since = time.monotonic()
+            elif time.monotonic() - quiet_since > self.CONTAINER_STALL_GRACE_S:
+                return False
+            time.sleep(poll_s)
+        return True
+
+    def _wait_for_live_containers(self, timeout_s: Optional[float] = None) -> int:
+        """Wait until containers this run published have no outstanding units.
+
+        The end-of-run sweep used to run immediately: a container whose worker
+        was still processing its attachments had those attachments counted as
+        "never reached a worker" and marked *skipped*, and the run then reported
+        completion while 19 013 files had never been touched. Waiting here is
+        what makes the sweep honest; the wait itself is bounded by progress, so
+        a genuinely stuck container cannot hang the run.
+        """
+        if self._owns_ledger is False and self._container_path:
+            return 0  # a nested reader never decides the fate of its siblings
+        started = time.monotonic()
+        quiet_since = started
+        deadline = started + (timeout_s if timeout_s is not None
+                              else self.CONTAINER_WAIT_MAX_S)
+        watermark: Dict[str, int] = {}
+        while True:
+            in_flight = self.progress_ledger.live_containers()
+            if not in_flight:
+                return 0
+
+            # Progress = any container's outstanding count going down. A single
+            # stalled container cannot hide behind the others: once they finish,
+            # the counters stop moving and the grace period expires.
+            moved = False
+            for container, count in in_flight.items():
+                previous = watermark.get(container)
+                if previous is None or count < previous:
+                    moved = True
+                watermark[container] = count
+            for container in list(watermark):
+                if container not in in_flight:
+                    moved = True
+                    del watermark[container]
+            if moved:
+                quiet_since = time.monotonic()
+            elif time.monotonic() - quiet_since >= self.CONTAINER_STALL_GRACE_S:
+                logger.warning(
+                    "%d nested unit(s) across %d container(s) made no progress "
+                    "for %.0fs; they will be recorded as failed rather than "
+                    "skipped",
+                    sum(in_flight.values()), len(in_flight),
+                    self.CONTAINER_STALL_GRACE_S,
+                )
+                return sum(in_flight.values())
+            if time.monotonic() >= deadline:
+                logger.warning(
+                    "Giving up waiting for %d nested unit(s) after %.0fs",
+                    sum(in_flight.values()), time.monotonic() - started,
+                )
+                return sum(in_flight.values())
+            self._notify_progress()
+            time.sleep(0.2)
 
     def _reconcile_outstanding(self, outcome: str = OUTCOME_SKIPPED) -> int:
         """Settle units this reader opened but never closed.
@@ -2086,7 +2443,8 @@ class IntegratedFileReader:
             self._open_units.clear()
         settled = 0
         for unit in units:
-            if unit.settle(outcome):
+            if self.progress_ledger.settle(unit, outcome,
+                                           container=self._container_path):
                 settled += 1
         return settled
 
@@ -2105,6 +2463,15 @@ class IntegratedFileReader:
         stats['bytes_processed'] = self._bytes_processed
         stats['results_retained'] = self._results_retained
         stats['results_truncated'] = self._results_truncated
+        # The full ledger view travels with the statistics, so a caller cannot
+        # accidentally report the bounded result window as if it were the work
+        # that was done (see apps/cli/main.py).
+        stats['ledger'] = self.progress_ledger.snapshot()
+        # The full state accounting with the identity that must hold:
+        # discovered = completed+failed+skipped+unsupported+retryable+locked
+        #              +cancelled +queued(=pending)+processing(=in_progress)
+        stats['accounting'] = self.progress_ledger.accounting()
+        stats['partial_run'] = self._partial_run
         stats['result_retention_limit'] = self._result_retention_limit
         stats['result_retention_bytes'] = self._result_retention_bytes
         stats['results_retained_bytes'] = self._results_retained_bytes

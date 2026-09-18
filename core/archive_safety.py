@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import time
 import zipfile
 import bz2
@@ -198,6 +199,35 @@ def _destination_checks(policy: ExtractionPolicy, dest: Path, member_size: int) 
         )
 
 
+def _prepare_output_dir(output_dir) -> Path:
+    """Return an **empty** output directory for a fresh extraction.
+
+    Extraction publishes the complete member set of one source file. An output
+    directory left over from an earlier attempt (crash, retry, or a previous
+    archive that occupied the same name) would otherwise be indistinguishable
+    from the current archive's members, and the pipeline would ingest stale
+    children as if they belonged to this source - the extraction equivalent of
+    reusing a stale hash.
+
+    This is done here, in the single choke point every format goes through,
+    rather than at each call site, so a new extraction backend cannot forget it.
+    """
+    root = Path(output_dir)
+    if root.is_symlink() or root.is_file():
+        root.unlink()
+    elif root.is_dir():
+        for child in root.iterdir():
+            try:
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child, ignore_errors=True)
+                else:
+                    child.unlink()
+            except OSError as exc:  # pragma: no cover - permission/lock edge
+                logger.warning("Could not clear %s from %s: %s", child, root, exc)
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def extract_zip(
     archive_path: str | os.PathLike,
     output_dir: str | os.PathLike,
@@ -206,8 +236,7 @@ def extract_zip(
 ) -> ExtractionResult:
     """Safely extract a ZIP archive member-by-member."""
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
 
@@ -273,8 +302,7 @@ def extract_tar(
 ) -> ExtractionResult:
     """Safely extract a TAR archive (incl. .tar.gz/.tar.bz2/.tar.xz)."""
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
 
@@ -340,8 +368,7 @@ def extract_single_file(
 ) -> ExtractionResult:
     """Safely extract a single-file stream (gzip/bzip2/xz)."""
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     result = ExtractionResult(output_dir=root)
 
     opener = {"gzip": gzip.open, "bzip2": bz2.open, "xz": lzma.open}[codec]
@@ -385,8 +412,7 @@ def extract_7z(
         raise ArchiveSafetyError("py7zr is not installed; cannot extract 7z archives") from exc
 
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
 
@@ -434,8 +460,7 @@ def extract_rar(
         raise ArchiveSafetyError("rarfile is not installed; cannot extract RAR archives") from exc
 
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
 

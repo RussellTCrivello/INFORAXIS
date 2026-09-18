@@ -172,9 +172,16 @@ def test_read_file_still_rejects_a_non_email(reader, tmp_path):
     assert "unsupported" in (result.get("error") or "").lower(), result
 
 
-def test_declared_extensions_are_unchanged(reader):
-    """The fix is about dispatch, not about advertising new formats."""
-    assert reader.get_supported_extensions() == {".eml", ".msg", ".mbox", ".pst"}
+def test_original_declared_extensions_are_still_supported(reader):
+    """Dispatch fixes must never remove a format.
+
+    The set is asserted as a superset rather than an equality: the reader was
+    later extended to the Outlook offline store (.ost), the Apple Mail message
+    (.emlx) and the alternative mbox spelling (.mbx), and each of those has its
+    own dispatch test above. What this test protects is that none of the
+    original four ever disappears.
+    """
+    assert {".eml", ".msg", ".mbox", ".pst"} <= reader.get_supported_extensions()
 
 
 def test_sniff_does_a_bounded_read(reader, tmp_path):

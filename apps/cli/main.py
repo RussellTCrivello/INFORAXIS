@@ -281,16 +281,43 @@ def main_read_folder_threaded(folder_path, storage_source=None, storage_side=Non
             print("📊 PROCESSING STATISTICS")
             print(f"{'='*70}")
             
-            total_files = len(results) if results else stats.get('total', 0)
+            # The report is built from the ledger, not from the (deliberately
+            # bounded) list of retained results. Reporting ``len(results)``
+            # under the label "Total Files" made a 19 566-attachment container
+            # print "Total Files: 2" - the number of top-level files whose
+            # results were still in the window - while the work actually done
+            # was 1 400x larger and invisible.
+            snapshot = reader.get_live_progress()
+            total_files = snapshot.get('files_discovered', stats.get('total', 0))
+            nested_files = snapshot.get('files_nested', 0)
+            containers = snapshot.get('containers_opened', 0)
+            completed_files = snapshot.get('files_completed', 0)
+            pending_files = snapshot.get('files_pending', 0)
             files_stored = storage_stats.get('completed', 0)
             duplicate_files = storage_stats.get('duplicates', 0)
-            failed_files = stats.get('failed', 0)
-            
+            failed_files = snapshot.get('files_failed', 0)
+            retryable_files = snapshot.get('files_retryable', 0)
+            skipped_files = snapshot.get('files_skipped', 0)
+            unsupported_files = snapshot.get('files_unsupported', 0)
+
             print(f"Total Files:            {total_files}")
+            if nested_files:
+                print(f"  of which nested:      {nested_files}"
+                      f" (from {containers} container(s))")
+            print(f"Files Completed:        {completed_files}")
             print(f"Files Stored:           {files_stored}")
             print(f"Duplicate Files:        {duplicate_files}")
+            if skipped_files:
+                print(f"Files Skipped:          {skipped_files}")
+            if unsupported_files:
+                print(f"Files Unsupported:      {unsupported_files}")
             if failed_files > 0:
                 print(f"Failed Files:           {failed_files}")
+            if retryable_files:
+                print(f"Retryable Files:        {retryable_files}")
+            if pending_files:
+                print(f"UNPROCESSED (pending):  {pending_files}"
+                      f"  <-- run is INCOMPLETE")
             
             # File type distribution
             if results:
@@ -801,12 +828,18 @@ def main_read_folder_sequential(folder_path, storage_source=None, storage_side=N
     print("📊 PROCESSING STATISTICS")
     print(f"{'='*70}")
     
-    total_files = len(results)
+    ledger_stats = stats.get('ledger') if isinstance(stats, dict) else None
+    ledger_stats = ledger_stats or {}
+    total_files = ledger_stats.get('files_discovered') or stats.get('total') or len(results)
+    nested_files = ledger_stats.get('files_nested', 0)
     files_stored = stored_count if 'stored_count' in locals() else 0
     duplicate_files = duplicate_count if 'duplicate_count' in locals() else 0
     storage_failed = failed_count if 'failed_count' in locals() else 0
-    
+    pending_files = ledger_stats.get('files_pending', 0)
+
     print(f"Total Files:            {total_files}")
+    if nested_files:
+        print(f"  of which nested:      {nested_files}")
     print(f"Processing Successful:  {successful}")
     if failed > 0:
         print(f"Processing Failed:      {failed}")
@@ -816,6 +849,8 @@ def main_read_folder_sequential(folder_path, storage_source=None, storage_side=N
         print(f"Storage Failed:         {storage_failed}")
     if 'extracted_count' in locals() and extracted_count > 0:
         print(f"Extracted Files Stored:  {extracted_count}")
+    if pending_files:
+        print(f"UNPROCESSED (pending):   {pending_files}  <-- run is INCOMPLETE")
     
     # File type distribution
     if results:

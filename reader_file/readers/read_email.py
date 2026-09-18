@@ -67,14 +67,17 @@ class EmailFileReader(BaseReader):
             '.eml',
             '.msg',
             '.mbox',
-            '.pst'
+            '.pst',
+            '.ost',    # Outlook offline store: same container as PST
+            '.emlx',   # Apple Mail message (RFC822 plus a plist trailer)
+            '.mbx',    # mbox mailbox, alternative spelling
         }
     
     #: Email formats the detector can identify from bytes alone.
     #: .msg is recognised as an OLE2 container holding a __substg1.0_ entry.
     #: The text formats are included because a caller that has already
     #: content-verified them must be believed.
-    CONTENT_IDENTIFIABLE = frozenset({'.msg', '.eml', '.mbox'})
+    CONTENT_IDENTIFIABLE = frozenset({'.msg', '.eml', '.mbox', '.emlx', '.mbx'})
 
     #: What content detection reports when it has no idea. Not an
     #: identification, so it must never trigger a rejection.
@@ -91,12 +94,12 @@ class EmailFileReader(BaseReader):
     #: OLE-based email formats with no format-specific signature. The detector
     #: can confirm the container ('.ole') but cannot tell a PST from any other
     #: OLE file, so the declared extension has to settle it.
-    OLE_BASED = frozenset({'.pst'})
+    OLE_BASED = frozenset({'.pst', '.ost'})
 
     #: Plain-text email formats. They have no magic bytes at all, so content
     #: detection reports ('.bin', 'none') and the declared extension is the only
     #: available signal.
-    TEXT_BASED = frozenset({'.eml', '.mbox'})
+    TEXT_BASED = frozenset({'.eml', '.mbox', '.emlx', '.mbx'})
 
     def _resolve_email_type(self, file_info: Dict[str, Any], file_path: str):
         """Return (email_type, rejection_reason) for this file.
@@ -137,7 +140,15 @@ class EmailFileReader(BaseReader):
             )
 
         # 4. Plain-text formats have no magic bytes, so the declared extension
-        #    is the only signal the detector can offer.
+        #    is the only signal the detector can offer - but an extension is a
+        #    claim, not evidence. A file named .eml whose bytes carry no RFC822
+        #    header field at all is not a message, and reporting it as an
+        #    extracted email would turn garbage into a silent success.
+        # 4. Plain-text formats have no magic bytes, so the declared extension
+        #    is the only signal the detector can offer. Whether the bytes
+        #    actually look like a message is decided in read_file, where the
+        #    answer is reported as an unsupported email type rather than as a
+        #    rejection (see _has_rfc822_headers).
         if declared in self.TEXT_BASED:
             return declared, None
 
@@ -151,6 +162,26 @@ class EmailFileReader(BaseReader):
         # 6. Fall back to the declared extension; the dispatcher rejects it if
         #    it is not an email format at all.
         return declared, None
+
+    def _has_rfc822_headers(self, file_path: str) -> bool:
+        """True when the file opens like an RFC822 message or an mbox record.
+
+        A bounded read of the first kilobyte; the check is deliberately about
+        *evidence* (at least one header field or an mbox envelope) rather than
+        about the extension, so a renamed message is still processed and a
+        mislabelled binary is still refused.
+        """
+        try:
+            with open(file_path, 'rb') as handle:
+                head = handle.read(1024)
+        except OSError:
+            return False
+        if not head:
+            return False
+        if head.startswith(b'From '):
+            return True
+        lowered = head[:4096].lower()
+        return any(marker in lowered for marker in self.RFC822_HEADERS)
 
     def _sniff_text_email(self, file_path: str):
         """Return '.mbox', '.eml' or None based on the leading bytes.
@@ -210,6 +241,23 @@ class EmailFileReader(BaseReader):
                 ValueError(rejection), file_path, "read_file"
             )
 
+        # A text-based email format is named by its extension alone, so the
+        # bytes have to be checked before a parser is pointed at them: a file
+        # named .eml whose content carries no RFC822 header field and no mbox
+        # envelope is not a message, and reporting it as extracted email would
+        # turn garbage into a silent success. The outcome is 'unsupported' (the
+        # container was named, the content does not match) rather than 'failed',
+        # which is the distinction the ledger records.
+        if email_type in self.TEXT_BASED and not self._has_rfc822_headers(file_path):
+            return self.handle_read_error(
+                ValueError(
+                    f"Unsupported email type: {file_path} has a text-email "
+                    f"extension ({email_type}) but no RFC822 header fields and "
+                    f"no mbox envelope, so it is not an email container"
+                ),
+                file_path, "read_file",
+            )
+
         try:
             result = None
 
@@ -223,15 +271,23 @@ class EmailFileReader(BaseReader):
                 if result and 'error' not in result:
                     result["email_type"] = "eml"
 
-            elif email_type == '.mbox':
+            elif email_type in ('.mbox', '.mbx'):
                 result = self.extract_mbox(file_path)
                 if result and 'error' not in result:
                     result["email_type"] = "mbox"
 
-            elif email_type == '.pst':
+            elif email_type == '.emlx':
+                result = self.extract_emlx(file_path)
+                if result and 'error' not in result:
+                    result["email_type"] = "emlx"
+
+            elif email_type in ('.pst', '.ost'):
+                # PST and OST are the same container family (both parsed by
+                # libpff); the reader records which one was declared rather than
+                # pretending the two are interchangeable.
                 result = self.extract_pst_pypff(file_path)
                 if result and 'error' not in result:
-                    result["email_type"] = "pst"
+                    result["email_type"] = email_type.lstrip('.')
             else:
                 error_msg = f"Unsupported email type: {file_path}"
                 return self.handle_read_error(ValueError(error_msg), file_path, "read_file")
@@ -246,6 +302,80 @@ class EmailFileReader(BaseReader):
         except Exception as e:
             return self.handle_read_error(e, file_path, "read_file")
     
+    def extract_emlx(self, filepath):
+        """Extract an Apple Mail ``.emlx`` message.
+
+        The format is an RFC822 message with two Apple additions: a leading
+        byte-count line, and a plist trailer holding Mail's own flags
+        (``flags``, ``date-received``, ``remote-id``). Both are evidence, so
+        both are recorded; the message itself is handed to the ordinary EML
+        path rather than re-implemented here, which keeps one MIME parser in
+        the pipeline.
+
+        A file whose byte count is missing or inconsistent is still processed -
+        the declared count is recorded as a discrepancy instead of causing the
+        message to be dropped.
+        """
+        try:
+            if not os.path.exists(filepath):
+                return {"error": "File not found", "filepath": filepath}
+
+            with open(filepath, "rb") as handle:
+                raw = handle.read()
+
+            notes = {"emlx": True}
+            declared_length = None
+            body_start = 0
+            first_newline = raw.find(b"\n")
+            if 0 < first_newline < 20:
+                header = raw[:first_newline].strip()
+                if header.isdigit():
+                    declared_length = int(header)
+                    body_start = first_newline + 1
+            if declared_length is None:
+                notes["length_line"] = "absent or not numeric; message parsed from the first line"
+                message_bytes = raw
+            else:
+                message_bytes = raw[body_start: body_start + declared_length]
+                if len(message_bytes) != declared_length:
+                    notes["length_line"] = (
+                        f"header declares {declared_length} bytes but only "
+                        f"{len(message_bytes)} are present"
+                    )
+                notes["declared_length"] = declared_length
+
+            trailer = raw[body_start + (declared_length or 0):] if declared_length else b""
+            if trailer.strip():
+                try:
+                    import plistlib
+
+                    plist = plistlib.loads(trailer[trailer.find(b"<?xml"):])
+                    notes["mail_flags"] = {
+                        key: value for key, value in (plist or {}).items()
+                        if key in ("flags", "date-received", "remote-id", "subject",
+                                   "sender", "original-mailbox", "message-id")
+                    }
+                except Exception as exc:
+                    notes["plist_error"] = str(exc)
+
+            # Write the message body to the artifact's extraction directory and
+            # let the established EML parser handle MIME structure, bodies and
+            # attachments - one parser, one set of behaviours to maintain.
+            extract_to = get_extraction_name_file(filepath, ".emlx")
+            os.makedirs(extract_to, exist_ok=True)
+            materialised = os.path.join(extract_to, os.path.basename(filepath) + ".eml")
+            with open(materialised, "wb") as handle:
+                handle.write(message_bytes)
+
+            result = self.extract_eml(materialised)
+            if isinstance(result, dict):
+                result["filepath"] = filepath
+                result["source_filepath"] = filepath
+                result["emlx"] = notes
+            return result
+        except Exception as e:
+            return self.handle_read_error(e, filepath, "extract_emlx")
+
     def extract_eml(self, filepath):
         """
         Extract EML file with complete separation:

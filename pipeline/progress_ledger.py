@@ -65,6 +65,16 @@ OUTCOME_FAILED = "failed"
 OUTCOME_SKIPPED = "skipped"
 OUTCOME_UNSUPPORTED = "unsupported"
 OUTCOME_RETRYABLE = "retryable"
+#: The file could not be read because something else holds it (Windows sharing
+#: violation, a POSIX lock, a file opened exclusively by the owning application).
+#: It is its own state because it is neither a failure of the file nor of the
+#: pipeline: the same artifact will process when the lock is released, and a
+#: report that lumps it in with "failed" hides a retryable condition.
+OUTCOME_LOCKED = "locked"
+#: Work the operator asked to stop (cancel/pause), or work abandoned because the
+#: run was cancelled. Distinct from 'skipped', which means "deliberately not
+#: processed" (already done, checkpointed, filtered by policy).
+OUTCOME_CANCELLED = "cancelled"
 
 TERMINAL_OUTCOMES = (
     OUTCOME_COMPLETED,
@@ -72,6 +82,8 @@ TERMINAL_OUTCOMES = (
     OUTCOME_SKIPPED,
     OUTCOME_UNSUPPORTED,
     OUTCOME_RETRYABLE,
+    OUTCOME_LOCKED,
+    OUTCOME_CANCELLED,
 )
 
 # Outcomes that mean "this object could succeed if run again".
@@ -144,8 +156,36 @@ class ProgressLedger:
         self.counts: Dict[str, int] = {o: 0 for o in TERMINAL_OUTCOMES}
 
         # Attribution: parent/container -> children discovered from it
+        #: Per-container attribution of nested work.  Bounded: a multi-million
+        #: file corpus with an archive per thousand files would otherwise keep
+        #: one dictionary entry per container alive for the whole run (measured:
+        #: 27 832 entries from a 40 000-file corpus).  The most recent
+        #: ``_children_detail_limit`` containers keep their own entry; older ones
+        #: are folded into ``children_by_parent_overflow``, so the totals a
+        #: consumer reports are still exact while the memory is bounded.
         self.children_by_parent: Dict[str, int] = {}
+        self.children_by_parent_overflow: int = 0
+        self.children_by_parent_containers: int = 0
+        self._children_detail_limit = 5000
         self.containers_opened = 0
+
+        #: Live per-container work: how many units a container has published
+        #: that have not reached a terminal state yet.  Why this exists: a
+        #: container's worker thread runs its children, and the children are
+        #: discovered *after* the container itself started.  Without this the
+        #: only signal about a container was its own file unit, so a run could
+        #: decide a container was finished (or timed out) while its nested
+        #: reader still had thousands of children queued - measured on a real
+        #: 2.1 GB PST: 19 013 of 19 566 attachments were declared "never
+        #: reached a worker" and skipped while the reader was still working.
+        #:
+        #: Bounded: only containers with outstanding work are interesting, so
+        #: the map holds at most ``_container_detail_limit`` entries and drops
+        #: the least recently touched one beyond that.  A dropped entry means
+        #: "not in flight", which is exactly what a stale container is.
+        self.container_work: Dict[str, int] = {}
+        self._container_detail_limit = 4096
+        self.containers_completed = 0
 
         # Live status
         self.current_file: Optional[str] = None
@@ -202,9 +242,8 @@ class ProgressLedger:
                 self._initial_locked = True
 
             if parent is not None and delta > 0:
-                self.children_by_parent[parent] = (
-                    self.children_by_parent.get(parent, 0) + delta
-                )
+                self._attribute_children_locked(parent, delta)
+                self._container_work_locked(parent, delta)
                 self.containers_opened += 1
 
             percent = self._percent_locked()
@@ -215,7 +254,8 @@ class ProgressLedger:
         return delta
 
     def record(self, outcome: str, count: int = 1,
-               parent: Optional[str] = None) -> None:
+               parent: Optional[str] = None,
+               container: Optional[str] = None) -> None:
         """Register work that is *already* terminal (skipped / unsupported).
 
         Adds to the denominator and settles in the same step, so objects that
@@ -236,15 +276,75 @@ class ProgressLedger:
             self.discovered_total += count
             self.counts[outcome] = self.counts.get(outcome, 0) + count
             if parent is not None:
-                self.children_by_parent[parent] = (
-                    self.children_by_parent.get(parent, 0) + count
-                )
+                self._attribute_children_locked(parent, count)
+                self._container_work_locked(parent, count)
+            if container is not None:
+                self._container_work_locked(container, -count)
             percent = self._percent_locked()
 
         if percent != self._last_percent:
             self._emit()
 
-    def abandon(self, count: int, outcome: str = OUTCOME_SKIPPED) -> None:
+    def _container_work_locked(self, container: str, delta: int) -> None:
+        """Adjust the outstanding-work counter for ``container`` (lock held)."""
+        if delta == 0 or not container:
+            return
+        remaining = self.container_work.get(container, 0) + delta
+        if remaining > 0:
+            # Re-insert to keep insertion order = least-recently-touched-first.
+            self.container_work.pop(container, None)
+            self.container_work[container] = remaining
+            while len(self.container_work) > self._container_detail_limit:
+                oldest, _ = next(iter(self.container_work.items()))
+                del self.container_work[oldest]
+        else:
+            if container in self.container_work:
+                del self.container_work[container]
+                self.containers_completed += 1
+
+    def container_outstanding(self, container: str) -> int:
+        """Units ``container`` has published that are not terminal yet."""
+        if not container:
+            return 0
+        with self._lock:
+            return self.container_work.get(container, 0)
+
+    def live_containers(self) -> Dict[str, int]:
+        """Containers with outstanding work, as a snapshot (bounded)."""
+        with self._lock:
+            return dict(self.container_work)
+
+    def outstanding_container_work(self) -> int:
+        with self._lock:
+            return sum(self.container_work.values())
+
+    def _attribute_children_locked(self, parent: str, count: int) -> None:
+        """Add ``count`` nested units to ``parent`` (caller holds the lock).
+
+        Keeps at most ``_children_detail_limit`` per-parent entries; beyond that
+        the oldest entries are folded into ``children_by_parent_overflow``. The
+        sum of the map plus the overflow total is always the exact number of
+        nested units attributed, so a consumer reporting "nested work per
+        container" stays truthful.
+        """
+        existing = self.children_by_parent.get(parent)
+        if existing is not None:
+            self.children_by_parent[parent] = existing + count
+            return
+        if len(self.children_by_parent) >= self._children_detail_limit:
+            # Bound reached: fold the first (oldest) entry into the overflow
+            # bucket. ``items()`` yields insertion order, so this retires the
+            # container that has been idle longest.
+            for oldest_parent, oldest_count in self.children_by_parent.items():
+                self.children_by_parent_overflow += oldest_count
+                del self.children_by_parent[oldest_parent]
+                break
+        else:
+            self.children_by_parent_containers += 1
+        self.children_by_parent[parent] = count
+
+    def abandon(self, count: int, outcome: str = OUTCOME_SKIPPED,
+                container: Optional[str] = None) -> None:
         """Settle already-discovered work that never entered a worker.
 
         This is the counterpart to :meth:`record`. ``record`` *adds* to the
@@ -268,6 +368,8 @@ class ProgressLedger:
 
         with self._lock:
             self.counts[outcome] = self.counts.get(outcome, 0) + count
+            if container is not None:
+                self._container_work_locked(container, -count)
             percent = self._percent_locked()
 
         if percent != self._last_percent:
@@ -292,8 +394,14 @@ class ProgressLedger:
             self.in_progress += 1
         return unit
 
-    def settle(self, unit: Optional[WorkUnit], outcome: str) -> bool:
-        """Close ``unit`` exactly once. Returns True for the counting call."""
+    def settle(self, unit: Optional[WorkUnit], outcome: str,
+               container: Optional[str] = None) -> bool:
+        """Close ``unit`` exactly once. Returns True for the counting call.
+
+        ``container`` attributes the settlement to the container that published
+        the unit (a nested reader passes its container path), so the ledger can
+        tell a container with work still to do from one that is finished.
+        """
         if unit is None:
             return False
         if outcome not in TERMINAL_OUTCOMES:
@@ -312,13 +420,16 @@ class ProgressLedger:
 
             self.in_progress = max(0, self.in_progress - 1)
             self.counts[outcome] = self.counts.get(outcome, 0) + 1
+            if container is not None:
+                self._container_work_locked(container, -1)
             percent = self._percent_locked()
 
         # A settled unit always changes state, so always emit.
         self._emit(force=(percent != self._last_percent))
         return True
 
-    def settle_path(self, path: Optional[str], outcome: str) -> bool:
+    def settle_path(self, path: Optional[str], outcome: str,
+                    container: Optional[str] = None) -> bool:
         """Settle the in-flight unit for ``path`` (used by timeout handling).
 
         Returns False when nothing is in flight for that path - e.g. the worker
@@ -330,7 +441,7 @@ class ProgressLedger:
             unit = self._inflight_by_path.get(path)
         if unit is None:
             return False
-        return self.settle(unit, outcome)
+        return self.settle(unit, outcome, container=container)
 
     # ------------------------------------------------------------------
     # Status
@@ -415,7 +526,53 @@ class ProgressLedger:
             terminal = sum(self.counts.get(o, 0) for o in TERMINAL_OUTCOMES)
             return self.in_progress <= 0 and terminal >= self.discovered_total
 
+    def accounting(self) -> Dict[str, Any]:
+        """Every discovered unit in exactly one state, with the invariant.
+
+        The contract the reports are checked against:
+
+            discovered = completed + failed + skipped + unsupported
+                       + retryable + locked + cancelled
+                       + in_progress + pending
+
+        ``in_progress`` (a worker holds it) and ``pending`` (queued, no worker
+        yet) are the two documented transitional states - they are the
+        ``PROCESSING`` and ``QUEUED`` states of the lifecycle, and a run that
+        ends with either non-zero is not finished. ``invariant_holds`` covers
+        the whole identity, so a caller cannot accidentally check only the
+        terminal buckets and call a partial run complete.
+        """
+        with self._lock:
+            counts = {outcome: self.counts.get(outcome, 0)
+                      for outcome in TERMINAL_OUTCOMES}
+            total = self.discovered_total
+            in_progress = self.in_progress
+            terminal = sum(counts.values())
+            pending = max(0, total - in_progress - terminal)
+            accounted = terminal + in_progress + pending
+            return {
+                "discovered": total,
+                "initial": self.initial_total,
+                "nested": max(0, total - self.initial_total),
+                "queued": pending,
+                "processing": in_progress,
+                **counts,
+                "pending": pending,
+                "terminal": terminal,
+                "accounted": accounted,
+                "invariant": (
+                    "discovered = completed + failed + skipped + unsupported + "
+                    "retryable + locked + cancelled + in_progress + pending"
+                ),
+                "invariant_holds": accounted == total,
+                "transitional_states": ("queued", "processing"),
+                "unprocessed": pending + in_progress,
+                "complete": (total > 0 and accounted == total
+                             and self.in_progress == 0 and pending == 0),
+            }
+
     def snapshot(self) -> Dict[str, Any]:
+        # (container accounting is included below in the returned dict)
         """Consistent point-in-time view for progress consumers."""
         with self._lock:
             counts = dict(self.counts)
@@ -427,6 +584,7 @@ class ProgressLedger:
             current_phase = self.current_phase
             containers = self.containers_opened
             by_parent = dict(self.children_by_parent)
+            by_parent_overflow = self.children_by_parent_overflow
 
         terminal = sum(counts.get(o, 0) for o in TERMINAL_OUTCOMES)
         nested = max(0, total - initial)
@@ -449,11 +607,21 @@ class ProgressLedger:
             "files_skipped": counts.get(OUTCOME_SKIPPED, 0),
             "files_unsupported": counts.get(OUTCOME_UNSUPPORTED, 0),
             "files_retryable": counts.get(OUTCOME_RETRYABLE, 0),
+            "files_locked": counts.get(OUTCOME_LOCKED, 0),
+            "files_cancelled": counts.get(OUTCOME_CANCELLED, 0),
             "files_pending": max(0, total - in_progress - terminal),
             "terminal": terminal,
             "complete": (in_progress <= 0 and total > 0 and terminal >= total),
             "elapsed_seconds": round(time.time() - self.started_at, 3),
             "children_by_parent": by_parent,
+            "children_by_parent_overflow": by_parent_overflow,
+            # Live container work: containers that have published units still
+            # to be settled.  A run is not finished while this is non-empty -
+            # that is the signal the end-of-run sweep uses to wait for nested
+            # readers instead of declaring their queued children terminal.
+            "containers_in_flight": len(self.container_work),
+            "container_work_outstanding": sum(self.container_work.values()),
+            "containers_completed": self.containers_completed,
         }
 
     # ------------------------------------------------------------------
@@ -504,6 +672,26 @@ def _result_layers(result: Dict[str, Any]) -> List[Dict[str, Any]]:
         if isinstance(info, dict):
             layers.append(info)
     return layers
+
+
+#: Message fragments that mean "another process holds this file" rather than
+#: "this file cannot be read". Windows raises a sharing violation; POSIX raises
+#: EACCES/EBUSY/ETXTBSY or a lock timeout from the container itself (Outlook
+#: holds .pst/.ost open, Excel holds .xls,.xlsx open).
+LOCK_ERROR_MARKERS = (
+    "sharing violation",
+    "being used by another process",
+    "used by another process",
+    "resource temporarily unavailable",
+    "device or resource busy",
+    "errno 11",
+    "errno 16",
+    "errno 26",
+    "errno 13",
+    "permission denied",
+    "access is denied",
+    "lock",
+)
 
 
 def classify_result(result: Any) -> str:
@@ -559,5 +747,9 @@ def classify_result(result: Any) -> str:
             return OUTCOME_COMPLETED
         if "timeout" in text or "connection" in text:
             return OUTCOME_RETRYABLE
+        if any(marker in text for marker in LOCK_ERROR_MARKERS):
+            # The artifact is fine; something else holds it. Reporting this as
+            # "failed" hid a retryable condition behind a terminal one.
+            return OUTCOME_LOCKED
         return OUTCOME_FAILED
     return OUTCOME_COMPLETED

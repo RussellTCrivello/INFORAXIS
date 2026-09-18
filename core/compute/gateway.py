@@ -35,13 +35,26 @@ from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 from .capabilities import CPU, HardwareInventory
 from .routing import (
+    WORKLOAD_PROFILES,
     DeviceDecision,
+    DeviceUnavailableError,
     ExecutionMode,
     WorkloadKind,
+    accelerator_memory_fits,
+    allowed_devices,
     choose_device,
+    profile_for,
+    requires_accelerator_in,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 #: Sliding window used for latency percentiles and throughput.
 _METRIC_WINDOW = 512
@@ -72,12 +85,39 @@ class Allocation:
 
 
 @dataclass
+class AcceleratorBackend:
+    """A callable accelerator implementation for one or more workloads.
+
+    A backend is only *usable* after its ``self_test`` passes on this machine:
+    the gateway runs it once at registration and refuses to advertise or use a
+    backend that cannot demonstrate a correct result. This is what keeps
+    "supports acceleration" an implementation fact rather than a claim - a
+    backend that is missing, broken or numerically wrong simply never gets
+    selected, and the workload stays on the CPU.
+
+    ``self_test`` must verify *equivalence*, not just "it ran": for a hashing or
+    extraction backend that means comparing its output with the CPU
+    implementation on a fixed input.
+    """
+
+    kind: str
+    name: str
+    self_test: Callable[[], bool]
+    run: Callable[..., Any]
+    workloads: FrozenSet["WorkloadKind"]
+    detail: str = ""
+    verified: bool = False
+    verification_error: str = ""
+
+
+@dataclass
 class ComputeStats:
     submitted: int = 0
     completed: int = 0
     failed: int = 0
     rejected: int = 0
     fallbacks: int = 0
+    capability_errors: int = 0
     peak_queue_depth: int = 0
     total_queue_wait_s: float = 0.0
     total_execution_s: float = 0.0
@@ -89,6 +129,7 @@ class ComputeStats:
             "failed": self.failed,
             "rejected": self.rejected,
             "fallbacks": self.fallbacks,
+            "capability_errors": self.capability_errors,
             "peak_queue_depth": self.peak_queue_depth,
         }
 
@@ -150,6 +191,17 @@ class ComputeGateway:
         self._queue_waits: Deque[float] = deque(maxlen=_METRIC_WINDOW)
         self._completion_times: Deque[float] = deque(maxlen=_METRIC_WINDOW)
         self._fallback_events: List[Dict[str, Any]] = []
+        #: Per-execution placement records, newest first, bounded. Each one
+        #: answers "which device actually ran this workload, with what
+        #: processor, for how long, and did it fall back and why" - the
+        #: provenance the forensic report needs. Aggregates live in
+        #: ``by_workload`` so nothing grows with the number of files.
+        self._execution_records: Deque[Dict[str, Any]] = deque(maxlen=256)
+        self.by_workload: Dict[str, Dict[str, Any]] = {}
+        #: Explicit opt-in to CPU fallback in ``gpu`` mode. Off by default: the
+        #: requested mode is honoured or refused, never quietly changed.
+        self.allow_cpu_fallback = _env_flag("COMPUTE_GPU_FALLBACK", False)
+        self._backends: Dict[str, AcceleratorBackend] = {}
         self._paused_until = 0.0
         self._gateway_threads: List[int] = []
         self._worker_threads: List[int] = []
@@ -166,32 +218,204 @@ class ComputeGateway:
     # ------------------------------------------------------------------
     @property
     def available_accelerators(self) -> Dict[str, bool]:
-        return {kind: info.available for kind, info in self.inventory.accelerators.items()}
+        """Device kinds that can actually be executed on right now.
+
+        A kind is usable when the hardware probe found a device with a working
+        runtime, **or** a registered backend of that kind passed its self-test.
+        The second case is how an accelerator without a Python-visible runtime
+        (an FPGA bitstream, a DPU offload) becomes usable: it is only usable
+        once something can demonstrably compute with it.
+        """
+        available = {kind: info.available
+                     for kind, info in self.inventory.accelerators.items()}
+        for kind in self._backends:
+            available[kind] = True
+        return available
 
     def select_device(self, workload: WorkloadKind) -> DeviceDecision:
-        """Where would ``workload`` run right now, and why."""
+        """Where would ``workload`` run right now, and why.
+
+        Selection is capability- and fit-aware: a device whose accelerator
+        memory is smaller than the workload's declared requirement - or whose
+        capacity could not be determined - is reported as not fitting, so a
+        placement never claims a device it cannot hold the work on.
+        """
         if workload in (WorkloadKind.OCR, WorkloadKind.CLASSIFICATION) and \
                 self.mode is ExecutionMode.CPU_GPU:
-            decision = choose_device(workload, self.mode, self.available_accelerators)
-            if decision.device != CPU:
-                return decision
-        return choose_device(workload, self.mode, self.available_accelerators)
+            preferred = choose_device(workload, self.mode, self.available_accelerators)
+            if preferred.device != CPU:
+                return self._with_memory_fit(workload, preferred)
+        return self._with_memory_fit(
+            workload, choose_device(workload, self.mode, self.available_accelerators))
+
+    def _with_memory_fit(self, workload: WorkloadKind,
+                         decision: DeviceDecision) -> DeviceDecision:
+        """Record whether the chosen device can hold the workload's working set."""
+        if decision.device == CPU:
+            return decision
+        info = self.inventory.accelerators.get(decision.device)
+        fits, reason = accelerator_memory_fits(
+            workload, getattr(info, "memory_bytes", None) if info else None)
+        decision.memory_fits = fits
+        decision.memory_note = reason
+        return decision
+
+    def register_accelerator_backend(self, backend: AcceleratorBackend) -> bool:
+        """Register an accelerator implementation, if it proves itself.
+
+        Runs ``backend.self_test()`` immediately. A backend that fails (raises
+        or returns False) is recorded as unverified, is not added to the usable
+        set, and can never be selected - the workload keeps running on the CPU.
+        Returns whether the backend was verified and registered.
+        """
+        verified = False
+        error = ""
+        try:
+            verified = bool(backend.self_test())
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+        backend.verified = verified
+        backend.verification_error = error
+        if verified:
+            self._backends[backend.kind] = backend
+            logger.info("Accelerator backend verified: %s (%s)", backend.name,
+                        backend.kind)
+        else:
+            logger.warning(
+                "Accelerator backend %s (%s) failed verification%s - it will not "
+                "be used", backend.name, backend.kind,
+                f": {error}" if error else " (self-test returned False)",
+            )
+        return verified
+
+    def verified_backends(self) -> Dict[str, str]:
+        """Kind -> backend name for every backend that passed verification."""
+        return {kind: backend.name for kind, backend in self._backends.items()}
+
+    def _backend_for(self, decision: DeviceDecision,
+                     workload: WorkloadKind) -> Optional[AcceleratorBackend]:
+        backend = self._backends.get(decision.device)
+        if backend is None:
+            return None
+        if workload not in backend.workloads:
+            return None
+        return backend
+
+    def _detected_devices_summary(self) -> Dict[str, Any]:
+        """What hardware was actually detected, for error messages and reports."""
+        summary: Dict[str, Any] = {
+            "cpu": {
+                "name": getattr(self.inventory.cpu, "name", "CPU"),
+                "detail": getattr(self.inventory.cpu, "detail", ""),
+                "concurrency": self.max_concurrency,
+            },
+            "devices": {},
+            "verified_backends": self.verified_backends(),
+        }
+        for kind, info in self.inventory.accelerators.items():
+            summary["devices"][kind] = {
+                "available": bool(info.available),
+                "detail": info.detail,
+                "memory_bytes": getattr(info, "memory_bytes", None),
+            }
+        return summary
+
+    def _record_execution_locked(self, workload: WorkloadKind, *,
+                                 selected_device: str, actual_device: Optional[str],
+                                 backend: Optional[str], duration_s: float,
+                                 outcome: str, fallback_reason: Optional[str],
+                                 mode: ExecutionMode) -> None:
+        """Record one placement (caller holds the lock)."""
+        record = {
+            "workload": workload.value,
+            "execution_mode": mode.value,
+            "selected_device": selected_device,
+            "actual_device": actual_device,
+            "processor": backend or (actual_device if actual_device else None),
+            "duration_ms": round(duration_s * 1000.0, 3),
+            "outcome": outcome,
+            "fallback_reason": fallback_reason,
+            "at": time.time(),
+        }
+        self._execution_records.append(record)
+        entry = self.by_workload.setdefault(workload.value, {
+            "executions": 0, "on_cpu": 0, "on_accelerator": 0,
+            "capability_errors": 0, "failures": 0, "fallbacks": 0,
+            "total_duration_s": 0.0, "last_actual_device": None,
+        })
+        entry["executions"] += 1
+        entry["total_duration_s"] = round(entry["total_duration_s"] + duration_s, 6)
+        if actual_device:
+            entry["last_actual_device"] = actual_device
+        if outcome == "capability_error":
+            entry["capability_errors"] += 1
+        elif outcome == "failed":
+            entry["failures"] += 1
+        if actual_device == CPU:
+            entry["on_cpu"] += 1
+        elif actual_device:
+            entry["on_accelerator"] += 1
+        if fallback_reason:
+            entry["fallbacks"] += 1
+
+    def execution_records(self, limit: int = 32) -> List[Dict[str, Any]]:
+        """Most recent placements, newest first (bounded ring buffer)."""
+        with self._lock:
+            records = list(self._execution_records)
+        return list(reversed(records))[:limit]
+
+    def placements(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Where each workload would run right now, and why."""
+        return {workload.value: self.select_device(workload).as_dict()
+                for workload in WorkloadKind}
 
     def mode_report(self) -> Dict[str, Any]:
         """Explain what each requested mode can actually do on this machine."""
         accelerators = self.available_accelerators
         usable = [k for k, ok in accelerators.items() if ok]
+        # Workloads that have an accelerator implementation but cannot use one
+        # here: the honest "unsupported on this machine" list.
+        unsupported = sorted(
+            workload.value for workload in WorkloadKind
+            if any(d != CPU for d in allowed_devices(workload))
+            and self.select_device(workload).device == CPU
+        )
+        cpu_only_workloads = sorted(
+            workload.value for workload in WorkloadKind
+            if all(d == CPU for d in allowed_devices(workload))
+        )
+        effective = "cpu"
+        if usable:
+            effective = "gpu" if self.mode is ExecutionMode.GPU_ONLY else "cpu+gpu"
         return {
             "requested_mode": self.mode.value,
-            "effective_mode": ("cpu+gpu" if usable else "cpu"),
+            "effective_mode": effective,
             "usable_accelerators": usable,
             "unavailable_accelerators": {k: info.detail
                                          for k, info in self.inventory.accelerators.items()
                                          if not info.available},
+            "detected": self._detected_devices_summary(),
+            "supported_on_accelerator": sorted(
+                workload.value for workload in WorkloadKind
+                if any(d != CPU for d in allowed_devices(workload))
+            ),
+            "cpu_only_workloads": cpu_only_workloads,
+            "unsupported_on_this_machine": unsupported,
+            "placements": self.placements(),
+            "execution_records": self.execution_records(16),
+            "by_workload": {k: dict(v) for k, v in self.by_workload.items()},
+            "stats": self.stats.as_dict(),
+            "workload_profiles": {k.value: profile_for(k).as_dict()
+                                  for k in WorkloadKind},
+            "strict_gpu_mode": self.mode is ExecutionMode.GPU_ONLY
+                               and not self.allow_cpu_fallback,
+            "cpu_fallback_allowed": bool(self.allow_cpu_fallback),
             "fallback_events": list(self._fallback_events),
             "honest_limits": (
-                "accelerator execution is only used when a verified device and "
-                "software path are present; otherwise work runs on the CPU"
+                "accelerator execution is used only when a verified device and "
+                "software path are present; in 'gpu' mode a workload that has an "
+                "accelerator implementation raises DeviceUnavailableError rather "
+                "than running on the CPU, unless COMPUTE_GPU_FALLBACK=1"
             ),
         }
 
@@ -361,24 +585,89 @@ class ComputeGateway:
             else:
                 self._record_fallback(workload, self.mode,
                                       f"requested device {device} is unavailable")
-        if decision.device == CPU and self.mode is not ExecutionMode.CPU_ONLY and \
-                not decision.accelerated and self.mode in (ExecutionMode.GPU_ONLY,
-                                                           ExecutionMode.CPU_GPU):
-            self._record_fallback(workload, self.mode, decision.reason)
+        # Note: plain CPU execution in 'cpu+gpu'/'auto' is *not* a fallback.
+        # Those modes mean "use whatever is available" and the CPU is the
+        # authoritative implementation, so counting every such execution as a
+        # fallback both inflated the metric and misrepresented normal operation.
+        # A fallback is only recorded when something was requested and could not
+        # be used: a pinned device that is unavailable, a verified backend that
+        # failed mid-run, or an explicit opt-in fallback in 'gpu' mode.
 
+        # STRICT MODE. ``gpu`` means GPU. A workload that has an accelerator
+        # implementation must not quietly run on the CPU instead - the operator
+        # asked for a device, and handing back CPU results without saying so is
+        # exactly the silent substitution this layer forbids. The capability
+        # error names what was detected so the request can be met or fixed.
+        if requires_accelerator_in(self.mode, workload, decision.device):
+            reason = decision.reason or "no usable accelerator for this workload"
+            if self.allow_cpu_fallback:
+                self._record_fallback(
+                    workload, self.mode,
+                    f"{reason}; COMPUTE_GPU_FALLBACK is set, so the CPU ran it",
+                )
+            else:
+                with self._lock:
+                    self.stats.capability_errors += 1
+                    self.stats.submitted = max(0, self.stats.submitted - 1)
+                    self._record_execution_locked(
+                        workload, selected_device=decision.device,
+                        actual_device=None, backend=None,
+                        duration_s=0.0, outcome="capability_error",
+                        fallback_reason=reason, mode=self.mode,
+                    )
+                raise DeviceUnavailableError(
+                    f"execution mode '{self.mode.value}' requires an accelerator "
+                    f"for workload '{workload.value}', but {reason}. "
+                    f"Detected devices: "
+                    f"{self._detected_devices_summary()}. "
+                    f"Either provide the accelerator path or request a different "
+                    f"mode (cpu / cpu+gpu / auto); set COMPUTE_GPU_FALLBACK=1 to "
+                    f"permit an explicit CPU fallback.",
+                    workload=workload.value,
+                    requested_mode=self.mode.value,
+                    detected=self._detected_devices_summary(),
+                )
+
+        backend = self._backend_for(decision, workload)
         t_exec = time.perf_counter()
         error = False
+        actual_device = CPU
+        fallback_reason = None
         try:
+            if backend is not None:
+                # The backend receives the same arguments as the CPU callable
+                # and must return the same result; if it cannot complete, the
+                # CPU path runs instead and the fallback is recorded.
+                try:
+                    result = backend.run(fn, *args, **kwargs)
+                    actual_device = decision.device
+                    return result
+                except Exception as backend_exc:
+                    fallback_reason = (f"{backend.name} failed "
+                                       f"({type(backend_exc).__name__}); ran on CPU")
+                    self._record_fallback(workload, self.mode, fallback_reason)
+                    return fn(*args, **kwargs)
             return fn(*args, **kwargs)
         except Exception:
             error = True
             raise
         finally:
+            duration = time.perf_counter() - t_exec
+            backend_name = backend.name if backend is not None and \
+                actual_device == decision.device else None
+            with self._lock:
+                self._record_execution_locked(
+                    workload, selected_device=decision.device,
+                    actual_device=actual_device, backend=backend_name,
+                    duration_s=duration,
+                    outcome="failed" if error else "completed",
+                    fallback_reason=fallback_reason, mode=self.mode,
+                )
             if admitted:
-                self._release(queue_wait, time.perf_counter() - t_exec, error)
+                self._release(queue_wait, duration, error)
             else:
                 with self._lock:
-                    self._latencies.append(time.perf_counter() - t_exec)
+                    self._latencies.append(duration)
                     self._completion_times.append(time.time())
                     if error:
                         self.stats.failed += 1
@@ -543,14 +832,72 @@ _gateway: Optional[ComputeGateway] = None
 _gateway_lock = threading.Lock()
 
 
+def _processing_settings():
+    """The project's ProcessingSettings, or None when unavailable."""
+    try:
+        from settings import get_settings
+
+        return getattr(get_settings(), "processing", None)
+    except Exception:
+        return None
+
+
+def configured_limits() -> Dict[str, Any]:
+    """Compute-layer settings, from project settings with env overrides.
+
+    Precedence: environment variable > settings file/UI > derived default. The
+    env names exist so the measurement harness and CI can pin values without
+    touching the settings store; the settings fields are what an operator in the
+    UI/config file uses. Zero/negative values mean "derive from this host".
+    """
+    settings = _processing_settings()
+    limits: Dict[str, Any] = {
+        "mode": "auto",
+        "max_concurrency": 0,
+        "reserved_gateway_cores": -1,
+        "queue_depth": 0,
+        "memory_budget_mb": 0,
+        "latency_budget_s": 10.0,
+        "isolation": True,
+    }
+    if settings is not None:
+        limits.update({
+            "mode": getattr(settings, "compute_mode", "auto"),
+            "max_concurrency": getattr(settings, "compute_max_concurrency", 0),
+            "reserved_gateway_cores": getattr(
+                settings, "compute_reserved_gateway_cores", -1),
+            "queue_depth": getattr(settings, "compute_queue_depth", 0),
+            "memory_budget_mb": getattr(settings, "compute_memory_budget_mb", 0),
+            "latency_budget_s": getattr(settings, "compute_latency_budget_s", 10.0),
+            "isolation": getattr(settings, "compute_isolation", True),
+        })
+
+    if os.environ.get("COMPUTE_MODE"):
+        limits["mode"] = os.environ["COMPUTE_MODE"]
+    for env_name, key, cast in (
+        ("COMPUTE_MAX_CONCURRENCY", "max_concurrency", int),
+        ("COMPUTE_RESERVED_CORES", "reserved_gateway_cores", int),
+        ("COMPUTE_QUEUE_DEPTH", "queue_depth", int),
+        ("COMPUTE_MEMORY_BUDGET_MB", "memory_budget_mb", int),
+        ("COMPUTE_LATENCY_BUDGET_S", "latency_budget_s", float),
+    ):
+        if os.environ.get(env_name):
+            try:
+                limits[key] = cast(os.environ[env_name])
+            except ValueError:
+                logger.warning("Ignoring invalid %s=%r", env_name, os.environ[env_name])
+    if os.environ.get("COMPUTE_ISOLATION"):
+        limits["isolation"] = os.environ["COMPUTE_ISOLATION"] not in ("0", "false", "False")
+    return limits
+
+
 def _configured_mode() -> ExecutionMode:
     """Execution mode from the environment / settings, defaulting to AUTO."""
-    value = os.environ.get("COMPUTE_MODE")
-    if value:
-        try:
-            return ExecutionMode.parse(value)
-        except ValueError:
-            logger.warning("Ignoring invalid COMPUTE_MODE=%r", value)
+    value = configured_limits()["mode"]
+    try:
+        return ExecutionMode.parse(value)
+    except ValueError:
+        logger.warning("Ignoring invalid compute mode %r", value)
     return ExecutionMode.AUTO
 
 
@@ -559,8 +906,19 @@ def get_compute_gateway() -> ComputeGateway:
     global _gateway
     with _gateway_lock:
         if _gateway is None:
-            _gateway = ComputeGateway(mode=_configured_mode())
-            if os.environ.get("COMPUTE_ISOLATION", "1") not in ("0", "false", "False"):
+            limits = configured_limits()
+            _gateway = ComputeGateway(
+                mode=_configured_mode(),
+                max_concurrency=limits["max_concurrency"] or None,
+                reserved_gateway_cores=(limits["reserved_gateway_cores"]
+                                        if limits["reserved_gateway_cores"] >= 0 else None),
+                queue_depth=limits["queue_depth"] or None,
+                memory_budget_bytes=((limits["memory_budget_mb"] * 1024 * 1024)
+                                     if limits["memory_budget_mb"] else None),
+                latency_budget_s=limits["latency_budget_s"],
+                enable_affinity=bool(limits["isolation"]),
+            )
+            if limits["isolation"]:
                 report = _gateway.apply_isolation()
                 logger.info("Compute isolation: %s", report)
         return _gateway

@@ -51,6 +51,18 @@ class PathsRepository(BaseRepository):
             params
         )
 
+    def mark_partial(self, path_id, detail, status="partially_processed"):
+        """Record that a stored object is missing derived data (see FileQueries).
+
+        ``partially_processed`` is one of the states m0007 defines for exactly
+        this condition - no migration is needed to use it. Returns True when a
+        row was updated.
+        """
+        return bool(self.execute(
+            FileQueries.mark_partial(),
+            (status, (detail or "")[:500], path_id)
+        ))
+
     def update_lineage(self, path_id, parent_path_id, hierarchy_path):
         """Link an extracted child to its container (PARENT-01)."""
         return self.execute(

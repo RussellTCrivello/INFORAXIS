@@ -1,0 +1,13 @@
+{
+ "corpus": "/tmp/mode_val3/corpus",
+ "objects_fingerprinted": {
+  "cpu": 752,
+  "auto": 752,
+  "gpu": 752,
+  "cpu+gpu": 752,
+  "bypass": 752
+ },
+ "reference": "bypass",
+ "identical": true,
+ "differences": []
+}
