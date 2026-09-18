@@ -447,6 +447,23 @@ def _select_engine() -> Optional[BaseOcrEngine]:
         if _SELECTION_DONE:
             return _SELECTED
         _SELECTION_DONE = True
+        # Device policy comes from the compute gateway: with no verified
+        # accelerator backend present it reports the CPU, which is exactly what
+        # every engine below runs on.  Accelerated OCR is only selected when the
+        # gateway can point at a real accelerator path, and the engines that
+        # implement it are preferred in that case - the logging makes the
+        # decision visible instead of leaving it implicit.
+        try:
+            from core.compute import WorkloadKind, get_compute_gateway
+
+            decision = get_compute_gateway().select_device(WorkloadKind.OCR)
+            logger.info(
+                "OCR device selection: %s (%s; %s)",
+                decision.device, decision.backend, decision.reason,
+            )
+        except Exception as exc:  # pragma: no cover - policy is advisory
+            logger.debug("Compute gateway unavailable for OCR selection: %s", exc)
+
         for engine_class in ENGINE_PREFERENCE:
             engine = engine_class()
             if engine.available():

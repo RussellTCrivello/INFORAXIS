@@ -568,7 +568,19 @@ class IngestionService:
             })
         except Exception:
             pass
-        if results:
+        # Bytes processed: prefer the reader's exact running total.  The
+        # per-file result list is a bounded window on large runs (each entry
+        # carries extracted content), so summing it would silently under-report
+        # once the window filled; the reader tracks every file's size whether
+        # or not its dictionary was retained.
+        exact = None
+        try:
+            exact = (reader.get_statistics() or {}).get("bytes_processed")
+        except Exception:
+            exact = None
+        if exact is not None:
+            stats["bytes_processed"] = exact
+        elif results:
             bytes_total = 0
             for r in results:
                 if isinstance(r, dict):

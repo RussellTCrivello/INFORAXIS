@@ -117,31 +117,56 @@ class OfficeFileReader(BaseReader):
         return self._image_reader().read_image_file_fast(image_path)
 
     def get_supported_extensions(self) -> Set[str]:
-        """Return set of supported office document extensions"""
+        """Every Office/OpenDocument format this reader processes.
+
+        The list is deliberately complete rather than convenient: templates and
+        macro-enabled variants are the formats most often *missed* by
+        extension-driven routing, and a document that reaches no reader is a
+        document whose evidence silently disappears. Each variant below is
+        routed to a real parse path in :meth:`read_file` - see the dispatch
+        table there - and the macro-enabled ones additionally have their VBA
+        project extracted and hashed.
+        """
         return {
             # Microsoft Word formats
-            '.docx',  # Word 2007+
-            '.doc',   # Word 97-2003
-            '.docm',  # Word Macro-Enabled Document
+            '.docx',   # Word 2007+
+            '.doc',    # Word 97-2003
+            '.docm',   # Word Macro-Enabled Document
+            '.dotx',   # Word Template (OOXML)
+            '.dotm',   # Word Macro-Enabled Template (OOXML)
+            '.dot',    # Word 97-2003 Template
             # Microsoft Excel formats
-            '.xlsx',  # Excel 2007+
-            '.xls',   # Excel 97-2003
-            '.xlsm',  # Excel Macro-Enabled Workbook
-            '.xlsb',  # Excel Binary Workbook
-            '.xltx',  # Excel Template
-            '.xlt',   # Excel 97-2003 Template
+            '.xlsx',   # Excel 2007+
+            '.xls',    # Excel 97-2003
+            '.xlsm',   # Excel Macro-Enabled Workbook
+            '.xlsb',   # Excel Binary Workbook
+            '.xltx',   # Excel Template (OOXML)
+            '.xltm',   # Excel Macro-Enabled Template (OOXML)
+            '.xlt',    # Excel 97-2003 Template
             # Microsoft PowerPoint formats
-            '.pptx',  # PowerPoint 2007+
-            '.ppt',   # PowerPoint 97-2003
-            '.potx',  # PowerPoint Template
-            '.pot',   # PowerPoint 97-2003 Template
-            # OpenDocument formats
-            '.odt',   # OpenDocument Text
-            '.ods',   # OpenDocument Spreadsheet
-            '.odp',   # OpenDocument Presentation
+            '.pptx',   # PowerPoint 2007+
+            '.pptm',   # PowerPoint Macro-Enabled Presentation
+            '.ppt',    # PowerPoint 97-2003
+            '.potx',   # PowerPoint Template (OOXML)
+            '.potm',   # PowerPoint Macro-Enabled Template (OOXML)
+            '.pot',    # PowerPoint 97-2003 Template
+            '.ppsx',   # PowerPoint Slideshow (OOXML)
+            '.ppsm',   # PowerPoint Macro-Enabled Slideshow (OOXML)
+            '.pps',    # PowerPoint 97-2003 Slideshow
+            # OpenDocument formats (documents, spreadsheets, presentations,
+            # their templates and drawings - all ODF packages)
+            '.odt',    # OpenDocument Text
+            '.ott',    # OpenDocument Text Template
+            '.ods',    # OpenDocument Spreadsheet
+            '.ots',    # OpenDocument Spreadsheet Template
+            '.odp',    # OpenDocument Presentation
+            '.otp',    # OpenDocument Presentation Template
+            '.odg',    # OpenDocument Drawing
             # Other formats
-            '.csv',   # Comma-Separated Values
-            '.rtf'    # Rich Text Format
+            '.csv',    # Comma-Separated Values
+            '.tsv',    # Tab-Separated Values
+            '.rtf',    # Rich Text Format
+            '.ole',    # OLE compound file whose payload is an unparsable document
         }
     
     def read_file(self, file_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -164,36 +189,49 @@ class OfficeFileReader(BaseReader):
         ext = self.effective_extension(file_info)
         
         try:
-            # Microsoft Word formats
-            if ext in ('.docx', '.docm'):
-                return self.read_docx_file(file_path)
-            elif ext == '.doc':
-                return self.read_doc_file(file_path)
+            result = None
+            # Microsoft Word formats. Templates and macro-enabled variants are
+            # the same package structure with a different content type, so they
+            # share the document parse path; the forensic pass below adds the
+            # macro project and the variant details.
+            if ext in ('.docx', '.docm', '.dotx', '.dotm'):
+                result = self.read_docx_file(file_path)
+            elif ext in ('.doc', '.dot'):
+                result = self.read_doc_file(file_path)
             # Microsoft Excel formats
-            elif ext in ('.xlsx', '.xlsm', '.xltx'):
-                return self.read_xlsx_file(file_path)
+            elif ext in ('.xlsx', '.xlsm', '.xltx', '.xltm'):
+                result = self.read_xlsx_file(file_path)
             elif ext in ('.xls', '.xlsb', '.xlt'):
-                return self.read_xls_file(file_path)
+                result = self.read_xls_file(file_path)
             # Microsoft PowerPoint formats
-            elif ext in ('.pptx', '.potx'):
-                return self.read_pptx_file(file_path)
-            elif ext in ('.ppt', '.pot'):
-                return self.read_ppt_file(file_path)
-            # OpenDocument formats
-            elif ext == '.odt':
-                return self.read_odt_file(file_path)
-            elif ext == '.ods':
-                return self.read_ods_file(file_path)
-            elif ext == '.odp':
-                return self.read_odp_file(file_path)
+            elif ext in ('.pptx', '.pptm', '.potx', '.potm', '.ppsx', '.ppsm'):
+                result = self.read_pptx_file(file_path)
+            elif ext in ('.ppt', '.pot', '.pps'):
+                result = self.read_ppt_file(file_path)
+            # OpenDocument formats. Drawings use the presentation parser: both
+            # are ODF packages whose pages are draw:page elements.
+            elif ext in ('.odt', '.ott'):
+                result = self.read_odt_file(file_path)
+            elif ext in ('.ods', '.ots'):
+                result = self.read_ods_file(file_path)
+            elif ext in ('.odp', '.otp', '.odg'):
+                result = self.read_odp_file(file_path)
             # Other formats
-            elif ext == '.csv':
-                return self.read_csv_file(file_path)
+            elif ext in ('.csv', '.tsv'):
+                delimiter = '\t' if ext == '.tsv' else ','
+                result = self.read_csv_file(file_path, delimiter=delimiter)
             elif ext == '.rtf':
-                return self.read_rtf_file(file_path)
+                result = self.read_rtf_file(file_path)
+            elif ext == '.ole':
+                # A compound file whose contents are not an Office document.
+                # Reported with its OLE stream inventory so the artifact is
+                # recorded as unsupported-but-inspected rather than failed.
+                return self._read_unrecognised_ole(file_path)
             else:
                 error_msg = f"Unsupported office file type: {ext or file_path}"
                 return self.handle_read_error(ValueError(error_msg), file_path, "read_file")
+
+            return self._attach_forensic_detail(result, file_path, ext)
         except Exception as e:
             return self.handle_read_error(e, file_path, "read_file")
 
@@ -354,6 +392,158 @@ class OfficeFileReader(BaseReader):
         except Exception as e:
             return {"error": str(e), "filepath": filepath}
 
+
+    # ------------------------------------------------------------------
+    # Forensic detail: everything the document libraries do not return
+    # ------------------------------------------------------------------
+    def _attach_forensic_detail(self, result, filepath, extension):
+        """Add properties, revisions, annotations, links and macros to a result.
+
+        The body readers return the visible document. This method adds the rest
+        of the evidence - document and custom properties, comments, tracked
+        changes, hidden content, fields, bookmarks, headers/footers, external
+        targets, embedded objects, formulas, notes, the package inventory and
+        the VBA project - under four additive keys:
+
+        ``artifact_metadata``
+            Core/application/custom document properties.
+        ``forensic_features``
+            Relationships, package inventory and the per-application feature
+            block, plus ``extraction_errors`` naming anything that could not be
+            read.
+        ``macros``
+            Every VBA project with its digests, module list and analysis.
+        ``forensic_text``
+            The extracted detail flattened into searchable text, so a term
+            inside a tracked deletion, a comment or a macro is indexed by the
+            same pipeline that indexes the body.
+
+        Failure never removes evidence: if a sub-extraction raises, the error is
+        recorded in ``extraction_errors`` and the body result is returned
+        unchanged.
+        """
+        if not isinstance(result, dict):
+            return result
+        if result.get('error') and not result.get('filepath'):
+            return result
+
+        import zipfile
+
+        errors = []
+        is_zip_package = False
+        try:
+            is_zip_package = zipfile.is_zipfile(filepath)
+        except Exception as exc:
+            errors.append({'scope': 'package', 'error': str(exc)})
+
+        # Composition of the artifact, always recorded (cheap, and it is what
+        # makes "which parts existed" answerable later).
+        try:
+            from core.formats import identify
+
+            detection = identify(filepath)
+            result['format_identification'] = detection.as_dict()
+        except Exception as exc:
+            errors.append({'scope': 'format_identification', 'error': str(exc)})
+
+        app = None
+        if is_zip_package:
+            app = {'.docx': 'word', '.docm': 'word', '.dotx': 'word', '.dotm': 'word',
+                   '.doc': 'word', '.dot': 'word',
+                   '.xlsx': 'excel', '.xlsm': 'excel', '.xltx': 'excel',
+                   '.xltm': 'excel', '.xls': 'excel', '.xlsb': 'excel',
+                   '.xlt': 'excel',
+                   '.pptx': 'powerpoint', '.pptm': 'powerpoint', '.potx': 'powerpoint',
+                   '.potm': 'powerpoint', '.ppsx': 'powerpoint', '.ppsm': 'powerpoint',
+                   '.ppt': 'powerpoint', '.pot': 'powerpoint', '.pps': 'powerpoint',
+                   '.odt': 'odf', '.ott': 'odf', '.ods': 'odf', '.ots': 'odf',
+                   '.odp': 'odf', '.otp': 'odf', '.odg': 'odf'}.get(extension)
+            try:
+                from core.forensics import extract_package_features, text_from_features
+
+                features = extract_package_features(filepath, app=app)
+                result['forensic_features'] = features
+                result['artifact_metadata'] = features.get('properties', {})
+                errors.extend(features.get('extraction_errors') or [])
+                feature_text = text_from_features(features)
+                if feature_text:
+                    result['forensic_text'] = feature_text
+            except Exception as exc:
+                errors.append({'scope': 'package_features', 'error': str(exc)})
+
+        # VBA: extracted for every Office container, macro-enabled or legacy.
+        # ``macro_present`` is True even when decompression fails, so "no
+        # macros" and "macros we could not read" cannot be confused.
+        try:
+            from core.forensics import extract_vba, macro_summary
+
+            macros = extract_vba(filepath)
+            if macros.get('macro_present') or macros.get('extraction_errors'):
+                result['macros'] = {
+                    **macro_summary(macros),
+                    'modules': [
+                        {'name': module.get('name'), 'stream': module.get('stream'),
+                         'line_count': module.get('line_count'),
+                         'md5': module.get('md5'), 'source': module.get('source')}
+                        for project in macros.get('projects', [])
+                        for module in (project.get('modules') or [])
+                    ],
+                }
+                errors.extend(macros.get('extraction_errors') or [])
+                source = str(macros.get('source_text') or '')
+                if source:
+                    result['macros']['source_text'] = source
+                    existing = str(result.get('forensic_text') or '')
+                    result['forensic_text'] = (existing + '\n\n' + source).strip()
+        except Exception as exc:
+            errors.append({'scope': 'macros', 'error': str(exc)})
+
+        if errors:
+            result.setdefault('extraction_errors', [])
+            result['extraction_errors'] = list(result['extraction_errors']) + errors
+        return result
+
+    def _read_unrecognised_ole(self, filepath):
+        """Record an OLE compound file that is not a recognised Office document.
+
+        The streams are inventoried (names, sizes, digests of small streams) so
+        the artifact is evidence-bearing even though no document parser claims
+        it. Its outcome is ``unsupported`` with a reason, never a silent skip.
+        """
+        result = {
+            'filepath': filepath,
+            'ole_container': True,
+            'streams': [],
+            'extraction_errors': [],
+        }
+        try:
+            import hashlib
+
+            import olefile
+
+            if not olefile.isOleFile(filepath):
+                return {'error': 'Not an OLE compound file', 'filepath': filepath}
+            with olefile.OleFileIO(filepath) as ole:
+                for entry in ole.listdir():
+                    name = '/'.join(entry)
+                    try:
+                        size = ole.get_size(entry)
+                    except Exception:
+                        size = None
+                    record = {'name': name, 'size': size}
+                    if size is not None and size <= 1024 * 1024:
+                        try:
+                            with ole.openstream(entry) as handle:
+                                data = handle.read()
+                            record['md5'] = hashlib.md5(data).hexdigest()
+                            record['sha256'] = hashlib.sha256(data).hexdigest()
+                        except Exception as exc:
+                            record['error'] = str(exc)
+                    result['streams'].append(record)
+            result['stream_count'] = len(result['streams'])
+        except Exception as exc:
+            result['extraction_errors'].append({'scope': 'ole', 'error': str(exc)})
+        return self._attach_forensic_detail(result, filepath, '.ole')
 
     def read_doc_file(self, filepath):
         """Independent DOC reader function - tries multiple methods."""
@@ -566,6 +756,43 @@ class OfficeFileReader(BaseReader):
         }
 
 
+    #: Suffixes openpyxl accepts when it is handed a *path*.  Anything else has
+    #: to be handed an open binary stream - see ``_load_workbook_by_content``.
+    _OPENPYXL_PATH_SUFFIXES = (".xlsx", ".xlsm", ".xltx", ".xltm")
+
+    def _load_workbook_by_content(self, filepath, openpyxl):
+        """Open a spreadsheet by its bytes, not by its filename.
+
+        openpyxl refuses a *path* whose extension is not one of its supported
+        formats before it looks at the content:
+
+            openpyxl does not support .docx file format, please check you can
+            open it with Excel first. Supported formats are:
+            .xlsx,.xlsm,.xltx,.xltm
+
+        That is the error a real corpus produced for an attachment named
+        ``attachment_00520.docx`` whose bytes are an xlsx workbook - the router
+        had already resolved the content-verified type to ``.xlsx`` and sent it
+        here, and the reader then failed the file because of its *name*,
+        storing it with no text at all.
+
+        The extension check is skipped for file-like objects, so a stream is
+        passed whenever the declared name is not a supported spreadsheet
+        suffix. Content wins over the name, which is the whole point of
+        content-based routing; files whose names are already correct keep the
+        exact code path they had before.
+        """
+        suffix = os.path.splitext(filepath)[1].lower()
+        if suffix in self._OPENPYXL_PATH_SUFFIXES:
+            return openpyxl.load_workbook(filepath, data_only=True)
+        logger.info(
+            "Opening %s as a spreadsheet by content (declared suffix %r is not "
+            "a supported openpyxl path suffix)",
+            os.path.basename(filepath), suffix or "(none)",
+        )
+        with open(filepath, "rb") as handle:
+            return openpyxl.load_workbook(handle, data_only=True)
+
     def read_xlsx_file(self, filepath):
         """Independent XLSX reader function with image extraction and OCR."""
         try:
@@ -580,7 +807,7 @@ class OfficeFileReader(BaseReader):
             if not os.path.exists(filepath):
                 return {"error": "File not found", "filepath": filepath}
             
-            workbook = openpyxl.load_workbook(filepath, data_only=True)
+            workbook = self._load_workbook_by_content(filepath, openpyxl)
             
             result = {
                 "filepath": filepath,

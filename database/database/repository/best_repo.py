@@ -441,6 +441,30 @@ class BaseRepository:
         if not values:
             return
 
+        # Ordered, duplicate-free insertion.
+        #
+        # ``ON CONFLICT DO NOTHING`` tolerates repeated words, but it is the
+        # *order* in which a transaction touches the ``words_word_key`` btree
+        # that decides whether two concurrent documents can deadlock. Each
+        # document used to insert its own token order, so two files sharing
+        # vocabulary acquired index locks in opposite orders and PostgreSQL
+        # aborted one of them mid-write:
+        #
+        #   deadlock detected
+        #   Process 18648 waits for ShareLock on transaction 324875; blocked by
+        #   process 14328. ... while inserting index tuple in relation "words"
+        #
+        # observed while two documents were stored concurrently. Inserting
+        # every batch in one global order makes lock acquisition monotone for
+        # all transactions - the standard fix for concurrent inserts into a
+        # shared dictionary - so a document is never rolled back (and re-stored)
+        # because another document happened to share words with it.
+        #
+        # The set() also drops repeats before they reach the database; a
+        # 170k-word spreadsheet has far fewer distinct tokens. ``ON CONFLICT``
+        # still covers words that already exist in the table.
+        values = sorted(set(values))
+
         with self.get_cursor() as cur:
             execute_values(
                 cur,

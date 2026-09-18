@@ -28,6 +28,28 @@ _LIBS_LOCK = threading.Lock()
 # Cache for tesseract availability check
 _TESSERACT_AVAILABLE = None
 _TESSERACT_CHECKED = False
+
+# Installed tesseract language packs, keyed by the tesseract binary in use.
+# ``pytesseract.get_languages`` spawns a tesseract process; the reader used to
+# ask for the list once per file, which is pure overhead on a corpus of images.
+_TESSERACT_LANGUAGE_CACHE = {}
+_TESSERACT_LANGUAGE_LOCK = threading.Lock()
+
+
+def _installed_tesseract_languages(pytesseract):
+    """Return the set of installed tesseract language packs (cached).
+
+    Raises like ``get_languages`` does when tesseract cannot be queried, so the
+    caller keeps deciding availability exactly as before.
+    """
+    binary = getattr(pytesseract, "tesseract_cmd", None) or "tesseract"
+    with _TESSERACT_LANGUAGE_LOCK:
+        cached = _TESSERACT_LANGUAGE_CACHE.get(binary)
+    if cached is None:
+        cached = set(pytesseract.get_languages(config=""))
+        with _TESSERACT_LANGUAGE_LOCK:
+            _TESSERACT_LANGUAGE_CACHE[binary] = cached
+    return cached
 _TESSERACT_LOCK = threading.Lock()
 
 # Default OCR languages - Hebrew prioritized for RTL text
@@ -194,7 +216,7 @@ class ImageFileReader(BaseReader):
                 requested_languages = list(languages or DEFAULT_OCR_LANGUAGES)
                 if use_tesseract:
                     try:
-                        installed_languages = set(pytesseract.get_languages(config=""))
+                        installed_languages = _installed_tesseract_languages(pytesseract)
                         missing_languages = [
                             code for code in requested_languages
                             if code not in installed_languages
@@ -627,93 +649,107 @@ class ImageFileReader(BaseReader):
 
         return result
     
+    def _tesseract_recognize_once(self, image, lang, pytesseract, config):
+        """Recognise text *and* word boxes from a single tesseract run.
+
+        ``image_to_string`` and ``image_to_data`` each launch tesseract and each
+        perform the full recognition again: obtaining the reading twice per PSM
+        mode was pure duplicated work. Tesseract can emit both renderings from
+        one recognition - the ``txt`` output configuration plus
+        ``-c tessedit_create_tsv=1`` - and the TSV is parsed with the same
+        helper ``image_to_data`` uses, so the text, the boxes and their order
+        are exactly what the previous two calls produced, minus one process
+        launch and one recognition per mode.
+
+        When the installed pytesseract does not expose the primitives, the
+        historical two-call sequence is used unchanged: output never depends on
+        the library version.
+        """
+        run_tesseract = getattr(pytesseract, "run_tesseract", None)
+        file_to_dict = getattr(pytesseract, "file_to_dict", None)
+        save_image = getattr(pytesseract, "save", None)
+
+        if run_tesseract is not None and file_to_dict is not None and save_image is not None:
+            try:
+                combined_config = f"-c tessedit_create_tsv=1 {config.strip()}".strip()
+                with save_image(image) as (base, input_filename):
+                    run_tesseract(
+                        input_filename=input_filename,
+                        output_filename_base=base,
+                        extension="txt",
+                        lang=lang,
+                        config=combined_config,
+                        nice=0,
+                        timeout=0,
+                    )
+                    with open(f"{base}.txt", encoding="utf-8") as handle:
+                        text = handle.read()
+                    with open(f"{base}.tsv", encoding="utf-8") as handle:
+                        tsv = handle.read()
+                return text, self._extract_coordinates_from_data(
+                    file_to_dict(tsv, "\t", -1)
+                )
+            except Exception as exc:
+                logger.debug(
+                    "Single-run txt+tsv OCR pass unavailable for config %r (%s); "
+                    "using separate text and coordinate calls", config, exc,
+                )
+
+        text = ""
+        coordinates = []
+        try:
+            text = str(pytesseract.image_to_string(image, lang=lang, config=config) or "")
+        except Exception:
+            text = ""
+        if text and text.strip():
+            try:
+                ocr_data = pytesseract.image_to_data(
+                    image, lang=lang, config=config,
+                    output_type=pytesseract.Output.DICT
+                )
+                coordinates = self._extract_coordinates_from_data(ocr_data)
+            except Exception:
+                coordinates = []
+        return text, coordinates
+
     def _extract_text_comprehensive(self, ocr_target, lang, pytesseract, base_config=None):
         """
-        Extract text and coordinates using multiple PSM modes.
-        Preserves formatting and structure.
-        
+        Extract text and coordinates, trying PSM modes in their historical order.
+
+        The ladder and its precedence are unchanged - sparse text (PSM 11)
+        first, then a uniform block (PSM 6), then fully automatic (PSM 3) or the
+        caller's config - and so is the rule that the first mode producing text
+        is the one that is kept.
+
+        What changed is how much work each rung costs. The old implementation
+        ran *every* mode unconditionally and recognised the image twice per mode
+        (once for the string, once for the boxes): up to eight tesseract
+        launches per image, most of whose results were then thrown away. A mode
+        is now attempted only when the previous one found nothing, and each
+        attempt is a single recognition.
+
         Args:
             ocr_target: PIL Image ready for OCR
             lang: Language string
             pytesseract: pytesseract module
-            base_config: Base config string (optional)
-        
+            base_config: Base config string (used for the last resort, as before)
+
         Returns:
             dict: {"text": str, "ocr_coordinates": list}
         """
-        result = {"text": "", "ocr_coordinates": []}
-        
-        # Primary: PSM 11 (Sparse text) - finds ALL text regardless of layout
-        primary_text = ""
-        primary_coords = []
-        try:
-            config_11 = f"--oem 3 --psm 11"
-            primary_text = pytesseract.image_to_string(ocr_target, lang=lang, config=config_11)
-            if primary_text:
-                primary_text = str(primary_text)
-                try:
-                    ocr_data = pytesseract.image_to_data(
-                        ocr_target, lang=lang, config=config_11,
-                        output_type=pytesseract.Output.DICT
-                    )
-                    primary_coords = self._extract_coordinates_from_data(ocr_data)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        
-        # Secondary: PSM 6 (Uniform block) - preserves paragraph structure
-        secondary_text = ""
-        secondary_coords = []
-        try:
-            config_6 = f"--oem 3 --psm 6"
-            secondary_text = pytesseract.image_to_string(ocr_target, lang=lang, config=config_6)
-            if secondary_text:
-                secondary_text = str(secondary_text)
-                try:
-                    ocr_data = pytesseract.image_to_data(
-                        ocr_target, lang=lang, config=config_6,
-                        output_type=pytesseract.Output.DICT
-                    )
-                    secondary_coords = self._extract_coordinates_from_data(ocr_data)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        
-        # Use primary (PSM 11) if successful
-        if primary_text and primary_text.strip():
-            result["text"] = primary_text.rstrip()
-            result["ocr_coordinates"] = primary_coords
-            return result
-        elif secondary_text and secondary_text.strip():
-            result["text"] = secondary_text.rstrip()
-            result["ocr_coordinates"] = secondary_coords
-            return result
-        
-        # Fallback: PSM 3 (Fully automatic) or base_config
-        try:
-            if base_config:
-                config_3 = base_config
-            else:
-                config_3 = f"--oem 3 --psm 3"
-            fallback_text = pytesseract.image_to_string(ocr_target, lang=lang, config=config_3)
-            if fallback_text and fallback_text.strip():
-                result["text"] = str(fallback_text).rstrip()
-                try:
-                    ocr_data = pytesseract.image_to_data(
-                        ocr_target, lang=lang, config=config_3,
-                        output_type=pytesseract.Output.DICT
-                    )
-                    result["ocr_coordinates"] = self._extract_coordinates_from_data(ocr_data)
-                except Exception:
-                    pass
-                return result
-        except Exception:
-            pass
-        
-        return result
-    
+        configs = [
+            "--oem 3 --psm 11",
+            "--oem 3 --psm 6",
+            base_config if base_config else "--oem 3 --psm 3",
+        ]
+        for config in configs:
+            text, coordinates = self._tesseract_recognize_once(
+                ocr_target, lang, pytesseract, config
+            )
+            if text and text.strip():
+                return {"text": str(text).rstrip(), "ocr_coordinates": coordinates}
+        return {"text": "", "ocr_coordinates": []}
+
     def _extract_coordinates_from_data(self, ocr_data):
         """
         Extract bounding box coordinates from OCR data

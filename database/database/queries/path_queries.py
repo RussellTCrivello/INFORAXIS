@@ -116,6 +116,20 @@ class FileQueries(BaseQueries):
         return "UPDATE paths SET file_status = %s WHERE id = %s"
 
     @staticmethod
+    def mark_partial() -> str:
+        """Record that a stored object is only partially processed.
+
+        Used when a derived step (raw display text, keywords, title) failed and
+        the document was stored without it, and when a container's nested work
+        did not finish. The row keeps its data; the status says plainly that
+        something is missing, instead of the run reporting a clean success.
+        """
+        return (
+            "UPDATE paths SET processing_status = %s, status_detail = %s,"
+            " status_updated_at = NOW() WHERE id = %s"
+        )
+
+    @staticmethod
     def update_lineage() -> str:
         """Link an extracted child to the container it came from.
 

@@ -13,7 +13,7 @@ import os
 from typing import Dict, Any, Optional, Set
 from pathlib import Path
 
-from core.path_utils import get_extraction_name_file
+from core.path_utils import get_extraction_name_file, reset_extraction_dir
 from core import archive_safety
 from core.archive_safety import ArchiveEncrypted, ArchiveSafetyError
 
@@ -48,8 +48,13 @@ class ArchiveFileReader(BaseReader):
             '.tar',
             '.gz',
             '.bz2',
+            '.xz',
             '.rar',
-            '.7z'
+            '.7z',
+            # Compound spellings: the tar layer inside a compressed stream.
+            '.tgz',    # tar + gzip
+            '.tbz2',   # tar + bzip2
+            '.txz',    # tar + xz
         }
 
     def read_file(self, file_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -78,10 +83,18 @@ class ArchiveFileReader(BaseReader):
                 extraction_path = self.extract_zip(file_path)
             elif ext in ('.tar', '.tar.gz', '.tar.bz2', '.tar.xz'):
                 extraction_path = self.extract_tar(file_path, ext)
+            elif ext == '.tgz':
+                extraction_path = self.extract_tar(file_path, '.tar.gz')
+            elif ext == '.tbz2':
+                extraction_path = self.extract_tar(file_path, '.tar.bz2')
+            elif ext == '.txz':
+                extraction_path = self.extract_tar(file_path, '.tar.xz')
             elif ext == '.gz':
                 extraction_path = self.extract_gz(file_path)
             elif ext == '.bz2':
                 extraction_path = self.extract_bz2(file_path)
+            elif ext == '.xz':
+                extraction_path = self.extract_xz(file_path)
             elif ext == '.rar':
                 extraction_path = self.extract_rar(file_path)
             elif ext == '.7z':
@@ -152,6 +165,7 @@ class ArchiveFileReader(BaseReader):
     def extract_zip(self, file_path):
         """Extract ZIP files safely (zip-slip protected)."""
         extract_to = get_extraction_name_file(file_path, '.zip')
+        reset_extraction_dir(extract_to)
         result = archive_safety.extract_zip(file_path, extract_to)
         logger.info("Extracted %d files from %s", result.files_extracted, file_path)
         return result, str(extract_to)
@@ -169,6 +183,7 @@ class ArchiveFileReader(BaseReader):
             extension = '.tar'
 
         extract_to = get_extraction_name_file(file_path, extension)
+        reset_extraction_dir(extract_to)
         result = archive_safety.extract_tar(file_path, extract_to)
         logger.info("Extracted %d files from %s", result.files_extracted, file_path)
         return result, str(extract_to)
@@ -176,13 +191,23 @@ class ArchiveFileReader(BaseReader):
     def extract_gz(self, file_path):
         """Extract GZ files (single file compression) safely."""
         extract_to = get_extraction_name_file(file_path, '.gz')
+        reset_extraction_dir(extract_to)
         result = archive_safety.extract_single_file(file_path, extract_to, codec="gzip")
         return result, str(extract_to)
 
     def extract_bz2(self, file_path):
         """Extract BZ2 files (single file compression) safely."""
         extract_to = get_extraction_name_file(file_path, '.bz2')
+        reset_extraction_dir(extract_to)
         result = archive_safety.extract_single_file(file_path, extract_to, codec="bzip2")
+        return result, str(extract_to)
+
+    def extract_xz(self, file_path):
+        """Extract an XZ stream (single file compression) safely."""
+        extract_to = get_extraction_name_file(file_path, '.xz')
+        reset_extraction_dir(extract_to)
+        result = archive_safety.extract_single_file(file_path, extract_to, codec="xz")
+        logger.info("Decompressed %s (%d bytes)", file_path, result.bytes_extracted)
         return result, str(extract_to)
 
     def extract_rar(self, file_path):
@@ -194,6 +219,7 @@ class ArchiveFileReader(BaseReader):
             return None
 
         extract_to = get_extraction_name_file(file_path, '.rar')
+        reset_extraction_dir(extract_to)
         try:
             result = archive_safety.extract_rar(file_path, extract_to)
             logger.info("Extracted %d files from %s", result.files_extracted, file_path)
@@ -217,6 +243,7 @@ class ArchiveFileReader(BaseReader):
             return None
 
         extract_to = get_extraction_name_file(file_path, '.7z')
+        reset_extraction_dir(extract_to)
         try:
             result = archive_safety.extract_7z(file_path, extract_to)
             logger.info("Extracted %d files from %s", result.files_extracted, file_path)

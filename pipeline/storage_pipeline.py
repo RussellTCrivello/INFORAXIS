@@ -167,9 +167,23 @@ class StoragePipeline:
         # NOTE: DatabaseHub may not exist - it's optional for storage functionality
         # Storage works with db_service alone, db_hub is only needed for advanced features
         # CRITICAL FIX: Use shared DatabaseHub instance to prevent connection pool exhaustion
+        db_hub_owned = db_hub is not None
         if db_hub is None:
             # Use singleton pattern to prevent multiple connection pools
             with StoragePipeline._shared_db_hub_lock:
+                if StoragePipeline._shared_db_hub is not None:
+                    # Re-check readiness: the shared hub is dropped when the
+                    # database configuration changes (settings/config.py
+                    # invalidate_database_connections) or when a caller closed
+                    # it.  Rebuilding it here self-heals the pipeline instead
+                    # of leaving every later store without a hub - the previous
+                    # behaviour that silently degraded duplicate detection and
+                    # triggered per-file "connection unhealthy" handling.
+                    try:
+                        if not StoragePipeline._shared_db_hub.db._pool:
+                            StoragePipeline._shared_db_hub = None
+                    except Exception:
+                        StoragePipeline._shared_db_hub = None
                 if StoragePipeline._shared_db_hub is None:
                     try:
                         from database import DatabaseHub
@@ -188,6 +202,11 @@ class StoragePipeline:
                 db_hub = StoragePipeline._shared_db_hub
         
         self.db_hub = db_hub
+        #: True when this pipeline created its own hub and may therefore close
+        #: it.  The class-shared hub is owned by the pipeline class: a nested
+        #: reader that closes it would break every other reader in the process
+        #: (the "Database connection unhealthy, attempting reconnect..." loop).
+        self.db_hub_owned = db_hub_owned
         
         # Store source and side names (optional in constructor, but mandatory in _store_file_sync)
         # No defaults - source and side must be explicitly provided
@@ -202,6 +221,13 @@ class StoragePipeline:
         #: lets the reader classify a resolved duplicate as "nothing new was
         #: stored" instead of counting it as a fresh success.  Bounded by
         #: :data:`_OUTCOME_KEEP`.
+        #: name -> id caches for source/side resolution (see _resolve_source_id).
+        #: Small by construction: a run uses a handful of names, and each entry
+        #: is one integer.  Invalidated on reconnect/reconfiguration.
+        self._source_id_cache: Dict[str, int] = {}
+        self._side_id_cache: Dict[str, int] = {}
+        self._entity_lock = threading.Lock()
+
         self._store_outcomes: "OrderedDict[str, str]" = OrderedDict()
         self._outcome_lock = threading.Lock()
 
@@ -249,6 +275,97 @@ class StoragePipeline:
         s['consistency_issues'] = issues
         return s
     
+    # ------------------------------------------------------------------
+    # Source / side resolution (cached, keyed)
+    # ------------------------------------------------------------------
+    def _resolve_source_id(self, name: str) -> Optional[int]:
+        """Return the id for ``name``, creating it if needed.
+
+        Cached per name: a run stores thousands of files under one source, and
+        the previous implementation re-read the entire ``sources`` table for
+        each of them.  On a cache miss the repository's ``ON CONFLICT`` upsert
+        resolves-or-creates in one statement, so concurrent workers cannot
+        race (which used to cost the file its real source).
+        """
+        with self._entity_lock:
+            cached = self._source_id_cache.get(name)
+        if cached is not None:
+            return cached
+        try:
+            source_id = self.db_service.get_or_create_source(name=name, importance=1.0)
+        except Exception as exc:
+            logger.error(f"Failed to resolve source '{name}': {exc}")
+            source_id = None
+        if source_id:
+            with self._entity_lock:
+                self._source_id_cache[name] = source_id
+            logger.debug(f"Resolved source: {name} (ID: {source_id})")
+            return source_id
+
+        # Fallback chain, preserved from the previous implementation: a known
+        # fallback source, then whatever source exists, so a file is never lost
+        # because its declared source could not be created.
+        try:
+            fallback_name = "__FALLBACK_SOURCE__"
+            fallback_id = self.db_service.get_or_create_source(
+                name=fallback_name, importance=0.5
+            )
+            if fallback_id:
+                with self._entity_lock:
+                    self._source_id_cache[fallback_name] = fallback_id
+                logger.warning(f"Using fallback source '{fallback_name}' (ID: {fallback_id})")
+                return fallback_id
+        except Exception as fallback_error:
+            logger.error(f"Failed to create fallback source: {fallback_error}")
+        try:
+            existing = self.db_service.get_all_sources()
+            if existing:
+                logger.warning(f"Using first available source (ID: {existing[0][0]}) as last resort")
+                return existing[0][0]
+        except Exception as exc:
+            logger.debug(f"Could not list sources: {exc}")
+        logger.error("No sources available and cannot create one - file cannot be stored")
+        return None
+
+    def _resolve_side_id(self, name: str) -> Optional[int]:
+        """Return the id for ``name``, creating it if needed (see above)."""
+        with self._entity_lock:
+            cached = self._side_id_cache.get(name)
+        if cached is not None:
+            return cached
+        try:
+            side_id = self.db_service.get_or_create_side(name=name, importance=1.0)
+        except Exception as exc:
+            logger.error(f"Failed to resolve side '{name}': {exc}")
+            side_id = None
+        if side_id:
+            with self._entity_lock:
+                self._side_id_cache[name] = side_id
+            logger.debug(f"Resolved side: {name} (ID: {side_id})")
+            return side_id
+
+        try:
+            fallback_name = "__FALLBACK_SIDE__"
+            fallback_id = self.db_service.get_or_create_side(
+                name=fallback_name, importance=0.5
+            )
+            if fallback_id:
+                with self._entity_lock:
+                    self._side_id_cache[fallback_name] = fallback_id
+                logger.warning(f"Using fallback side '{fallback_name}' (ID: {fallback_id})")
+                return fallback_id
+        except Exception as fallback_error:
+            logger.error(f"Failed to create fallback side: {fallback_error}")
+        try:
+            existing = self.db_service.get_all_sides()
+            if existing:
+                logger.warning(f"Using first available side (ID: {existing[0][0]}) as last resort")
+                return existing[0][0]
+        except Exception as exc:
+            logger.debug(f"Could not list sides: {exc}")
+        logger.error("No sides available and cannot create one - file cannot be stored")
+        return None
+
     def _store_file_sync(
         self,
         file_info: Dict[str, Any],
@@ -291,114 +408,47 @@ class StoragePipeline:
             logger.warning(f"Using fallback side name '{effective_side_name}' to ensure file is stored")
         
         # Get or create source and side using ContentDBService
-        # First, try to get existing sources/sides
-        all_sources = self.db_service.get_all_sources()
-        source_id = None
-        for sid, sname in all_sources:
-            if sname == effective_source_name:
-                source_id = sid
-                break
-        
-        # Create source if it doesn't exist
+        #
+        # Resolution is cached per name and done with a single keyed statement.
+        # The previous code called ``get_all_sources()`` (an unbounded
+        # ``SELECT`` over the whole table) and then linearly searched it - on
+        # *every stored file*.  Cost therefore grew with database cardinality
+        # times file count: with 100k sources and 10M files that is a terabyte
+        # of row transfer and a python-level scan per file.  The names used by a
+        # run are stable, so one lookup per name is enough, and the upsert is
+        # already concurrency-safe.
+        source_id = self._resolve_source_id(effective_source_name)
         if source_id is None:
-            try:
-                source_id = self.db_service.create_source(
-                    name=effective_source_name,
-                    country="",
-                    job="",
-                    importance=1.0
-                )
-                logger.info(f"Created new source: {effective_source_name} (ID: {source_id})")
-            except Exception as e:
-                logger.error(f"Failed to create source '{effective_source_name}': {e}")
-                # CRITICAL: Don't return None - try to use a fallback source or create with retry
-                # Attempt to get/create a fallback source
-                try:
-                    fallback_source_name = "__FALLBACK_SOURCE__"
-                    all_sources = self.db_service.get_all_sources()
-                    for sid, sname in all_sources:
-                        if sname == fallback_source_name:
-                            source_id = sid
-                            logger.warning(f"Using fallback source '{fallback_source_name}' (ID: {source_id})")
-                            break
-                    if source_id is None:
-                        source_id = self.db_service.create_source(
-                            name=fallback_source_name,
-                            country="",
-                            job="",
-                            importance=0.5
-                        )
-                        logger.warning(f"Created fallback source '{fallback_source_name}' (ID: {source_id})")
-                except Exception as fallback_error:
-                    logger.error(f"Failed to create fallback source: {fallback_error}")
-                    # Last resort: use first available source or fail gracefully
-                    all_sources = self.db_service.get_all_sources()
-                    if all_sources:
-                        source_id = all_sources[0][0]
-                        logger.warning(f"Using first available source (ID: {source_id}) as last resort")
-                    else:
-                        logger.error("No sources available and cannot create one - file cannot be stored")
-                        self.stats['files_failed'] += 1
-                        return None
-        
-        # Get or create side
-        all_sides = self.db_service.get_all_sides()
-        side_id = None
-        for sid, sname in all_sides:
-            if sname == effective_side_name:
-                side_id = sid
-                break
-        
-        # Create side if it doesn't exist
+            self.stats['files_failed'] += 1
+            return None
+
+        side_id = self._resolve_side_id(effective_side_name)
         if side_id is None:
-            try:
-                side_id = self.db_service.create_side(
-                    name=effective_side_name,
-                    importance=1.0
-                )
-                logger.info(f"Created new side: {effective_side_name} (ID: {side_id})")
-            except Exception as e:
-                logger.error(f"Failed to create side '{effective_side_name}': {e}")
-                # CRITICAL: Don't return None - try to use a fallback side or create with retry
-                # Attempt to get/create a fallback side
-                try:
-                    fallback_side_name = "__FALLBACK_SIDE__"
-                    all_sides = self.db_service.get_all_sides()
-                    for sid, sname in all_sides:
-                        if sname == fallback_side_name:
-                            side_id = sid
-                            logger.warning(f"Using fallback side '{fallback_side_name}' (ID: {side_id})")
-                            break
-                    if side_id is None:
-                        side_id = self.db_service.create_side(
-                            name=fallback_side_name,
-                            importance=0.5
-                        )
-                        logger.warning(f"Created fallback side '{fallback_side_name}' (ID: {side_id})")
-                except Exception as fallback_error:
-                    logger.error(f"Failed to create fallback side: {fallback_error}")
-                    # Last resort: use first available side or fail gracefully
-                    all_sides = self.db_service.get_all_sides()
-                    if all_sides:
-                        side_id = all_sides[0][0]
-                        logger.warning(f"Using first available side (ID: {side_id}) as last resort")
-                    else:
-                        logger.error("No sides available and cannot create one - file cannot be stored")
-                        self.stats['files_failed'] += 1
-                        return None
+            self.stats['files_failed'] += 1
+            return None
+
         max_retries = 2
         retry_count = 0
         
         while retry_count <= max_retries:
             try:
-                # Check database connection health (only if db_hub is available)
-                # CRITICAL: Don't fail if connection check fails - retry will handle it
+                # Reconnect only when the database link is genuinely gone.
+                #
+                # The previous check treated *load* as failure: when the pool
+                # was busy (or the pool object had already been closed by
+                # another component) it declared the database unhealthy and
+                # called ``_reconnect()``, which tore down and rebuilt the pool
+                # from the callback of a store transaction.  With several
+                # workers doing this repeatedly the rebuilds multiplied
+                # connections until PostgreSQL answered
+                # "FATAL: sorry, too many clients already".  ``rebuild_pool``
+                # keeps a usable pool untouched, is rate-limited across
+                # threads, and is verified by a health check, so a reconnect
+                # can no longer be triggered by a busy pool.
                 if self.db_hub:
-                    if not self.db_hub._check_connection_health():
-                        logger.warning("Database connection unhealthy, attempting reconnect...")
-                        if not self.db_hub._reconnect():
+                    try:
+                        if not self.db_hub.db.rebuild_pool():
                             logger.error("Failed to reconnect to database - will retry in outer loop")
-                            # Don't return None here - let retry logic handle it
                             if retry_count >= max_retries:
                                 # Only fail after all retries exhausted
                                 logger.error("All retries exhausted - cannot store file")
@@ -407,6 +457,8 @@ class StoragePipeline:
                             retry_count += 1
                             time.sleep(1.0 * retry_count)
                             continue
+                    except Exception as hub_err:
+                        logger.debug(f"Connection health check unavailable: {hub_err}")
                 
                 # Extract metadata and content (with validation)
                 metadata = result.get('Metadata', {})
@@ -1778,19 +1830,13 @@ class StoragePipeline:
                 provenance["ocr"] = ocr
 
         # ---- type detection, when the reader recorded it ----
-        detection = content.get("type_detection")
-        if isinstance(detection, dict) and detection:
-            provenance["detection"] = {
-                key: detection.get(key)
-                for key in (
-                    "declared_extension", "detected_extension",
-                    "detection_method", "detection_confidence",
-                    "extension_mismatch",
-                )
-                if detection.get(key) is not None
-            } or None
-            if provenance["detection"] is None:
-                provenance.pop("detection", None)
+        # The forensic record of identity: original name and extension,
+        # detected format (exact variant), MIME type, version and container
+        # features, and every declared-vs-detected discrepancy. Recorded for
+        # every artifact, not only the ones whose reader happened to report it.
+        detection = _detection_record(content)
+        if detection:
+            provenance["detection"] = detection
 
         # ---- extraction diagnostics ----
         info = content.get("extraction_info")
@@ -2689,6 +2735,27 @@ class StoragePipeline:
             
             # Join with double newline for readability
             combined_text = '\n\n'.join(text_parts)
+
+            # FORENSIC-01: evidence that lives outside the visible body must be
+            # searchable. Comments, tracked deletions, hidden text, headers and
+            # footers, notes, spreadsheet formulas, PDF annotations and
+            # JavaScript, and macro source are all content; before this they
+            # were extracted but never indexed, so an examiner searching for a
+            # term inside a tracked change found nothing. The readers place this
+            # flattened text in 'forensic_text' (additive key: absent for
+            # readers that have not been extended).
+            forensic_text = str(content.get('forensic_text') or '').strip()
+            # IDENTITY: the artifact's recorded identity (original name,
+            # declared extension, detected format/MIME/version and every
+            # declared-vs-detected discrepancy) is searchable, so a reviewer can
+            # find e.g. every file whose content contradicted its extension.
+            identity_text = _detection_search_text(content)
+            if identity_text:
+                forensic_text = (f"{identity_text}\n\n{forensic_text}"
+                                 if forensic_text else identity_text)
+            if forensic_text:
+                combined_text = (f"{combined_text}\n\n{forensic_text}"
+                                 if combined_text.strip() else forensic_text)
             
             # Log extraction summary for debugging
             if ordered_content:
@@ -2984,3 +3051,111 @@ class StoragePipeline:
         # Close database connection if needed
         # Currently db_hub is managed externally, so just log
         logger.info("Storage pipeline shutdown")
+
+#: Provenance kept about identification. Bounded on purpose: the DB copy must
+#: stay small enough to write for millions of artifacts, so long lists are
+#: truncated with an explicit count rather than silently dropped.
+_DETECTION_SCALAR_KEYS = (
+    "declared_name", "declared_extension", "detected_extension",
+    "detection_method", "detection_confidence", "extension_mismatch",
+    "format_id", "format_family", "mime_type", "format_version",
+)
+_DETECTION_LIST_LIMIT = 25
+
+
+def _detection_search_text(content: Dict[str, Any]) -> str:
+    """Flatten identity metadata into searchable lines (or '' when absent)."""
+    record = _detection_record(content)
+    if not record:
+        return ""
+    lines = []
+    labels = {
+        "declared_name": "Original name",
+        "declared_extension": "Declared extension",
+        "detected_extension": "Detected extension",
+        "format_id": "Format",
+        "format_family": "Format family",
+        "mime_type": "MIME type",
+        "format_version": "Format version",
+        "detection_method": "Identification method",
+        "detection_confidence": "Identification confidence",
+    }
+    for key, label in labels.items():
+        if record.get(key):
+            lines.append(f"{label}: {record[key]}")
+    if record.get("extension_mismatch"):
+        lines.append("Extension mismatch: content contradicts the file name")
+    for discrepancy in record.get("discrepancies") or ():
+        if isinstance(discrepancy, dict) and discrepancy.get("kind"):
+            lines.append(
+                f"Discrepancy ({discrepancy.get('severity', 'info')}): "
+                f"{discrepancy['kind']} "
+                f"{discrepancy.get('declared')} -> {discrepancy.get('detected')} "
+                f"{discrepancy.get('detail', '')}".strip())
+    features = record.get("features") or {}
+    if isinstance(features, dict):
+        for key in ("macros_present", "encrypted", "variant", "application",
+                    "entry_count", "nested_documents", "has_xml_signature"):
+            if features.get(key) not in (None, False, 0, ""):
+                lines.append(f"Container feature - {key}: {features[key]}")
+    return "\n".join(lines)
+
+
+def _detection_record(content: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The stored identity record for one artifact, or None when absent.
+
+    Accepts both shapes that exist in the pipeline: the reader service's
+    ``type_detection`` decision and the richer ``format_identification`` block a
+    reader may attach. Nothing is invented: a field is recorded only when the
+    identifier produced it.
+    """
+    decision = content.get("type_detection")
+    identification = content.get("format_identification")
+    if not isinstance(decision, dict):
+        decision = {}
+    if not isinstance(identification, dict):
+        identification = decision.get("format_identification")
+    if not isinstance(identification, dict):
+        identification = {}
+
+    merged: Dict[str, Any] = {}
+    for key in _DETECTION_SCALAR_KEYS:
+        value = decision.get(key)
+        if value is None:
+            value = identification.get(key)
+        if value is not None:
+            merged[key] = value
+
+    features = identification.get("features") or decision.get("format_features")
+    if isinstance(features, dict) and features:
+        trimmed: Dict[str, Any] = {}
+        for key, value in features.items():
+            if isinstance(value, (list, tuple, set)):
+                items = list(value)
+                if len(items) > _DETECTION_LIST_LIMIT:
+                    trimmed[key] = items[:_DETECTION_LIST_LIMIT]
+                    trimmed[f"{key}_total"] = len(items)
+                else:
+                    trimmed[key] = items
+            elif isinstance(value, (str, int, float, bool)) or value is None:
+                trimmed[key] = value
+        merged["features"] = trimmed
+
+    evidence = identification.get("evidence")
+    if isinstance(evidence, (list, tuple)) and evidence:
+        merged["evidence"] = list(evidence)[:_DETECTION_LIST_LIMIT]
+
+    discrepancies = decision.get("format_discrepancies") or identification.get("discrepancies")
+    if isinstance(discrepancies, (list, tuple)) and discrepancies:
+        merged["discrepancies"] = [
+            item if isinstance(item, dict) else {"kind": str(item)}
+            for item in list(discrepancies)[:_DETECTION_LIST_LIMIT]
+        ]
+
+    confidence = identification.get("confidence")
+    if confidence and "detection_confidence" not in merged:
+        merged["detection_confidence"] = confidence
+
+    return merged or None
+
+

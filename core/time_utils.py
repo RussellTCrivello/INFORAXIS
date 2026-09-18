@@ -54,14 +54,18 @@ def print_execution_time(description: str, func: Callable, *args, **kwargs) -> A
             time_value = elapsed
             time_unit = "seconds"
         
-        # Neat printing
+        # Neat printing - emitted as one atomic block so a report from another
+        # worker thread cannot be interleaved into the middle of this one.
         CYAN = "\033[36m"
         RESET = "\033[0m"
         
-        print(f"{'-'*40}")
-        print(f"Task: {description}")
-        print(f"Elapsed time: {CYAN}{time_str}{RESET}")
-        print(f"{'-'*40}")
+        from core.console import console
+        console.block([
+            f"{'-'*40}",
+            f"Task: {description}",
+            f"Elapsed time: {CYAN}{time_str}{RESET}",
+            f"{'-'*40}",
+        ])
         
         # Record execution time to log
         _get_record_function()(
@@ -240,14 +244,21 @@ def calculate_file_processing_metrics(file_info: Dict[str, Any],
     
     status = f"{GREEN}✓ Success{RESET}" if not has_error else f"{RED}✗ Failed{RESET}"
     
-    print(f"\n{YELLOW}📈 File Metrics:{RESET}")
-    print(f"  File:     {file_name}")
-    print(f"  Size:     {size_str}")
-    print(f"  Status:   {status}")
-    print(f"  Time:     {processing_time:.4f} seconds")
+    # Emitted as one atomic block: this report is written from every worker
+    # thread, and printing it line by line let another thread's progress or
+    # metrics output land in the middle of it.
+    from core.console import console
+    metric_lines = [
+        f"\n{YELLOW}📈 File Metrics:{RESET}",
+        f"  File:     {file_name}",
+        f"  Size:     {size_str}",
+        f"  Status:   {status}",
+        f"  Time:     {processing_time:.4f} seconds",
+    ]
     if has_error:
-        print(f"  Error:    {content.get('error', 'Unknown error')}")
-    print()
+        metric_lines.append(f"  Error:    {content.get('error', 'Unknown error')}")
+    metric_lines.append("")
+    console.block(metric_lines)
     
     # Record file metrics to log
     _get_record_function()(

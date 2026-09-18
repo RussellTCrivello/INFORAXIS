@@ -407,6 +407,49 @@ class PDFFileReader(BaseReader):
                     }
             
             result["metadata"] = doc.metadata
+
+            # PDF-02: a PDF is a container. Annotations, comments, embedded
+            # files, JavaScript, form fields, signature fields and incremental
+            # revisions live in it whether or not they are ever rendered on a
+            # page, and none of them are visible to a page-text extraction. The
+            # feature pass below records them, materialises the embedded files
+            # as child objects (so they are hashed, stored and processed like
+            # any other artifact) and never lets a failure there lose the page
+            # text that was already extracted.
+            try:
+                from core.forensics.pdf import (
+                    extract_pdf_features,
+                    materialise_embedded_files,
+                    pdf_feature_text,
+                )
+
+                pdf_features = extract_pdf_features(filepath, doc=doc)
+                # Materialise the attachments first, so the records that reach
+                # the result already name the file each one was written to.
+                written = materialise_embedded_files(pdf_features, str(filepath), result)
+                result["forensic_features"] = pdf_features
+                result["annotations"] = pdf_features.get("annotations", [])
+                result["embedded_files"] = [
+                    {key: value for key, value in record.items() if key != "content"}
+                    for record in pdf_features.get("embedded_files", [])
+                ]
+                result["javascript"] = pdf_features.get("javascript", [])
+                result["form_fields"] = pdf_features.get("form_fields", [])
+                result["revisions"] = pdf_features.get("revisions", {})
+                result["has_signatures"] = pdf_features.get("has_signatures", False)
+                if written:
+                    logger.info("Materialised %d PDF embedded file(s) for %s",
+                                len(written), filepath.name)
+                feature_text = pdf_feature_text(pdf_features)
+                if feature_text:
+                    result["forensic_text"] = feature_text
+                if pdf_features.get("extraction_errors"):
+                    result["extraction_errors"] = pdf_features["extraction_errors"]
+            except Exception as exc:
+                # Feature extraction is additive: record the failure and keep
+                # the page text rather than failing the artifact.
+                result.setdefault("extraction_errors", []).append(
+                    {"scope": "pdf_features", "error": str(exc)})
             
             # ===== CRITICAL OPTIMIZATION: Detect PDF type early =====
             logger.info(f"Detecting PDF type for {filepath.name}...")
