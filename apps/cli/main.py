@@ -1653,23 +1653,22 @@ def main():
                 "side": storage_side
             })
             
-            # Choose processing mode
+            # Choose processing mode. Both entry points print their own
+            # summary and statistics, so neither return value is consumed.
             if USE_THREADING:
-                results = main_read_folder_threaded(
+                main_read_folder_threaded(
                     input_path_user,
                     storage_source=storage_source,
                     storage_side=storage_side,
                     checkpoint_file=str(checkpoint_file) if checkpoint_file else None
                 )
             else:
-                results = main_read_folder_sequential(
+                main_read_folder_sequential(
                     input_path_user,
                     storage_source=storage_source,
                     storage_side=storage_side,
                     checkpoint_file=str(checkpoint_file) if checkpoint_file else None
                 )
-                
-            # Statistics are already displayed by the processing functions
             
         else:
             error_msg = f"Invalid path type: {input_path_user}"

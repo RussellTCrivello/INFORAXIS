@@ -132,7 +132,6 @@ def reset_config():
     """Reset configuration to defaults (useful for testing)"""
     global _config
     _config = None
-    from .settings_adapter import get_settings
     # Reset is handled by settings manager
 
 

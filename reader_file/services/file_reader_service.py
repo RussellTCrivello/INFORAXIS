@@ -9,7 +9,6 @@ based on file extension, following the same design pattern as the database layer
 import os
 import logging
 from typing import Dict, Any, Optional, Set, List
-from pathlib import Path
 
 from core.detect_binanry_utils import (
     CONFIDENCE_STRONG,

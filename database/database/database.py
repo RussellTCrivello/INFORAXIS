@@ -741,7 +741,7 @@ class Database:
         try:
             conn = self.connect()
             yield conn
-        except Exception as e:
+        except Exception:
             if conn is not None:
                 try:
                     conn.rollback()

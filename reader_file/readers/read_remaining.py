@@ -664,12 +664,13 @@ class RemainingFileReader(BaseReader):
                 # For very large files, use smaller chunk sizes
                 if file_size > 10 * 1024 * 1024 * 1024:  # > 10GB
                     # Use 1MB chunks for very large files
-                    logger.warning(f"Memory error on large file ({file_size / (1024*1024*1024):.2f}GB), retrying with 1MB chunks")
+                    logger.warning(f"Memory error on large file ({file_size / (1024*1024*1024):.2f}GB), retrying with 1MB chunks: {e}")
                     # Force streaming mode with smaller chunks by modifying the method
                     # We'll use a recursive call but with a flag to use smaller chunks
                     return self._read_text_file_streaming(filepath, encoding, chunk_size=1024 * 1024)  # 1MB chunks
                 else:
                     # Standard retry with streaming
+                    logger.warning("Memory error on %s, retrying with streaming: %s", filepath, e)
                     return self.read_text_file(filepath, encoding)  # Will use streaming on retry
             except MemoryError as retry_err:
                 # Even streaming failed - file is too large

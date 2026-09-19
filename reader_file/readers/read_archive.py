@@ -9,7 +9,6 @@ byte / ratio limits and timeouts. The legacy implementation used
 ``extractall`` (zip-slip / tar-slip vulnerable) and is replaced entirely.
 """
 
-import os
 from typing import Dict, Any, Optional, Set
 from pathlib import Path
 

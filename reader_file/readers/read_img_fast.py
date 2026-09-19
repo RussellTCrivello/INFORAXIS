@@ -8,7 +8,6 @@ Optimized for speed and reliability
 import os
 import logging
 from typing import Dict, Any, Optional, Set
-from pathlib import Path
 import threading
 import warnings
 
@@ -525,7 +524,6 @@ class ImageFileReader(BaseReader):
     
     def _get_libraries(self):
         """Get image processing libraries (cached)"""
-        global _LIBS_CACHE
         
         with _LIBS_LOCK:
             if _LIBS_CACHE:

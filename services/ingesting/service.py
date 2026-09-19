@@ -104,18 +104,6 @@ class IngestionService:
     def _resolve_identifier(self, value: str, kind: str) -> str:
         """INJ-04: resolve an identifier according to the API contract.
 
-        * non-numeric value            -> an entity name, used as-is
-        * numeric, matches an id       -> resolved to the entity's name
-        * numeric, matches a *name*    -> used as-is (legitimate numeric-looking
-          names such as a side literally named '9' stay addressable, and the
-          check is idempotent under the double validation pass)
-        * numeric, matches neither     -> rejected (previously fell through to
-          the name-based pipeline, silently creating garbage entities
-          literally named '999999')
-        """
-    def _resolve_identifier(self, value: str, kind: str) -> str:
-        """INJ-04: resolve an identifier according to the API contract.
-
         Precedence is deterministic and idempotent (validate() runs more than
         once per job, and a first pass may rewrite an id into a numeric-looking
         name such as side '9'):

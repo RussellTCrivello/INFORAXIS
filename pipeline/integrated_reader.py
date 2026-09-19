@@ -12,21 +12,20 @@ import threading
 import time
 
 from core.console import console
-from core.file_utils import get_standardized_metadata, iter_tree, read_tree
+from core.file_utils import get_standardized_metadata, iter_tree
 from reader_file.main_specify_method import main_specify_method_of_reading_the_file
 # DatabaseHub is optional - import will be handled conditionally in _init_storage
 from pipeline.storage_pipeline import StoragePipeline
+from settings import get_processing_config
 from pipeline.progress_ledger import (
     OUTCOME_COMPLETED,
     OUTCOME_FAILED,
     OUTCOME_RETRYABLE,
     OUTCOME_CANCELLED,
     OUTCOME_SKIPPED,
-    OUTCOME_UNSUPPORTED,
     ProgressLedger,
     classify_result,
 )
-from settings import get_storage_config, get_processing_config
 from Hdg_Err_Ex_Log import (
     handle_error, is_connection_error,
     ErrorCategory, ErrorSeverity
@@ -137,8 +136,6 @@ MAX_FILE_TIMEOUT_S = 24 * 3600.0
 def _configured_max_file_timeout() -> float:
     """``processing.max_file_timeout_s``, falling back to the default ceiling."""
     try:
-        from settings.config import get_processing_config
-
         value = getattr(get_processing_config(), 'max_file_timeout_s', None)
         if value:
             return float(value)
@@ -157,8 +154,6 @@ def _configured_base_file_timeout(default: int = 1200) -> int:
     budget - so the documented adaptive scaling did not apply to extensions.
     """
     try:
-        from settings.config import get_processing_config
-
         value = getattr(get_processing_config(), 'file_processing_timeout', None)
         if value:
             return int(value)
@@ -439,8 +434,11 @@ class IntegratedFileReader:
         self.checkpoint_manager = None
         if checkpoint_file:
             try:
-                from core.checkpoint_manager import CheckpointManager
-                # Checkpoint manager will be initialized when folder path is known
+                # Availability probe: the import raising ImportError is the
+                # check (resume support is optional), and the warning below is
+                # the operator-visible consequence. The class itself is
+                # instantiated later, once the folder path is known.
+                from core.checkpoint_manager import CheckpointManager  # noqa: F401
                 self.checkpoint_file = checkpoint_file
             except ImportError as e:
                 logger.warning(f"Checkpoint manager not available: {e}. Resume functionality disabled.")
@@ -451,7 +449,6 @@ class IntegratedFileReader:
     def _init_storage(self):
         """Initialize database connection and storage pipeline"""
         try:
-            storage_cfg = get_storage_config()
             # CRITICAL FIX: Pass None to StoragePipeline so it uses shared DatabaseHub instance
             # This prevents connection pool exhaustion from multiple DatabaseHub instances
             # StoragePipeline will create/use shared singleton DatabaseHub internally
@@ -923,8 +920,7 @@ class IntegratedFileReader:
 
             batch_number = 0
             processed_in_phase = 0
-            for batch in self._iter_phase_batches(folder_path, phase_key, batch_size,
-                                                  inventory.get('root_error')):
+            for batch in self._iter_phase_batches(folder_path, phase_key, batch_size):
                 if self._control_requested():
                     logger.warning(f"Control requested: skipping remaining {control_wording} batches")
                     break
@@ -1120,8 +1116,7 @@ class IntegratedFileReader:
             'not_ingested': not_ingested,
         }
 
-    def _iter_phase_batches(self, folder_path: str, phase: str, batch_size: int,
-                            root_error: Optional[Dict[str, Any]] = None):
+    def _iter_phase_batches(self, folder_path: str, phase: str, batch_size: int):
         """Yield batches of records for one phase, streaming from disk.
 
         Yields lists of at most ``batch_size`` records, in tree order, skipping
@@ -1129,7 +1124,6 @@ class IntegratedFileReader:
         beyond the batch currently being built.
         """
         batch: List[Dict[str, Any]] = []
-        yielded_root_error = False
         for file_info in iter_tree(folder_path, compute_hashes=False):
             record_type = file_info.get('type')
             if record_type not in ('FILE', 'ERROR'):
@@ -1138,8 +1132,6 @@ class IntegratedFileReader:
                 continue
             if self.checkpoint_manager and self.checkpoint_manager.is_processed(file_info):
                 continue
-            if root_error is not None and file_info is root_error:
-                yielded_root_error = True
             batch.append(file_info)
             if len(batch) >= batch_size:
                 yield batch
@@ -2391,7 +2383,6 @@ class IntegratedFileReader:
         pool finishing must not keep a stuck container alive, so progress is
         counted only as the container's own outstanding work going down.
         """
-        thread_id, thread = entry[0], entry[1]
         file_info = entry[2]
         path = file_info.get('path') if isinstance(file_info, dict) else None
 
@@ -2446,8 +2437,6 @@ class IntegratedFileReader:
         Returns True when the thread finished, False when it stopped making
         progress for ``CONTAINER_STALL_GRACE_S`` (a genuinely stuck worker).
         """
-        import os as _os
-
         container = thread.name.split('Process-', 1)[-1] if thread.name else None
         last_seen = None
         quiet_since = time.monotonic()

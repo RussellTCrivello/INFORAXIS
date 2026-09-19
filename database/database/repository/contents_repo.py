@@ -399,12 +399,9 @@ class ContentsRepository(BaseRepository):
             # Binary search to find the largest chunk that fits within max_chunk_size
             best_chunk_end = chunk_start + 1
             
-            # Start with a reasonable chunk size estimate
-            # Estimate: each symbol pair tuple is ~50 bytes when pickled, compressed ~15 bytes
-            estimated_pairs_per_chunk = max_chunk_size // 15
-            chunk_end = min(chunk_start + estimated_pairs_per_chunk, total_pairs)
-            
-            # Binary search for optimal chunk size
+            # Binary search for the largest chunk that fits; the search is
+            # logarithmic in the pair count, so no size estimate is needed to
+            # bound it (an unused estimate used to sit here).
             low = chunk_start + 1
             high = total_pairs
             

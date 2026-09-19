@@ -26,13 +26,11 @@ from __future__ import annotations
 import importlib
 import json
 import os
-import shutil
 import sys
 import tempfile
-import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -310,7 +308,6 @@ def _():
             raise AssertionError("hash is not sha256 hex")
 
         import psycopg2
-        from settings.config import get_db_config
 
         cfg = _db_cfg()
         conn = psycopg2.connect(
@@ -510,7 +507,7 @@ def _():
             import core.app_paths as ap
 
             ap.reset_cache()
-            dirs = ensure_runtime_dirs()
+            ensure_runtime_dirs()
             root = get_data_root()
             if not root.is_dir():
                 raise AssertionError("data root not created")
@@ -550,7 +547,7 @@ def _():
 # ---------------------------------------------------------------------------
 @check("compute", "Compute gateway selects a device honestly")
 def _():
-    from core.compute import ExecutionMode, WorkloadKind, get_compute_gateway
+    from core.compute import WorkloadKind, get_compute_gateway
 
     gateway = get_compute_gateway()
     report = gateway.mode_report()

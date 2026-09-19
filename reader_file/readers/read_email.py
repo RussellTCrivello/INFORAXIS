@@ -7,9 +7,7 @@ Aligned with database design principles - all functions within class
 """
 
 from email import policy
-import email
 from email.parser import BytesParser
-import json
 import os
 import time
 from typing import Dict, Any, Optional, Set
@@ -815,7 +813,7 @@ class EmailFileReader(BaseReader):
                                     
                                     if text_content.strip():
                                         content_parts.append(text_content.strip())
-                            except Exception as e:
+                            except Exception:
                                 continue
                 
                 msg_data = {
@@ -872,7 +870,7 @@ class EmailFileReader(BaseReader):
                                             html_attachments_content.append(f"\n\n--- HTML Attachment: {original_filename} ---\n{html_content[:5000]}")
                                         message_attachment_count += 1
                                         total_attachments += 1
-                                except Exception as e:
+                                except Exception:
                                     # Fall through to save as file
                                     is_html = False
                             
@@ -906,7 +904,7 @@ class EmailFileReader(BaseReader):
                                     
                                     message_attachment_count += 1
                                     total_attachments += 1
-                                except Exception as e:
+                                except Exception:
                                     continue
                 
                 # Add HTML attachments content to message
@@ -981,7 +979,7 @@ class EmailFileReader(BaseReader):
 
             # Optional: RTF conversion
             try:
-                from striprtf.striprtf import rtf_to_text
+                from striprtf.striprtf import rtf_to_text  # noqa: F401
                 STRIP_RTF_AVAILABLE = True
             except ImportError:
                 STRIP_RTF_AVAILABLE = False

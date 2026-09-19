@@ -18,7 +18,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
 import logging
 import time
-import warnings
 
 # Suppress PIL warning about palette images with transparency
 # We handle this by converting to RGBA when needed
@@ -347,8 +346,7 @@ class PDFFileReader(BaseReader):
         libs = self._check_pdf_libraries()
         fitz = libs.get('fitz')
         pytesseract = libs.get('pytesseract')
-        Image = libs.get('Image')
-        
+
         # Return error if any required libraries are missing
         missing_libs = libs.get('missing') or []
         if missing_libs:
