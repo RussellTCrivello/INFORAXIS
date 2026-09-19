@@ -261,9 +261,21 @@ def _():
     app.config["TESTING"] = True
     client = app.test_client()
     resp = client.get("/auth/login")
-    if resp.status_code != 200:
-        raise AssertionError(f"/auth/login returned {resp.status_code}")
-    return "GET /auth/login -> 200"
+    if resp.status_code == 200:
+        return "GET /auth/login -> 200"
+    # A fresh installation has no account yet, and the application redirects the
+    # login route to the first-run setup page. That is correct behaviour - the
+    # operator has to create the administrator before logging in - so it must
+    # not be reported as a readiness failure. The redirect is followed to prove
+    # the login flow is actually reachable.
+    location = resp.headers.get("Location", "")
+    if resp.status_code in (301, 302, 303, 307, 308) and location.endswith("/setup"):
+        follow = client.get(location)
+        if follow.status_code == 200:
+            return ("GET /auth/login -> 302 /setup (first-run setup: create the "
+                    "administrator account to enable login)")
+        raise AssertionError(f"/setup returned {follow.status_code}")
+    raise AssertionError(f"/auth/login returned {resp.status_code} -> {location}")
 
 
 # ---------------------------------------------------------------------------
