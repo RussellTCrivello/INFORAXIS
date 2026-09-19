@@ -21,6 +21,22 @@ logger = logging.getLogger(__name__)
 # Suppress PIL warning about palette images with transparency
 warnings.filterwarnings('ignore', message='.*Palette images with Transparency.*', category=UserWarning, module='PIL')
 
+#: Minimum width/height, in pixels, for OCR to be attempted at all.
+#:
+#: Below this floor a raster cannot hold a readable text line: the recogniser
+#: returns noise or nothing while still costing a full tesseract launch, and on
+#: a corpus of icons and thumbnails that cost dominates the run. The outcome is
+#: an *explicit* skip - ``extraction_info["skipped"] = True`` with
+#: ``skip_reason = "too_small"`` - which the storage layer records as the
+#: first-class ``skipped`` processing state and the ledger counts as skipped.
+#: That is deliberately not the same as discarding the file: it is stored, its
+#: metadata is kept, and the reason travels with the row.
+#:
+#: The value is the reader's documented 50px floor (see the contract tests in
+#: tests/unit/test_ocr_engines.py and the corpus description in
+#: tests/integration/test_status_persisted.py).
+MIN_OCR_DIMENSION = 50
+
 # Global cache for library imports
 _LIBS_CACHE = {}
 _LIBS_LOCK = threading.Lock()
@@ -184,13 +200,28 @@ class ImageFileReader(BaseReader):
                 width, height = img.size
                 img_format = img.format
                 
-                # Even small/icon images are content-bearing input. Do not
-                # discard them before OCR; the caller must receive either text
-                # or an explicit retryable OCR failure.
                 result["extraction_info"].update({
                     "image_size": f"{width}x{height}",
                     "image_format": img_format
                 })
+
+                # Size floor (see MIN_OCR_DIMENSION). Small images are not
+                # discarded: they are recorded as an explicit, terminal skip
+                # with the reason, so a downstream reader can always tell
+                # "deliberately not attempted" from "attempted and failed".
+                if width < MIN_OCR_DIMENSION or height < MIN_OCR_DIMENSION:
+                    result["extraction_info"].update({
+                        "skipped": True,
+                        "skip_reason": "too_small",
+                        "reason": "too_small",
+                        "min_ocr_dimension": MIN_OCR_DIMENSION,
+                    })
+                    logger.info(
+                        "[EXTRACTION] Skipping OCR for %s: %dx%d is below the "
+                        "%dpx floor (stored as an explicit skip, not a failure)",
+                        os.path.basename(filepath), width, height, MIN_OCR_DIMENSION,
+                    )
+                    return result
                 
                 # Extract GPS location (for paths.coordinates field, not content)
                 location_info = None

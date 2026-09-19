@@ -708,10 +708,21 @@ class StoragePipeline:
                             content_words = []
                             content_date = None
                 
-                # Set file_status: 'Read' if file contains content OR OCR was successful
+                # Set file_status: 'Read' only when the artifact yielded content.
+                # 'Read' means "this file had readable content", not "this file
+                # was touched": a deliberately skipped artifact (for example an
+                # icon below the image reader's minimum size), an unsupported
+                # type, or a container whose readers produced nothing is
+                # 'Unread' with its own processing_status explaining why. Every
+                # input to is_read is content evidence that a reader produced:
+                # indexed words from the extracted text, OCR text the image
+                # reader actually returned, or the reader's own
+                # extraction_info['extracted'/'stored'] signal. Metadata the
+                # pipeline adds about the file must never be counted here (see
+                # the identity note in _extract_text_from_content).
                 # This ensures images with extracted text are marked as 'Read' even if tokenization fails
                 has_content = bool(content_words)
-                has_ocr_text = bool(text and text.strip())
+                has_ocr_text = bool(str(content.get('text') or '').strip())
                 is_read = has_content or (ocr_successful and has_ocr_text) or has_extracted_text
                 file_status = 'Read' if is_read else 'Unread'
                 
@@ -2743,19 +2754,34 @@ class StoragePipeline:
             # were extracted but never indexed, so an examiner searching for a
             # term inside a tracked change found nothing. The readers place this
             # flattened text in 'forensic_text' (additive key: absent for
-            # readers that have not been extended).
+            # readers that have not been extended). It IS content of this
+            # artifact, so it joins the content channel and counts as evidence
+            # that the artifact could be read.
             forensic_text = str(content.get('forensic_text') or '').strip()
-            # IDENTITY: the artifact's recorded identity (original name,
-            # declared extension, detected format/MIME/version and every
-            # declared-vs-detected discrepancy) is searchable, so a reviewer can
-            # find e.g. every file whose content contradicted its extension.
-            identity_text = _detection_search_text(content)
-            if identity_text:
-                forensic_text = (f"{identity_text}\n\n{forensic_text}"
-                                 if forensic_text else identity_text)
             if forensic_text:
                 combined_text = (f"{combined_text}\n\n{forensic_text}"
                                  if combined_text.strip() else forensic_text)
+
+            # IDENTITY (original name, declared extension, detected
+            # format/MIME/version, container features and every
+            # declared-vs-detected discrepancy) is metadata *about* the artifact,
+            # not content *of* it, and it is already recorded structurally:
+            # _build_extraction_provenance persists it per artifact as
+            # paths.extraction_provenance -> 'detection', which the lineage API
+            # surfaces (see docs/operations.md). Folding the flattened identity
+            # lines into this content text used to make an artifact look
+            # readable when nothing had been read - a 20x20 icon that the image
+            # reader deliberately skipped was stored as file_status='Read' with
+            # 200 characters of "content" that were nothing but labels such as
+            # "Original name: icon.png" - which broke the documented meaning of
+            # file_status and the Unread status contract
+            # (tests/integration/test_status_persisted.py), polluted the
+            # full-text word index with ~10 boilerplate labels per artifact, and
+            # put the labels in front of the examiner in the content display.
+            # Identity stays searchable where it belongs: as a structured,
+            # queryable record (SELECT ... WHERE extraction_provenance ->
+            # 'detection' ->> 'extension_mismatch' = 'true'), not as fake body
+            # text. Do not re-add it here.
             
             # Log extraction summary for debugging
             if ordered_content:
@@ -3061,44 +3087,6 @@ _DETECTION_SCALAR_KEYS = (
     "format_id", "format_family", "mime_type", "format_version",
 )
 _DETECTION_LIST_LIMIT = 25
-
-
-def _detection_search_text(content: Dict[str, Any]) -> str:
-    """Flatten identity metadata into searchable lines (or '' when absent)."""
-    record = _detection_record(content)
-    if not record:
-        return ""
-    lines = []
-    labels = {
-        "declared_name": "Original name",
-        "declared_extension": "Declared extension",
-        "detected_extension": "Detected extension",
-        "format_id": "Format",
-        "format_family": "Format family",
-        "mime_type": "MIME type",
-        "format_version": "Format version",
-        "detection_method": "Identification method",
-        "detection_confidence": "Identification confidence",
-    }
-    for key, label in labels.items():
-        if record.get(key):
-            lines.append(f"{label}: {record[key]}")
-    if record.get("extension_mismatch"):
-        lines.append("Extension mismatch: content contradicts the file name")
-    for discrepancy in record.get("discrepancies") or ():
-        if isinstance(discrepancy, dict) and discrepancy.get("kind"):
-            lines.append(
-                f"Discrepancy ({discrepancy.get('severity', 'info')}): "
-                f"{discrepancy['kind']} "
-                f"{discrepancy.get('declared')} -> {discrepancy.get('detected')} "
-                f"{discrepancy.get('detail', '')}".strip())
-    features = record.get("features") or {}
-    if isinstance(features, dict):
-        for key in ("macros_present", "encrypted", "variant", "application",
-                    "entry_count", "nested_documents", "has_xml_signature"):
-            if features.get(key) not in (None, False, 0, ""):
-                lines.append(f"Container feature - {key}: {features[key]}")
-    return "\n".join(lines)
 
 
 def _detection_record(content: Dict[str, Any]) -> Optional[Dict[str, Any]]:
