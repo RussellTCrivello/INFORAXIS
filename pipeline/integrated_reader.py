@@ -803,6 +803,24 @@ class IntegratedFileReader:
         if error_count > 0:
             logger.warning(f"⚠️  {error_count} files/folders have access errors but will still be stored in database")
 
+        # Enumerated but deliberately not ingested: say so once, so an examiner
+        # knows these entries exist and is not left to conclude they were read.
+        not_ingested = inventory.get('not_ingested') or {}
+        if not_ingested:
+            symlinks = not_ingested.get('SYMLINK', 0)
+            special = not_ingested.get('OTHER', 0)
+            parts = []
+            if symlinks:
+                parts.append(f"{symlinks} symbolic link(s)")
+            if special:
+                parts.append(f"{special} special file(s) (socket/FIFO/device)")
+            message = ("Not ingested: " + " and ".join(parts)
+                       + " - links are not followed (their targets are ingested "
+                         "on their own) and special files are not artifacts")
+            logger.info(message)
+            if not nested_run:
+                print(f"ℹ️  {message}")
+
         if skipped_count > 0:
             if not nested_run:
                 print(f"Resuming: {skipped_count} files already processed, {remaining_files} remaining")
@@ -1067,9 +1085,18 @@ class IntegratedFileReader:
         skipped = 0
         phases = dict.fromkeys(PHASE_NAMES, 0)
         root_error = None
+        #: Records that are enumerated but deliberately never ingested. Symlinks
+        #: are not followed (their targets are ingested as files in their own
+        #: right; following them would duplicate that content and can cycle),
+        #: and sockets/FIFOs/devices are not artifacts. They are counted so the
+        #: run can say so instead of dropping them silently - which is what
+        #: happened while they were filtered out with directories.
+        not_ingested: Dict[str, int] = {}
         for file_info in iter_tree(folder_path, compute_hashes=False):
             record_type = file_info.get('type')
             if record_type not in ('FILE', 'ERROR'):
+                if record_type in ('SYMLINK', 'OTHER'):
+                    not_ingested[record_type] = not_ingested.get(record_type, 0) + 1
                 continue
             if root_error is None and record_type == 'ERROR' \
                     and file_info.get('path') == folder_path and folder_path:
@@ -1090,6 +1117,7 @@ class IntegratedFileReader:
             'total': files + errors,
             'phases': phases,
             'root_error': root_error,
+            'not_ingested': not_ingested,
         }
 
     def _iter_phase_batches(self, folder_path: str, phase: str, batch_size: int,

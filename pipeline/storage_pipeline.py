@@ -22,7 +22,7 @@ except ImportError:
 
 from Hdg_Err_Ex_Log import (
     handle_error, is_connection_error, is_retryable_error,
-    ErrorCategory, ErrorSeverity, format_validation_error
+    ErrorCategory, ErrorSeverity
 )
 from core.content_markers import strip_structural_markers
 
@@ -514,8 +514,10 @@ class StoragePipeline:
                         file_hash = hash_file(file_path_for_hash)
                         logger.debug("Computed content hash for %s", os.path.basename(file_path_for_hash))
                     except HashingError as hash_exc:
-                        logger.error("Hashing failed for %s - refusing to store under a fake identity",
-                                     file_path_for_hash)
+                        logger.error(
+                            "Hashing failed for %s - refusing to store under a fake identity: %s",
+                            file_path_for_hash, hash_exc,
+                        )
                         self.stats['files_failed'] = self.stats.get('files_failed', 0) + 1
                         self.stats.setdefault('storage_failed', 0)
                         self.stats['storage_failed'] = self.stats.get('storage_failed', 0) + 1
@@ -555,7 +557,7 @@ class StoragePipeline:
                     else:
                         # Hash exists but db_hub not available - proceed with storage
                         # ContentDBService will handle duplicates via database constraints or return existing path_id
-                        logger.debug(f"Hash exists but cannot check for duplicate path_id (db_hub not available). Proceeding with storage - database will handle duplicates.")
+                        logger.debug("Hash exists but cannot check for duplicate path_id (db_hub not available). Proceeding with storage - database will handle duplicates.")
                         # Continue to storage - don't return None
                 
                 # Step 3: Prepare file metadata for storage
@@ -987,7 +989,7 @@ class StoragePipeline:
                         
                         if is_duplicate:
                             storage_details = [
-                                f"⚠️  DUPLICATE FILE DETECTED (already processed)",
+                                "⚠️  DUPLICATE FILE DETECTED (already processed)",
                                 f"   File: {file_name}",
                                 f"   Path ID: {path_id} (existing)",
                                 f"   Hash ID: {hash_id}",
@@ -997,7 +999,7 @@ class StoragePipeline:
                             ]
                         else:
                             storage_details = [
-                                f"✅ FILE SUCCESSFULLY STORED IN DATABASE (using ContentDBService with transactions)",
+                                "✅ FILE SUCCESSFULLY STORED IN DATABASE (using ContentDBService with transactions)",
                                 f"   File: {file_name}",
                                 f"   Path ID: {path_id}",
                                 f"   Hash ID: {hash_id}",
@@ -1087,13 +1089,6 @@ class StoragePipeline:
                         time.sleep(1.0 * retry_count)
                         continue
                 
-                # OLD CODE BELOW - DEPRECATED: This section is now replaced by ContentDBService.process_full_document()
-                # The code above should always return (either path_id or None), so this should never execute
-                # Keeping for reference but disabled to prevent errors
-                # If execution reaches here, it means the new code path didn't return properly
-                logger.error("ERROR: Execution reached deprecated code path. This should not happen.")
-                self.stats['files_failed'] += 1
-                return None
                 
             except Exception as e:
                 # Handle any unexpected errors in the main storage flow
@@ -1121,7 +1116,7 @@ class StoragePipeline:
                             time.sleep(1.0)
                             continue
                         else:
-                            logger.error(f"Failed to reconnect, will retry entire operation")
+                            logger.error("Failed to reconnect, will retry entire operation")
                             time.sleep(2.0 * retry_count)  # Exponential backoff
                             continue
                     
@@ -1168,337 +1163,18 @@ class StoragePipeline:
                     self.stats['files_failed'] += 1
                     return None
                 
-                # ========================================================================
-                # DEPRECATED CODE PATH - DISABLED
-                # This code should NEVER execute. All storage now uses ContentDBService.process_full_document()
-                # If execution reaches here, it's a critical bug - the new code path should have returned.
-                # ========================================================================
-                logger.critical("CRITICAL ERROR: Execution reached deprecated code path at line 750+. This should never happen.")
-                logger.critical("The new ContentDBService.process_full_document() code should have returned path_id or None.")
-                logger.critical("This deprecated code uses db_hub operations that no longer exist and will cause AttributeError.")
-                # Return None immediately to prevent execution of deprecated code
+                # Fail-safe: every supported path above returns (a path_id or
+                # None). Reaching this point means control fell through a branch
+                # that did not, so the file's outcome would otherwise be lost -
+                # count it as failed and say so loudly rather than continuing.
+                logger.critical(
+                    "Storage fell through every return path for %s; the file is "
+                    "counted as failed and no path row was written.",
+                    file_info.get('path', 'unknown') if file_info else 'unknown',
+                )
                 self.stats['files_failed'] += 1
                 return None
                 
-                # OLD CODE BELOW IS DISABLED - DO NOT UNCOMMENT
-                # The code below uses db_hub.path_operations, db_hub.word_operations, etc. which don't exist
-                # All storage should use ContentDBService.process_full_document() instead
-                """
-                # DISABLED OLD CODE - Uncomment only for debugging
-                # Step 4: Verify hash exists before proceeding (critical for transaction safety)
-                # This ensures hash_id is valid even if there were transaction issues
-                hash_verified = False
-                hash_verify_attempts = 0
-                max_hash_verify_attempts = 3
-                
-                while hash_verify_attempts < max_hash_verify_attempts and not hash_verified:
-                    try:
-                        # Verify hash exists in database (get_hash_by_id returns hash string or None)
-                        # Use ContentDBService hashs_repo instead of db_hub.hash_operations
-                        verified_hash_value = self.db_service.hashs_repo.get_hash_by_id(hash_id) if self.db_service else None
-                        if verified_hash_value is None:
-                            # Hash doesn't exist, need to recreate it
-                            logger.warning(f"Hash ID {hash_id} not found in database, recreating hash...")
-                            new_hash_id = self.db_service.create_hash(
-                                file_hash, source_id, side_id
-                            ) if self.db_service else None
-                            if new_hash_id:
-                                hash_id = new_hash_id
-                                hash_verified = True
-                            else:
-                                hash_verify_attempts += 1
-                                if hash_verify_attempts < max_hash_verify_attempts:
-                                    logger.warning(f"Failed to recreate hash, retrying (attempt {hash_verify_attempts}/{max_hash_verify_attempts})...")
-                                    time.sleep(0.5 * hash_verify_attempts)
-                                    continue
-                                else:
-                                    error_msg = "Failed to verify or recreate hash after multiple attempts"
-                                    handle_error(
-                                        Exception(error_msg),
-                                        category=ErrorCategory.DATABASE,
-                                        severity=ErrorSeverity.HIGH,
-                                        context={
-                                            'operation': 'verify_hash',
-                                            'hash_id': hash_id,
-                                            'file_hash': file_hash[:16] + '...'
-                                        },
-                                        suggested_action='Check database connection and hash table'
-                                    )
-                                    if retry_count < max_retries:
-                                        retry_count += 1
-                                        logger.info(f"Retrying entire file storage (attempt {retry_count}/{max_retries})...")
-                                        continue
-                                    self.stats['files_failed'] += 1
-                                    return None
-                        else:
-                            # Hash exists, verify it matches our file_hash (safety check)
-                            if verified_hash_value != file_hash:
-                                logger.warning(f"Hash ID {hash_id} exists but hash value mismatch. Expected: {file_hash[:16]}..., Got: {verified_hash_value[:16]}...")
-                                # This shouldn't happen, but if it does, recreate hash
-                                new_hash_id = self.db_service.create_hash(
-                                    file_hash, source_id, side_id
-                                )
-                                if new_hash_id:
-                                    hash_id = new_hash_id
-                                    hash_verified = True
-                                else:
-                                    hash_verify_attempts += 1
-                                    if hash_verify_attempts < max_hash_verify_attempts:
-                                        continue
-                                    else:
-                                        self.stats['files_failed'] += 1
-                                        return None
-                            else:
-                                hash_verified = True
-                    except Exception as verify_error:
-                        hash_verify_attempts += 1
-                        if is_connection_error(verify_error):
-                            logger.warning(f"Connection error verifying hash, attempting reconnect...")
-                            self.db_hub._reconnect()
-                        if hash_verify_attempts < max_hash_verify_attempts:
-                            logger.warning(f"Error verifying hash, retrying (attempt {hash_verify_attempts}/{max_hash_verify_attempts}): {verify_error}")
-                            time.sleep(0.5 * hash_verify_attempts)
-                            continue
-                        else:
-                            error_msg = f"Failed to verify hash after multiple attempts: {verify_error}"
-                            handle_error(
-                                Exception(error_msg),
-                                category=ErrorCategory.DATABASE_CONNECTION if is_connection_error(verify_error) else ErrorCategory.DATABASE,
-                                severity=ErrorSeverity.HIGH,
-                                context={
-                                    'operation': 'verify_hash',
-                                    'hash_id': hash_id,
-                                    'file_hash': file_hash[:16] + '...'
-                                },
-                                suggested_action='Check database connection'
-                            )
-                            if retry_count < max_retries:
-                                retry_count += 1
-                                logger.info(f"Retrying entire file storage (attempt {retry_count}/{max_retries})...")
-                                continue
-                            self.stats['files_failed'] += 1
-                            return None
-                
-                if not hash_verified:
-                    self.stats['files_failed'] += 1
-                    return None
-                
-                # Step 5: Extract coordinates if available
-                coordinates = self._extract_coordinates(content)
-                
-                # Step 6: Store metadata (with validation and retry)
-                path_id = None
-                metadata_retry_count = 0
-                max_metadata_retries = 2
-                
-                # Prepare error message if content has errors
-                error_message = None
-                if has_content_error:
-                    error_message = content.get('error', 'Unknown error')
-                    if isinstance(error_message, str):
-                        # Truncate if too long
-                        error_message = error_message[:10000] if len(error_message) > 10000 else error_message
-                
-                while metadata_retry_count <= max_metadata_retries and path_id is None:
-                    try:
-                        path_id = self.db_hub.path_operations.store_metadata(
-                            file_info, hash_id, file_status='Unread', coordinates=coordinates, error_message=error_message
-                        )
-                        if not path_id:
-                            if metadata_retry_count < max_metadata_retries:
-                                metadata_retry_count += 1
-                                logger.warning(f"Metadata storage returned None, retrying (attempt {metadata_retry_count}/{max_metadata_retries})...")
-                                time.sleep(0.5 * metadata_retry_count)
-                                continue
-                            else:
-                                error_msg = "Failed to store metadata after multiple attempts"
-                                handle_error(
-                                    Exception(error_msg),
-                                    category=ErrorCategory.DATABASE,
-                                    severity=ErrorSeverity.HIGH,
-                                    context={
-                                        'operation': 'store_metadata',
-                                        'file_path': file_info.get('path', 'unknown')[:100],
-                                        'hash_id': hash_id
-                                    },
-                                    suggested_action='Check database connection and file_path uniqueness constraint'
-                                )
-                                if retry_count < max_retries:
-                                    retry_count += 1
-                                    logger.info(f"Retrying entire file storage (attempt {retry_count}/{max_retries})...")
-                                    continue
-                                self.stats['files_failed'] += 1
-                                return None
-                    except Exception as metadata_error:
-                        if is_retryable_error(metadata_error) and metadata_retry_count < max_metadata_retries:
-                            metadata_retry_count += 1
-                            logger.warning(f"Retryable error storing metadata, retrying (attempt {metadata_retry_count}/{max_metadata_retries}): {metadata_error}")
-                            # Trigger reconnection if it's a connection error
-                            if is_connection_error(metadata_error):
-                                logger.warning("Connection error detected, attempting reconnect...")
-                                if not self.db_hub._reconnect():
-                                    logger.error("Failed to reconnect after metadata error")
-                                    # Still continue to retry if we haven't exhausted retries
-                                    if metadata_retry_count <= max_metadata_retries:
-                                        time.sleep(0.5 * metadata_retry_count)
-                                        continue
-                            else:
-                                time.sleep(0.5 * metadata_retry_count)
-                            continue
-                        else:
-                            handle_error(
-                                metadata_error,
-                                category=ErrorCategory.DATABASE_CONNECTION if is_connection_error(metadata_error) else ErrorCategory.DATABASE,
-                                severity=ErrorSeverity.MEDIUM,
-                                context={'operation': 'store_metadata', 'file_path': file_info.get('path', 'unknown')[:100]}
-                            )
-                            if retry_count < max_retries:
-                                retry_count += 1
-                                # Try to reconnect before retrying entire operation
-                                if is_connection_error(metadata_error):
-                                    logger.warning("Connection error in metadata storage, attempting reconnect before full retry...")
-                                    self.db_hub._reconnect()
-                                continue
-                            self.stats['files_failed'] += 1
-                            return None
-                
-                # Step 6: Verify path exists before storing content (critical for transaction safety)
-                if path_id:
-                    path_verified = False
-                    path_verify_attempts = 0
-                    max_path_verify_attempts = 3
-                    
-                    while path_verify_attempts < max_path_verify_attempts and not path_verified:
-                        try:
-                            # Verify path exists by trying to get it
-                            verified_path = self.db_hub.path_operations.get_path_by_id(path_id)
-                            if verified_path is None:
-                                # Path doesn't exist, need to recreate metadata
-                                logger.warning(f"Path ID {path_id} not found in database, recreating metadata...")
-                                # Recreate metadata with verified hash_id
-                                new_path_id = self.db_hub.path_operations.store_metadata(
-                                    file_info, hash_id, file_status='Unread', coordinates=coordinates, error_message=error_message
-                                )
-                                if new_path_id:
-                                    path_id = new_path_id
-                                    path_verified = True
-                                else:
-                                    path_verify_attempts += 1
-                                    if path_verify_attempts < max_path_verify_attempts:
-                                        logger.warning(f"Failed to recreate path, retrying (attempt {path_verify_attempts}/{max_path_verify_attempts})...")
-                                        time.sleep(0.5 * path_verify_attempts)
-                                        continue
-                                    else:
-                                        logger.error(f"Failed to verify or recreate path after multiple attempts, skipping content storage")
-                                        path_id = None  # Mark as failed so we skip content storage
-                                        break
-                            else:
-                                path_verified = True
-                        except Exception as verify_error:
-                            path_verify_attempts += 1
-                            if is_connection_error(verify_error):
-                                logger.warning(f"Connection error verifying path, attempting reconnect...")
-                                self.db_hub._reconnect()
-                            if path_verify_attempts < max_path_verify_attempts:
-                                logger.warning(f"Error verifying path, retrying (attempt {path_verify_attempts}/{max_path_verify_attempts}): {verify_error}")
-                                time.sleep(0.5 * path_verify_attempts)
-                                continue
-                            else:
-                                logger.error(f"Failed to verify path after multiple attempts: {verify_error}, skipping content storage")
-                                path_id = None  # Mark as failed so we skip content storage
-                                break
-                
-                # Step 7: Extract and store content (skip if content has errors or path verification failed)
-                text = None
-                text_length = 0
-                content_stored = False
-                
-                if path_id and not has_content_error:
-                    logger.info(f"Extracting text content for path_id {path_id}, file: {file_info.get('path', 'unknown')[:100]}")
-                    text = self._extract_text_from_content(content)
-                    
-                    if text:
-                        text_length = len(text)
-                        logger.info(f"Extracted {text_length} characters of text for path_id {path_id}")
-                        
-                        success = self._store_content_pipeline(text, path_id)
-                        if success:
-                            content_stored = True
-                            logger.info(f"Content successfully stored for path_id {path_id} ({text_length} chars)")
-                            # Update status to 'Read' (non-critical, so wrap in try-except)
-                            try:
-                                if not self.db_hub._check_connection_health():
-                                    self.db_hub._reconnect()
-                                self.db_hub.path_operations.update_file_status(path_id, 'Read')
-                            except Exception as status_error:
-                                logger.warning(f"Failed to update file status to 'Read' for path_id {path_id}: {status_error}")
-                                # Don't fail the operation - file is stored, just status update failed
-                        else:
-                            logger.warning(f"Content storage failed for path_id {path_id}, but metadata was stored")
-                    else:
-                        logger.warning(f"No text extracted from content for path_id {path_id}. Content may be empty or binary.")
-
-                else:
-                    # File has content error - error message already stored in metadata step
-                    logger.info(f"Metadata stored for file with content error, path_id: {path_id}, error: {error_message}")
-                
-                # Step 8: Title.
-                #
-                # _store_title_pipeline was removed. It called
-                # self.db_hub.word_operations and .title_operations, neither of
-                # which exists on DatabaseHub, so it raised AttributeError on
-                # every file with a title, logged it, and always returned False.
-                # Titles are stored by the content path instead
-                # (contents_db_service.create_title_content), which is verified
-                # to write titles_content rows. Keeping the local so the
-                # "Stored Components" report below is unchanged in shape.
-                title = self._extract_title(result, file_info)
-                title_stored = False
-                
-                self.stats['files_stored'] += 1
-                self.stats['files_processed'] += 1
-                
-                # ========== STORAGE COMPLETE - CLEAR SUCCESS MESSAGE ==========
-                # This message appears AFTER all storage operations are complete
-                file_name = file_info.get('name', 'unknown')
-                file_path = file_info.get('path', 'unknown')
-                file_size = file_info.get('size_bytes', 0)
-                file_size_mb = file_size / (1024 * 1024) if file_size > 0 else 0
-                
-                # Build comprehensive storage confirmation message
-                storage_details = []
-                storage_details.append(f"✅ FILE SUCCESSFULLY STORED IN DATABASE")
-                storage_details.append(f"   File: {file_name}")
-                storage_details.append(f"   Path ID: {path_id}")
-                storage_details.append(f"   Source: {effective_source_name} (ID: {source_id})")
-                storage_details.append(f"   Side: {effective_side_name} (ID: {side_id})")
-                storage_details.append(f"   Hash: {file_hash[:16]}...")
-                
-                if file_size_mb > 0:
-                    storage_details.append(f"   Size: {file_size_mb:.2f} MB ({file_size:,} bytes)")
-                
-                # Indicate what was stored
-                stored_components = ["Metadata"]
-                if content_stored and text:
-                    stored_components.append(f"Content ({text_length:,} chars)")
-                elif path_id and not has_content_error:
-                    stored_components.append("Content (empty)")
-                if title_stored:
-                    stored_components.append("Title")
-                if has_content_error:
-                    stored_components.append("Error Information")
-                
-                storage_details.append(f"   Stored Components: {', '.join(stored_components)}")
-                storage_details.append(f"   Status: {'Read' if content_stored and text else 'Unread'}")
-                storage_details.append(f"   Database Record: paths.id = {path_id}")
-                
-                # Log the complete message
-                success_message = "\n".join(storage_details)
-                logger.info(success_message)
-                print(success_message)  # Also print to console for visibility
-                
-                return path_id
-                """  # End of disabled old code block
                 
             except Exception as e:
                 # Use improved error detection from error_handling module
@@ -1525,7 +1201,7 @@ class StoragePipeline:
                             time.sleep(1.0)
                             continue
                         else:
-                            logger.error(f"Failed to reconnect, will retry entire operation")
+                            logger.error("Failed to reconnect, will retry entire operation")
                             time.sleep(2.0 * retry_count)  # Exponential backoff
                             continue
                     
@@ -1973,8 +1649,6 @@ class StoragePipeline:
             return None
         
         try:
-            from datetime import datetime
-            
             # Extract dates using ContentProcessor patterns
             dates_found = []
             
