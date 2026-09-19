@@ -273,6 +273,7 @@ use, and the new AST guard proves it).
 | `tests/unit/test_discovery_contract.py` (11 tests) | symlinks and not-ingested accounting |
 | `tests/integration/test_readiness_login_check.py` | first-run readiness semantics |
 | `tests/integration/test_status_persisted.py` (11 tests) | `Read`/`Unread` + `processing_status` end-to-end |
+| `tests/conftest.py` (`prepare_web_app`, autouse session fixture) | test-order dependence: the Flask app is configured before any test can dispatch a request, because `add_url_rule` cannot be called after the first one - the readiness login check used to break every later `app` fixture |
 
 ---
 

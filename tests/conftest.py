@@ -274,13 +274,60 @@ def pg_db(pg_settings, tmp_path_factory):
     yield cfg
 
 
-@pytest.fixture(scope="session")
-def app(pg_db):
-    """The real Flask application against the disposable database."""
+_WEB_APP_PREPARED = False
+_WEB_APP = None
+
+
+def prepare_web_app():
+    """Apply the test-time app configuration *before any request is dispatched*.
+
+    Flask refuses ``add_url_rule`` once the application has handled a request
+    ("The setup method 'add_url_rule' can no longer be called"), and the ``app``
+    fixture is not guaranteed to run first: the readiness login check and any
+    other in-process check drive the same singleton application. Doing this at
+    session start - rather than lazily in the fixture - is what makes the suite
+    order-independent; the fixture keeps only the state that genuinely needs a
+    live database (the initialisation marker).
+
+    Idempotent: importing twice, or calling from more than one place, must not
+    double-register the route.
+    """
+    global _WEB_APP_PREPARED, _WEB_APP
+    if _WEB_APP_PREPARED:
+        return _WEB_APP
+
     from apps.web.app import app as flask_app
 
     flask_app.config["TESTING"] = True
     flask_app.config["WTF_CSRF_ENABLED"] = False  # API-level tests fetch tokens explicitly
+
+    # API-01: per-route limits would trip the ~30 login fixtures; individual
+    # rate-limit tests re-enable the limiter explicitly.
+    from core.security.rate_limit import limiter as _limiter
+    _limiter.enabled = False
+
+    if "_test/sec08/boom" not in {r.rule for r in flask_app.url_map.iter_rules()}:
+        def _boom():
+            raise RuntimeError("SECRET postgresql://user:pass@host/db leaked")
+
+        flask_app.add_url_rule("/_test/sec08/boom", view_func=_boom, endpoint="_sec08_boom")
+
+    _WEB_APP = flask_app
+    _WEB_APP_PREPARED = True
+    return flask_app
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _prepared_web_app():
+    """Prepare the Flask app before the first test, whatever it is."""
+    prepare_web_app()
+    yield
+
+
+@pytest.fixture(scope="session")
+def app(pg_db):
+    """The real Flask application against the disposable database."""
+    flask_app = prepare_web_app()
 
     # The setup gate in Api/routes/setup.py redirects EVERY request to /setup
     # unless a filesystem marker exists and the critical tables are present.
@@ -293,17 +340,6 @@ def app(pg_db):
     marker_existed = INIT_MARKER_FILE.exists()
     if not marker_existed:
         mark_system_initialized()
-
-    # API-01: per-route limits would trip the ~30 login fixtures; individual
-    # rate-limit tests re-enable the limiter explicitly.
-    from core.security.rate_limit import limiter as _limiter
-    _limiter.enabled = False
-
-    # Pre-register test-only routes (must happen before the first request).
-    if "_test/sec08/boom" not in {r.rule for r in flask_app.url_map.iter_rules()}:
-        def _boom():
-            raise RuntimeError("SECRET postgresql://user:pass@host/db leaked")
-        flask_app.add_url_rule("/_test/sec08/boom", view_func=_boom, endpoint="_sec08_boom")
 
     yield flask_app
 
