@@ -1333,8 +1333,18 @@ class StoragePipeline:
         ):
             return "unsupported", error_text[:STATUS_DETAIL_MAX_LENGTH]
 
-        # 2. Explicit extraction failure.
+        # 2. Explicit extraction failure - except a held file, which is not a
+        #    failed one. The artifact is fine; something else has it open.
+        #    The stored vocabulary has no 'locked' state (the CHECK constraint
+        #    from migration 0007), so the distinction is carried visibly in
+        #    status_detail and counted as OUTCOME_LOCKED by the run's ledger.
+        #    The marker list is shared with classify_result, so the row and the
+        #    accounting cannot disagree about what "locked" means.
         if error_text:
+            from pipeline.progress_ledger import LOCK_ERROR_MARKERS
+
+            if any(marker in lowered for marker in LOCK_ERROR_MARKERS):
+                return "failed", f"locked: {error_text}"[:STATUS_DETAIL_MAX_LENGTH]
             return "failed", error_text[:STATUS_DETAIL_MAX_LENGTH]
 
         # 3. Deliberately skipped (icon, below the reader's size floor, ...).

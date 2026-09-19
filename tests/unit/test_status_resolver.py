@@ -139,3 +139,44 @@ def test_non_dict_content_does_not_raise():
 
 def test_non_dict_extraction_info_does_not_raise():
     assert _resolve({"extraction_info": "not a dict"})[0] == "processed"
+
+def test_a_held_file_is_failed_but_says_it_was_locked():
+    """Windows/POSIX lock: retryable, not a defect of the artifact.
+
+    The stored vocabulary (migration 0007's CHECK constraint) has no 'locked'
+    value, so the distinction has to survive in status_detail - an operator
+    triaging 'failed' rows must be able to tell a retry from a real failure.
+    """
+    state, detail = _resolve(
+        {"error": "[WinError 32] The process cannot access the file because it"
+                  " is being used by another process"}
+    )
+
+    assert state == "failed"
+    assert detail.startswith("locked:"), detail
+    assert "another process" in detail
+
+
+def test_a_normal_error_is_not_labelled_locked():
+    state, detail = _resolve({"error": "invalid PDF structure"})
+
+    assert state == "failed"
+    assert not detail.startswith("locked:"), detail
+
+
+def test_the_row_and_the_run_agree_on_what_locked_means():
+    """The resolver (row) and classify_result (accounting) must not diverge."""
+    from pipeline.progress_ledger import OUTCOME_LOCKED, classify_result
+
+    contents = [
+        {"error": "[WinError 32] being used by another process"},
+        {"error": "Permission denied: '/x/y.pdf'"},
+        {"error": "resource temporarily unavailable"},
+        {"error": "invalid PDF structure"},
+    ]
+    for content in contents:
+        state, detail = _resolve(content)
+        outcome = classify_result(content)
+        assert (detail.startswith("locked:") is (outcome == OUTCOME_LOCKED)), (
+            f"row says {detail!r} while the ledger says {outcome!r}: {content}"
+        )

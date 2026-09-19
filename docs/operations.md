@@ -35,3 +35,98 @@ configuration follows defaults < settings file < environment.
 * Job events (DB) + correlation ids in server logs trace any file from
   discovery to database write.
 * `verify_readiness.py` includes job-infrastructure checks (tables present).
+  Run it after any deployment change; `READINESS: READY` is the gate.
+
+## Status model and triage
+
+Two stored columns answer two different questions, and they are not
+interchangeable:
+
+* `paths.file_status` — `Read` when the artifact yielded content, `Unread`
+  otherwise. A deliberately skipped file (for example an image below the
+  reader's minimum size), an unsupported type and a failed read are all
+  `Unread`; *why* is in the second column.
+* `paths.processing_status` — the stored outcome. The schema (migration 0007)
+  permits `processed`, `partially_processed`, `failed`, `unsupported`,
+  `skipped`, and the job layer adds the in-flight `discovered`, `queued`,
+  `processing`, `retrying`. `status_detail` carries the reason
+  (`too_small`, `ocr_required_engine_unavailable`, …), with `attempts` and
+  `status_updated_at`.
+
+The *run's* accounting uses a wider vocabulary than the column: `completed`,
+`failed`, `skipped`, `unsupported`, `retryable`, `locked`, `cancelled` (see
+the invariant section). In particular **`locked` has no column value**: a file
+held open by another process is stored as `failed` with a `status_detail`
+beginning `locked:` — the artifact is fine and the read is retryable once the
+holder releases it, and the run counts it as `locked`, not as a failure. The
+marker list is shared between the two layers, so the row and the accounting
+cannot disagree.
+
+```sql
+-- what needs attention, without reading rows one by one
+SELECT processing_status, COUNT(*) FROM paths GROUP BY processing_status;
+SELECT file_name, status_detail, attempts FROM paths
+ WHERE processing_status = 'failed' ORDER BY status_updated_at DESC;
+
+-- held files, which are retryable rather than broken
+SELECT file_name, status_detail FROM paths
+ WHERE file_status = 'Unread' AND status_detail LIKE 'locked:%';
+
+-- a run is only complete when every discovered object has a terminal state
+SELECT processing_status, COUNT(*) FROM paths
+ WHERE processing_status IN ('discovered', 'queued', 'processing') GROUP BY 1;
+```
+
+## Identity, provenance and where "detected as" lives
+
+Every artifact also records *how it was identified*, as structured provenance
+in `paths.extraction_provenance` (JSONB), under `detection`:
+
+```json
+{"detection": {"declared_name": "report.pdf", "declared_extension": ".pdf",
+               "detected_extension": ".zip", "format_id": "zip",
+               "format_family": "archive", "mime_type": "application/zip",
+               "detection_method": "magic-bytes", "detection_confidence": "certain",
+               "extension_mismatch": true,
+               "features": {...}, "evidence": [...], "discrepancies": [...]}}
+```
+
+Long lists are truncated with an explicit `*_total` count rather than silently
+dropped. This record is **metadata about the artifact, not its content**: it is
+deliberately *not* part of the file's text, so it never appears as body text in
+the content viewer or in search results (a mismatch is still findable, by
+query, which keeps every hit explicable):
+
+```sql
+SELECT file_name FROM paths
+ WHERE (extraction_provenance -> 'detection' ->> 'extension_mismatch') = 'true';
+SELECT file_name FROM paths
+ WHERE extraction_provenance -> 'detection' ->> 'format_family' = 'archive';
+```
+
+The same JSON is returned by the file-details API
+(`GET /api/file/<id>/details`) and coerced/validated by
+`Api/services/lineage_service.py`, so what an examiner sees matches what is
+stored.
+
+## Accounting invariants
+
+The run reports one denominator (everything discovered, including archive
+members, email attachments and embedded objects) and one bucket per outcome.
+`GET /api/jobs/summary` and the persisted job statistics carry the same keys:
+
+```
+discovered = completed + failed + skipped + unsupported + retryable
+           + locked + cancelled + in_progress + pending
+```
+
+Terminal buckets are reported by the job statistics and the live ingest
+payload; the CLI summary prints them too (including `locked` and `cancelled`
+when non-zero), so no object can be in a state the operator cannot see.
+
+`containers_in_flight` / `container_work_outstanding` say whether a container
+still has nested work to settle; a run is not complete while they are non-zero,
+however the buckets read. Per-container attribution (`children_by_parent`) is
+bounded for memory, and the exactly-counted remainder is in
+`children_by_parent_overflow`, so map plus overflow always equals the nested
+total.

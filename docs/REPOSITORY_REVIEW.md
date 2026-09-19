@@ -207,6 +207,15 @@ use, and the new AST guard proves it).
   `map + overflow` stays exact wherever attribution is shown.
 * **C-3 bounded attribution counter**: folding a container's entry into the
   overflow bucket did not decrement the "containers with nested work" counter.
+* **C-5 `locked` had no stored representation.** The ledger counts a held file
+  as `locked` (retryable, not a defect), but the column vocabulary from
+  migration 0007 has no such value, so the stored row said `failed` with prose
+  the operator had to interpret. A locked read now carries a `locked:` prefix
+  in `status_detail`, produced from the *same* marker list `classify_result`
+  uses, and `tests/unit/test_status_resolver.py` asserts the row and the
+  accounting can never disagree. `docs/operations.md` now documents both
+  vocabularies, the triage queries, the identity/`extraction_provenance`
+  location (metadata, deliberately not content) and the accounting invariant.
 * **C-4 compute-mode policy** (`6e1af06`): precedence CLI flag → `COMPUTE_MODE`
   env → `processing.compute_mode` → default, refusal with the exact remedy for
   a GPU-only run on a CPU-only host, no silent substitution; guarded by
