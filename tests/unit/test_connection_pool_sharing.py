@@ -232,3 +232,32 @@ def test_small_pool_advice_is_logged_once_per_pool(pg_db, caplog):
         for handle in handles:
             handle.close_all()
         reset_connection_pools()
+
+
+def test_failed_initialization_does_not_leak_a_pool_reference(pg_db, monkeypatch):
+    """A handle that failed to initialize must not pin the shared pool.
+
+    ``_initialize_pool`` takes a reference to the shared pool before the
+    advice/schema-repair steps. If one of those raises, the reference has to be
+    given back - otherwise the pool is never closed, even after every usable
+    handle has been closed, and it leaks a server-side backend for the life of
+    the process.
+    """
+    from database.database import database as db_module
+
+    baseline = _make_database()
+    try:
+        shared = baseline._shared
+        refs_before = shared.refs
+
+        def _explode():
+            raise RuntimeError("schema repair failed")
+
+        monkeypatch.setattr(db_module.Database, "_ensure_large_file_sizes", _explode)
+        with pytest.raises(ConnectionError):
+            _make_database()
+
+        assert shared.refs == refs_before, "failed init leaked a pool reference"
+        assert baseline._pool is shared.pool, "the working handle lost its pool"
+    finally:
+        baseline.close_all()

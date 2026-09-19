@@ -401,6 +401,12 @@ class Database:
             self._ensure_large_file_sizes()
                 
         except Exception as e:
+            # Release the reference taken above: without this, a handle whose
+            # initialization failed (advice or schema repair raising) left a
+            # reference on the shared pool forever, so the pool was never
+            # closed even after every usable handle had been released.
+            if self._shared is not None:
+                _release_shared_pool(self._shared)
             self._shared = None
             logger.error(f"Failed to initialize connection pool: {e}")
             # Re-raise the exception so callers know initialization failed
