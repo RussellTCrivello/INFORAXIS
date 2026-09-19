@@ -217,7 +217,8 @@ use, and the new AST guard proves it).
   env → `processing.compute_mode` → default, refusal with the exact remedy for
   a GPU-only run on a CPU-only host, no silent substitution; guarded by
   `tests/unit/test_compute_mode_policy.py` and
-  `tests/integration/test_cli_compute_refusal.py`.* **C-5 `locked` had no stored representation.** The ledger counts a held file
+  `tests/integration/test_cli_compute_refusal.py`.
+* **C-5 `locked` had no stored representation.** The ledger counts a held file
   as `locked` (retryable, not a defect), but the column vocabulary from
   migration 0007 has no such value, so the stored row said `failed` with prose
   the operator had to interpret. A locked read now carries a `locked:` prefix
