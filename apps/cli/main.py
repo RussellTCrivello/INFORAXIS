@@ -3,7 +3,6 @@ import os
 import hashlib
 from pathlib import Path
 import sys
-import importlib
 from typing import List, Optional
 
 # Ensure UTF-8 encoding for stdout on Windows (emoji progress output)
@@ -28,40 +27,33 @@ def safe_print(message: str) -> None:
         safe_message = message.encode('ascii', 'replace').decode('ascii')
         print(safe_message)
 
-# CRITICAL: Protect standard library logging module BEFORE any other imports
-# This is especially important for multiprocessing spawn on Windows
-# PROBLEM: importlib.import_module('logging') returns cached module from sys.modules if it exists
-# SOLUTION: Always delete from sys.modules first, then import fresh
-if 'logging' in sys.modules:
-    # Check if it's the standard library module by checking for multiple standard attributes
-    _cached = sys.modules['logging']
-    _is_stdlib = (
-        hasattr(_cached, 'getLogger') and 
-        hasattr(_cached, 'INFO') and 
-        hasattr(_cached, 'DEBUG') and
-        hasattr(_cached, 'WARNING') and
-        hasattr(_cached, 'ERROR') and
-        hasattr(_cached, 'basicConfig') and
-        # managers.logging package won't have these
-        hasattr(_cached, 'Formatter') and
-        hasattr(_cached, 'StreamHandler')
+# Standard-library logging, imported normally.
+#
+# This file used to delete ``logging`` from ``sys.modules`` and re-import it
+# ("protect the standard library logging module"), on the theory that a
+# multiprocessing spawn or a stray ``managers.logging`` could poison the cached
+# module. Re-importing does not protect anything: it executes the module again
+# and creates a *second* logging universe (fresh root logger, manager, handler
+# registry and level state). Every module that had already imported logging -
+# the web app, the database layer, any library, the test harness - keeps
+# logging into the first universe, while code imported afterwards logs into the
+# second, so handlers and levels configured on one side silently do not apply
+# to the other. Observed in the suite: a warning logged through the new root
+# never reached pytest's capture handler (caplog.records was empty while the
+# message appeared on stderr).
+#
+# What is worth guarding is the real failure the comment was reaching for: a
+# local module shadowing the stdlib. Refuse loudly instead of re-importing.
+import logging
+
+if not (hasattr(logging, "getLogger") and hasattr(logging, "basicConfig")
+        and hasattr(logging, "Formatter")):
+    raise ImportError(
+        "'logging' resolved to a module that is not the standard library "
+        "(a local logging.py / logging/ package is shadowing it). Remove it "
+        "from the import path; do not re-import logging through sys.modules, "
+        "which splits the process into two logging configurations."
     )
-    if not _is_stdlib:
-        # It's been replaced with managers.logging - delete it
-        del sys.modules['logging']
-    else:
-        # Even if it looks correct, delete and reload to ensure freshness in multiprocessing
-        # This prevents any subtle corruption issues
-        del sys.modules['logging']
-
-# Now import fresh from standard library (importlib will load from file, not cache)
-logging = importlib.import_module('logging')
-# Ensure it's cached as the standard library module
-sys.modules['logging'] = logging
-
-# Final verification before using
-if not hasattr(logging, 'getLogger'):
-    raise ImportError("Failed to import standard library logging module. sys.modules['logging'] is corrupted.")
 
 logger = logging.getLogger(__name__)
 

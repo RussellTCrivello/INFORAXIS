@@ -149,6 +149,34 @@ what would have caught it earlier, i.e. why the existing safeguards did not.
 * **Verification**: `tests/integration/test_cli_compute_refusal.py` and
   `tests/integration/test_cli_parity.py` green; `pyflakes` clean on the file.
 
+### R-10 (high) The CLI split the process into two logging configurations
+
+* **Symptom**: after a CLI integration test ran, a warning logged by the
+  database layer was visibly printed to stderr but never reached pytest's
+  capture handler, so `tests/unit/test_connection_pool_sharing.py` failed with
+  "advice emitted 0 times for one pool" - a *different* module's test failing
+  because of an earlier import. In production the same split means handlers and
+  levels configured by the web app or the CLI do not cover modules imported on
+  the other side of it: half the process's log output can be lost, duplicated or
+  misformatted, which is exactly the sort of silent failure this review is
+  meant to remove.
+* **Root cause**: `apps/cli/main.py` deleted `logging` from `sys.modules` and
+  re-imported it ("protect standard library logging module"), which executes
+  the module a second time and creates a second root logger, manager and
+  handler registry. Python's import system already guarantees the stdlib
+  module; re-importing cannot protect it, and the two-universe state is the
+  actual hazard.
+* **Introduced by**: the initial commit (`7cc3421`).
+  **Fixed here**: plain `import logging` plus a loud `ImportError` when a local
+  module shadows the stdlib (with the remedy in the message).
+* **Why the safeguards missed it**: the defect only manifests *across* test
+  files (it needs an earlier import of the CLI), so per-file runs were green.
+  It was found while bisecting an order-dependent failure.
+* **Verification**: `tests/unit/test_logging_module_integrity.py` pins the
+  module/root/manager identity and the capture consequence; restoring the hack
+  in a scratch copy fails both tests. The previously failing combination
+  (CLI + status + pool tests) now passes.
+
 ### R-7 (medium) Symlinks and special files disappeared from the accounting
 
 * **Symptom**: discovery dropped anything that was neither a regular file nor a
@@ -235,6 +263,7 @@ use, and the new AST guard proves it).
 | Guard | Locks out |
 | --- | --- |
 | `tests/unit/test_logger_shadowing.py` (3 tests) | use-before-bind `logger` shadowing, repo-wide, with self-tests proving the scan can fail and does not over-report |
+| `tests/unit/test_logging_module_integrity.py` (2 tests) | an entry point replacing the stdlib `logging` module (two logging universes) |
 | `tests/unit/test_ppt_legacy_read.py` (5 tests) | `.ppt`/`.pot`/`.pps` regression, "missing file still reports File not found", router hand-off |
 | `tests/unit/test_resource_coordinator_policy.py` (15 tests) | worker-ceiling policy: no hard cap of 4, memory bound, per-instance split, stale-instance filter, CPU saturation ≠ overload, memory pressure reduction, never zero, restore ≤ live-instance ceiling, monitor loop not re-implementing thresholds |
 | `tests/unit/test_content_vs_identity.py` | identity metadata reaching the content channel |
