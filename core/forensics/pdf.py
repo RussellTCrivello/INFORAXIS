@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 #: Caps. Chosen so that a pathological PDF cannot exhaust memory or the disk.

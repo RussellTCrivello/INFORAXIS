@@ -39,7 +39,6 @@ import os
 import sys
 import threading
 import time
-from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent

@@ -146,6 +146,30 @@ def _configured_max_file_timeout() -> float:
         pass
     return MAX_FILE_TIMEOUT_S
 
+
+def _configured_base_file_timeout(default: int = 1200) -> int:
+    """``processing.file_processing_timeout``: the per-file base cost, in seconds.
+
+    Single source of truth for the base budget. The run's first attempt and the
+    deadline watchdog must agree on it: when the watchdog looked the value up on
+    its own through an unbound local it raised NameError, swallowed it, and
+    extended every deadline by a constant 300 s instead of the configured
+    budget - so the documented adaptive scaling did not apply to extensions.
+    """
+    try:
+        from settings.config import get_processing_config
+
+        value = getattr(get_processing_config(), 'file_processing_timeout', None)
+        if value:
+            return int(value)
+    except Exception as exc:  # config missing/unreadable: fall back, but say so
+        logger.warning(
+            "Could not get processing config, using default file timeout %ss: %s",
+            default, exc,
+        )
+        return default
+    return default
+
 #: How many per-file result dictionaries ``process_folder`` keeps in memory by
 #: default.  Each carries the extracted content (~5 KB measured), so retaining
 #: every result of a large corpus would hold the whole extraction in RAM.
@@ -354,6 +378,9 @@ class IntegratedFileReader:
         self.max_file_timeout_s = float(
             max_file_timeout_s or _configured_max_file_timeout()
         )
+        #: Base per-file budget actually used by the current run; set by
+        #: process_folder and read by the deadline watchdog (_file_window).
+        self._base_file_timeout: Optional[int] = None
         #: Set when work was discovered but never processed: the run is partial
         #: and every completion message must say so (see process_folder).
         self._partial_run = False
@@ -1167,19 +1194,16 @@ class IntegratedFileReader:
                 return ThreadPriority.NORMAL  # Small files also get normal priority (all files prioritized)
 
         # Get base timeout from processing config (default: 1200 seconds = 20 minutes)
-        try:
-            processing_cfg = get_processing_config()
-            base_timeout = getattr(processing_cfg, 'file_processing_timeout', 1200)
-            if base_timeout < 600:
-                logger.warning(
-                    f"File processing timeout ({base_timeout}s) is less than recommended minimum (600s). "
-                    f"Large files may timeout. Consider increasing to at least 1200s."
-                )
-            logger.info(f"Using file processing timeout: {base_timeout}s (base) with dynamic scaling for large files")
-        except Exception as e:
-            logger.warning(f"Could not get processing config, using default timeout: {e}")
-            base_timeout = 1200  # 20 minutes default
-            logger.info(f"Using fallback timeout: {base_timeout}s")
+        base_timeout = _configured_base_file_timeout()
+        # Keep the resolved value: the deadline watchdog (_file_window) must use
+        # the same base budget this run used.
+        self._base_file_timeout = base_timeout
+        if base_timeout < 600:
+            logger.warning(
+                f"File processing timeout ({base_timeout}s) is less than recommended minimum (600s). "
+                f"Large files may timeout. Consider increasing to at least 1200s."
+            )
+        logger.info(f"Using file processing timeout: {base_timeout}s (base) with dynamic scaling for large files")
 
         def calculate_file_timeout(file_info: Dict[str, Any], base_timeout: int) -> int:
             """This reader's timeout budget (see ``file_timeout_seconds``)."""
@@ -2367,11 +2391,25 @@ class IntegratedFileReader:
         return False
 
     def _file_window(self, entry: list) -> float:
-        """The base window for an entry (recomputed from its file info)."""
+        """The base window for an entry (recomputed from its file info).
+
+        This used to call ``calculate_file_timeout``, a closure local to
+        ``process_folder`` that does not exist in this scope; the NameError was
+        swallowed and every entry silently got the 300 s fallback, so a large
+        container was extended on a window unrelated to its size or to the
+        configured base timeout. It now uses the same module-level budget the
+        run used (``self._base_file_timeout``), with the configured value as the
+        fallback when a window is asked for outside a run.
+        """
         file_info = entry[2]
+        base = getattr(self, '_base_file_timeout', None) or _configured_base_file_timeout()
         try:
-            return float(max(30, calculate_file_timeout(file_info, self.base_timeout)))
-        except Exception:
+            return float(max(30, file_timeout_seconds(
+                file_info, base, self._observed_bytes_per_second(),
+                max_timeout=self.max_file_timeout_s,
+            )))
+        except Exception as exc:
+            logger.debug("Could not compute a file window (%s); using 300s", exc)
             return 300.0
 
     def _wait_for_thread(self, thread, poll_s: float = 0.25) -> bool:

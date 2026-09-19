@@ -57,6 +57,9 @@ docx2txt>=0.8                         # [WIN-NATIVE] DOCX text extraction
 RTFDE>=0.1                            # [WIN-NATIVE] compressed/embedded RTF support
 compressed-rtf>=1.0                   # [WIN-NATIVE] RTF compression decoding
 olefile>=0.47                         # [WIN-NATIVE] OLE container inspection
+oletools>=0.60                        # [WIN-NATIVE] MS-OVBA macro source decompression
+                                      #   (core/forensics/vba.py); without it macro source is
+                                      #   reported as unavailable instead of extracted
 
 # -----------------------------------------------------------------------------
 # Images and OCR

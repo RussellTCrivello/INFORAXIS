@@ -66,7 +66,6 @@ def _reader(ledger=None, **kwargs):
 def test_container_members_are_all_processed_when_the_file_budget_expires(
         container_corpus, monkeypatch):
     import pipeline.integrated_reader as reader_module
-    from pipeline.progress_ledger import ProgressLedger
 
     # A deliberately tiny per-file budget: 2 s is far less than the time needed
     # to process 300 members, which is what the 1 322 s budget was for the
@@ -118,8 +117,6 @@ def test_container_members_are_attributed_to_their_container(container_corpus):
 
 def test_statistics_report_nested_work_not_the_retained_window(container_corpus):
     """The CLI's "Total Files" came from len(results) - a bounded window."""
-    from pipeline.progress_ledger import ProgressLedger
-
     with _reader() as reader:
         results = reader.process_folder(str(container_corpus))
         stats = reader.get_statistics()
@@ -131,3 +128,44 @@ def test_statistics_report_nested_work_not_the_retained_window(container_corpus)
     # authority and is what the reports must use.
     assert len(results) <= MEMBER_COUNT + 1
     assert stats["partial_run"] is False
+
+
+def test_deadline_window_uses_the_run_budget_not_a_constant():
+    """The watchdog window must scale with the file, as ``file_timeout_seconds`` does.
+
+    ``_file_window`` used to call ``calculate_file_timeout``, a closure local to
+    ``process_folder``: the NameError was caught and every entry silently got the
+    300 s fallback, so a multi-gigabyte container was extended on a window that
+    had nothing to do with its size or with the configured base timeout.
+    """
+    from pipeline.integrated_reader import IntegratedFileReader, file_timeout_seconds
+
+    reader = IntegratedFileReader(max_workers=1)
+    reader._base_file_timeout = 1200
+    file_info = {"size_bytes": 4 * 1024 ** 3, "path": "huge.pst"}
+    entry = [None, None, file_info, None]
+
+    window = reader._file_window(entry)
+    expected = float(max(30, file_timeout_seconds(
+        file_info, 1200, reader._observed_bytes_per_second(),
+        max_timeout=reader.max_file_timeout_s,
+    )))
+    assert window == expected
+    assert window > 300.0, "fell back to the constant instead of the budget"
+
+
+def test_deadline_window_falls_back_to_the_configured_base_outside_a_run():
+    """Called outside a run it still uses configuration, never a hard-coded 300 s."""
+    from pipeline.integrated_reader import (
+        IntegratedFileReader, _configured_base_file_timeout, file_timeout_seconds,
+    )
+
+    reader = IntegratedFileReader(max_workers=1)
+    reader._base_file_timeout = None
+    file_info = {"size_bytes": 8 * 1024 ** 3, "path": "huge.pst"}
+    expected = float(max(30, file_timeout_seconds(
+        file_info, _configured_base_file_timeout(), 0.0,
+        max_timeout=reader.max_file_timeout_s,
+    )))
+    assert reader._file_window([None, None, file_info, None]) == expected
+    assert expected > 300.0

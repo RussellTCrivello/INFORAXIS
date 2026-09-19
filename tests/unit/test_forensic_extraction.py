@@ -11,7 +11,6 @@ same result.
 from __future__ import annotations
 
 import hashlib
-import io
 import sys
 import zipfile
 from pathlib import Path

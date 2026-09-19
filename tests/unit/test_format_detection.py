@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import io
 import sys
-import os
-import sys
 import zipfile
 from pathlib import Path
 
@@ -42,7 +40,6 @@ from core.formats import (  # noqa: E402
 
 from _cfb import build_compound_file  # noqa: E402  (test-only CFB writer)
 from core.formats.detection import (  # noqa: E402
-    DISC_ALIAS,
     DISC_BINARY_TEXT,
     DISC_ENCRYPTED,
     DISC_EXTENSION_ABSENT,

@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 import sys
 import importlib
-from typing import Optional
+from typing import List, Optional
 
 # Ensure UTF-8 encoding for stdout on Windows (emoji progress output)
 if sys.platform == 'win32':
@@ -828,14 +828,22 @@ def main_read_folder_sequential(folder_path, storage_source=None, storage_side=N
     print("📊 PROCESSING STATISTICS")
     print(f"{'='*70}")
     
-    ledger_stats = stats.get('ledger') if isinstance(stats, dict) else None
-    ledger_stats = ledger_stats or {}
-    total_files = ledger_stats.get('files_discovered') or stats.get('total') or len(results)
-    nested_files = ledger_stats.get('files_nested', 0)
+    # This sequential fallback path tracks its own counters and has no progress
+    # ledger (the ledger belongs to the streaming reader used by cli_main and
+    # the web front end), so the summary is built from the numbers this path
+    # actually knows. An earlier change read the ledger through an undefined
+    # `stats` name here, which raised NameError before any of the summary
+    # printed - the numbers below can never be fabricated and a file that was
+    # discovered but not stored is still reported as pending.
+    total_files = len(results)
+    # Files extracted from containers are counted separately below ("Extracted
+    # Files Stored"): they are additional artifacts, not a subset of the
+    # top-level total, so they must not be reported as "of which nested".
+    nested_files = 0
     files_stored = stored_count if 'stored_count' in locals() else 0
     duplicate_files = duplicate_count if 'duplicate_count' in locals() else 0
     storage_failed = failed_count if 'failed_count' in locals() else 0
-    pending_files = ledger_stats.get('files_pending', 0)
+    pending_files = storage_failed
 
     print(f"Total Files:            {total_files}")
     if nested_files:
@@ -1792,17 +1800,34 @@ def cli_main(argv=None) -> int:
     parser.add_argument("--verbose", action="store_true", help="Verbose logging")
     args = parser.parse_args(argv)
 
+    # Resolved before the compute-policy block below, which needs to know
+    # whether the caller asked for machine-readable output (the startup proof
+    # is suppressed for --json so the JSON payload stays parseable). Reading it
+    # after that block raised NameError on every invocation.
+    output_json = args.json or args.format == "json"
+
     # The compute policy is applied before anything else: an impossible
     # request (e.g. GPU-ONLY on a host with no GPU) must fail here, not after
     # files have been read, and the selected mode must be visible at startup.
+    #
+    # In --json mode the human-readable policy lines are buffered instead of
+    # discarded: the stream must stay parseable, but a refusal must still say
+    # why it refused. Discarding them (as this call did before) made a
+    # GPU-ONLY run on a GPU-less host exit 1 with no output at all.
+    policy_lines: List[str] = []
     policy_exit = apply_compute_mode(
         args.compute_mode, quiet=args.quiet,
-        printer=(lambda line: None) if output_json else None,
+        printer=(lambda line: policy_lines.append(line)) if output_json else None,
     )
     if policy_exit:
+        if output_json:
+            print(_json.dumps({
+                "success": False,
+                "compute_mode": args.compute_mode or "configured",
+                "error": "compute policy refused this run",
+                "details": {"policy": policy_lines},
+            }))
         return policy_exit
-
-    output_json = args.json or args.format == "json"
 
     def _emit(payload_dict=None, text=None):
         if output_json:

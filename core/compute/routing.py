@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, Optional
+from typing import Dict, FrozenSet, Optional, Tuple
 
 from .capabilities import CPU, DPU, FPGA, GPU, NPU
 

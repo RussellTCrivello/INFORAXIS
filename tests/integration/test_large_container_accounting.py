@@ -208,7 +208,6 @@ class TestEndOfRunSweep:
         ledger = ProgressLedger()
         ledger.add_discovered(1, key='c', initial=True)
         ledger.add_discovered(19_013, key='never-run')
-        reader = self._reader(ledger)
 
         # Simulate the sweep's decision for work nobody touched.
         snapshot = ledger.snapshot()
