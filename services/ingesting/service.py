@@ -534,9 +534,14 @@ class IngestionService:
                 "files_skipped": live.get("files_skipped"),
                 "files_unsupported": live.get("files_unsupported"),
                 "files_retryable": live.get("files_retryable"),
+                "files_locked": live.get("files_locked"),
+                "files_cancelled": live.get("files_cancelled"),
                 "files_in_progress": live.get("in_progress"),
                 "files_pending": live.get("files_pending"),
                 "children_by_parent": live.get("children_by_parent"),
+                "children_by_parent_overflow": live.get("children_by_parent_overflow"),
+                "containers_in_flight": live.get("containers_in_flight"),
+                "container_work_outstanding": live.get("container_work_outstanding"),
                 # The closing percentage and completion flag. Without these the
                 # final persisted stats describe the counts but not the state the
                 # progress bar should render, so the API's statistics.percent was

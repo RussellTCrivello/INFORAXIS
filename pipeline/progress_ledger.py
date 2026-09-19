@@ -338,6 +338,9 @@ class ProgressLedger:
             for oldest_parent, oldest_count in self.children_by_parent.items():
                 self.children_by_parent_overflow += oldest_count
                 del self.children_by_parent[oldest_parent]
+                self.children_by_parent_containers = max(
+                    0, self.children_by_parent_containers - 1
+                )
                 break
         else:
             self.children_by_parent_containers += 1

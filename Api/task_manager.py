@@ -501,6 +501,8 @@ class FileProcessingTaskManager:
                     skipped = live.get('files_skipped', 0) or 0
                     unsupported = live.get('files_unsupported', 0) or 0
                     retryable = live.get('files_retryable', 0) or 0
+                    locked = live.get('files_locked', 0) or 0
+                    cancelled = live.get('files_cancelled', 0) or 0
                     in_progress = live.get('in_progress', 0) or 0
                     nested = live.get('files_nested', 0) or 0
                     initial = live.get('files_initial', 0) or 0
@@ -520,7 +522,8 @@ class FileProcessingTaskManager:
                     detail_message = (
                         f"Completed: {completed}, Failed: {failed}, "
                         f"Skipped: {skipped}, Unsupported: {unsupported}, "
-                        f"Retryable: {retryable}, Running: {in_progress}, "
+                        f"Retryable: {retryable}, Locked: {locked}, "
+                        f"Cancelled: {cancelled}, Running: {in_progress}, "
                         f"Queued: {pending}"
                     )
                     phase = live.get('current_phase')
@@ -544,6 +547,8 @@ class FileProcessingTaskManager:
                             'skipped': skipped,
                             'unsupported': unsupported,
                             'retryable': retryable,
+                            'locked': locked,
+                            'cancelled': cancelled,
                             'in_progress': in_progress,
                             'pending': pending,
                             'percent': int(percent),

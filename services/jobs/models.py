@@ -68,6 +68,11 @@ def job_to_api(job: Dict[str, Any]) -> Dict[str, Any]:
             "files_skipped": _int(_first(stats, "files_skipped")),
             "files_unsupported": _int(_first(stats, "files_unsupported")),
             "files_retryable": _int(_first(stats, "files_retryable")),
+            # Locked (retryable once the holder releases it) and cancelled
+            # (operator asked to stop) are terminal states too; leaving them out
+            # of the payload made their objects look unaccounted for.
+            "files_locked": _int(_first(stats, "files_locked", "locked")),
+            "files_cancelled": _int(_first(stats, "files_cancelled", "cancelled")),
             # Non-terminal: what is running and what has not started yet. A
             # non-zero pending count is why the bar is legitimately below 100%.
             "files_in_progress": _int(_first(stats, "in_progress", "files_in_progress")),
@@ -78,6 +83,15 @@ def job_to_api(job: Dict[str, Any]) -> Dict[str, Any]:
             # Recursive descendants stay attributable to the container that
             # produced them: {parent_path: children_discovered}.
             "children_by_parent": stats.get("children_by_parent") or {},
+            # Per-container attribution is bounded; nested units beyond the
+            # bound are counted here so map + overflow stays exact.
+            "children_by_parent_overflow": _int(stats.get("children_by_parent_overflow")),
+            # Containers that have published work which has not settled: a run
+            # with work in flight is not finished, however the buckets read.
+            "containers_in_flight": _int(_first(stats, "containers_in_flight")),
+            "container_work_outstanding": _int(
+                _first(stats, "container_work_outstanding")
+            ),
         },
         "result_summary": job.get("result_summary"),
     }

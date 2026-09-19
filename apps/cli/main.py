@@ -299,6 +299,8 @@ def main_read_folder_threaded(folder_path, storage_source=None, storage_side=Non
             retryable_files = snapshot.get('files_retryable', 0)
             skipped_files = snapshot.get('files_skipped', 0)
             unsupported_files = snapshot.get('files_unsupported', 0)
+            locked_files = snapshot.get('files_locked', 0)
+            cancelled_files = snapshot.get('files_cancelled', 0)
 
             print(f"Total Files:            {total_files}")
             if nested_files:
@@ -315,6 +317,11 @@ def main_read_folder_threaded(folder_path, storage_source=None, storage_side=Non
                 print(f"Failed Files:           {failed_files}")
             if retryable_files:
                 print(f"Retryable Files:        {retryable_files}")
+            if locked_files:
+                print(f"Locked Files:           {locked_files}"
+                      f"  (retryable once the holder releases them)")
+            if cancelled_files:
+                print(f"Cancelled Files:        {cancelled_files}")
             if pending_files:
                 print(f"UNPROCESSED (pending):  {pending_files}"
                       f"  <-- run is INCOMPLETE")
