@@ -9,14 +9,13 @@ import tempfile
 import logging
 from typing import Dict, Any, Optional, Set
 
+from core.file_utils import (
+    OPENPYXL_PATH_SUFFIXES, load_spreadsheet_workbook,
+)
+
 from .base_reader import BaseReader
 
-from Hdg_Err_Ex_Log import (
-    handle_error,
-    ErrorCategory,
-    ErrorSeverity,
-    format_validation_error
-)
+
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +347,6 @@ class OfficeFileReader(BaseReader):
                 import zipfile
                 
                 # DOCX files are ZIP archives - extract images from word/media/ folder
-                image_parts = []
                 with zipfile.ZipFile(filepath, 'r') as docx_zip:
                     # List all files in the archive
                     file_list = docx_zip.namelist()
@@ -757,10 +755,7 @@ class OfficeFileReader(BaseReader):
 
 
     #: Suffixes openpyxl accepts when it is handed a *path*.  Anything else has
-    #: to be handed an open binary stream - see ``_load_workbook_by_content``.
-    _OPENPYXL_PATH_SUFFIXES = (".xlsx", ".xlsm", ".xltx", ".xltm")
-
-    def _load_workbook_by_content(self, filepath, openpyxl):
+    def _load_workbook_by_content(self, filepath):
         """Open a spreadsheet by its bytes, not by its filename.
 
         openpyxl refuses a *path* whose extension is not one of its supported
@@ -783,15 +778,13 @@ class OfficeFileReader(BaseReader):
         exact code path they had before.
         """
         suffix = os.path.splitext(filepath)[1].lower()
-        if suffix in self._OPENPYXL_PATH_SUFFIXES:
-            return openpyxl.load_workbook(filepath, data_only=True)
-        logger.info(
-            "Opening %s as a spreadsheet by content (declared suffix %r is not "
-            "a supported openpyxl path suffix)",
-            os.path.basename(filepath), suffix or "(none)",
-        )
-        with open(filepath, "rb") as handle:
-            return openpyxl.load_workbook(handle, data_only=True)
+        if suffix not in OPENPYXL_PATH_SUFFIXES:
+            logger.info(
+                "Opening %s as a spreadsheet by content (declared suffix %r is "
+                "not a supported openpyxl path suffix)",
+                os.path.basename(filepath), suffix or "(none)",
+            )
+        return load_spreadsheet_workbook(filepath, data_only=True)
 
     def read_xlsx_file(self, filepath):
         """Independent XLSX reader function with image extraction and OCR."""
@@ -807,7 +800,7 @@ class OfficeFileReader(BaseReader):
             if not os.path.exists(filepath):
                 return {"error": "File not found", "filepath": filepath}
             
-            workbook = self._load_workbook_by_content(filepath, openpyxl)
+            workbook = self._load_workbook_by_content(filepath)
             
             result = {
                 "filepath": filepath,
@@ -1402,9 +1395,12 @@ class OfficeFileReader(BaseReader):
         Read legacy .ppt files by converting to .pptx first.
         Tries LibreOffice conversion, then falls back to python-pptx.
         """
-        if logger is None:
-            logger = logging.getLogger(__name__)
-        
+        # NOTE: this function used to start with ``if logger is None: logger =
+        # logging.getLogger(__name__)``. Assigning the name anywhere in a
+        # function makes it local for the whole function, so that line turned
+        # the ``if`` into an UnboundLocalError before any work happened: every
+        # legacy .ppt/.pot/.pps file failed to read. The module logger already
+        # exists (line 25) and is what the rest of the module uses.
         if not os.path.exists(filepath):
             return {"error": "File not found", "filepath": filepath}
         
@@ -1692,9 +1688,9 @@ class OfficeFileReader(BaseReader):
         """
         try:
             from odf.opendocument import load
-            from odf.draw import Page, Frame, TextBox
+            from odf.draw import Page, TextBox
             from odf.text import P
-            from odf.table import Table, TableRow, TableCell
+            from odf.table import TableRow, TableCell
         except ImportError:
             return {
                 "error": "odfpy not installed. Install with: pip install odfpy",

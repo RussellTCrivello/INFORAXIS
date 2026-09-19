@@ -9,7 +9,7 @@ import stat as stat_module
 import hashlib
 from pathlib import Path
 from datetime import datetime
-from typing import Any, Dict, Iterator, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, Optional
 
 
 #: Files at or above this size are not hashed during discovery. Discovery
@@ -62,6 +62,64 @@ def calculate_file_hash(file_path: str, algorithm: str = 'sha256', chunk_size: i
     
     return hash_obj.hexdigest()
 
+
+
+#: Suffixes openpyxl accepts when it is handed a *path*. It validates the name
+#: before it looks at the bytes and refuses anything else with
+#: "openpyxl does not support .docx file format ...". A file-like object skips
+#: that check, so a spreadsheet whose declared name is something else (an
+#: attachment inherited from its container, for example) must be opened as a
+#: stream. Both the ingestion reader and the preview service used to carry their
+#: own copy of this rule; it lives here so they cannot drift apart.
+OPENPYXL_PATH_SUFFIXES = (".xlsx", ".xlsm", ".xltx", ".xltm")
+
+
+def load_spreadsheet_workbook(file_path: str, *, read_only: bool = False,
+                              data_only: bool = False):
+    """Open a workbook by its bytes when its name is not a supported suffix.
+
+    ``read_only`` and ``data_only`` are passed through unchanged, so the caller
+    keeps deciding whether formulas or cached values are wanted. Raises whatever
+    openpyxl raises for content that is not a workbook.
+
+    The returned workbook owns the stream it was opened from and closes it in
+    its own ``close()``. openpyxl reads from a stream lazily - a ``read_only``
+    worksheet fetches rows on demand - so closing the handle when this function
+    returns (what a ``with`` block does) makes the *first* row read fail with
+    ``ValueError: seek of closed file``. Callers that use ``read_only`` must
+    still call ``close()`` when they are done.
+    """
+    import openpyxl
+
+    suffix = os.path.splitext(str(file_path))[1].lower()
+    if suffix in OPENPYXL_PATH_SUFFIXES:
+        return openpyxl.load_workbook(file_path, read_only=read_only,
+                                      data_only=data_only)
+
+    handle = open(file_path, "rb")
+    try:
+        workbook = openpyxl.load_workbook(handle, read_only=read_only,
+                                          data_only=data_only)
+    except Exception:
+        handle.close()
+        raise
+
+    original_close = workbook.close
+
+    def _close() -> None:
+        try:
+            original_close()
+        finally:
+            try:
+                handle.close()
+            except Exception:  # pragma: no cover - defensive
+                pass
+
+    workbook.close = _close          # type: ignore[method-assign]
+    #: Keeps the stream reachable (and closed by ``close()``) for as long as the
+    #: workbook is alive, instead of depending on garbage collection order.
+    workbook._inforaxis_source_stream = handle
+    return workbook
 
 
 def sanitize_filename(filename: str) -> str:
