@@ -30,10 +30,10 @@ than the evidence supports.
 | --- | --- | --- |
 | `109cf7c`, `7cc3421` | initial project | Several contracts documented only in tests (image size floor, `too_small` skip reason) were never implemented in any commit's source. See R-2. |
 | `f1e0357`, `485d6ee` | "Fix parallel ingestion: thread-safe transactions, honest accounting" | The accounting model was still keyed on the top-level tree; nested container work was invisible. |
-| `688a779` | "Scalability hardening + gateway compute-control layer" | Introduced the CPU-as-overload signal that later starved healthy runs (R-5), and the compute-control layer whose refusal paths were not all exercised. |
+| `688a779` | "Scalability hardening + gateway compute-control layer" | Streaming discovery, journal checkpointing, cached source/side resolution and the compute-control layer; its only router change was honest duplicate reporting. The CPU-as-overload rule it is often blamed for predates it (R-5). |
 | `d94eb76`, `95d945a` | scalability harness + evidence | Evidence files and their limits are recorded, but the measured runs target 100 K–1 M objects, not the 5 TB / multi-million case. |
-| `9cad168` | "Content-based format identification, forensic extraction, exact accounting and explicit compute control" | Introduced the identity record; it was also folded into the *content* channel (R-1), referenced an undeclared `oletools` dependency (C-1), and added dead imports/code (D-1). |
-| `3b66299` | "Fix StoragePipeline class truncation" | Followed a `return` that had made the rest of the class dead; the cleanup left a 319-line dead block and a duplicated fail-safe behind (D-2), and the CLI crash paths it touched were still broken (R-3). |
+| `9cad168` | "Content-based format identification, forensic extraction, exact accounting and explicit compute control" | Introduced the identity record; it was also folded into the *content* channel (R-1), referenced an undeclared `oletools` dependency (C-1), and added dead imports/code (D-1). On the credit side it replaced the original CPU-as-overload throttle and the sequential sub-tree fallback with a memory-based policy (R-5). |
+| `3b66299` | "Fix StoragePipeline class truncation" | Followed a `return` that had made the rest of the class dead. A 319-line disabled block and a duplicated fail-safe stayed in the storage pipeline until this review removed them (D-8), and the CLI crash paths it touched were still broken (R-3). |
 | `c7fde4b` | "Stop re-recognising every image, serialise word inserts, fix Windows test DB probing" | Correct fixes; the word-ordering change is sound (`sorted(set(values))` makes lock acquisition monotone). |
 | `fe23947` | "Open spreadsheets by content, quiet nested sub-runs" | Two conflicting openpyxl rules appeared (D-3) and the workbook was given a stream it did not own (R-4). |
 | `6e1af06` | user-selectable compute mode | Policy is now implemented and tested; the CLI paths that *refused* a mode crashed (R-3). |
@@ -116,19 +116,24 @@ what would have caught it earlier, i.e. why the existing safeguards did not.
 * **Symptom**: on a 2-core host the worker pool was cut from 8 to 2 within
   seconds of starting and stayed there; a 19 566-attachment PST then ran
   strictly serially.
-* **Root cause**: the monitor treated `CPU > 85 %` as overload. An I/O-bound
-  pipeline saturating its cores is the *intended* state; each cycle removed a
-  worker and each reader sub-tree fell back to sequential processing.
-* **Introduced by**: `688a779`. **Fixed by**: the coordinator rewrite in
-  `81dbb10`-era work, completed here: memory is the only throttle signal, the
-  ceiling is `min(cores×2, memory/0.35 GB, 16)` split across live instances,
-  and the reader no longer switches sub-trees to sequential processing under
-  pressure.
-* **Also fixed here**: the monitor restored workers against a *single-instance*
-  ceiling even with a second instance live, and `is_system_overloaded()`'s
-  docstring still advertised the CPU rule. Policy now lives in
-  `_evaluate_pressure()`; `tests/unit/test_resource_coordinator_policy.py`
-  (15 tests) pins it, including "CPU saturation alone changes nothing".
+* **Root cause**: the monitor treated `CPU > 85 %` as overload, and the worker
+  budget was `min(max_workers, 4)`. An I/O-bound pipeline saturating its cores
+  is the *intended* state; each monitoring cycle removed a worker (8 → 2 on a
+  2-core host within seconds), the cap made a configured 8/16-worker host run
+  at 4, and each reader sub-tree fell back to sequential processing under the
+  "overload" flag.
+* **Introduced by**: the original implementation (`7cc3421`) - the CPU rule,
+  the cap and the sequential fallback are all in the first commit.
+  **Fixed by**: `9cad168` (memory is the only throttle signal, ceiling from
+  cores *and* memory, degraded workers instead of sequential sub-trees).
+  **Completed here**: the monitor restored workers against a single-instance
+  ceiling even with a second instance live, and the policy had no tests.
+* **Also fixed here**: `is_system_overloaded()`'s docstring still advertised
+  the removed CPU rule. Policy now lives in `_evaluate_pressure()`;
+  `tests/unit/test_resource_coordinator_policy.py` (15 tests) pins it,
+  including "CPU saturation alone changes nothing", "no hard cap of 4",
+  "restore bounded by the live instance count" and "capacity never reaches
+  zero".
 
 ### R-6 (high) Crash-path regressions in the CLI and the deadline watchdog
 
@@ -182,6 +187,7 @@ what would have caught it earlier, i.e. why the existing safeguards did not.
 | D-5 shadowed `global _LIBS_CACHE` | `reader_file/readers/read_img_fast.py` | Declared for a name the function only reads |
 | D-6 duplicate `os` import | `core/path_utils.py` | The module-level import was shadowed everywhere by the function-local one that is actually used |
 | D-7 unconsumed return values | `apps/cli/main.py` | Both folder entry points print their own summary; the aggregated `results` was never read |
+| D-8 disabled legacy storage block + duplicate fail-safe | `pipeline/storage_pipeline.py` | A 319-line triple-quoted copy of the old `_store_file_sync` (with `_store_content_pipeline`) sat unreachable next to the live implementation; removed in `81dbb10`, with `tests/unit/test_storage_dead_paths.py` asserting no such literal and the new fail-safe contract |
 
 Also reviewed and left alone (deliberate, documented behaviour):
 `verify_readiness.py`'s repeated `def _():` names (the decorator registry
@@ -277,6 +283,42 @@ use, and the new AST guard proves it).
   covered by tests but not by a 5 TB run.
 * Windows-specific behaviour (paths, sharing violations, UnRAR/bsdtar absence)
   is covered by unit tests but not executed here.
+
+---
+
+## 7b. Residual static-analysis debt (deliberately not mass-edited)
+
+`pyflakes` over the whole tree (excluding `tests/`) still reports 274
+findings - 23 f-strings without placeholders, unused typing/stdlib imports and
+unused local variables - concentrated in code this review did not otherwise
+change:
+
+| Area | Findings |
+| --- | --- |
+| `Api/routes` | 69 |
+| `Hdg_Err_Ex_Log` | 28 |
+| `Api/blueprints`, `Api/utils`, `Api/services` | 64 |
+| `reader_file/readers` | 20 |
+| `apps/importing/utils`, `settings`, `concurrency`, `database`, `apps/web`, rest | 93 |
+
+The findings the *updates* introduced were all triaged and cleared in
+`5941cfe` (this review's dead-code pass), so nothing here is a defect that
+recent work added. The legacy remainder is left alone on purpose: mass-editing
+unused imports and f-strings across 20+ legacy modules is churn that would
+touch far more code than it improves, and every edit carries a chance of
+changing behaviour in code with no test coverage. It is recorded here as known
+debt, with its exact size, rather than silently fixed or silently ignored:
+
+```bash
+python -m pyflakes $(git ls-files '*.py' | grep -v '^tests/')
+```
+
+Two of those findings are *not* debt and must stay:
+
+* optional-library availability probes (`import fitz`, `CheckpointManager`,
+  `rarfile`, `py7zr`, `striprtf`, `openpyxl`, …) where the `ImportError` is the
+  check - each is now labelled with a comment saying so;
+* `Hdg_Err_Ex_Log` re-export imports used by callers of those modules.
 
 ---
 
