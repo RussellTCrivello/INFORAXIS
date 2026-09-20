@@ -24,7 +24,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from core.path_safety import configured_ingestion_roots
 from core.security.flask_ext import admin_required, current_user
-from core.security.rate_limit import limiter
+from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 from services.importing.backup_import_service import (
     BackupImportService, BatchImportService,
 )
@@ -463,15 +463,12 @@ def api_list_import_jobs():
 # ===========================================================================
 # Jobs / Operations Center (shared across job types)
 # ===========================================================================
-#: Limit for the read-only endpoints the Jobs page polls while a run is in
-#: progress. The default 60/minute is a budget for *user* requests, not for the
-#: application polling itself every two seconds: with the default in force the
-#: error endpoint answered 429 for the whole duration of a run, so the panel
-#: that explains what failed - the one thing an operator needs during a run -
-#: was never available (observed in a production ingest log, where every poll
-#: of ``/api/jobs/<id>/errors`` was throttled). Higher, still bounded: these
-#: return bounded, in-memory job state and remain behind authentication.
-_JOB_POLL_LIMIT = "600 per minute"
+# The limit below is the project-wide one for read-only endpoints an
+# interactive page calls repeatedly (core.security.rate_limit): the Jobs page
+# polls its progress and error endpoints every couple of seconds during a run,
+# and with the 60/minute default in force the error endpoint answered 429 for
+# the whole duration of a production ingest - the panel that explains what
+# failed was never available. Defined once, used by every such route.
 
 
 @operations_bp.route("/api/jobs", methods=["GET"])
@@ -491,7 +488,7 @@ def api_list_jobs():
 
 
 @operations_bp.route("/api/jobs/<job_id>", methods=["GET"])
-@limiter.limit(_JOB_POLL_LIMIT)
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 def api_get_job(job_id):
     job, err = _job_or_404(job_id)
     if err:
@@ -501,7 +498,7 @@ def api_get_job(job_id):
 
 
 @operations_bp.route("/api/jobs/<job_id>/events", methods=["GET"])
-@limiter.limit(_JOB_POLL_LIMIT)
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 def api_job_events(job_id):
     job, err = _job_or_404(job_id)
     if err:
@@ -516,7 +513,7 @@ def api_job_events(job_id):
 
 
 @operations_bp.route("/api/jobs/<job_id>/errors", methods=["GET"])
-@limiter.limit(_JOB_POLL_LIMIT)
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 def api_job_errors(job_id):
     job, err = _job_or_404(job_id)
     if err:
@@ -527,7 +524,7 @@ def api_job_errors(job_id):
 
 
 @operations_bp.route("/api/jobs/<job_id>/results", methods=["GET"])
-@limiter.limit(_JOB_POLL_LIMIT)
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 def api_job_results(job_id):
     job, err = _job_or_404(job_id)
     if err:

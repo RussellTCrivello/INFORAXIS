@@ -18,7 +18,7 @@ import logging
 from Api.utils import get_processing_statistics, get_statistics
 from Api.services import lineage_service
 from core.errors import client_error
-from core.security.rate_limit import limiter
+from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 from database import (
     create_side, create_source, insert_side, insert_source, get_side, get_side_by_name, get_source, get_source_by_name, get_source_by_id,
     update_source, update_side, search_categories
@@ -1542,6 +1542,7 @@ def register_api_routes(app):
             traceback.print_exc()
             return client_error(e, subsystem='Api.routes.api', success_key='success', status=500)
     
+    @limiter.limit(INTERACTIVE_READ_LIMIT)
     @app.route('/api/file/<int:file_id>/details')
     def api_file_details(file_id):
         """API endpoint for getting file details as JSON"""

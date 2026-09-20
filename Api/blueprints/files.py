@@ -29,7 +29,7 @@ files_bp = Blueprint("files", __name__)
 
 from core.serialization import pack_int_list, unpack_int_list
 from core.errors import client_error, client_safe_message
-from core.security.rate_limit import limiter
+from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 from Api.utils import (
     execute_query, select_info_sources, select_info_sides, select_info_file_types,
     load_text_content, select_classification, compute_percentage, get_content_stats,
@@ -1026,6 +1026,7 @@ def file_detail(file_id):
                          analyst_categories=analyst_categories or [])
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/file/<int:file_id>/content')
 def file_content_lazy(file_id):
     """Lazy load content in chunks"""
@@ -1082,6 +1083,7 @@ def file_export(file_id):
         return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/file/<int:file_id>/content/page')
 def file_content_page(file_id):
     """Get specific content page with pagination info"""
@@ -1461,6 +1463,7 @@ def file_full_content(file_id):
         return redirect(url_for('files.files_list'))
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/api/file/serve', methods=['GET'])
 def serve_file():
     """
@@ -1519,6 +1522,7 @@ def serve_file():
         return client_error(e, subsystem='Api.blueprints.files', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/api/file/<int:file_id>/serve', methods=['GET'])
 def serve_file_by_id(file_id):
     """

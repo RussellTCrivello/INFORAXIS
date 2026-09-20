@@ -11,6 +11,7 @@ from Api.utils import (
 import logging
 from core.serialization import pack_int_list, unpack_int_list
 from core.errors import client_error
+from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 
 logger = logging.getLogger(__name__)
 
@@ -503,6 +504,7 @@ def register_archives_routes(app):
             logger.error(traceback.format_exc())
             return client_error(e, subsystem='Api.routes.archives', success_key='success', status=500)
     
+    @limiter.limit(INTERACTIVE_READ_LIMIT)
     @app.route('/api/archives/files')
     def api_archives_files():
         """API endpoint for getting files associated with an archive item"""
@@ -986,6 +988,7 @@ def register_archives_routes(app):
             logger.error(traceback.format_exc())
             return client_error(e, subsystem='Api.routes.archives', success_key='success', status=500)
     
+    @limiter.limit(INTERACTIVE_READ_LIMIT)
     @app.route('/api/archives/source-categories-keywords')
     def api_source_categories_keywords():
         """API endpoint for getting categories and keywords for a specific source with file counts"""
@@ -1141,6 +1144,7 @@ def register_archives_routes(app):
             logger.error(traceback.format_exc())
             return client_error(e, subsystem='Api.routes.archives', success_key='success', status=500)
     
+    @limiter.limit(INTERACTIVE_READ_LIMIT)
     @app.route('/api/archives/side-categories-keywords')
     def api_side_categories_keywords():
         """API endpoint for getting categories and keywords for a specific side with file counts"""
