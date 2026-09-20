@@ -24,6 +24,16 @@ codebase. Every control listed here has an automated regression test in
 * Password reset strategy: administrators generate a one-time random password
   (`POST /api/auth/users/<id>/reset-password`); all of the target's sessions
   are revoked; the account is flagged `must_change_password`.
+* Lost the last administrator password? The same properties are available
+  offline, to whoever already has access to the host:
+  `python scripts/reset_admin_password.py` (docs/INSTALL.md E11). It scrypt-
+  hashes the new password, writes a one-time password to
+  `<APP_DATA_DIR>/runtime/recovery_admin_password.txt` at `0600`, revokes that
+  account's sessions, clears its lockout and records `user.password_recovery`
+  in the audit log. It never prints the password, never stores plaintext, and
+  refuses to promote or activate an account unless `--promote` / `--activate`
+  is passed explicitly. It cannot be reached over the network: it is a local
+  script, not an endpoint.
 
 ## Authorization (SEC-02)
 

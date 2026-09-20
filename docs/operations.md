@@ -23,6 +23,19 @@
 | Re-ingest same data | safe by design: duplicates detected, nothing double-stored |
 | Backup restore needed | Import Center → Backup (admin) → Validate → Restore |
 | Many small jobs piling up | `JOBS_MAX_CONCURRENT` controls parallel jobs |
+| Nobody can log in (admin password lost) | `python scripts/reset_admin_password.py` — see docs/INSTALL.md E11; other accounts are untouched |
+| Admin account locked/deactivated/demoted | same script with `--activate` / `--promote` (explicit, audited) |
+
+## Account recovery (no data loss)
+
+The administrator password can be recovered locally, without deleting accounts
+or data: `python scripts/reset_admin_password.py` (see
+[docs/INSTALL.md](INSTALL.md#e11-i-forgot-the-admin-password)). It hashes the
+new password with the app's own function, writes a one-time password to the
+runtime directory (owner-only), revokes that account's sessions, clears its
+lockout state and audits the change (`user.password_recovery`). `--list` shows
+which accounts exist; `--promote` / `--activate` cover the cases where the
+first administrator was demoted or switched off.
 
 ## Environment
 
