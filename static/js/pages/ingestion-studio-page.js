@@ -32,6 +32,7 @@ import {
 import { stageLargeFile } from '../modules/upload/large-file-upload.js';
 import {
   examplePathFor,
+  folderStructureAvailable,
   isInside,
   joinRelative,
   shortenPath,
@@ -48,6 +49,8 @@ const state = {
   recursive: true,
   workers: 0,
   checkpoint: 'auto',
+  hashNoticeShown: false,
+  flatFolderNoticeShown: false,
   monitoring: true,
   limits: { direct: 0, chunked: 0, chunkSize: 8 * 1024 * 1024 },
   roots: [],
@@ -231,6 +234,14 @@ function bindPicker() {
     event.stopPropagation();
     fileInput.click();
   });
+  // A browser without webkitdirectory silently turns "Choose folder" into a
+  // plain file picker. Say so on the button rather than pretending the folder
+  // was read; on Windows (Edge/Chrome) this never fires.
+  if (!('webkitdirectory' in folderInput)) {
+    const folderButton = el('pickFolderBtn');
+    folderButton.disabled = true;
+    folderButton.title = msg('This browser cannot send a whole folder — drag it here instead.');
+  }
   el('pickFolderBtn').addEventListener('click', (event) => {
     event.stopPropagation();
     folderInput.click();
@@ -249,8 +260,15 @@ function bindPicker() {
   });
   folderInput.addEventListener('change', () => {
     // webkitdirectory: every file carries its path within the chosen folder,
-    // '/'-separated on all platforms, so the tree is reproduced server-side.
-    addFiles(Array.from(folderInput.files || []));
+    // '/'-separated on all platforms, so the tree is reproduced server-side
+    // (Windows included). If a browser hands over bare names anyway, the
+    // operator is told the folders will not be reproduced - once, not per file.
+    const files = Array.from(folderInput.files || []);
+    if (!folderStructureAvailable(files) && !state.flatFolderNoticeShown) {
+      state.flatFolderNoticeShown = true;
+      pushMessage(msg('This browser did not report the folder structure, so these files are placed without their folders.'), 'warn');
+    }
+    addFiles(files);
     folderInput.value = '';
   });
 
@@ -279,6 +297,10 @@ function bindPicker() {
     if (entries.length) {
       const collected = await collectEntries(entries);
       if (collected.length) {
+        if (!folderStructureAvailable(collected) && !state.flatFolderNoticeShown) {
+          state.flatFolderNoticeShown = true;
+          pushMessage(msg('This browser did not report the folder structure, so these files are placed without their folders.'), 'warn');
+        }
         addFiles(collected);
         return;
       }

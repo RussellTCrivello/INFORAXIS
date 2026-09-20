@@ -93,6 +93,18 @@ are specified for it explicitly:
   message. The other files in the same selection still stage — one impossible
   name never costs the operator the batch.
 
+
+### What the browser must support
+
+Every browser that implements the folder picker (Edge and Chrome on Windows,
+Firefox, Safari) reports where each selected file sits inside the chosen folder,
+and the page preserves that structure. A browser that does not sends bare
+names: the files are then placed without their folders, and the page says so
+once rather than quietly losing the tree. Dropping a folder from Explorer goes
+through the same structure-preserving path (`webkitGetAsEntry`); a browser
+without it is told to use "Choose folder" instead of being handed something
+that is not a file.
+
 ## Classification
 
 Source and Side are mandatory (the engine has always required them) and become

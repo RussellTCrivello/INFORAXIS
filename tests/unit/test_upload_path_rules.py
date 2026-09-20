@@ -89,6 +89,14 @@ out.names = [
   p.relativePathFor({{ name: 'a.txt', webkitRelativePath: 'dir/a.txt' }}),
 ];
 
+// --- did the browser report the folder structure? ------------------------
+out.folders = [
+  p.folderStructureAvailable([]),
+  p.folderStructureAvailable([{{ name: 'a.txt', webkitRelativePath: 'Case 1/a.txt' }}]),
+  p.folderStructureAvailable([{{ file: {{ name: 'b.txt' }}, path: 'Case 1/b.txt' }}]),
+  p.folderStructureAvailable([{{ name: 'a.txt' }}, {{ name: 'b.txt' }}]),
+];
+
 // --- shortening ----------------------------------------------------------
 const deep = 'C:\\\\Evidence\\\\2026\\\\Case 000123\\\\Scans\\\\Batch 4\\\\' + 'x'.repeat(60) + '\\\\report.pdf';
 out.shortened = [p.shortenPath('C:\\\\Data\\\\a.txt', 64), p.shortenPath(deep, 64).length, p.shortenPath(deep, 64).includes('report.pdf')];
@@ -176,3 +184,11 @@ def test_deep_paths_are_shortened_without_losing_the_file_name(rules):
     assert short == "C:\\Data\\a.txt"
     assert length <= 64
     assert keeps_name is True
+
+
+def test_a_folder_selection_without_structure_is_recognisable(rules):
+    folders = rules["folders"]
+    assert folders[0] is True    # nothing selected is nothing to warn about
+    assert folders[1] is True    # a picker that reports webkitRelativePath
+    assert folders[2] is True    # a file walked out of a dropped folder
+    assert folders[3] is False   # only bare names: the tree would be lost

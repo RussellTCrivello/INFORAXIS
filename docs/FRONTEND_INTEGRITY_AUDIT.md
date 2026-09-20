@@ -161,6 +161,11 @@ All 17 `url_for()` targets in `templates/base.html` resolve to registered endpoi
 
 *The `/upload/process-path` 403 is path containment, not authorization — valid ingestion paths succeed for all three roles.*
 
+*Superseded: that endpoint belonged to the second upload interface and was removed with it. The
+same containment check now guards the single interface's server-path mode —
+`POST /api/input/jobs` and the server paths accepted by `POST /api/input/uploads` — so the
+behaviour tabulated above still holds, one URL over.*
+
 ---
 
 ## 7. SECURITY FINDINGS

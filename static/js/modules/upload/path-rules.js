@@ -39,6 +39,20 @@ export function relativePathFor(item) {
   return (file && (file.webkitRelativePath || file.relativePath)) || '';
 }
 
+/**
+ * Did the browser tell us where these files sit inside the folder that was
+ * chosen? Every browser that implements `webkitdirectory` (Edge and Chrome on
+ * Windows, Firefox, Safari) fills `webkitRelativePath` for such a selection; a
+ * browser that does not sends the files flat. Saying so is the difference
+ * between an operator knowing the tree will be reproduced and quietly getting
+ * their folders dropped.
+ */
+export function folderStructureAvailable(items) {
+  const list = Array.from(items || []);
+  if (!list.length) return true;
+  return list.some((item) => Boolean(relativePathFor(item)));
+}
+
 /** What to show (and send) for a selected file: its path within the folder
  *  selection, or its bare name when it was selected on its own. */
 export function displayNameFor(item) {
