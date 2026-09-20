@@ -209,7 +209,30 @@ def _checked_destination(directory: Path, parts):
             f"name and try again.",
             400,
         )
-    return _unique_destination(directory, parts)
+    try:
+        return _unique_destination(directory, parts)
+    except (FileExistsError, NotADirectoryError) as exc:
+        # The client's own names collided: `Case/a.txt` and
+        # `Case/a.txt/inner.txt` cannot both exist, on Windows or anywhere
+        # else, because the first needs `a.txt` to be a file and the second
+        # needs it to be a directory. That is one file's problem - the rest of
+        # the selection still stages - and it is the client's naming, not a
+        # server fault, so it is reported rather than raised as a 500.
+        raise _StagingError(
+            "NAME_CONFLICT",
+            "A file and a folder in this selection have the same name; rename "
+            "one of them and select again.",
+            400,
+        ) from exc
+    except OSError as exc:
+        # Genuinely unwritable staging (permissions, space, a path the
+        # filesystem refuses): a server-side failure, said plainly.
+        logger.warning("staging area could not be prepared for %s: %s", parts, exc)
+        raise _StagingError(
+            "STORAGE_FAILED",
+            "The staging area could not be written to for this file.",
+            500,
+        ) from exc
 
 
 def _unique_destination(directory: Path, parts) -> Path:
@@ -403,9 +426,8 @@ def api_input_upload():
         shutil.rmtree(staged_dir, ignore_errors=True)
         first = failed[0] if failed else {"code": "NO_FILES",
                                           "message": "No valid files provided"}
-        status = {"UPLOAD_TOO_LARGE": 413, "PATH_TOO_LONG": 400, "BAD_NAME": 400}.get(
-            first["code"], 400
-        )
+        status = {"UPLOAD_TOO_LARGE": 413, "PATH_TOO_LONG": 400, "BAD_NAME": 400,
+                  "NAME_CONFLICT": 400, "STORAGE_FAILED": 500}.get(first["code"], 400)
         return _error(first["code"], first["message"], status, details={"failed": failed})
     return jsonify({
         "success": True,

@@ -159,3 +159,43 @@ def test_a_path_within_the_limit_is_reserved_without_overwriting(tmp_path):
     second = _checked_destination(batch, ["Case 1", "report.pdf"])
     assert second != first
     assert second.name == "report (2).pdf"
+
+
+# ------------------------------------------------- client naming collisions --
+def test_a_file_and_a_folder_with_the_same_name_are_reported(tmp_path):
+    """`Case/a.txt` and `Case/a.txt/inner.txt` cannot both exist, anywhere.
+
+    A client can name both in one selection. The second cannot be created, and
+    that is one file's problem: it is reported as a name conflict for that file
+    rather than raised as a server error that loses the whole batch.
+    """
+    batch = tmp_path / "batch"
+    taken = _checked_destination(batch, ["Case", "a.txt"])
+    taken.parent.mkdir(parents=True, exist_ok=True)
+    taken.write_bytes(b"file")
+
+    with pytest.raises(_StagingError) as excinfo:
+        _checked_destination(batch, ["Case", "a.txt", "inner.txt"])
+    assert excinfo.value.code == "NAME_CONFLICT"
+    assert excinfo.value.status == 400
+    assert "rename" in excinfo.value.message
+
+
+def test_unwritable_staging_is_a_storage_failure(tmp_path, monkeypatch):
+    """A filesystem refusal that is not the client's naming is a server fault.
+
+    Permissions, a full disk and a path the filesystem rejects must not be
+    reported as the operator's mistake: they are a 500 with a plain message,
+    while the rest of the selection still stages.
+    """
+    from Api.routes import operations_api
+
+    def refuse(directory, parts):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(operations_api, "_unique_destination", refuse)
+
+    with pytest.raises(_StagingError) as excinfo:
+        _checked_destination(tmp_path / "batch", ["report.pdf"])
+    assert excinfo.value.code == "STORAGE_FAILED"
+    assert excinfo.value.status == 500

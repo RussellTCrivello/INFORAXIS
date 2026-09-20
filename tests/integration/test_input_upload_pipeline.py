@@ -233,6 +233,46 @@ def test_a_batch_where_everything_fails_reports_the_reason(app, admin_client):
     assert error["details"]["failed"][0]["name"] == "bad\x00.txt"
 
 
+def test_a_name_collision_costs_one_file_not_the_batch(
+    app, admin_client, staged_cleanup
+):
+    """`Case/a.txt` (file) and `Case/a.txt/inner.txt` (needs a.txt to be a
+    folder) in one selection: the impossible one is reported by name and the
+    others still stage - never a 500 that loses everything the operator chose.
+    """
+    payload = {
+        "files": [
+            (io.BytesIO(b"a file"), "a.txt"),
+            (io.BytesIO(b"inside what would have to be a folder"), "inner.txt"),
+            (io.BytesIO(b"unrelated"), "other.txt"),
+        ],
+        "relative_paths": json.dumps([
+            "Case/a.txt", "Case/a.txt/inner.txt", "Case/other.txt",
+        ]),
+    }
+    resp = admin_client.post(
+        "/api/input/uploads", data=payload, content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    body = resp.get_json()
+
+    assert body["success"] is True
+    names = sorted(entry["name"] for entry in body["staged"])
+    assert names == ["Case/a.txt", "Case/other.txt"], names
+    _tidy(body["staged"][0]["path"], staged_cleanup)
+
+    assert len(body["failed"]) == 1, body["failed"]
+    failure = body["failed"][0]
+    assert failure["code"] == "NAME_CONFLICT"
+    assert "a.txt" in failure["name"]
+    assert "rename" in failure["message"].lower()
+
+    contents = sorted(
+        pathlib.Path(entry["path"]).read_bytes() for entry in body["staged"]
+    )
+    assert contents == [b"a file", b"unrelated"]
+
+
 def test_upload_without_files_is_refused(app, admin_client):
     resp = admin_client.post(
         "/api/input/uploads", data={}, content_type="multipart/form-data",
