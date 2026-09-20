@@ -94,6 +94,15 @@ are specified for it explicitly:
   name never costs the operator the batch.
 
 
+### Checking the three inputs on the machine that runs the engine
+
+`python scripts\verify_windows_ingestion.py` walks all three inputs against the
+real application on that host - one file, a whole folder (Windows spellings
+included), and a typed server path - plus the names Windows refuses and the
+staged-path limit, and prints PASS/FAIL per check. It ingests nothing (the
+server-path checks are dry runs) and removes the staged files it creates. See
+`docs/windows.md` for what each check proves.
+
 ### What the browser must support
 
 Every browser that implements the folder picker (Edge and Chrome on Windows,
