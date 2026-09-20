@@ -150,6 +150,55 @@ class TestOfficePackageFeatures:
         assert workbook["formulas"][0]["formula"] == "SUM(B1:B9)"
         assert workbook["comments"][0]["text"] == "verify this"
 
+    def test_worksheet_labels_stay_out_of_the_searchable_text(self, tmp_path):
+        """A sheet name and a sheet's state are labels, not body content.
+
+        They are recorded structurally (``sheet_states``/``defined_names``) and
+        are already shown to the examiner as display markers ("Sheet: Sheet1"),
+        so flattening them into the text channel only made a query for "sheet"
+        return every workbook - the label exclusion the pipeline guarantees
+        (tests/integration/test_structural_marker_exclusion.py). Everything
+        that *is* content - a comment, a formula, a tracked deletion - stays.
+        """
+        path = _package(tmp_path / "labels.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+                        {
+                            "xl/workbook.xml": (
+                                '<workbook xmlns="http://schemas.openxmlformats.org/'
+                                'spreadsheetml/2006/main" xmlns:r="http://schemas.'
+                                'openxmlformats.org/officeDocument/2006/relationships">'
+                                '<sheets><sheet name="Sheet1" sheetId="1"/>'
+                                '<sheet name="Data" sheetId="2" state="hidden"/>'
+                                '</sheets><definedNames><definedName name="Rate" '
+                                'hidden="1">Sheet1!$A$1</definedName></definedNames>'
+                                '</workbook>'),
+                            "xl/worksheets/sheet1.xml": (
+                                '<worksheet xmlns="http://schemas.openxmlformats.org/'
+                                'spreadsheetml/2006/main"><sheetData><row r="1">'
+                                '<c r="A1"><f>SUM(B1:B9)</f><v>42</v></c></row>'
+                                '</sheetData></worksheet>'),
+                            "xl/comments1.xml": (
+                                '<comments xmlns="http://schemas.openxmlformats.org/'
+                                'spreadsheetml/2006/main"><commentList><comment ref="A1" '
+                                'authorId="0"><text><t>verify this</t></text></comment>'
+                                '</commentList></comments>'),
+                        })
+        features = extract_package_features(str(path), app="excel")
+        text = text_from_features(features)
+
+        # Content is searchable...
+        assert "verify this" in text, "a comment must stay searchable"
+        assert "SUM(B1:B9)" in text, "a formula must stay searchable"
+        # ...and the labels are not, in any spelling a query could use.
+        for label in ("Sheet1", "Data", "Rate", "hidden", "visible"):
+            assert label not in text, f"structural label {label!r} leaked into the text"
+
+        # The same facts remain recorded exactly, where they belong.
+        workbook = features["workbook"]
+        assert {"name": "Sheet1", "state": "visible"} in workbook["sheet_states"]
+        assert {"name": "Data", "state": "hidden"} in workbook["sheet_states"]
+        assert workbook["defined_names"][0]["name"] == "Rate"
+
     def test_pptx_hidden_slides_notes_and_comments(self, tmp_path):
         path = _package(tmp_path / "deck.pptx",
                         "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",

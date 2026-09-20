@@ -792,16 +792,42 @@ def text_from_features(features: Dict[str, object]) -> str:
     are all content: an examiner searching for a term must find it whether it
     sits in the body or in a tracked change. This returns the parts that the
     body readers do not already emit.
+
+    Identifiers and states are NOT content. A worksheet named "Sheet1", a
+    defined name and a sheet's hidden/visible state are software labels: they
+    are recorded structurally (``extraction_provenance -> forensic_features``,
+    where they can be queried exactly), and flattening them into the text
+    channel made a search for "sheet" return every workbook - the label
+    exclusion the storage pipeline guarantees (see
+    ``tests/integration/test_structural_marker_exclusion.py``). The body
+    readers already print the sheet name as a display marker, so nothing an
+    examiner reads is lost by keeping labels out of the index.
     """
     chunks: List[str] = []
 
+    #: Keys whose value identifies a part or names a state rather than carrying
+    #: document text. (``part``/``ref``/``id``/... were already excluded; the
+    #: identity entries below were the leak.)
+    _STRUCTURAL_KEYS = (
+        "part", "date", "ref", "id", "relationship_id", "anchor", "fmtid",
+        "pid", "author", "initials", "type",
+        "name", "state", "hidden", "local_sheet_id", "refers_to",
+        "scope", "error",
+    )
+
+    #: Whole subtrees that are package inventory: every string in them is an
+    #: identifier (worksheet names and states, defined-name identifiers,
+    #: relationship ids), never body text.
+    _STRUCTURAL_SUBTREES = ("sheet_states", "defined_names", "external_links")
+
     def _collect(value: object, key: str = "") -> None:
         if isinstance(value, str):
-            if key not in ("part", "date", "ref", "id", "relationship_id", "anchor",
-                           "fmtid", "pid", "author", "initials", "type"):
+            if key not in _STRUCTURAL_KEYS:
                 chunks.append(value)
         elif isinstance(value, dict):
             for sub_key, sub_value in value.items():
+                if sub_key in _STRUCTURAL_SUBTREES:
+                    continue
                 _collect(sub_value, sub_key)
         elif isinstance(value, (list, tuple, set)):
             for item in value:
