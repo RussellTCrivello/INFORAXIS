@@ -3,8 +3,11 @@
 ## Normal operation (no terminal required)
 
 1. Log in.
-2. **Input / Ingestion** (`/operations/input`) — upload or point at a
-   server folder, pick source/side, dry-run if desired, Start.
+2. **Input / Ingestion** (`/operations/input`) — the only ingestion screen
+   (the old `/upload` page now redirects here): upload files or a whole folder
+   from the browser, or point at a server folder inside `INGESTION_ROOTS`,
+   pick source/side, dry-run if desired, Start. Files above the single-request
+   limit are staged in resumable chunks without any extra step.
 3. **Jobs** (`/operations/jobs`) — watch progress live; cancel/pause/resume/
    retry as needed; every job keeps its errors, warnings and event log.
 4. **Import Center** (`/operations/import`) — domain data, backup restore
@@ -40,7 +43,10 @@ first administrator was demoted or switched off.
 ## Environment
 
 See docs/job-system.md for the full list (`JOBS_*`, upload limits). All
-configuration follows defaults < settings file < environment.
+configuration follows defaults < settings file < environment. Upload-specific
+knobs: `OPERATIONS_MAX_UPLOAD_MB`, `OPERATIONS_MAX_CHUNKED_UPLOAD_MB`,
+`OPERATIONS_UPLOAD_CHUNK_MB`, and `INGESTION_ROOTS` for server-side paths
+(docs/input-ingestion.md).
 
 ## Monitoring
 

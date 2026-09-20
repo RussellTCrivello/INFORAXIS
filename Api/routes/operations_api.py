@@ -13,9 +13,11 @@ Security model (server-side enforced):
                     IngestionValidationError/... -> HTTP 400 structured error);
 * rate limiting   - strict per-route limits on job creation.
 """
+import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -84,7 +86,17 @@ def _job_or_404(job_id):
 
 
 MAX_UPLOAD_BYTES = int(os.environ.get("OPERATIONS_MAX_UPLOAD_MB", "2048")) * 1024 * 1024
+# Large files are streamed in chunks, so the per-request ceiling above does not
+# have to be the ceiling for the feature. Both numbers are reported by
+# /api/input/options-info so the interface never has to guess a limit.
+MAX_CHUNKED_UPLOAD_BYTES = (
+    int(os.environ.get("OPERATIONS_MAX_CHUNKED_UPLOAD_MB", "20480")) * 1024 * 1024
+)
+CHUNK_SIZE_BYTES = int(os.environ.get("OPERATIONS_UPLOAD_CHUNK_MB", "8")) * 1024 * 1024
 UPLOAD_SUBDIR = "uploads"
+CHUNKED_SUBDIR = "chunked"
+#: A chunked upload id is a uuid4 hex; validated before it is used as a path.
+_UPLOAD_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 def _staged_uploads_dir() -> Path:
@@ -93,6 +105,78 @@ def _staged_uploads_dir() -> Path:
     d = Path(get_data_root()) / UPLOAD_SUBDIR
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def _chunked_root() -> Path:
+    d = _staged_uploads_dir() / CHUNKED_SUBDIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _new_staging_dir() -> Path:
+    """One directory per staged batch, shared by direct and chunked uploads."""
+    d = _staged_uploads_dir() / uuid.uuid4().hex[:12]
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _safe_relative_parts(name: str):
+    """Client-supplied name -> containment-safe relative path parts.
+
+    Browsers send ``sub/dir/file.txt`` for folder selections and a bare name
+    for file selections. ``..``, drive letters, absolute paths and empty
+    segments are dropped, so a staged file can never escape the batch
+    directory (``Path(fs.filename).name`` alone silently flattened folders and
+    let two same-named files overwrite each other).
+    """
+    raw = (name or "").replace("\\", "/")
+    parts = []
+    for part in raw.split("/"):
+        part = part.strip().strip(". ")
+        if not part or part in {".", ".."}:
+            continue
+        part = re.sub(r"[:*?\"<>|]", "_", part)
+        if part:
+            parts.append(part[:200])
+    if not parts:
+        parts = ["upload.bin"]
+    return parts
+
+
+def _unique_destination(directory: Path, parts) -> Path:
+    """Reserve a non-colliding path inside ``directory`` (never overwrite)."""
+    base = directory.joinpath(*parts[:-1])
+    base.mkdir(parents=True, exist_ok=True)
+    stem, suffix = os.path.splitext(parts[-1])
+    candidate = base / parts[-1]
+    counter = 2
+    while candidate.exists():
+        candidate = base / f"{stem} ({counter}){suffix}"
+        counter += 1
+    return candidate
+
+
+def _stream_to(dest: Path, stream, declared_size=None, digest=None):
+    """Copy an upload stream to ``dest``; returns bytes written.
+
+    ``digest`` (a hashlib object) is updated as the bytes go by, so a chunk can
+    be verified against the hash the client computed without reading it twice.
+    """
+    written = 0
+    with open(dest, "wb") as out:
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            written += len(chunk)
+            if declared_size is not None and written > declared_size:
+                raise ValueError("chunk larger than declared")
+            if written > MAX_CHUNKED_UPLOAD_BYTES:
+                raise ValueError("size")
+            if digest is not None:
+                digest.update(chunk)
+            out.write(chunk)
+    return written
 
 
 # ===========================================================================
@@ -105,11 +189,19 @@ def api_input_options_info():
         roots = bool(configured_ingestion_roots())
     except Exception:
         roots = False
+    try:
+        root_list = [str(r) for r in configured_ingestion_roots()]
+    except Exception:
+        root_list = []
     return jsonify({
         "success": True,
         "ingestion_roots_configured": roots,
         "server_path_import_available": roots,
+        "ingestion_roots": root_list,
         "upload_available": True,
+        "max_direct_upload_mb": MAX_UPLOAD_BYTES // (1024 * 1024),
+        "max_chunked_upload_mb": MAX_CHUNKED_UPLOAD_BYTES // (1024 * 1024),
+        "chunk_size_mb": max(CHUNK_SIZE_BYTES // (1024 * 1024), 1),
         "hashing": "sha256-streamed (always on)",
         "deduplication": "identity=(hash,source,side) (always on)",
         "archive_safety": "core.archive_safety (always on)",
@@ -176,44 +268,286 @@ def api_input_upload():
     )
     if not files:
         return _error("NO_FILES", "No files provided", 400)
-    staged_dir = _staged_uploads_dir() / uuid.uuid4().hex[:12]
-    staged_dir.mkdir(parents=True, exist_ok=True)
+    # Folder uploads keep their structure; the client sends the browser's
+    # relative path (if any) for each file, in the same order as the files.
+    names = []
+    if request.form.get("relative_paths"):
+        try:
+            names = json.loads(request.form["relative_paths"])
+        except (TypeError, ValueError):
+            return _error("BAD_PATHS", "relative_paths must be a JSON array", 400)
+        if not isinstance(names, list):
+            return _error("BAD_PATHS", "relative_paths must be a JSON array", 400)
+
+    staged_dir = _new_staging_dir()
     staged = []
     total = 0
-    for fs in files:
-        name = Path(fs.filename or "upload.bin").name  # never trust filenames
-        if not name or name in {".", ".."}:
-            continue
-        dest = staged_dir / name
-        written = 0
+    for index, fs in enumerate(files):
+        supplied = names[index] if index < len(names) else fs.filename
+        dest = _unique_destination(staged_dir, _safe_relative_parts(supplied))
         try:
-            with open(dest, "wb") as out:
-                while True:
-                    chunk = fs.stream.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    written += len(chunk)
-                    total += len(chunk)
-                    if total > MAX_UPLOAD_BYTES:
-                        raise ValueError("size")
-                    out.write(chunk)
+            written = _stream_to(dest, fs.stream, declared_size=MAX_UPLOAD_BYTES)
         except ValueError:
+            dest.unlink(missing_ok=True)
             shutil.rmtree(staged_dir, ignore_errors=True)
             return _error("UPLOAD_TOO_LARGE", "Upload exceeds the size limit", 413)
         except Exception:
+            dest.unlink(missing_ok=True)
             shutil.rmtree(staged_dir, ignore_errors=True)
             logger.exception("upload staging failed")
             return _error("UPLOAD_FAILED", "Upload could not be stored", 500)
-        staged.append(str(dest))
+        total += written
+        staged.append({"path": str(dest), "name": str(dest.relative_to(staged_dir)), "bytes": written})
     if not staged:
         shutil.rmtree(staged_dir, ignore_errors=True)
         return _error("NO_FILES", "No valid files provided", 400)
     return jsonify({
         "success": True,
-        "staged_paths": staged,
+        "staged_paths": [entry["path"] for entry in staged],
+        "staged": staged,
         "bytes": total,
         "expires_note": "Staged files are plain files; ingest or delete them.",
     }), 201
+
+
+# ===========================================================================
+# Input: chunked staging for files larger than a single request may carry
+# ===========================================================================
+#
+# The direct endpoint above streams one file per request and is bounded by
+# OPERATIONS_MAX_UPLOAD_MB. Large files are staged the same way through
+# chunked requests, and produce exactly the same result: plain files under the
+# staging directory, which a job then ingests like any other path. Session
+# state is on disk (one directory per upload), so an interrupted upload can be
+# resumed and a restarted server does not lose it.
+
+
+def _utc_now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _chunked_session_dir(upload_id: str) -> Path:
+    return _chunked_root() / upload_id
+
+
+def _load_session(upload_id: str):
+    if not _UPLOAD_ID_RE.match(upload_id or ""):
+        return None
+    meta = _chunked_session_dir(upload_id) / "session.json"
+    if not meta.exists():
+        return None
+    try:
+        return json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _session_state(upload_id: str, session: dict) -> dict:
+    directory = _chunked_session_dir(upload_id)
+    uploaded = sorted(
+        int(p.name.split("_")[1])
+        for p in directory.glob("chunk_*")
+        if p.name.split("_")[1].isdigit()
+    )
+    return {
+        "upload_id": upload_id,
+        "filename": session["filename"],
+        "total_chunks": session["total_chunks"],
+        "chunk_size": session["chunk_size"],
+        "bytes_received": sum(p.stat().st_size for p in directory.glob("chunk_*")),
+        "uploaded_chunks": uploaded,
+        "missing_chunks": [
+            i for i in range(session["total_chunks"]) if i not in set(uploaded)
+        ],
+    }
+
+
+@operations_bp.route("/api/input/uploads/chunked/start", methods=["POST"])
+@limiter.limit("60 per minute")
+def api_chunked_start():
+    """Begin a chunked staging session; returns the chunk plan."""
+    data = request.get_json(silent=True) or {}
+    filename = str(data.get("filename") or "").strip()
+    try:
+        size = int(data.get("size") or 0)
+    except (TypeError, ValueError):
+        return _error("BAD_SIZE", "size must be an integer number of bytes", 400)
+    if not filename:
+        return _error("NO_FILENAME", "filename is required", 400)
+    if size <= 0:
+        return _error("BAD_SIZE", "size must be greater than zero", 400)
+    if size > MAX_CHUNKED_UPLOAD_BYTES:
+        return _error(
+            "UPLOAD_TOO_LARGE",
+            f"File exceeds the {MAX_CHUNKED_UPLOAD_BYTES // (1024 * 1024)} MB chunked limit",
+            413,
+        )
+    declared_hash = str(data.get("sha256") or "").strip().lower()
+    if declared_hash and not re.fullmatch(r"[0-9a-f]{64}", declared_hash):
+        return _error("BAD_HASH", "sha256 must be 64 hex characters", 400)
+
+    chunk_size = CHUNK_SIZE_BYTES
+    upload_id = uuid.uuid4().hex
+    directory = _chunked_session_dir(upload_id)
+    directory.mkdir(parents=True, exist_ok=False)
+    total_chunks = max((size + chunk_size - 1) // chunk_size, 1)
+    session = {
+        "filename": filename,
+        "size": size,
+        "sha256": declared_hash,
+        "chunk_size": chunk_size,
+        "total_chunks": total_chunks,
+        "created_at": _utc_now(),
+    }
+    (directory / "session.json").write_text(json.dumps(session), encoding="utf-8")
+    return jsonify({
+        "success": True,
+        "upload_id": upload_id,
+        "chunk_size": chunk_size,
+        "total_chunks": total_chunks,
+        "max_bytes": MAX_CHUNKED_UPLOAD_BYTES,
+    }), 201
+
+
+@operations_bp.route(
+    "/api/input/uploads/chunked/<upload_id>/chunk/<int:index>", methods=["POST"]
+)
+@limiter.limit("1200 per minute")
+def api_chunked_chunk(upload_id: str, index: int):
+    """Store one chunk. Chunks are written to a temporary name and renamed, so
+    a half-written chunk is never mistaken for a complete one."""
+    session = _load_session(upload_id)
+    if session is None:
+        return _error("UPLOAD_NOT_FOUND", "Upload session not found", 404)
+    if index < 0 or index >= int(session["total_chunks"]):
+        return _error("BAD_CHUNK", "Chunk index out of range", 400)
+    part = request.files.get("chunk")
+    if part is None:
+        return _error("NO_CHUNK", "No chunk provided", 400)
+
+    directory = _chunked_session_dir(upload_id)
+    incoming = directory / f"chunk_{index}.part"
+    final = directory / f"chunk_{index}"
+    remaining = int(session["size"]) - index * int(session["chunk_size"])
+    declared = (request.form.get("sha256") or "").strip().lower()
+    if declared and not re.fullmatch(r"[0-9a-f]{64}", declared):
+        return _error("BAD_HASH", "sha256 must be 64 hex characters", 400)
+    digest = hashlib.sha256() if declared else None
+    try:
+        written = _stream_to(
+            incoming, part.stream, declared_size=max(remaining, 1), digest=digest
+        )
+    except ValueError:
+        incoming.unlink(missing_ok=True)
+        return _error("CHUNK_TOO_LARGE", "Chunk is larger than the plan allows", 413)
+    except Exception:
+        incoming.unlink(missing_ok=True)
+        logger.exception("chunk write failed")
+        return _error("CHUNK_FAILED", "Chunk could not be stored", 500)
+    if digest is not None and digest.hexdigest() != declared:
+        incoming.unlink(missing_ok=True)
+        return _error(
+            "CHUNK_HASH_MISMATCH",
+            f"Chunk {index} does not match its SHA-256; it was discarded, retry the chunk",
+            422,
+        )
+    incoming.replace(final)
+    state = _session_state(upload_id, session)
+    return jsonify({"success": True, "bytes": written, **state})
+
+
+@operations_bp.route("/api/input/uploads/chunked/<upload_id>", methods=["GET"])
+@limiter.limit(INTERACTIVE_READ_LIMIT)
+def api_chunked_status(upload_id: str):
+    session = _load_session(upload_id)
+    if session is None:
+        return _error("UPLOAD_NOT_FOUND", "Upload session not found", 404)
+    return jsonify({"success": True, **_session_state(upload_id, session)})
+
+
+@operations_bp.route("/api/input/uploads/chunked/<upload_id>/complete", methods=["POST"])
+@limiter.limit("60 per minute")
+def api_chunked_complete(upload_id: str):
+    """Assemble the chunks into the staging directory and verify integrity.
+
+    The assembled file is byte-identical to what the browser held: the size is
+    checked against the plan, the per-session SHA-256 is verified when the
+    client declared one, and the digest of the staged file is returned so the
+    interface can show what was actually stored. Nothing enters the database
+    here - the job does that, and it hashes the file again for deduplication.
+    """
+    session = _load_session(upload_id)
+    if session is None:
+        return _error("UPLOAD_NOT_FOUND", "Upload session not found", 404)
+    state = _session_state(upload_id, session)
+    if state["missing_chunks"]:
+        return _error(
+            "UPLOAD_INCOMPLETE",
+            f"{len(state['missing_chunks'])} of {state['total_chunks']} chunks are missing",
+            409,
+            details={"missing_chunks": state["missing_chunks"][:50]},
+        )
+
+    directory = _chunked_session_dir(upload_id)
+    staged_dir = _new_staging_dir()
+    dest = _unique_destination(staged_dir, _safe_relative_parts(session["filename"]))
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        with open(dest, "wb") as out:
+            for index in range(int(session["total_chunks"])):
+                with open(directory / f"chunk_{index}", "rb") as part:
+                    while True:
+                        block = part.read(4 * 1024 * 1024)
+                        if not block:
+                            break
+                        digest.update(block)
+                        total += len(block)
+                        out.write(block)
+    except Exception:
+        shutil.rmtree(staged_dir, ignore_errors=True)
+        logger.exception("chunk assembly failed")
+        return _error("ASSEMBLY_FAILED", "Uploaded chunks could not be assembled", 500)
+
+    if total != int(session["size"]):
+        shutil.rmtree(staged_dir, ignore_errors=True)
+        return _error(
+            "SIZE_MISMATCH",
+            f"Assembled {total} bytes but {session['size']} were declared",
+            422,
+        )
+    actual_hash = digest.hexdigest()
+    if session.get("sha256") and actual_hash != session["sha256"]:
+        shutil.rmtree(staged_dir, ignore_errors=True)
+        return _error(
+            "HASH_MISMATCH",
+            "Assembled file does not match the declared SHA-256",
+            422,
+            details={"expected": session["sha256"], "actual": actual_hash},
+        )
+
+    shutil.rmtree(directory, ignore_errors=True)
+    return jsonify({
+        "success": True,
+        "staged_path": str(dest),
+        "name": str(dest.relative_to(staged_dir)),
+        "bytes": total,
+        "sha256": actual_hash,
+    }), 201
+
+
+@operations_bp.route("/api/input/uploads/chunked/<upload_id>", methods=["DELETE"])
+@limiter.limit("60 per minute")
+def api_chunked_cancel(upload_id: str):
+    if not _UPLOAD_ID_RE.match(upload_id or ""):
+        return _error("UPLOAD_NOT_FOUND", "Upload session not found", 404)
+    directory = _chunked_session_dir(upload_id)
+    if not directory.exists():
+        return _error("UPLOAD_NOT_FOUND", "Upload session not found", 404)
+    shutil.rmtree(directory, ignore_errors=True)
+    return jsonify({"success": True, "cancelled": upload_id})
 
 
 def _as_bool(value, default: bool) -> bool:

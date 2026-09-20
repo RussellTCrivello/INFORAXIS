@@ -82,9 +82,6 @@ import CursorPaginatorModule from '../modules/rendering/cursor-pagination.js';
 // CursorPaginator should be available from the module export
 const CursorPaginator = CursorPaginatorModule || (typeof window !== 'undefined' ? window.CursorPaginator : null);
 
-// Upload modules
-import { ChunkedUploadClient, ChunkedUploadUI } from '../modules/upload/chunked-upload.js';
-
 /**
  * Function Manager - Central registry
  */
@@ -167,12 +164,6 @@ const FunctionManager = {
         filters,
         viewMode,
         theme: themeManager
-    },
-    
-    // Upload
-    upload: {
-        chunked: ChunkedUploadClient,
-        chunkedUI: ChunkedUploadUI
     },
     
     // API
@@ -304,10 +295,6 @@ if (typeof window !== 'undefined') {
     // Expose applyFilters for files list page (override the generic one from filters module)
     window.applyFileFilters = fileManagement.applyFilters.bind(fileManagement);
     window.navigateToPage = fileManagement.navigateToPage.bind(fileManagement);
-    
-    // Upload functions
-    window.ChunkedUploadClient = ChunkedUploadClient;
-    window.ChunkedUploadUI = ChunkedUploadUI;
     
     // Theme Manager
     window.ThemeManager = themeManager;

@@ -105,7 +105,7 @@ Per Phase 23 this is classified **MISSING / FUTURE FUNCTIONALITY** — not inven
 | Files | `/files` | file/files_list.html | pages/files-list-page.js | VERIFIED |
 | File detail | `/file/<id>` | file/file_detail.html | pages/file-detail-page.js | VERIFIED |
 | Full content | `/file/<id>/full-content` | file/full_content.html | pages/full-content-page.js | VERIFIED |
-| Upload | `/upload` | file/upload.html | pages/upload-page.js | VERIFIED (302 — see §4) |
+| Upload | `/upload` | *superseded — redirects to `/operations/input`, which is served by `templates/Operations/input.html` + `pages/ingestion-studio-page.js` (interface consolidation)* | VERIFIED (302 — see §4) |
 | Search | `/search` | Search/search.html | pages/search-page.js | VERIFIED |
 | Advanced search | `/search/advanced` | Search/search_advanced.html | pages/search-advanced-page.js | VERIFIED |
 | Enhanced search | `/search/enhanced` | Search/search_enhanced.html | pages/search-enhanced-page.js | VERIFIED |

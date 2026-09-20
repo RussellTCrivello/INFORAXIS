@@ -3,18 +3,12 @@ Files Blueprint - File Management Routes and Helpers
 Handles file upload, browsing, viewing, and processing
 """
 
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, current_app
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app
 from werkzeug.utils import secure_filename
-import os
 import sys
 from pathlib import Path
 import re
-from datetime import datetime, date
-import hashlib
 import logging
-import uuid
-import shutil
-import time
 
 project_root = str(Path(__file__).parent.parent.parent.parent)
 if project_root not in sys.path:
@@ -210,87 +204,32 @@ def get_monitor():
 
 @files_bp.route('/upload')
 def upload_page():
-    """Upload Interface"""
-    try:
-        sources = select_info_sources() or {}
-        sides = select_info_sides() or {}
-        return render_template('file/upload.html', sources=sources, sides=sides)
-    except Exception as e:
-        logger.error(f"Error loading upload page: {e}", exc_info=True)
-        # Return empty dicts to prevent template errors
-        return render_template('file/upload.html', sources={}, sides={})
+    """Compatibility alias for the single ingestion interface.
 
-
-@files_bp.route('/upload/process-path', methods=['POST'])
-def upload_process_path():
+    There used to be two upload interfaces - this CLI-styled page and
+    ``/operations/input`` - with different capabilities, different pipelines
+    and different words for the same thing. The interface is now one page; this
+    URL is kept so bookmarks, shortcuts and documentation that predate the
+    merge keep working and land on it.
     """
-    Start background file processing task.
-    Returns immediately with task ID for progress tracking.
-    """
-    try:
-        data = request.get_json()
-        file_path = data.get('file_path', '').strip()
-        source_id = data.get('source_id')
-        side_id = data.get('side_id')
-        
-        if not file_path:
-            return jsonify({'error': 'File path is required'}), 400
-        
-        if not source_id or not side_id:
-            return jsonify({'error': 'Source and Side are required'}), 400
-
-        # SECURITY (SEC-06): server-path ingestion must be contained to the
-        # configured INGESTION_ROOTS (plus the app's own upload staging
-        # directory). Without this check any analyst/admin could point the
-        # reader at an arbitrary file the server can read (e.g. /etc/passwd,
-        # .env, .flask_secret_key) and have its contents stored in the
-        # database, where any authenticated user can search and read them.
-        # ``validate_ingestion_path`` fails closed when no roots are
-        # configured, which is the documented behaviour of this feature.
-        from core.path_safety import validate_ingestion_path, PathSafetyError
-
-        try:
-            resolved_path = validate_ingestion_path(file_path)
-        except PathSafetyError as exc:
-            logger.warning("Rejected server path ingestion for %r: %s", file_path, exc)
-            return jsonify({'error': str(exc)}), 403
-        except Exception as exc:
-            logger.warning("Could not validate server path %r: %s", file_path, exc)
-            return jsonify({'error': 'Path could not be validated'}), 400
-
-        if not resolved_path.exists():
-            return jsonify({'error': f'Path does not exist: {file_path}'}), 400
-
-        file_path = str(resolved_path)
-
-        # Import task manager
-        from Api.task_manager import get_task_manager
-        
-        # Create and start background processing task
-        task_manager = get_task_manager()
-        try:
-            task_id = task_manager.create_task(
-                file_path=file_path,
-                source_id=source_id,
-                side_id=side_id,
-                task_name=f"Process: {os.path.basename(file_path)}"
-            )
-            
-            return jsonify({
-                'success': True,
-                'task_id': task_id,
-                'message': 'Processing started in background'
-            }), 202  # 202 Accepted - processing started
-        
-        except RuntimeError as e:
-            # Too many concurrent tasks
-            return client_error(e, subsystem='Api.blueprints.files', status=503)  # 503 Service Unavailable
-        
-    except Exception as e:
-        logger.error(f"Upload process-path error: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', status=500)
+    return redirect(url_for('operations_input_page'), code=302)
 
 
+# ---------------------------------------------------------------------------
+# Processing-task API (Api/task_manager.py)
+#
+# These four routes are the HTTP surface of the background processing-task
+# manager. It is a live subsystem: the import flows create tasks in it
+# (Api/services/import_service.py) and the dashboard's progress tracker polls
+# /upload/active-tasks every 1.5 s. The ingestion page does NOT use them - it
+# creates ingestion *jobs* (/api/input/jobs) whose progress, pause, resume and
+# cancel live in the Jobs Center (/operations/jobs). The old
+# POST /upload/process-path entry point, which started a path-ingestion task
+# from the deleted upload page, was removed with that page: it was a second,
+# differently-shaped way to start the same ingestion the Jobs API owns, and
+# nothing called it any more. Path containment (SEC-06) is unchanged and still
+# enforced in IngestionService.validate() for every ingestion path.
+# ---------------------------------------------------------------------------
 @files_bp.route('/upload/progress/<task_id>', methods=['GET'])
 def upload_progress(task_id):
     """
@@ -421,181 +360,6 @@ def api_cancel_task(task_id):
     except Exception as e:
         logger.error(f"Cancel task error: {e}", exc_info=True)
         return client_error(e, subsystem='Api.blueprints.files', status=500)
-
-
-# ==================== CHUNKED UPLOAD ROUTES ====================
-
-# Store active upload sessions
-_upload_sessions = {}
-
-@files_bp.route('/upload/chunked/start', methods=['POST'])
-def chunked_upload_start():
-    """Start a chunked upload session"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'success': False, 'error': 'JSON data is required'}), 400
-        
-        filename = data.get('filename', '').strip()
-        total_size = data.get('total_size', 0)
-        file_hash = data.get('file_hash', '').strip()
-        source_id = data.get('source_id')
-        side_id = data.get('side_id')
-        chunk_size = data.get('chunk_size', 5 * 1024 * 1024)  # Default 5MB
-        auto_analyze = data.get('auto_analyze', False)
-        
-        # Validate inputs
-        if not filename:
-            return jsonify({'success': False, 'error': 'Filename is required'}), 400
-        if not file_hash:
-            return jsonify({'success': False, 'error': 'File hash is required'}), 400
-        if not source_id or not side_id:
-            return jsonify({'success': False, 'error': 'Source ID and Side ID are required'}), 400
-        if total_size <= 0:
-            return jsonify({'success': False, 'error': 'Invalid file size'}), 400
-        
-        # Generate upload ID
-        upload_id = str(uuid.uuid4())
-        
-        # Create upload directory
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        session_dir = os.path.join(upload_folder, 'chunked_uploads', upload_id)
-        os.makedirs(session_dir, exist_ok=True)
-        
-        # Calculate total chunks
-        total_chunks = (total_size + chunk_size - 1) // chunk_size
-        
-        # Store session info
-        _upload_sessions[upload_id] = {
-            'upload_id': upload_id,
-            'filename': filename,
-            'total_size': total_size,
-            'file_hash': file_hash,
-            'source_id': source_id,
-            'side_id': side_id,
-            'chunk_size': chunk_size,
-            'total_chunks': total_chunks,
-            'uploaded_chunks': set(),
-            'session_dir': session_dir,
-            'auto_analyze': auto_analyze,
-            'created_at': datetime.now()
-        }
-        
-        logger.info(f"Started chunked upload session: {upload_id} for file: {filename}")
-        
-        return jsonify({
-            'success': True,
-            'upload_id': upload_id,
-            'total_chunks': total_chunks,
-            'chunk_size': chunk_size
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error starting chunked upload: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
-
-
-@files_bp.route('/upload/chunked/<upload_id>/chunk/<int:chunk_index>', methods=['POST'])
-def chunked_upload_chunk(upload_id, chunk_index):
-    """Upload a single chunk"""
-    try:
-        # Get session
-        session = _upload_sessions.get(upload_id)
-        if not session:
-            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
-        
-        # Validate chunk index
-        if chunk_index < 0 or chunk_index >= session['total_chunks']:
-            return jsonify({'success': False, 'error': 'Invalid chunk index'}), 400
-        
-        # Get chunk file
-        if 'chunk' not in request.files:
-            return jsonify({'success': False, 'error': 'No chunk file provided'}), 400
-        
-        chunk_file = request.files['chunk']
-        if not chunk_file:
-            return jsonify({'success': False, 'error': 'Empty chunk file'}), 400
-        
-        # Save chunk with error handling
-        chunk_path = os.path.join(session['session_dir'], f'chunk_{chunk_index}')
-        try:
-            chunk_file.save(chunk_path)
-        except PermissionError as e:
-            logger.error(f"Permission denied saving chunk {chunk_index}: {e}")
-            return jsonify({'success': False, 'error': f'Cannot save chunk: Permission denied'}), 403
-        except OSError as e:
-            logger.error(f"OS error saving chunk {chunk_index}: {e}")
-            return client_error(e, subsystem='Api.blueprints.files', success_key='success', public_message='Cannot save chunk', status=500)
-        except Exception as e:
-            logger.error(f"Unexpected error saving chunk {chunk_index}: {e}")
-            return client_error(e, subsystem='Api.blueprints.files', success_key='success', public_message='Failed to save chunk', status=500)
-        
-        # Mark chunk as uploaded
-        session['uploaded_chunks'].add(chunk_index)
-        
-        logger.debug(f"Uploaded chunk {chunk_index}/{session['total_chunks']} for session {upload_id}")
-        
-        return jsonify({
-            'success': True,
-            'chunk_index': chunk_index,
-            'uploaded_chunks': len(session['uploaded_chunks']),
-            'total_chunks': session['total_chunks']
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error uploading chunk: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
-
-@files_bp.route('/upload/chunked/<upload_id>/cancel', methods=['POST'])
-def chunked_upload_cancel(upload_id):
-    """Cancel a chunked upload session"""
-    try:
-        session = _upload_sessions.get(upload_id)
-        if not session:
-            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
-        
-        # Cleanup session directory
-        try:
-            if os.path.exists(session['session_dir']):
-                shutil.rmtree(session['session_dir'])
-        except Exception as e:
-            logger.warning(f"Failed to cleanup cancelled session directory: {e}")
-        
-        # Remove session
-        del _upload_sessions[upload_id]
-        
-        logger.info(f"Cancelled chunked upload session: {upload_id}")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Upload cancelled successfully'
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error cancelling chunked upload: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
-
-
-@files_bp.route('/upload/chunked/<upload_id>/status', methods=['GET'])
-def chunked_upload_status(upload_id):
-    """Get status of a chunked upload session"""
-    try:
-        session = _upload_sessions.get(upload_id)
-        if not session:
-            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
-        
-        return jsonify({
-            'success': True,
-            'upload_id': upload_id,
-            'filename': session['filename'],
-            'uploaded_chunks': len(session['uploaded_chunks']),
-            'total_chunks': session['total_chunks'],
-            'progress': (len(session['uploaded_chunks']) / session['total_chunks']) * 100 if session['total_chunks'] > 0 else 0
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error getting chunked upload status: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
 
 
 # ==================== FILE BROWSER ====================

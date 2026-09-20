@@ -372,9 +372,9 @@
             <!-- File Management -->
             {% if is_interface_enabled('upload_files') %}
             <li class="sidebar-nav-item">
-                <a href="{{ url_for('files.upload_page') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'files.upload_page' %}active{% endif %}" 
-                   data-endpoint="files.upload_page">
+                <a href="{{ url_for('operations_input_page') }}" 
+                   class="sidebar-nav-link {% if request.endpoint == 'operations_input_page' %}active{% endif %}" 
+                   data-endpoint="operations_input_page">
                     <i class="bi bi-cloud-upload"></i>
                     <span>{{ _('Upload Files') }}</span>
                 </a>
@@ -537,6 +537,7 @@
                                     'search_advanced': _('Search'),
                                     'search_enhanced_page': _('Search'),
                                     'upload_page': _('Upload Files'),
+                                    'operations_input_page': _('Input / Ingestion'),
                                     'files.files_list': _('File Library'),
                                     'keywords_list': _('Keywords'),
                                     'words_list': _('Words'),
@@ -587,6 +588,7 @@
                                     'search_advanced': _('Search'),
                                     'search_enhanced_page': _('Search'),
                                     'upload_page': _('Upload Files'),
+                                    'operations_input_page': _('Input / Ingestion'),
                                     'files.files_list': _('File Library'),
                                     'keywords_list': _('Keywords'),
                                     'words_list': _('Words'),
