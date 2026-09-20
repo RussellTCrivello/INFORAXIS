@@ -415,6 +415,52 @@ class TestTextAndBinary:
         assert result.confidence == "none"
         assert any(d.kind == "unreadable" for d in result.discrepancies)
 
+    def test_text_declared_as_an_image_is_read_as_text(self):
+        """Reported from a real ingest: a text file named ``fake-png.png``.
+
+        The declared type was kept, so the file went to the image reader and
+        failed with "cannot identify image file" - an ERROR in the log for a
+        file whose bytes are perfectly readable text. The content decides, and
+        the reader that follows from the content is the text reader.
+        """
+        result = identify_bytes(b"this is plain text pretending to be a png\n" * 20,
+                                declared_name="fake-png.png")
+        assert result.format_id == "text.plain"
+        assert result.family is FormatFamily.TEXT
+        assert result.reader == "read_remaining"
+        assert result.features.get("declared_type_rejected_for_content") == "image.png"
+        assert any(d.kind == DISC_FORMAT_MISMATCH and d.severity == SEVERITY_HIGH
+                   for d in result.discrepancies)
+
+    def test_text_declared_as_an_archive_is_read_as_text(self):
+        result = identify_bytes(b"not an archive at all, just words\n" * 20,
+                                declared_name="evidence.zip")
+        assert result.family is FormatFamily.TEXT
+        assert result.reader == "read_remaining"
+        assert any(d.kind == DISC_FORMAT_MISMATCH for d in result.discrepancies)
+
+    def test_a_text_capable_declared_type_is_still_honoured(self):
+        """SVG is XML text but its declared type names the right reader.
+
+        Rejecting every image-family declaration for text content would take
+        SVG away from the SVG reader, which is the opposite of the fix.
+        """
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><text>x</text></svg>'
+        result = identify_bytes(svg, declared_name="chart.svg")
+        assert result.format_id == "image.svg"
+        assert result.reader == "read_img_fast"
+
+    def test_text_capable_declarations_keep_their_own_format(self):
+        """A .js or .json file is not "unspecific plain text"."""
+        script = identify_bytes(b"function f() { return 1; }\n" * 10,
+                                declared_name="app.js")
+        assert script.format_id == "text.script"
+        assert not script.high_severity_discrepancies
+
+        data = identify_bytes(b'{"evidence": true}\n' * 10, declared_name="doc.json")
+        assert data.format_id == "text.json"
+        assert not data.high_severity_discrepancies
+
     def test_jpeg_alias_is_not_reported_as_a_contradiction(self):
         jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00" + b"\x00" * 100
         result = identify_bytes(jpeg, declared_name="photo.jpeg")

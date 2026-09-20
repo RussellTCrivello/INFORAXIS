@@ -275,6 +275,31 @@ class FileReaderService:
                 decision['effective_extension'] = ''
             return decision
 
+        # A declared extension the content contradicts outright does not get to
+        # choose the reader, even when the content evidence is only a heuristic.
+        # A text file called .png is not a PNG: the format service rejects the
+        # declared type for these bytes (it records
+        # ``declared_type_rejected_for_content``), and honouring the name sent
+        # the file to the image reader, which failed with "cannot identify
+        # image file" - an ERROR line for a file whose text was perfectly
+        # readable. Only that explicit rejection can override a usable
+        # extension, so nothing else changes route.
+        rejected = (
+            decision.get('format_identification', {})
+            .get('features', {})
+            .get('declared_type_rejected_for_content')
+        )
+        if rejected and self.is_supported(detected):
+            decision['effective_extension'] = detected
+            decision['detection_method'] = 'content-heuristic'
+            decision['extension_mismatch'] = True
+            decision['detection_note'] = (
+                f'declared extension {declared} names {rejected}, which cannot '
+                f'hold this content; the bytes are {detected or "text"} and the '
+                f'content decides'
+            )
+            return decision
+
         if declared and self.is_supported(declared):
             decision['detection_method'] = 'extension'
             return decision

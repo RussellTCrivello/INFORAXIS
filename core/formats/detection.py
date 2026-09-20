@@ -650,6 +650,23 @@ def _email_or_archive_detection(extension: str, data: bytes,
     return None, []
 
 
+def _spec_can_hold_text(spec) -> bool:
+    """Whether a format can legitimately contain plain text.
+
+    A ``.png`` whose bytes are text is not a PNG with unusual content: the
+    name is wrong and the content decides - the same rule the signature table
+    applies in the other direction. The catalogue's own MIME statement is what
+    this asks, so a text-capable image format (``image/svg+xml``) is still
+    honoured while ``image/png`` is not.
+    """
+    mime = (getattr(spec, "mime", "") or "").lower()
+    if mime.startswith("text/"):
+        return True
+    if mime.endswith("+xml") or mime.endswith("+json"):
+        return True
+    return mime in ("application/json", "application/xml", "application/x-yaml")
+
+
 def _apply_declared_extension_disambiguation(extension: str, declared_extension: str,
                                              features: Dict[str, Any]) -> str:
     """Handle formats whose content signature cannot separate their variants.
@@ -832,9 +849,25 @@ def identify_bytes(data: Union[bytes, bytearray, memoryview],
             features["text_likeness"] = round(text_score, 3)
             features["line_count_sampled"] = data[: SNIFF_HEADER_SIZE].count(b"\n") + 1
             evidence.append(f"textual content (likeness {text_score:.2f})")
-            spec = lookup_by_extension(declared_extension) or lookup_format("text.plain")
-            if spec.family in (FormatFamily.BINARY, FormatFamily.UNKNOWN, FormatFamily.DATA,
-                               FormatFamily.TEXT):
+            declared_spec = lookup_by_extension(declared_extension)
+            if declared_spec is not None and not _spec_can_hold_text(declared_spec):
+                # The name says a format that cannot hold these bytes (a text
+                # file called .png, for instance). Keeping the declared type
+                # sent the file to the image reader, which failed with "cannot
+                # identify image file" - the content is what decides.
+                features["declared_type_rejected_for_content"] = declared_spec.format_id
+                evidence.append(
+                    f"declared extension names {declared_spec.description or declared_spec.format_id}"
+                    f" ({declared_spec.mime}), which cannot hold text content"
+                )
+            spec = declared_spec or lookup_format("text.plain")
+            # A declared type that can hold text is kept: it is more specific
+            # than "plain text" and it is what the artifact claims to be. One
+            # that cannot hold text (image/png, application/zip, a video) is
+            # not, however loudly it is declared - the bytes are text, so the
+            # content decides and the mismatch is recorded below.
+            if (not _spec_can_hold_text(spec)
+                    or spec.family in (FormatFamily.BINARY, FormatFamily.UNKNOWN)):
                 spec = lookup_format("text.plain")
             return _finish(_result_for(spec, declared_name=declared_name,
                                        declared_extension=declared_extension,
