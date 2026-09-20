@@ -97,6 +97,24 @@ class TestFrontendIngestionWorkflow:
         assert (stats2["duplicates"] or 0) >= 1
         assert (stats2["files_succeeded"] or 0) == 0
 
+    def test_a_refused_server_path_is_echoed_exactly_as_typed(
+            self, app, admin_client, roots):
+        r"""A Windows path on a host with no matching root, and a POSIX path
+        outside every root: the refusal must name the path the operator typed.
+
+        `Path(raw).name` used to build this message, which reduced
+        `C:\Windows\System32` to `System32` on Windows and `/etc` to `etc`
+        everywhere else - the operator was told about a path they had not
+        typed, in the one message that is supposed to explain the refusal.
+        """
+        for typed in ("C:\\Evidence\\Case 1", "/etc"):
+            resp = admin_client.post("/api/input/jobs", json={
+                "path": typed, "source": "s", "side": "d",
+            })
+            assert resp.status_code == 400, resp.get_data(as_text=True)
+            message = resp.get_json()["error"]["message"]
+            assert message == f"Path not allowed: {typed}", message
+
     def test_server_folder_ingestion_job(self, app, admin_client, roots):
         uid = uuid.uuid4().hex
         admin_client.post("/api/input/sources", json={

@@ -178,12 +178,16 @@ class IngestionService:
                 # guidance for the disabled-roots case.
                 if "disabled" in str(exc):
                     raise IngestionValidationError(str(exc)) from exc
+                # Echo the path as submitted. `Path(raw).name` was wrong twice
+                # over: on Windows it reduces `C:\Windows\System32` to
+                # `System32`, and on POSIX it turns `/etc` into `etc`, so the
+                # operator is told about a path they did not type.
                 raise IngestionValidationError(
-                    f"Path not allowed: {Path(str(raw)).name}"
+                    f"Path not allowed: {str(raw).strip()}"
                 ) from exc
             if not resolved.exists():
                 raise IngestionValidationError(
-                    f"Path does not exist: {Path(str(raw)).name}"
+                    f"Path does not exist: {str(raw).strip()}"
                 )
             validated.append(str(resolved))
         # Second pass invariants that don't need per-path errors surfaced.
