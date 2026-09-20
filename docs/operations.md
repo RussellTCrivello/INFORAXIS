@@ -130,3 +130,55 @@ however the buckets read. Per-container attribution (`children_by_parent`) is
 bounded for memory, and the exactly-counted remainder is in
 `children_by_parent_overflow`, so map plus overflow always equals the nested
 total.
+
+## Archives that need an external decoder (RAR)
+
+RAR is the one container this pipeline cannot decode in pure Python: `rarfile`
+is a front end for `unrar`/`unar`/7-Zip/`bsdtar`, and the compressed streams are
+proprietary. What `rarfile` *can* do without any tool is parse RAR4/RAR5
+headers and read members stored uncompressed. The reader is built on that
+distinction:
+
+* Every member that can be read is extracted (and CRC-verified). A decoderless
+  machine therefore still reads the stored part of an archive, instead of
+  failing the whole file as it did when the first compressed member raised
+  `RarCannotExec`.
+* A member whose stream needs a decoder is recorded, not dropped: it appears in
+  the archive's `status_detail` (for example
+  `341 of 405 archive members could not be read (decoder required); 64 read`),
+  in the archive's own content (its manifest, which lists the members that
+  could not be read), and in `extraction_provenance`.
+* The container is still reported as a partial success
+  (`processing_status = 'partially_processed'`) — neither "processed" (which
+  would claim the whole archive was read) nor "failed" (which would discard
+  what was read).
+* `ArchiveEncrypted` (needs a password) and `ArchiveSafetyError` (corrupt, or
+  rejected by policy) stay distinct from the missing-decoder case, so the three
+  different fixes are never confused.
+
+To read the compressed members, install a decoder. The reader looks for one on
+`PATH` and in the standard Windows install locations of WinRAR (`UnRAR.exe`),
+7-Zip (`7z.exe`) and the bundled `bsdtar`; a candidate has to *demonstrate*
+RAR support (GNU tar answers `--version` too and cannot read RAR, so presence
+alone is not accepted).
+
+    # what the machine currently has
+    python -c "from core.archive_safety import rar_decoder_status; print(rar_decoder_status())"
+
+```sql
+-- archives blocked by a missing decoder, and how much of each was read
+SELECT p.file_name, p.processing_status, p.status_detail
+  FROM paths p
+ WHERE p.extraction_provenance -> 'diagnostics' ->> 'decoder_missing' = 'true';
+
+-- how much of a container's character count was inline code rather than body
+SELECT p.file_name,
+       p.extraction_provenance -> 'diagnostics' ->> 'visible_text_chars' AS visible,
+       p.extraction_provenance -> 'diagnostics' ->> 'script_chars'        AS script,
+       p.extraction_provenance -> 'diagnostics' ->> 'style_chars'         AS style
+  FROM paths p
+ WHERE p.extraction_provenance -> 'diagnostics' ->> 'script_chars' IS NOT NULL;
+```
+
+Re-running the ingest after installing a decoder reads the remaining members;
+the members read the first time are already stored as children of the archive.
