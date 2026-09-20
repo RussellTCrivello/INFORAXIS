@@ -180,3 +180,90 @@ def test_the_row_and_the_run_agree_on_what_locked_means():
         assert (detail.startswith("locked:") is (outcome == OUTCOME_LOCKED)), (
             f"row says {detail!r} while the ledger says {outcome!r}: {content}"
         )
+
+
+# ----------------------------------------------------------------------
+# Containers that were only partly read (RAR without a decoder)
+# ----------------------------------------------------------------------
+def _partial_archive(**overrides):
+    info = {
+        "warning": "archive_needs_external_decoder",
+        "decoder_missing": True,
+        "members_total": 405,
+        "members_read": 64,
+        "members_unreadable": {"decoder_required": 341},
+    }
+    info.update(overrides)
+    return {"text": "RAR archive: Deleted Items.rar\nMembers: 405", "extraction_info": info}
+
+
+def test_partly_read_archive_is_partially_processed():
+    """'processed' would claim the whole archive was read."""
+    state, detail = _resolve(_partial_archive(), "Read")
+    assert state == "partially_processed", state
+    assert "341 of 405" in detail and "decoder required" in detail
+
+
+def test_partly_read_archive_detail_names_the_read_portion():
+    _, detail = _resolve(_partial_archive(), "Read")
+    assert detail.endswith("64 read"), detail
+
+
+def test_fully_read_archive_is_processed():
+    state, detail = _resolve(
+        _partial_archive(members_total=3, members_read=3, members_unreadable={}),
+        "Read",
+    )
+    assert (state, detail) == ("processed", None)
+
+
+def test_archive_member_counts_without_a_total_still_reported():
+    state, detail = _resolve(
+        _partial_archive(members_total=None, members_read=None), "Read"
+    )
+    assert state == "partially_processed"
+    assert "341 archive member(s) could not be read" in detail
+
+
+def test_an_explicit_error_still_wins_over_a_partial_member_read():
+    state, detail = _resolve({**_partial_archive(), "error": "read failed"}, "Unread")
+    assert (state, detail) == ("failed", "read failed")
+
+
+def test_reader_reason_replaces_the_generic_no_text_message():
+    """An SVG with no text elements must not say only 'no extractable text'."""
+    state, detail = _resolve(
+        {"text": "", "extraction_info": {"reason": "svg_has_no_text_elements"}},
+        "Unread",
+    )
+    assert state == "processed"
+    assert detail == "no extractable text: svg_has_no_text_elements"
+
+
+def test_reason_detail_is_length_capped_too():
+    from pipeline.storage_pipeline import STATUS_DETAIL_MAX_LENGTH
+
+    _, detail = _resolve(
+        {"text": "", "extraction_info": {"reason": "x" * 5000}}, "Unread"
+    )
+    assert len(detail) <= STATUS_DETAIL_MAX_LENGTH
+
+
+def test_archive_and_html_diagnostics_are_persisted():
+    """The states above must be queryable after the run, not just logged."""
+    from pipeline.storage_pipeline import StoragePipeline
+
+    provenance = StoragePipeline._build_extraction_provenance(
+        None, _partial_archive()
+    )
+    diagnostics = provenance["diagnostics"]
+    assert diagnostics["decoder_missing"] is True
+    assert diagnostics["members_total"] == 405
+    assert diagnostics["members_unreadable"] == {"decoder_required": 341}
+
+    html = StoragePipeline._build_extraction_provenance(None, {
+        "text_content": "hi",
+        "extraction_info": {"visible_text_chars": 539, "script_chars": 41200},
+    })
+    assert html["diagnostics"]["visible_text_chars"] == 539
+    assert html["diagnostics"]["script_chars"] == 41200

@@ -1378,6 +1378,35 @@ class StoragePipeline:
                 )
 
         warnings = []
+
+        # 4b. A container that was only partly read. The reader names the
+        #     members it could not decode; recording this as 'processed' would
+        #     claim the whole archive was read, and recording it as 'failed'
+        #     would discard the members that were read. (Only RAR needs an
+        #     external decoder, so this is the archive case.)
+        members_unreadable = info.get("members_unreadable")
+        if isinstance(members_unreadable, dict) and members_unreadable:
+            unread_count = sum(
+                value for value in members_unreadable.values()
+                if isinstance(value, int)
+            )
+            total = info.get("members_total")
+            read = info.get("members_read")
+            reasons = ", ".join(sorted(
+                str(reason).replace("_", " ") for reason in members_unreadable
+            ))
+            if total is None:
+                detail = (
+                    f"{unread_count} archive member(s) could not be read"
+                    + (f" ({reasons})" if reasons else "")
+                )
+            else:
+                detail = f"{unread_count} of {total} archive members could not be read"
+                if reasons:
+                    detail += f" ({reasons})"
+                if read is not None:
+                    detail += f"; {read} read"
+            warnings.append(detail)
         if content.get("ocr_attempted") and not content.get("ocr_successful"):
             warnings.append("ocr attempted but produced no text")
         if info.get("engine_error"):
@@ -1391,6 +1420,14 @@ class StoragePipeline:
         #    successfully - that is a different fact from failing to read it.
         if content.get("text") or pages or file_status == "Read":
             return "processed", None
+        # The reader knows *why* there was no text (an SVG with no text
+        # elements, an icon below the size floor, a scanned page with no OCR
+        # engine); reporting the generic phrase loses that. It is still a
+        # successful read, so the state stays 'processed'.
+        if info.get("reason"):
+            return "processed", f"no extractable text: {info['reason']}"[
+                :STATUS_DETAIL_MAX_LENGTH
+            ]
         return "processed", "no extractable text"
 
     HIERARCHY_SEPARATOR = "::"
@@ -1540,8 +1577,20 @@ class StoragePipeline:
         if isinstance(info, dict) and info:
             diagnostics = {
                 key: info.get(key)
-                for key in ("error", "reason", "skipped", "skip_reason",
-                            "engine_error", "preprocessing")
+                for key in (
+                    "error", "reason", "skipped", "skip_reason",
+                    "engine_error", "preprocessing",
+                    # Archive containers: how much of the member set was read
+                    # and what stopped the rest (a missing decoder, most
+                    # often), so the condition is queryable after the run.
+                    "decoder_missing", "members_total", "members_read",
+                    "members_unreadable",
+                    # HTML: where a document's characters went (visible text
+                    # versus inline script/style and excluded comments).
+                    "visible_text_chars", "script_chars", "style_chars",
+                    "comment_chars_excluded", "inline_code_truncated",
+                    "embedded_code_chars",
+                )
                 if info.get(key) is not None
             }
             if diagnostics:
