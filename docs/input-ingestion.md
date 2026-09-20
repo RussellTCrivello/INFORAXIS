@@ -74,6 +74,10 @@ are specified for it explicitly:
   paths are compared case-insensitively; on macOS/Linux `/` separates and the
   comparison is case-sensitive. The page states the containment rule the way
   the host will apply it — it never promises a path the server would refuse.
+  On a macOS volume that folds case (the default), the comparison stays
+  byte-exact, so a path typed in a different case than the configured root is
+  refused: type it as configured. Refusing is the safe direction — a false
+  refusal costs one retry, a false acceptance would read the wrong folder.
 * **Folder selections** keep their tree on all three platforms: the browser
   reports each file's path inside the chosen folder (always with `/`), the
   server stores it below the staged batch directory, and the file's place in

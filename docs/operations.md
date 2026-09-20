@@ -175,6 +175,17 @@ distinction:
   rejected by policy) stay distinct from the missing-decoder case, so the three
   different fixes are never confused.
 
+**Measured cost of the unreadable members (2026-09-20, this build).** A
+decoder-less RAR container keeps one nested unit open for the member that
+cannot be read, and the run's stall guard waits for progress before settling
+it: measured on a two-member archive, the container waited **120 s** (the
+configured `CONTAINER_STALL_GRACE_S`) and then recorded the unreadable member
+as *failed* rather than *skipped* — the recorded outcome is honest and the
+archive is still `partially_processed`, but the wait is dead time, once per
+container per run. The fix (settle the unit at the moment the reader reports
+`members_unreadable`, instead of at the grace deadline) is tracked as a
+follow-up; it changes when the outcome is recorded, not what is recorded.
+
 To read the compressed members, install a decoder. The reader looks for one on
 `PATH` and in the standard Windows install locations of WinRAR (`UnRAR.exe`),
 7-Zip (`7z.exe`) and the bundled `bsdtar`; a candidate has to *demonstrate*
