@@ -117,6 +117,41 @@ class ArchiveFileReader(BaseReader):
                     "bytes_extracted": getattr(result, "bytes_extracted", 0) if result else 0,
                     "skipped_members": list(getattr(result, "skipped", []) or []),
                 }
+                if getattr(result, "decoder_missing", False):
+                    # Part of this archive needed a decoder this machine does
+                    # not have. Members stored uncompressed were still read, so
+                    # this is a real result with a bounded gap: it is reported
+                    # as content (the container's own manifest) rather than
+                    # discarded as "Extraction failed", and the unreadable
+                    # members are named with their reason. Only RAR needs an
+                    # external decoder, so no other format is affected.
+                    result_notes = list(getattr(result, "notes", []) or [])
+                    payload["decoder_missing"] = True
+                    payload["members_total"] = getattr(result, "members_total", None)
+                    payload["members_unreadable"] = dict(
+                        getattr(result, "members_unreadable", None) or {}
+                    )
+                    payload["text"] = self._undecoded_container_text(
+                        file_path, ext, result, result_notes
+                    )
+                    hint = getattr(result, "decoder_hint", None)
+                    payload["extraction_info"] = {
+                        "extracted": files > 0,
+                        "stored": True,
+                        "warning": "archive_needs_external_decoder",
+                        "decoder_missing": True,
+                        "members_total": getattr(result, "members_total", None),
+                        "members_read": files,
+                        "members_unreadable": payload["members_unreadable"],
+                        "notes": result_notes,
+                        "detail": (
+                            "Part of this archive uses a RAR compression method "
+                            "that requires an external decoder, which is not "
+                            "installed. Members stored uncompressed were read and "
+                            "are listed below. " + (hint or "")
+                        ).strip(),
+                    }
+                    return payload
                 if files == 0:
                     # An empty archive is legitimate; an archive the backend
                     # could not actually parse is not. rarfile, for instance,
@@ -210,28 +245,82 @@ class ArchiveFileReader(BaseReader):
         return result, str(extract_to)
 
     def extract_rar(self, file_path):
-        """Extract RAR files safely (requires rarfile package and UnRAR tool)."""
-        try:
-            import rarfile  # noqa: F401
-        except ImportError:
-            logger.warning("rarfile not installed. Install with: pip install rarfile")
-            return None
+        """Extract RAR files safely.
 
+        Decoding is delegated to whichever RAR decoder is installed (unrar,
+        unar, 7-Zip or bsdtar). When none is - the normal state of a Windows
+        machine without WinRAR or 7-Zip - core.archive_safety reads the
+        container itself: members stored uncompressed are extracted and
+        CRC32-verified, the member inventory is reported, and members that need
+        a decoder are named instead of failing the whole file.
+
+        ArchiveSafetyError and ArchiveEncrypted propagate: read_file reports
+        the specific condition (rejected by policy, corrupt, password-protected)
+        rather than collapsing everything into "Extraction failed".
+        """
         extract_to = get_extraction_name_file(file_path, '.rar')
         reset_extraction_dir(extract_to)
-        try:
-            result = archive_safety.extract_rar(file_path, extract_to)
+        result = archive_safety.extract_rar(file_path, extract_to)
+        if getattr(result, "decoder_missing", False):
+            logger.warning(
+                "RAR read without an external decoder for %s: %d of %s member(s) "
+                "read (%s); compressed members require 7-Zip or WinRAR/UnRAR",
+                file_path,
+                result.files_extracted,
+                result.members_total,
+                archive_safety.rar_decoder_status(),
+            )
+        else:
             logger.info("Extracted %d files from %s", result.files_extracted, file_path)
-            return result, str(extract_to)
-        except ArchiveSafetyError:
-            # Re-raise: read_file's handler reports the specific reason. Turning
-            # it into None here made every rejection surface as a generic
-            # "Extraction failed", discarding which policy was hit.
-            raise
-        except Exception as e:
-            # rarfile.RarCannotExec lands here: the UnRAR tool is missing.
-            logger.warning("RAR extraction unavailable for %s: %s", file_path, e.__class__.__name__)
-            return None
+        return result, str(extract_to)
+
+    # ------------------------------------------------------------------
+    # Reporting for containers read without their decoder
+    # ------------------------------------------------------------------
+    #: Name listing cap. A 10 000-member archive must not turn into a 10 000-line
+    #: content blob in the word index; the count is always exact, the listing is
+    #: representative and says so.
+    MAX_LISTED_MEMBERS = 200
+
+    #: Hard cap on the manifest text handed to the index.
+    MAX_MANIFEST_CHARS = 20_000
+
+    def _undecoded_container_text(self, file_path, ext, result, notes):
+        """Describe a container that was read without its external decoder.
+
+        The manifest is built from what the container declares - names, sizes
+        and why each unreadable member is unreadable - so the archive's own
+        content is searchable evidence even when a member could not be
+        decoded, and the gap is never silent.
+        """
+        family = ext.lstrip('.').upper() or 'ARCHIVE'
+        lines = [
+            f"{family} archive: {Path(file_path).name}",
+            f"Members: {getattr(result, 'members_total', None)}",
+            f"Members read: {getattr(result, 'files_extracted', 0)}",
+        ]
+        unreadable = getattr(result, "members_unreadable", None) or {}
+        if unreadable:
+            described = ", ".join(
+                f"{count} {archive_safety.MEMBER_REASON_TEXT.get(reason, reason)}"
+                for reason, count in sorted(unreadable.items())
+            )
+            lines.append(f"Members that could not be read: {described}")
+        for note in notes or []:
+            lines.append(f"Note: {note}")
+
+        skipped = list(getattr(result, "skipped", []) or [])
+        if skipped:
+            lines.append("Members not extracted:")
+            lines.extend(f"  {name}" for name in skipped[:self.MAX_LISTED_MEMBERS])
+            if len(skipped) > self.MAX_LISTED_MEMBERS:
+                lines.append(
+                    f"  ... and {len(skipped) - self.MAX_LISTED_MEMBERS} more"
+                )
+        text = "\n".join(lines)
+        if len(text) > self.MAX_MANIFEST_CHARS:
+            text = text[:self.MAX_MANIFEST_CHARS] + "\n[manifest truncated]"
+        return text
 
     def extract_7z(self, file_path):
         """Extract 7Z files safely (requires py7zr package)."""

@@ -313,31 +313,35 @@ def test_encrypted_zip_is_reported_as_encrypted(reader, tmp_path):
 
 
 # --------------------------------------------------------------- rAR status
-def test_rar_cannot_be_verified_here(reader):
-    """Documents the boundary honestly instead of claiming RAR support.
+def test_rar_without_a_decoder_states_what_it_could_not_read(reader):
+    """RAR support, stated precisely - the previous version of this test was a
+    placeholder that recorded RAR as UNVERIFIED.
 
-    .rar is declared in get_supported_extensions() and rarfile is a declared
-    dependency, but rarfile needs an external tool (unrar/unar/7z/bsdtar) to
-    decode members and none is installed here, and no RAR creation tool is
-    available to build a valid fixture. So RAR extraction is UNVERIFIED - it is
-    not evidence of support, and it must not be promoted to supported.
+    What is verified here (see tests/unit/test_rar_without_decoder.py for the
+    full suite): rarfile parses RAR4/RAR5 headers in Python and reads members
+    stored uncompressed without any external tool, an archive whose members
+    need a decoder reports which ones and why, and no decoder is reported as
+    corruption. What is NOT verified here: decoding compressed members, because
+    no unrar/7z/bsdtar exists on this machine - the suite asserts that such a
+    member is named rather than silently missing.
 
-    What IS verified: a RAR the backend cannot decode does not raise and does
-    not claim members it never produced.
+    This test keeps the old hostile input: a RAR signature followed by junk is
+    not a container, and must not be reported as one.
     """
-    if shutil.which("unrar") or shutil.which("unar") or shutil.which("7z"):
-        pytest.skip("a RAR backend is present; this boundary does not apply")
     assert ".rar" in reader.get_supported_extensions()
     tmp = tempfile.mkdtemp()
     path = Path(tmp) / "fake.rar"
     path.write_bytes(bytes.fromhex("526172211a070100") + b"\x00garbage" * 40)
     res = _read(reader, path)
-    # Either it refuses, or it reports success with zero members and says so.
+    # Either it refuses, or it reports zero members and says so - never a
+    # silent success with invented content.
     if res.get("status") == "success":
         assert res.get("files_extracted") == 0, res
         assert res["extraction_info"]["warning"] == (
             "archive_opened_but_no_members_extracted"
         )
+    else:
+        assert res.get("error")
 
 
 def test_unsupported_archive_extension_is_rejected(reader, tmp_path):
