@@ -234,14 +234,22 @@
             {% endif %}
             
             <!-- Operations (unified input/import/jobs control surface) -->
+            {# The ONLY way into ingestion. The retired upload page had its own
+               shortcut here as well ("Upload Files" -> files.upload_page); both
+               landed on this same page, so the sidebar showed two icons for one
+               destination. The interface switch that used to gate that shortcut
+               ('upload_files') now gates this one, which is what it always
+               meant: whether the operator sees a way in from the menu. #}
+            {% if is_interface_enabled('upload_files') %}
             <li class="sidebar-nav-item">
                 <a href="{{ url_for('operations_input_page') }}"
-                   class="sidebar-nav-link {% if request.endpoint == 'operations_input_page' %}active{% endif %}"
+                   class="sidebar-nav-link {% if request.endpoint == 'operations_input_page' or request.endpoint == 'files.upload_page' %}active{% endif %}"
                    data-endpoint="operations_input_page">
                     <i class="bi bi-folder-plus"></i>
                     <span>{{ _('Input / Ingestion') }}</span>
                 </a>
             </li>
+            {% endif %}
             <li class="sidebar-nav-item">
                 <a href="{{ url_for('operations_import_page') }}"
                    class="sidebar-nav-link {% if request.endpoint == 'operations_import_page' %}active{% endif %}"
@@ -297,7 +305,7 @@
             {% endif %}
 
             <!-- Data Management -->
-            {% set data_section_visible = is_interface_enabled('sources') or is_interface_enabled('sides') or is_interface_enabled('email_words') or is_interface_enabled('keywords') or is_interface_enabled('words') or is_interface_enabled('categories') or is_interface_enabled('upload_files') or is_interface_enabled('file_library') %}
+            {% set data_section_visible = is_interface_enabled('sources') or is_interface_enabled('sides') or is_interface_enabled('email_words') or is_interface_enabled('keywords') or is_interface_enabled('words') or is_interface_enabled('categories') or is_interface_enabled('file_library') %}
             {% if data_section_visible %}
             <li class="sidebar-nav-item">
                 <span class="sidebar-section-label">{{ _('Data Management') }}</span>
@@ -365,18 +373,6 @@
                    data-endpoint="categories_list">
                     <i class="bi bi-tags"></i>
                     <span>{{ _('Categories') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            <!-- File Management -->
-            {% if is_interface_enabled('upload_files') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('files.upload_page') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'files.upload_page' %}active{% endif %}" 
-                   data-endpoint="files.upload_page">
-                    <i class="bi bi-cloud-upload"></i>
-                    <span>{{ _('Upload Files') }}</span>
                 </a>
             </li>
             {% endif %}
@@ -536,7 +532,7 @@
                                     'search_page': _('Search'),
                                     'search_advanced': _('Search'),
                                     'search_enhanced_page': _('Search'),
-                                    'upload_page': _('Upload Files'),
+                                    'operations_input_page': _('Input / Ingestion'),
                                     'files.files_list': _('File Library'),
                                     'keywords_list': _('Keywords'),
                                     'words_list': _('Words'),
@@ -586,7 +582,7 @@
                                     'search_page': _('Search'),
                                     'search_advanced': _('Search'),
                                     'search_enhanced_page': _('Search'),
-                                    'upload_page': _('Upload Files'),
+                                    'operations_input_page': _('Input / Ingestion'),
                                     'files.files_list': _('File Library'),
                                     'keywords_list': _('Keywords'),
                                     'words_list': _('Words'),

@@ -7,6 +7,23 @@ from core.serialization import pack_mapping, unpack_mapping
 
 logger = logging.getLogger(__name__)
 
+#: PostgreSQL rejects U+0000 in TEXT columns; it is the one character a text
+#: column cannot hold. Extracted text from binary containers (PST bodies,
+#: attachment payloads) genuinely contains it.
+NUL = "\x00"
+REPLACEMENT_CHARACTER = "\ufffd"
+
+
+def _sanitise_pg_text(text: str):
+    """Replace un-storable NUL characters, returning (text, removed_count).
+
+    Deterministic and position-preserving: one replacement character per NUL.
+    """
+    if not isinstance(text, str) or NUL not in text:
+        return text, 0
+    return text.replace(NUL, REPLACEMENT_CHARACTER), text.count(NUL)
+
+
 class ContentsRepository(BaseRepository):
     """
     Repository for content operations.
@@ -157,12 +174,30 @@ class ContentsRepository(BaseRepository):
     def store_raw_content(self, path_id, text, chunk_size=1024 * 1024):
         """Store the extractor's structured text verbatim (display fidelity).
 
-        Chunked TEXT rows in contents_raw. Called inside the same
-        transaction as the word-ID content store so both stores stay
-        consistent. Returns the number of chunks stored.
+        Chunked TEXT rows in contents_raw. Called inside the same transaction
+        as the word-ID content store so both stores stay consistent. Returns the
+        number of chunks stored.
+
+        PostgreSQL TEXT cannot represent U+0000, so text extracted from binary
+        containers (a real 2.1 GB PST produced chunks containing NUL) was
+        rejected by the driver with "A string literal cannot contain NUL (0x00)
+        characters" and the whole raw-text step was recorded as a degraded
+        failure. The document was stored, but without its display text.
+
+        NUL is replaced by U+FFFD (the standard replacement character) at this
+        single choke point, so position is preserved rather than silently
+        closing a gap, and the count is exposed on ``last_sanitisation`` for the
+        caller to record. Everything else is stored byte-for-byte. The
+        substitution is deterministic, so it cannot make two runs of the same
+        file disagree.
         """
         if text is None:
             return 0
+        text, nul_removed = _sanitise_pg_text(text)
+        self.last_sanitisation = {
+            'nul_replaced': nul_removed,
+            'chars': len(text),
+        }
         chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)] or [""]
         for seq, chunk in enumerate(chunks):
             self.execute(
@@ -364,12 +399,9 @@ class ContentsRepository(BaseRepository):
             # Binary search to find the largest chunk that fits within max_chunk_size
             best_chunk_end = chunk_start + 1
             
-            # Start with a reasonable chunk size estimate
-            # Estimate: each symbol pair tuple is ~50 bytes when pickled, compressed ~15 bytes
-            estimated_pairs_per_chunk = max_chunk_size // 15
-            chunk_end = min(chunk_start + estimated_pairs_per_chunk, total_pairs)
-            
-            # Binary search for optimal chunk size
+            # Binary search for the largest chunk that fits; the search is
+            # logarithmic in the pair count, so no size estimate is needed to
+            # bound it (an unused estimate used to sit here).
             low = chunk_start + 1
             high = total_pairs
             

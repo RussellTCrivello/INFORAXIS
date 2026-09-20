@@ -985,7 +985,6 @@ class SettingsManager:
             "categories": {"enabled": True, "category": "user"},
             "notifications": {"enabled": True, "category": "user"},
             "settings": {"enabled": True, "category": "user"},
-            "file_upload": {"enabled": True, "category": "core"},
             "file_browser": {"enabled": True, "category": "core"},
             "analytics": {"enabled": True, "category": "analysis"},
             "page_tips": {"enabled": True, "category": "user"},  # New interface for page tips

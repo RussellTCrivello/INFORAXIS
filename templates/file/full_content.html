@@ -6,6 +6,7 @@
 <link href="{{ url_for('static', filename='css/full-content.css') }}" rel="stylesheet">
 <link href="{{ url_for('static', filename='css/formatted-content.css') }}" rel="stylesheet">
 <link href="{{ url_for('static', filename='css/analyst-classify.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='css/file-nav.css') }}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -13,6 +14,7 @@
     <!-- Page Tips -->
     {% from 'components/page_tips.html' import page_tips %}
     {% from 'components/analyst_classify.html' import analyst_classify %}
+    {% from 'components/file_nav.html' import file_nav %}
         {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
 
     <div class="tips-section">
@@ -61,9 +63,15 @@
                 <span><i class="bi bi-calendar me-1"></i>{{ file[7]|format_date('%Y-%m-%d') }}</span>
                 <span><i class="bi bi-hash me-1"></i>{{ _('ID') }} {{ file[0] }}</span>
             </div>
+            <!-- Same Previous/Next control as the detail page, same browsed
+                 set: switching between a file's two views must not reset
+                 where the operator is. -->
+            <div class="file-nav-strip">
+                {{ file_nav(nav, 'plain') }}
+            </div>
         </div>
         <div class="btn-toolbar gap-2" role="toolbar" aria-label="{{ _('Toolbar') }}">
-            <a href="/file/{{ file[0] }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>{{ _('Details') }}</a>
+            <a href="{{ nav.details_url }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>{{ _('Details') }}</a>
             <button class="btn btn-outline-secondary" id="btnCopy"><i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}</button>
             <button class="btn btn-outline-secondary" id="btnDownload"><i class="bi bi-download me-1"></i>{{ _('Download') }}</button>
             <button class="btn btn-outline-secondary" id="btnPrint"><i class="bi bi-printer me-1"></i>{{ _('Print') }}</button>
@@ -178,23 +186,8 @@
 }|tojson|safe }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/full-content-page.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='js/modules/content-formatter.js') }}"></script>
-<script type="application/json" id="analyst-classify-page-data">{{ {
-    "canCategorize": current_user.is_authenticated and current_user.has_role('admin', 'analyst'),
-    "translations": {
-        "noCategoriesYet": _('No analyst categories yet.'),
-        "confirmRemove": _('Remove analyst category from this file? It returns to uncategorized status for search scope.'),
-        "removeLabel": _('Remove'),
-        "chooseCategory": _('Choose analyst category…'),
-        "chooseOrCreateCategory": _('Choose an analyst category or type a new one'),
-        "sourceContext": _('content view'),
-        "assignedToast": _('Assigned "{category}" to {count} file(s)'),
-        "assignFailed": _('Analyst categorization failed'),
-        "removeAllConfirmFile": _('Remove all analyst categories from this file? It will return to "uncategorized" for analyst search scope. Smart categories are not affected.'),
-        "removedToast": _('Removed analyst categories from {count} file(s)'),
-        "removeFailed": _('Remove failed'),
-        "categoryRemoved": _('Analyst category removed')
-    }
-}|tojson|safe }}</script>
+{% from 'components/analyst_classify_page_data.html' import analyst_classify_page_data %}
+{{ analyst_classify_page_data(current_user.is_authenticated and current_user.has_role('admin', 'analyst')) }}
 <script type="module" src="{{ url_for('static', filename='js/modules/analyst-classify.js') }}"></script>
 {% endblock %}
 

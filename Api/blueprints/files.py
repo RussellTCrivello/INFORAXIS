@@ -3,18 +3,12 @@ Files Blueprint - File Management Routes and Helpers
 Handles file upload, browsing, viewing, and processing
 """
 
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, current_app
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app
 from werkzeug.utils import secure_filename
-import os
 import sys
 from pathlib import Path
 import re
-from datetime import datetime, date
-import hashlib
 import logging
-import uuid
-import shutil
-import time
 
 project_root = str(Path(__file__).parent.parent.parent.parent)
 if project_root not in sys.path:
@@ -29,11 +23,15 @@ files_bp = Blueprint("files", __name__)
 
 from core.serialization import pack_int_list, unpack_int_list
 from core.errors import client_error, client_safe_message
-from core.security.rate_limit import limiter
+from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 from Api.utils import (
     execute_query, select_info_sources, select_info_sides, select_info_file_types,
     load_text_content, select_classification, compute_percentage, get_content_stats,
     get_word_frequencies, get_file, get_query
+)
+from Api.services.file_navigation import (
+    LIBRARY_JOINS, ORDER_BY, build_library_filters, context_params,
+    navigation_for,
 )
 
 
@@ -206,87 +204,32 @@ def get_monitor():
 
 @files_bp.route('/upload')
 def upload_page():
-    """Upload Interface"""
-    try:
-        sources = select_info_sources() or {}
-        sides = select_info_sides() or {}
-        return render_template('file/upload.html', sources=sources, sides=sides)
-    except Exception as e:
-        logger.error(f"Error loading upload page: {e}", exc_info=True)
-        # Return empty dicts to prevent template errors
-        return render_template('file/upload.html', sources={}, sides={})
+    """Compatibility alias for the single ingestion interface.
 
-
-@files_bp.route('/upload/process-path', methods=['POST'])
-def upload_process_path():
+    There used to be two upload interfaces - this CLI-styled page and
+    ``/operations/input`` - with different capabilities, different pipelines
+    and different words for the same thing. The interface is now one page; this
+    URL is kept so bookmarks, shortcuts and documentation that predate the
+    merge keep working and land on it.
     """
-    Start background file processing task.
-    Returns immediately with task ID for progress tracking.
-    """
-    try:
-        data = request.get_json()
-        file_path = data.get('file_path', '').strip()
-        source_id = data.get('source_id')
-        side_id = data.get('side_id')
-        
-        if not file_path:
-            return jsonify({'error': 'File path is required'}), 400
-        
-        if not source_id or not side_id:
-            return jsonify({'error': 'Source and Side are required'}), 400
-
-        # SECURITY (SEC-06): server-path ingestion must be contained to the
-        # configured INGESTION_ROOTS (plus the app's own upload staging
-        # directory). Without this check any analyst/admin could point the
-        # reader at an arbitrary file the server can read (e.g. /etc/passwd,
-        # .env, .flask_secret_key) and have its contents stored in the
-        # database, where any authenticated user can search and read them.
-        # ``validate_ingestion_path`` fails closed when no roots are
-        # configured, which is the documented behaviour of this feature.
-        from core.path_safety import validate_ingestion_path, PathSafetyError
-
-        try:
-            resolved_path = validate_ingestion_path(file_path)
-        except PathSafetyError as exc:
-            logger.warning("Rejected server path ingestion for %r: %s", file_path, exc)
-            return jsonify({'error': str(exc)}), 403
-        except Exception as exc:
-            logger.warning("Could not validate server path %r: %s", file_path, exc)
-            return jsonify({'error': 'Path could not be validated'}), 400
-
-        if not resolved_path.exists():
-            return jsonify({'error': f'Path does not exist: {file_path}'}), 400
-
-        file_path = str(resolved_path)
-
-        # Import task manager
-        from Api.task_manager import get_task_manager
-        
-        # Create and start background processing task
-        task_manager = get_task_manager()
-        try:
-            task_id = task_manager.create_task(
-                file_path=file_path,
-                source_id=source_id,
-                side_id=side_id,
-                task_name=f"Process: {os.path.basename(file_path)}"
-            )
-            
-            return jsonify({
-                'success': True,
-                'task_id': task_id,
-                'message': 'Processing started in background'
-            }), 202  # 202 Accepted - processing started
-        
-        except RuntimeError as e:
-            # Too many concurrent tasks
-            return client_error(e, subsystem='Api.blueprints.files', status=503)  # 503 Service Unavailable
-        
-    except Exception as e:
-        logger.error(f"Upload process-path error: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', status=500)
+    return redirect(url_for('operations_input_page'), code=302)
 
 
+# ---------------------------------------------------------------------------
+# Processing-task API (Api/task_manager.py)
+#
+# These four routes are the HTTP surface of the background processing-task
+# manager. It is a live subsystem: the import flows create tasks in it
+# (Api/services/import_service.py) and the dashboard's progress tracker polls
+# /upload/active-tasks every 1.5 s. The ingestion page does NOT use them - it
+# creates ingestion *jobs* (/api/input/jobs) whose progress, pause, resume and
+# cancel live in the Jobs Center (/operations/jobs). The old
+# POST /upload/process-path entry point, which started a path-ingestion task
+# from the deleted upload page, was removed with that page: it was a second,
+# differently-shaped way to start the same ingestion the Jobs API owns, and
+# nothing called it any more. Path containment (SEC-06) is unchanged and still
+# enforced in IngestionService.validate() for every ingestion path.
+# ---------------------------------------------------------------------------
 @files_bp.route('/upload/progress/<task_id>', methods=['GET'])
 def upload_progress(task_id):
     """
@@ -419,181 +362,6 @@ def api_cancel_task(task_id):
         return client_error(e, subsystem='Api.blueprints.files', status=500)
 
 
-# ==================== CHUNKED UPLOAD ROUTES ====================
-
-# Store active upload sessions
-_upload_sessions = {}
-
-@files_bp.route('/upload/chunked/start', methods=['POST'])
-def chunked_upload_start():
-    """Start a chunked upload session"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'success': False, 'error': 'JSON data is required'}), 400
-        
-        filename = data.get('filename', '').strip()
-        total_size = data.get('total_size', 0)
-        file_hash = data.get('file_hash', '').strip()
-        source_id = data.get('source_id')
-        side_id = data.get('side_id')
-        chunk_size = data.get('chunk_size', 5 * 1024 * 1024)  # Default 5MB
-        auto_analyze = data.get('auto_analyze', False)
-        
-        # Validate inputs
-        if not filename:
-            return jsonify({'success': False, 'error': 'Filename is required'}), 400
-        if not file_hash:
-            return jsonify({'success': False, 'error': 'File hash is required'}), 400
-        if not source_id or not side_id:
-            return jsonify({'success': False, 'error': 'Source ID and Side ID are required'}), 400
-        if total_size <= 0:
-            return jsonify({'success': False, 'error': 'Invalid file size'}), 400
-        
-        # Generate upload ID
-        upload_id = str(uuid.uuid4())
-        
-        # Create upload directory
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        session_dir = os.path.join(upload_folder, 'chunked_uploads', upload_id)
-        os.makedirs(session_dir, exist_ok=True)
-        
-        # Calculate total chunks
-        total_chunks = (total_size + chunk_size - 1) // chunk_size
-        
-        # Store session info
-        _upload_sessions[upload_id] = {
-            'upload_id': upload_id,
-            'filename': filename,
-            'total_size': total_size,
-            'file_hash': file_hash,
-            'source_id': source_id,
-            'side_id': side_id,
-            'chunk_size': chunk_size,
-            'total_chunks': total_chunks,
-            'uploaded_chunks': set(),
-            'session_dir': session_dir,
-            'auto_analyze': auto_analyze,
-            'created_at': datetime.now()
-        }
-        
-        logger.info(f"Started chunked upload session: {upload_id} for file: {filename}")
-        
-        return jsonify({
-            'success': True,
-            'upload_id': upload_id,
-            'total_chunks': total_chunks,
-            'chunk_size': chunk_size
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error starting chunked upload: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
-
-
-@files_bp.route('/upload/chunked/<upload_id>/chunk/<int:chunk_index>', methods=['POST'])
-def chunked_upload_chunk(upload_id, chunk_index):
-    """Upload a single chunk"""
-    try:
-        # Get session
-        session = _upload_sessions.get(upload_id)
-        if not session:
-            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
-        
-        # Validate chunk index
-        if chunk_index < 0 or chunk_index >= session['total_chunks']:
-            return jsonify({'success': False, 'error': 'Invalid chunk index'}), 400
-        
-        # Get chunk file
-        if 'chunk' not in request.files:
-            return jsonify({'success': False, 'error': 'No chunk file provided'}), 400
-        
-        chunk_file = request.files['chunk']
-        if not chunk_file:
-            return jsonify({'success': False, 'error': 'Empty chunk file'}), 400
-        
-        # Save chunk with error handling
-        chunk_path = os.path.join(session['session_dir'], f'chunk_{chunk_index}')
-        try:
-            chunk_file.save(chunk_path)
-        except PermissionError as e:
-            logger.error(f"Permission denied saving chunk {chunk_index}: {e}")
-            return jsonify({'success': False, 'error': f'Cannot save chunk: Permission denied'}), 403
-        except OSError as e:
-            logger.error(f"OS error saving chunk {chunk_index}: {e}")
-            return client_error(e, subsystem='Api.blueprints.files', success_key='success', public_message='Cannot save chunk', status=500)
-        except Exception as e:
-            logger.error(f"Unexpected error saving chunk {chunk_index}: {e}")
-            return client_error(e, subsystem='Api.blueprints.files', success_key='success', public_message='Failed to save chunk', status=500)
-        
-        # Mark chunk as uploaded
-        session['uploaded_chunks'].add(chunk_index)
-        
-        logger.debug(f"Uploaded chunk {chunk_index}/{session['total_chunks']} for session {upload_id}")
-        
-        return jsonify({
-            'success': True,
-            'chunk_index': chunk_index,
-            'uploaded_chunks': len(session['uploaded_chunks']),
-            'total_chunks': session['total_chunks']
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error uploading chunk: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
-
-@files_bp.route('/upload/chunked/<upload_id>/cancel', methods=['POST'])
-def chunked_upload_cancel(upload_id):
-    """Cancel a chunked upload session"""
-    try:
-        session = _upload_sessions.get(upload_id)
-        if not session:
-            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
-        
-        # Cleanup session directory
-        try:
-            if os.path.exists(session['session_dir']):
-                shutil.rmtree(session['session_dir'])
-        except Exception as e:
-            logger.warning(f"Failed to cleanup cancelled session directory: {e}")
-        
-        # Remove session
-        del _upload_sessions[upload_id]
-        
-        logger.info(f"Cancelled chunked upload session: {upload_id}")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Upload cancelled successfully'
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error cancelling chunked upload: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
-
-
-@files_bp.route('/upload/chunked/<upload_id>/status', methods=['GET'])
-def chunked_upload_status(upload_id):
-    """Get status of a chunked upload session"""
-    try:
-        session = _upload_sessions.get(upload_id)
-        if not session:
-            return jsonify({'success': False, 'error': 'Upload session not found'}), 404
-        
-        return jsonify({
-            'success': True,
-            'upload_id': upload_id,
-            'filename': session['filename'],
-            'uploaded_chunks': len(session['uploaded_chunks']),
-            'total_chunks': session['total_chunks'],
-            'progress': (len(session['uploaded_chunks']) / session['total_chunks']) * 100 if session['total_chunks'] > 0 else 0
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error getting chunked upload status: {e}", exc_info=True)
-        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
-
-
 # ==================== FILE BROWSER ====================
 
 @files_bp.route('/files')
@@ -617,7 +385,9 @@ def files_list():
     # Calculate offset
     offset = (page - 1) * limit
     
-    # Get filters
+    # Filters are validated and rendered by Api.services.file_navigation so
+    # that this list, its statistics counters and the Previous/Next controls
+    # on the detail pages can never disagree about what the current view is.
     search = request.args.get('search', '')
     source_filter = request.args.get('source', '')
     side_filter = request.args.get('side', '')
@@ -627,127 +397,20 @@ def files_list():
     date_to = request.args.get('date_to', '')
     size_min = request.args.get('size_min', '')
     size_max = request.args.get('size_max', '')
+
+    filters = build_library_filters(request.args)
+    where_clause = filters.where_clause()
+    where_params = list(filters.params)
+
+    # The same view, as query parameters the detail pages hand back to us.
+    # Every file link in this list carries them, which is what makes
+    # Previous/Next on a detail page walk *this* list and not the whole
+    # library.
+    nav_params = context_params(filters)
     
-    # Build filters for cursor pagination
-    filters = {}
-    joins = [
-        'LEFT JOIN hashs h ON p.hash_id = h.id',
-        'LEFT JOIN sources s ON h.source_id = s.id',
-        'LEFT JOIN sides si ON h.side_id = si.id'
-    ]
-    
-    if search:
-        # Use ILIKE for case-insensitive search
-        # Sanitize search to prevent SQL injection
-        search = search.strip()
-        if search:
-            filters['p.file_name'] = {'op': 'ILIKE', 'value': f'%{search}%'}
-        # Note: OR conditions need special handling - we'll use a combined filter
-        # For now, search on file_name only (can be extended)
-    
-    if source_filter:
-        try:
-            filters['h.source_id'] = int(source_filter)
-        except (ValueError, TypeError):
-            logger.warning(f"Invalid source_filter: {source_filter}")
-    
-    if side_filter:
-        try:
-            filters['h.side_id'] = int(side_filter)
-        except (ValueError, TypeError):
-            logger.warning(f"Invalid side_filter: {side_filter}")
-    
-    if status_filter:
-        # Validate status filter - handle both 'Read'/'Unread' and 'Analyzed'/'Pending'
-        if status_filter in ['Read', 'Unread', 'Analyzed', 'Pending']:
-            # Map 'Analyzed' to 'Read' and 'Pending' to 'Unread' for database
-            status_mapping = {'Analyzed': 'Read', 'Pending': 'Unread'}
-            db_status = status_mapping.get(status_filter, status_filter)
-            filters['p.file_status'] = db_status
-        else:
-            logger.warning(f"Invalid status_filter: {status_filter}")
-    
-    if file_type_filter:
-        # Sanitize file type filter
-        file_type_filter = file_type_filter.strip()
-        if file_type_filter:
-            filters['p.file_type'] = file_type_filter
-    
-    # Date range filters - use BETWEEN when both are provided, otherwise use >= or <=
-    if date_from or date_to:
-        try:
-            from datetime import datetime
-            if date_from and date_to:
-                # Both dates provided - use BETWEEN
-                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-                # Ensure date_from <= date_to
-                if date_from_obj <= date_to_obj:
-                    filters['p.file_date'] = {'op': 'BETWEEN', 'value': [date_from_obj, date_to_obj]}
-                else:
-                    # Invalid range - use date_from only
-                    logger.warning(f"Invalid date range: date_from ({date_from}) > date_to ({date_to})")
-                    filters['p.file_date'] = {'op': '>=', 'value': date_from_obj}
-            elif date_from:
-                # Only date_from provided
-                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-                filters['p.file_date'] = {'op': '>=', 'value': date_from_obj}
-            elif date_to:
-                # Only date_to provided
-                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-                filters['p.file_date'] = {'op': '<=', 'value': date_to_obj}
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Invalid date filter: date_from={date_from}, date_to={date_to}, error: {e}")
-    
-    # Size range filters - use BETWEEN when both are provided, otherwise use >= or <=
-    if size_min or size_max:
-        try:
-            if size_min and size_max:
-                # Both sizes provided - use BETWEEN
-                size_min_bytes = int(float(size_min) * 1024 * 1024)  # Convert MB to bytes
-                size_max_bytes = int(float(size_max) * 1024 * 1024)  # Convert MB to bytes
-                # Ensure size_min <= size_max
-                if size_min_bytes <= size_max_bytes:
-                    filters['p.file_size'] = {'op': 'BETWEEN', 'value': [size_min_bytes, size_max_bytes]}
-                else:
-                    # Invalid range - use size_min only
-                    logger.warning(f"Invalid size range: size_min ({size_min}MB) > size_max ({size_max}MB)")
-                    filters['p.file_size'] = {'op': '>=', 'value': size_min_bytes}
-            elif size_min:
-                # Only size_min provided
-                size_min_bytes = int(float(size_min) * 1024 * 1024)  # Convert MB to bytes
-                filters['p.file_size'] = {'op': '>=', 'value': size_min_bytes}
-            elif size_max:
-                # Only size_max provided
-                size_max_bytes = int(float(size_max) * 1024 * 1024)  # Convert MB to bytes
-                filters['p.file_size'] = {'op': '<=', 'value': size_max_bytes}
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Invalid size filter: size_min={size_min}, size_max={size_max}, error: {e}")
-    
-    # Build WHERE clause from filters
-    where_parts = []
-    where_params = []
-    
-    if filters:
-        for col, val in filters.items():
-            if isinstance(val, dict):
-                op = val.get('op', '=')
-                filter_value = val.get('value')
-                if op in ('=', '!=', '>', '<', '>=', '<=', 'LIKE', 'ILIKE'):
-                    where_parts.append(f"{col} {op} %s")
-                    where_params.append(filter_value)
-                elif op == 'BETWEEN':
-                    where_parts.append(f"{col} BETWEEN %s AND %s")
-                    where_params.extend([filter_value[0], filter_value[1]])
-            else:
-                where_parts.append(f"{col} = %s")
-                where_params.append(val)
-    
-    where_clause = ''
-    if where_parts:
-        where_clause = 'WHERE ' + ' AND '.join(where_parts)
-    
-    # Build base query
+    # Build base query. The ORDER BY is the one Previous/Next walks, so the
+    # sequence the detail pages step through is exactly this list's order.
+    joins = list(LIBRARY_JOINS)
     base_query = f"""
         SELECT 
             p.id, p.file_name, p.file_path, p.file_size, p.file_type,
@@ -757,7 +420,7 @@ def files_list():
         FROM paths p
         {' '.join(joins) if joins else ''}
         {where_clause}
-        ORDER BY p.date_creation DESC
+        ORDER BY {ORDER_BY}
     """
     
     try:
@@ -804,74 +467,12 @@ def files_list():
         total_pending = 0
         
         try:
-            # Build WHERE clause with same filters as main query (but exclude status filter)
-            stats_where = []
-            stats_params = []
-            
-            if search:
-                stats_where.append("p.file_name ILIKE %s")
-                stats_params.append(f'%{search}%')
-            
-            if source_filter:
-                try:
-                    stats_where.append("h.source_id = %s")
-                    stats_params.append(int(source_filter))
-                except (ValueError, TypeError):
-                    pass
-            
-            if side_filter:
-                try:
-                    stats_where.append("h.side_id = %s")
-                    stats_params.append(int(side_filter))
-                except (ValueError, TypeError):
-                    pass
-            
-            if file_type_filter:
-                stats_where.append("p.file_type = %s")
-                stats_params.append(file_type_filter)
-            
-            # Apply date filters
-            if date_from or date_to:
-                try:
-                    from datetime import datetime
-                    if date_from and date_to:
-                        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-                        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-                        if date_from_obj <= date_to_obj:
-                            stats_where.append("p.file_date BETWEEN %s AND %s")
-                            stats_params.extend([date_from_obj, date_to_obj])
-                    elif date_from:
-                        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-                        stats_where.append("p.file_date >= %s")
-                        stats_params.append(date_from_obj)
-                    elif date_to:
-                        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-                        stats_where.append("p.file_date <= %s")
-                        stats_params.append(date_to_obj)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Apply size filters
-            if size_min or size_max:
-                try:
-                    if size_min and size_max:
-                        size_min_bytes = int(float(size_min) * 1024 * 1024)
-                        size_max_bytes = int(float(size_max) * 1024 * 1024)
-                        if size_min_bytes <= size_max_bytes:
-                            stats_where.append("p.file_size BETWEEN %s AND %s")
-                            stats_params.extend([size_min_bytes, size_max_bytes])
-                    elif size_min:
-                        size_min_bytes = int(float(size_min) * 1024 * 1024)
-                        stats_where.append("p.file_size >= %s")
-                        stats_params.append(size_min_bytes)
-                    elif size_max:
-                        size_max_bytes = int(float(size_max) * 1024 * 1024)
-                        stats_where.append("p.file_size <= %s")
-                        stats_params.append(size_max_bytes)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Build queries with joins
+            # Same filters as the main query, minus status: each counter
+            # appends its own status condition below.
+            stats_filters = build_library_filters(request.args, include_status=False)
+            stats_where = list(stats_filters.where_parts)
+            stats_params = list(stats_filters.params)
+
             stats_query_base = """
                 SELECT COUNT(*) 
                 FROM paths p
@@ -880,23 +481,16 @@ def files_list():
                 LEFT JOIN sides si ON h.side_id = si.id
             """
             
-            # Get analyzed count (Read status)
-            analyzed_where = stats_where + ["p.file_status = 'Read'"]
-            analyzed_query = stats_query_base
-            if analyzed_where:
-                analyzed_query += " WHERE " + " AND ".join(analyzed_where)
-            
-            analyzed_result = execute_query(analyzed_query, tuple(stats_params) if stats_params else None, fetch="one")
-            total_analyzed = analyzed_result[0] if analyzed_result and isinstance(analyzed_result, tuple) else (analyzed_result if isinstance(analyzed_result, int) else 0)
-            
-            # Get pending count (Unread status)
-            pending_where = stats_where + ["p.file_status = 'Unread'"]
-            pending_query = stats_query_base
-            if pending_where:
-                pending_query += " WHERE " + " AND ".join(pending_where)
-            
-            pending_result = execute_query(pending_query, tuple(stats_params) if stats_params else None, fetch="one")
-            total_pending = pending_result[0] if pending_result and isinstance(pending_result, tuple) else (pending_result if isinstance(pending_result, int) else 0)
+            def _status_count(status):
+                query = stats_query_base + " WHERE " + " AND ".join(
+                    stats_where + ["p.file_status = %s"])
+                result = execute_query(query, tuple(stats_params + [status]), fetch="one")
+                if isinstance(result, tuple):
+                    return result[0]
+                return result if isinstance(result, int) else 0
+
+            total_analyzed = _status_count('Read')
+            total_pending = _status_count('Unread')
             
         except Exception as e:
             logger.error(f"Error calculating statistics: {e}", exc_info=True)
@@ -944,7 +538,8 @@ def files_list():
                              size_min=size_min or '',
                              size_max=size_max or '',
                              limit=limit,
-                             start_position=start_position)
+                             start_position=start_position,
+                             nav_params=nav_params)
     
     except Exception as e:
         logger.error(f"Error in files_list: {e}", exc_info=True)
@@ -978,6 +573,7 @@ def files_list():
                              status_filter=status_filter or '',
                              file_type_filter=request.args.get('file_type', '') or '',
                              cursor_pagination=True,
+                             nav_params={},
                              error=str(e))
 
 
@@ -1169,7 +765,13 @@ def file_detail(file_id):
     logger.info(f"Rendering template for file_id={file_id}: content_length={len(content)}, total_chars={total_chars}, total_pages={total_pages}, content_type={type(content)}")
     logger.info(f"Content preview (first 100 chars): {repr(content[:100]) if content else 'EMPTY'}")
     
+    # Previous/Next for the file being displayed, resolved inside the
+    # browsing context the operator arrived from (the filtered library list,
+    # or the whole library when the page is opened directly).
+    nav = navigation_for(file_id, request.args, endpoint='files.file_detail')
+
     return render_template('file/file_detail.html',
+                         nav=nav,
                          file=file_info,
                          content=content,  # Already ensured to be string
                          content_stats=content_stats,
@@ -1188,6 +790,7 @@ def file_detail(file_id):
                          analyst_categories=analyst_categories or [])
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/file/<int:file_id>/content')
 def file_content_lazy(file_id):
     """Lazy load content in chunks"""
@@ -1244,6 +847,7 @@ def file_export(file_id):
         return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/file/<int:file_id>/content/page')
 def file_content_page(file_id):
     """Get specific content page with pagination info"""
@@ -1598,7 +1202,12 @@ def file_full_content(file_id):
         except Exception as analyst_err:  # never break the reader page
             logger.warning(f"Could not load analyst categories for file {file_id}: {analyst_err}")
 
+        # Same Previous/Next control, same browsed set - the reader is a
+        # second view of the file, not a different browsing session.
+        nav = navigation_for(file_id, request.args, endpoint='files.file_full_content')
+
         return render_template('file/full_content.html', 
+                             nav=nav,
                              file=file_info, 
                              content=content,
                              content_stats=content_stats,
@@ -1618,6 +1227,7 @@ def file_full_content(file_id):
         return redirect(url_for('files.files_list'))
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/api/file/serve', methods=['GET'])
 def serve_file():
     """
@@ -1676,6 +1286,7 @@ def serve_file():
         return client_error(e, subsystem='Api.blueprints.files', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/api/file/<int:file_id>/serve', methods=['GET'])
 def serve_file_by_id(file_id):
     """

@@ -132,7 +132,6 @@ def reset_config():
     """Reset configuration to defaults (useful for testing)"""
     global _config
     _config = None
-    from .settings_adapter import get_settings
     # Reset is handled by settings manager
 
 
@@ -276,6 +275,18 @@ def invalidate_database_connections():
         StoragePipeline._shared_db_hub = None
     except Exception:
         logger.debug("Storage pipeline hub invalidation skipped", exc_info=True)
+
+    # 3. Process-wide connection pools: the registry is keyed by connection
+    #    target, so a pool created for the old host/database would keep being
+    #    handed to new Database objects even after the hub was dropped.  Closing
+    #    the registry entries is what makes the saved configuration take effect
+    #    for every component, not only for the storage hub.
+    try:
+        from database.database.database import reset_connection_pools
+
+        reset_connection_pools()
+    except Exception:
+        logger.debug("Connection pool registry invalidation skipped", exc_info=True)
 
     logger.info("Cached database state invalidated")
 

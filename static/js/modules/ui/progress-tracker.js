@@ -9,17 +9,23 @@
  * and recursive descendant discovered while processing), but the frontend had
  * two problems of its own:
  *
- *   1. `templates/file/upload.html` ships a `#processingProgressContainer`
- *      block and `static/css/upload.css` styles it - but nothing ever polled
- *      `/upload/active-tasks`, so on the page where processing is actually
- *      started the bar was dead markup and never appeared at all.
+ *   1. The page that used to ship a `#processingProgressContainer` block
+ *      (`templates/file/upload.html`, removed in the ingestion-interface
+ *      consolidation) styled the bar but never polled `/upload/active-tasks`,
+ *      so the bar was dead markup and never appeared at all. That page is gone;
+ *      the dashboard is the surviving consumer of this tracker.
  *   2. The dashboard's copy rebuilt the whole list with `innerHTML` on every
  *      poll. That destroys the DOM node carrying `transition: width .3s`, so
  *      even correct percentages rendered as a jump instead of a movement.
  *
- * This module is the single renderer for both pages. It polls, keeps one DOM
+ * This module is the single renderer for those pages. It polls, keeps one DOM
  * node per task (so CSS transitions animate), and surfaces the nested/terminal
  * breakdown rather than a bare percentage.
+ *
+ * Scope note: the tasks it shows come from Api/task_manager.py (the import
+ * flows create them). New ingestions do not appear here - they are Jobs, shown
+ * in the Jobs Center (/operations/jobs) and created by the ingestion page
+ * (/operations/input).
  */
 
 const DEFAULT_INTERVAL_MS = 1500;

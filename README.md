@@ -233,3 +233,7 @@ See **docs/windows.md** for setup, `.env` examples, and service installation.
 See docs/: job-system.md, input-ingestion.md, import-center.md, api.md,
 operations.md, performance.md, windows.md, security.md, database.md,
 architecture.md.
+
+`docs/REPOSITORY_REVIEW.md` is the whole-repository review: every regression
+found across the project's history with its root cause, the exact change that
+introduced it, what was fixed, and what is verified versus still unverified.

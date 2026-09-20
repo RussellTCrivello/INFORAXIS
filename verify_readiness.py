@@ -26,13 +26,11 @@ from __future__ import annotations
 import importlib
 import json
 import os
-import shutil
 import sys
 import tempfile
-import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -261,9 +259,21 @@ def _():
     app.config["TESTING"] = True
     client = app.test_client()
     resp = client.get("/auth/login")
-    if resp.status_code != 200:
-        raise AssertionError(f"/auth/login returned {resp.status_code}")
-    return "GET /auth/login -> 200"
+    if resp.status_code == 200:
+        return "GET /auth/login -> 200"
+    # A fresh installation has no account yet, and the application redirects the
+    # login route to the first-run setup page. That is correct behaviour - the
+    # operator has to create the administrator before logging in - so it must
+    # not be reported as a readiness failure. The redirect is followed to prove
+    # the login flow is actually reachable.
+    location = resp.headers.get("Location", "")
+    if resp.status_code in (301, 302, 303, 307, 308) and location.endswith("/setup"):
+        follow = client.get(location)
+        if follow.status_code == 200:
+            return ("GET /auth/login -> 302 /setup (first-run setup: create the "
+                    "administrator account to enable login)")
+        raise AssertionError(f"/setup returned {follow.status_code}")
+    raise AssertionError(f"/auth/login returned {resp.status_code} -> {location}")
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +308,6 @@ def _():
             raise AssertionError("hash is not sha256 hex")
 
         import psycopg2
-        from settings.config import get_db_config
 
         cfg = _db_cfg()
         conn = psycopg2.connect(
@@ -498,7 +507,7 @@ def _():
             import core.app_paths as ap
 
             ap.reset_cache()
-            dirs = ensure_runtime_dirs()
+            ensure_runtime_dirs()
             root = get_data_root()
             if not root.is_dir():
                 raise AssertionError("data root not created")
@@ -531,6 +540,72 @@ def _():
         limiter, "_route_limits", {}
     )
     return f"limiter enabled with {len(limits)} default limit(s)"
+
+
+# ---------------------------------------------------------------------------
+# Compute control (gateway compute-control layer)
+# ---------------------------------------------------------------------------
+@check("compute", "Compute gateway selects a device honestly")
+def _():
+    from core.compute import WorkloadKind, get_compute_gateway
+
+    gateway = get_compute_gateway()
+    report = gateway.mode_report()
+    placement = {k.value: gateway.select_device(k).as_dict() for k in WorkloadKind}
+    # A device may only be selected when the probe found a usable backend.
+    for kind, decision in placement.items():
+        if decision["device"] != "cpu":
+            assert decision["backend"], f"{kind} placed on a device with no backend"
+    usable = report["usable_accelerators"]
+    return (f"mode={report['requested_mode']} effective={report['effective_mode']} "
+            f"accelerators={usable or 'none (CPU only is what this host provides)'}")
+
+
+@check("compute", "Accelerator claims match measured hardware")
+def _():
+    from core.compute import detect_hardware
+
+    inventory = detect_hardware()
+    claimed = [i.kind for i in inventory.available_accelerators]
+    for kind, info in inventory.accelerators.items():
+        if info.available:
+            assert info.backend, f"{kind} claims availability without a runtime"
+        else:
+            assert info.detail, f"{kind} unavailable without an explanation"
+    return (f"cpu={inventory.cpu.name}; accelerators reported usable: "
+            f"{claimed or 'none'}")
+
+
+@check("compute", "Back-pressure refuses work instead of growing without bound",
+       critical=False)
+def _():
+    from core.compute import BackpressureError, ComputeGateway, HardwareInventory
+
+    inventory = HardwareInventory(probe=False)
+    inventory.cpu.compute_units = 2
+    gateway = ComputeGateway(inventory=inventory, max_concurrency=1, queue_depth=1,
+                             admission_timeout_s=0.05)
+    refused = False
+    with gateway.admit():
+        try:
+            with gateway.admit():
+                pass
+        except BackpressureError:
+            refused = True
+    assert refused, "queue saturation did not produce back-pressure"
+    return f"back-pressure engaged; peak queue depth {gateway.stats.peak_queue_depth}"
+
+
+@check("compute", "Compute is isolated from gateway/network cores", critical=False)
+def _():
+    from core.compute import ComputeGateway, HardwareInventory
+
+    inventory = HardwareInventory(probe=False)
+    inventory.cpu.compute_units = 8
+    gateway = ComputeGateway(inventory=inventory)
+    report = gateway.apply_isolation()
+    return (f"reserved {gateway.reserved_gateway_cores} core(s) for the gateway; "
+            f"affinity={report['affinity']} nice={report['nice']}")
 
 
 def main(argv=None) -> int:

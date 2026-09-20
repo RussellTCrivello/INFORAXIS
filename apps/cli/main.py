@@ -3,8 +3,7 @@ import os
 import hashlib
 from pathlib import Path
 import sys
-import importlib
-from typing import Optional
+from typing import List, Optional
 
 # Ensure UTF-8 encoding for stdout on Windows (emoji progress output)
 if sys.platform == 'win32':
@@ -28,40 +27,33 @@ def safe_print(message: str) -> None:
         safe_message = message.encode('ascii', 'replace').decode('ascii')
         print(safe_message)
 
-# CRITICAL: Protect standard library logging module BEFORE any other imports
-# This is especially important for multiprocessing spawn on Windows
-# PROBLEM: importlib.import_module('logging') returns cached module from sys.modules if it exists
-# SOLUTION: Always delete from sys.modules first, then import fresh
-if 'logging' in sys.modules:
-    # Check if it's the standard library module by checking for multiple standard attributes
-    _cached = sys.modules['logging']
-    _is_stdlib = (
-        hasattr(_cached, 'getLogger') and 
-        hasattr(_cached, 'INFO') and 
-        hasattr(_cached, 'DEBUG') and
-        hasattr(_cached, 'WARNING') and
-        hasattr(_cached, 'ERROR') and
-        hasattr(_cached, 'basicConfig') and
-        # managers.logging package won't have these
-        hasattr(_cached, 'Formatter') and
-        hasattr(_cached, 'StreamHandler')
+# Standard-library logging, imported normally.
+#
+# This file used to delete ``logging`` from ``sys.modules`` and re-import it
+# ("protect the standard library logging module"), on the theory that a
+# multiprocessing spawn or a stray ``managers.logging`` could poison the cached
+# module. Re-importing does not protect anything: it executes the module again
+# and creates a *second* logging universe (fresh root logger, manager, handler
+# registry and level state). Every module that had already imported logging -
+# the web app, the database layer, any library, the test harness - keeps
+# logging into the first universe, while code imported afterwards logs into the
+# second, so handlers and levels configured on one side silently do not apply
+# to the other. Observed in the suite: a warning logged through the new root
+# never reached pytest's capture handler (caplog.records was empty while the
+# message appeared on stderr).
+#
+# What is worth guarding is the real failure the comment was reaching for: a
+# local module shadowing the stdlib. Refuse loudly instead of re-importing.
+import logging
+
+if not (hasattr(logging, "getLogger") and hasattr(logging, "basicConfig")
+        and hasattr(logging, "Formatter")):
+    raise ImportError(
+        "'logging' resolved to a module that is not the standard library "
+        "(a local logging.py / logging/ package is shadowing it). Remove it "
+        "from the import path; do not re-import logging through sys.modules, "
+        "which splits the process into two logging configurations."
     )
-    if not _is_stdlib:
-        # It's been replaced with managers.logging - delete it
-        del sys.modules['logging']
-    else:
-        # Even if it looks correct, delete and reload to ensure freshness in multiprocessing
-        # This prevents any subtle corruption issues
-        del sys.modules['logging']
-
-# Now import fresh from standard library (importlib will load from file, not cache)
-logging = importlib.import_module('logging')
-# Ensure it's cached as the standard library module
-sys.modules['logging'] = logging
-
-# Final verification before using
-if not hasattr(logging, 'getLogger'):
-    raise ImportError("Failed to import standard library logging module. sys.modules['logging'] is corrupted.")
 
 logger = logging.getLogger(__name__)
 
@@ -281,16 +273,50 @@ def main_read_folder_threaded(folder_path, storage_source=None, storage_side=Non
             print("📊 PROCESSING STATISTICS")
             print(f"{'='*70}")
             
-            total_files = len(results) if results else stats.get('total', 0)
+            # The report is built from the ledger, not from the (deliberately
+            # bounded) list of retained results. Reporting ``len(results)``
+            # under the label "Total Files" made a 19 566-attachment container
+            # print "Total Files: 2" - the number of top-level files whose
+            # results were still in the window - while the work actually done
+            # was 1 400x larger and invisible.
+            snapshot = reader.get_live_progress()
+            total_files = snapshot.get('files_discovered', stats.get('total', 0))
+            nested_files = snapshot.get('files_nested', 0)
+            containers = snapshot.get('containers_opened', 0)
+            completed_files = snapshot.get('files_completed', 0)
+            pending_files = snapshot.get('files_pending', 0)
             files_stored = storage_stats.get('completed', 0)
             duplicate_files = storage_stats.get('duplicates', 0)
-            failed_files = stats.get('failed', 0)
-            
+            failed_files = snapshot.get('files_failed', 0)
+            retryable_files = snapshot.get('files_retryable', 0)
+            skipped_files = snapshot.get('files_skipped', 0)
+            unsupported_files = snapshot.get('files_unsupported', 0)
+            locked_files = snapshot.get('files_locked', 0)
+            cancelled_files = snapshot.get('files_cancelled', 0)
+
             print(f"Total Files:            {total_files}")
+            if nested_files:
+                print(f"  of which nested:      {nested_files}"
+                      f" (from {containers} container(s))")
+            print(f"Files Completed:        {completed_files}")
             print(f"Files Stored:           {files_stored}")
             print(f"Duplicate Files:        {duplicate_files}")
+            if skipped_files:
+                print(f"Files Skipped:          {skipped_files}")
+            if unsupported_files:
+                print(f"Files Unsupported:      {unsupported_files}")
             if failed_files > 0:
                 print(f"Failed Files:           {failed_files}")
+            if retryable_files:
+                print(f"Retryable Files:        {retryable_files}")
+            if locked_files:
+                print(f"Locked Files:           {locked_files}"
+                      f"  (retryable once the holder releases them)")
+            if cancelled_files:
+                print(f"Cancelled Files:        {cancelled_files}")
+            if pending_files:
+                print(f"UNPROCESSED (pending):  {pending_files}"
+                      f"  <-- run is INCOMPLETE")
             
             # File type distribution
             if results:
@@ -801,12 +827,26 @@ def main_read_folder_sequential(folder_path, storage_source=None, storage_side=N
     print("📊 PROCESSING STATISTICS")
     print(f"{'='*70}")
     
+    # This sequential fallback path tracks its own counters and has no progress
+    # ledger (the ledger belongs to the streaming reader used by cli_main and
+    # the web front end), so the summary is built from the numbers this path
+    # actually knows. An earlier change read the ledger through an undefined
+    # `stats` name here, which raised NameError before any of the summary
+    # printed - the numbers below can never be fabricated and a file that was
+    # discovered but not stored is still reported as pending.
     total_files = len(results)
+    # Files extracted from containers are counted separately below ("Extracted
+    # Files Stored"): they are additional artifacts, not a subset of the
+    # top-level total, so they must not be reported as "of which nested".
+    nested_files = 0
     files_stored = stored_count if 'stored_count' in locals() else 0
     duplicate_files = duplicate_count if 'duplicate_count' in locals() else 0
     storage_failed = failed_count if 'failed_count' in locals() else 0
-    
+    pending_files = storage_failed
+
     print(f"Total Files:            {total_files}")
+    if nested_files:
+        print(f"  of which nested:      {nested_files}")
     print(f"Processing Successful:  {successful}")
     if failed > 0:
         print(f"Processing Failed:      {failed}")
@@ -816,6 +856,8 @@ def main_read_folder_sequential(folder_path, storage_source=None, storage_side=N
         print(f"Storage Failed:         {storage_failed}")
     if 'extracted_count' in locals() and extracted_count > 0:
         print(f"Extracted Files Stored:  {extracted_count}")
+    if pending_files:
+        print(f"UNPROCESSED (pending):   {pending_files}  <-- run is INCOMPLETE")
     
     # File type distribution
     if results:
@@ -1417,6 +1459,17 @@ def main():
     record_command_line_action("SYSTEM", "Application started", {"log_file": str(log_file)})
     safe_print(f"[INFO] Action recording started: {log_file}\n")
     
+    # Compute policy: report the effective mode and the layer that set it, and
+    # refuse up front when the selection cannot be honoured on this host.
+    if apply_compute_mode(None) != 0:
+        safe_print("\n[ERROR] Cannot start: the selected compute mode cannot be "
+                   "honoured. Fix the configuration and start again.")
+        try:
+            stop_action_recording()
+        except Exception:
+            pass
+        return 1
+
     # Display mode
     mode = "THREADED" if USE_THREADING else "SEQUENTIAL"
     safe_print(f"[INFO] Processing Mode: {mode}")
@@ -1599,23 +1652,22 @@ def main():
                 "side": storage_side
             })
             
-            # Choose processing mode
+            # Choose processing mode. Both entry points print their own
+            # summary and statistics, so neither return value is consumed.
             if USE_THREADING:
-                results = main_read_folder_threaded(
+                main_read_folder_threaded(
                     input_path_user,
                     storage_source=storage_source,
                     storage_side=storage_side,
                     checkpoint_file=str(checkpoint_file) if checkpoint_file else None
                 )
             else:
-                results = main_read_folder_sequential(
+                main_read_folder_sequential(
                     input_path_user,
                     storage_source=storage_source,
                     storage_side=storage_side,
                     checkpoint_file=str(checkpoint_file) if checkpoint_file else None
                 )
-                
-            # Statistics are already displayed by the processing functions
             
         else:
             error_msg = f"Invalid path type: {input_path_user}"
@@ -1628,6 +1680,76 @@ def main():
         stop_action_recording()
         if is_recording_enabled():
             safe_print(f"\n[INFO] Action recording stopped. Log saved to: {log_file}")
+
+def extract_compute_mode_flag(argv):
+    """Pull ``--compute-mode VALUE`` (or ``--compute-mode=VALUE``) out of argv.
+
+    The interactive front-end has no argument parser, so the policy flag is
+    extracted here and applied before either front-end runs. Returns
+    ``(value_or_None, remaining_argv)``; raises ValueError when the flag is
+    present without a value so the caller can report it.
+    """
+    rest, value = [], None
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--compute-mode":
+            if i + 1 >= len(argv):
+                raise ValueError("--compute-mode requires a value "
+                                 "(cpu, gpu, cpu+gpu or auto)")
+            value = argv[i + 1]
+            i += 2
+            continue
+        if arg.startswith("--compute-mode="):
+            value = arg.split("=", 1)[1]
+            i += 1
+            continue
+        rest.append(arg)
+        i += 1
+    return value, rest
+
+
+def apply_compute_mode(value=None, *, quiet=False, printer=None):
+    """Resolve, report and validate the compute policy. Returns an exit code.
+
+    This is the single application point for the operator's mode selection:
+    the command line (``--compute-mode``) is pinned first, then the effective
+    mode is reported with the configuration layer it came from, the host's
+    ability to honour it is checked *before* any work starts, and a mode that
+    cannot be honoured fails here with an actionable error instead of
+    degrading silently. Returns 0 when the run may proceed, 1 otherwise.
+    """
+    from core.compute import policy as compute_policy
+
+    printer = printer or safe_print
+    try:
+        if value is not None:
+            selection = compute_policy.set_mode_override(
+                value, source=f"command line (--compute-mode {value})"
+            )
+        else:
+            selection = compute_policy.mode_selection()
+    except compute_policy.ComputeModeError as exc:
+        printer(f"[ERROR] {exc}")
+        return 1
+
+    support = compute_policy.mode_support(selection)
+    compute_policy.record(selection, support)
+    if not quiet:
+        compute_policy.emit(selection, support, printer=printer)
+    if not support.ok:
+        if quiet:
+            # ``emit`` was suppressed, so the reason must still be visible.
+            printer(f"[ERROR] {support.problem}")
+            if support.action:
+                printer(f"[ACTION] {support.action}")
+        return 1
+    if support.degraded and not quiet:
+        printer(f"[WARNING] {support.problem}")
+        if support.action:
+            printer(f"[ACTION] {support.action}")
+    return 0
+
 
 def cli_main(argv=None) -> int:
     """Non-interactive CLI entry point (thin adapter over IngestionService).
@@ -1657,6 +1779,14 @@ def cli_main(argv=None) -> int:
     parser.add_argument("--side", required=True, help="Side name for storage")
     parser.add_argument("--workers", type=int, default=0,
                         help="Worker threads (0 = configured default)")
+    parser.add_argument("--compute-mode", dest="compute_mode", default=None,
+                        metavar="MODE",
+                        help="Compute policy: cpu (CPU-only), gpu (GPU-only, "
+                             "strict - refuses rather than substituting the "
+                             "CPU), cpu+gpu (both worker sets) or auto "
+                             "(automatic routing). Overrides "
+                             "processing.compute_mode in data/settings.json; "
+                             "default: the configured value, else auto.")
     parser.add_argument("--checkpoint", default=None,
                         help="Checkpoint name for crash recovery/resume")
     parser.add_argument("--no-recursive", action="store_true",
@@ -1668,7 +1798,34 @@ def cli_main(argv=None) -> int:
     parser.add_argument("--verbose", action="store_true", help="Verbose logging")
     args = parser.parse_args(argv)
 
+    # Resolved before the compute-policy block below, which needs to know
+    # whether the caller asked for machine-readable output (the startup proof
+    # is suppressed for --json so the JSON payload stays parseable). Reading it
+    # after that block raised NameError on every invocation.
     output_json = args.json or args.format == "json"
+
+    # The compute policy is applied before anything else: an impossible
+    # request (e.g. GPU-ONLY on a host with no GPU) must fail here, not after
+    # files have been read, and the selected mode must be visible at startup.
+    #
+    # In --json mode the human-readable policy lines are buffered instead of
+    # discarded: the stream must stay parseable, but a refusal must still say
+    # why it refused. Discarding them (as this call did before) made a
+    # GPU-ONLY run on a GPU-less host exit 1 with no output at all.
+    policy_lines: List[str] = []
+    policy_exit = apply_compute_mode(
+        args.compute_mode, quiet=args.quiet,
+        printer=(lambda line: policy_lines.append(line)) if output_json else None,
+    )
+    if policy_exit:
+        if output_json:
+            print(_json.dumps({
+                "success": False,
+                "compute_mode": args.compute_mode or "configured",
+                "error": "compute policy refused this run",
+                "details": {"policy": policy_lines},
+            }))
+        return policy_exit
 
     def _emit(payload_dict=None, text=None):
         if output_json:
@@ -1740,6 +1897,9 @@ def cli_main(argv=None) -> int:
         return 3
 
     failed = int(result.stats.get("files_failed") or 0)
+    from core.compute import policy as compute_policy
+
+    compute_record = compute_policy.result_block()
     payload = {
         "success": True,
         "path": request.path,
@@ -1751,18 +1911,38 @@ def cli_main(argv=None) -> int:
             "duplicates": result.stats.get("files_duplicates"),
             "failed": failed,
         },
+        # The compute policy travels with the results: requested mode, its
+        # configuration layer, the devices that actually executed work and any
+        # fallback or capability refusal.
+        "compute": compute_record,
     }
-    _emit(payload, f"[OK] Ingestion complete: {payload['summary']}")
+    actual = ", ".join(f"{device} x{count}"
+                       for device, count in sorted(compute_record["actual_devices"].items()))
+    summary_line = (f"[OK] Ingestion complete: {payload['summary']} | "
+                    f"Compute Mode: {compute_record['mode_label']}"
+                    + (f" | Actual Device: {actual}" if actual else ""))
+    _emit(payload, summary_line)
     return 2 if failed else 0
 
 if __name__ == "__main__":
-    # Dispatch: flags -> non-interactive service adapter (cli_main);
-    # no flags -> legacy interactive flow (deprecated, kept for
-    # terminal-only environments).
-    if any(a.startswith("-") for a in sys.argv[1:]):
-        sys.exit(cli_main())
+    # Dispatch: any flag -> non-interactive service adapter (cli_main);
+    # policy-only or no flags -> legacy interactive flow (deprecated, kept for
+    # terminal-only environments). ``--compute-mode`` is accepted by both
+    # front-ends, so it is recognised here rather than being mistaken for an
+    # ingestion flag with missing --path/--source/--side.
     try:
-        main()
+        _requested_mode, _remaining = extract_compute_mode_flag(sys.argv[1:])
+    except ValueError as _mode_error:
+        safe_print(f"[ERROR] {_mode_error}")
+        sys.exit(1)
+
+    if any(a.startswith("-") for a in _remaining):
+        sys.exit(cli_main())
+    if _requested_mode is not None:
+        if apply_compute_mode(_requested_mode) != 0:
+            sys.exit(1)
+    try:
+        sys.exit(main() or 0)
     
     except KeyboardInterrupt:
         print("\n\nInterrupted by user. Exiting...")

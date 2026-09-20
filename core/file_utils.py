@@ -5,10 +5,11 @@ No dependencies on other project modules.
 
 import os
 import re
+import stat as stat_module
 import hashlib
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Iterator, Optional
 
 
 #: Files at or above this size are not hashed during discovery. Discovery
@@ -63,6 +64,64 @@ def calculate_file_hash(file_path: str, algorithm: str = 'sha256', chunk_size: i
 
 
 
+#: Suffixes openpyxl accepts when it is handed a *path*. It validates the name
+#: before it looks at the bytes and refuses anything else with
+#: "openpyxl does not support .docx file format ...". A file-like object skips
+#: that check, so a spreadsheet whose declared name is something else (an
+#: attachment inherited from its container, for example) must be opened as a
+#: stream. Both the ingestion reader and the preview service used to carry their
+#: own copy of this rule; it lives here so they cannot drift apart.
+OPENPYXL_PATH_SUFFIXES = (".xlsx", ".xlsm", ".xltx", ".xltm")
+
+
+def load_spreadsheet_workbook(file_path: str, *, read_only: bool = False,
+                              data_only: bool = False):
+    """Open a workbook by its bytes when its name is not a supported suffix.
+
+    ``read_only`` and ``data_only`` are passed through unchanged, so the caller
+    keeps deciding whether formulas or cached values are wanted. Raises whatever
+    openpyxl raises for content that is not a workbook.
+
+    The returned workbook owns the stream it was opened from and closes it in
+    its own ``close()``. openpyxl reads from a stream lazily - a ``read_only``
+    worksheet fetches rows on demand - so closing the handle when this function
+    returns (what a ``with`` block does) makes the *first* row read fail with
+    ``ValueError: seek of closed file``. Callers that use ``read_only`` must
+    still call ``close()`` when they are done.
+    """
+    import openpyxl
+
+    suffix = os.path.splitext(str(file_path))[1].lower()
+    if suffix in OPENPYXL_PATH_SUFFIXES:
+        return openpyxl.load_workbook(file_path, read_only=read_only,
+                                      data_only=data_only)
+
+    handle = open(file_path, "rb")
+    try:
+        workbook = openpyxl.load_workbook(handle, read_only=read_only,
+                                          data_only=data_only)
+    except Exception:
+        handle.close()
+        raise
+
+    original_close = workbook.close
+
+    def _close() -> None:
+        try:
+            original_close()
+        finally:
+            try:
+                handle.close()
+            except Exception:  # pragma: no cover - defensive
+                pass
+
+    workbook.close = _close          # type: ignore[method-assign]
+    #: Keeps the stream reachable (and closed by ``close()``) for as long as the
+    #: workbook is alive, instead of depending on garbage collection order.
+    workbook._inforaxis_source_stream = handle
+    return workbook
+
+
 def sanitize_filename(filename: str) -> str:
     """
     Sanitize filename by removing invalid characters.
@@ -80,20 +139,41 @@ def sanitize_filename(filename: str) -> str:
     return filename if filename else "unnamed_attachment"
 
 
-def get_standardized_metadata(file_path: str) -> Optional[Dict[str, Any]]:
-    """
-    Get standardized metadata for a file or directory.
-    
+def get_standardized_metadata(file_path: str, compute_hash: bool = True,
+                             dir_entry=None) -> Optional[Dict[str, Any]]:
+    """Get standardized metadata for a file or directory.
+
     Args:
         file_path: Path to file or directory
-        
+        compute_hash: Hash readable files below :data:`HASH_INLINE_MAX_BYTES`
+            while inspecting them.  Kept True by default (the historical
+            behaviour); the ingestion pipeline passes False so that hashing
+            happens once, in the parallel store stage, instead of a serialized
+            full read of the corpus during enumeration.  Either way a file that
+            is not hashed here carries :data:`HASH_DEFERRED_SENTINEL`, never a
+            fabricated identity.
+        dir_entry: Optional ``os.DirEntry`` for ``file_path``.  When supplied
+            its cached stat results are used, which removes several syscalls
+            per file (``read_tree`` walks millions of entries at a time).
+
     Returns:
         Dictionary with metadata or None if error
     """
     try:
-        path = Path(file_path)
-        
-        if not path.exists():
+        if dir_entry is not None:
+            try:
+                stats = dir_entry.stat(follow_symlinks=False)
+            except OSError:
+                stats = os.stat(file_path)
+            path = Path(file_path)
+        else:
+            path = Path(file_path)
+            try:
+                stats = path.stat()
+            except OSError:
+                stats = None
+
+        if stats is None:
             return {
                 "name": path.name,
                 "path": str(path),
@@ -110,29 +190,30 @@ def get_standardized_metadata(file_path: str) -> Optional[Dict[str, Any]]:
                 "executable": False,
                 "processing_time": "N/A"
             }
-        
-        stats = path.stat()
-        
-        # Determine file type
-        if path.is_file():
+
+        # Determine file type from the stat result we already have.
+        mode = stats.st_mode
+        if stat_module.S_ISREG(mode):
             file_type = "FILE"
-        elif path.is_dir():
+        elif stat_module.S_ISDIR(mode):
             file_type = "DIRECTORY"
-        elif path.is_symlink():
+        elif stat_module.S_ISLNK(mode):
             file_type = "SYMLINK"
         else:
             file_type = "OTHER"
-        
+
         is_readable = os.access(file_path, os.R_OK)
         is_writable = os.access(file_path, os.W_OK)
         is_executable = os.access(file_path, os.X_OK)
-        
+
         file_size = format_file_size(stats.st_size)
-        
+
         file_hash = "N/A"
-        if path.is_file() and is_readable:
+        if file_type == "FILE" and is_readable:
             try:
-                if stats.st_size < HASH_INLINE_MAX_BYTES:
+                if not compute_hash:
+                    file_hash = HASH_DEFERRED_SENTINEL
+                elif stats.st_size < HASH_INLINE_MAX_BYTES:
                     file_hash = calculate_file_hash(file_path)
                 else:
                     # HASH-01: never fabricate an identity. This used to be
@@ -145,10 +226,10 @@ def get_standardized_metadata(file_path: str) -> Optional[Dict[str, Any]]:
                     file_hash = HASH_DEFERRED_SENTINEL
             except Exception:
                 file_hash = "ERROR"
-        
+
         metadata = {
             "name": path.name,
-            "path": str(path.absolute()),
+            "path": os.path.abspath(file_path),
             "type": file_type,
             "extension": path.suffix.lower() if path.suffix else "none",
             "size": file_size,
@@ -162,9 +243,9 @@ def get_standardized_metadata(file_path: str) -> Optional[Dict[str, Any]]:
             "executable": is_executable,
             "processing_time": "N/A"
         }
-        
+
         return metadata
-        
+
     except Exception:
         return {
             "name": Path(file_path).name if file_path else "Unknown",
@@ -180,225 +261,243 @@ def get_standardized_metadata(file_path: str) -> Optional[Dict[str, Any]]:
             "readable": False,
             "writable": False,
             "executable": False,
-            "processing_time": "N/A"
+            "processing_time": "N/A",
+            "error": "Failed to get metadata"
         }
 
 
-def read_tree(path: str) -> list:
+def _error_metadata(name: str, path: str, extension: str, message: str) -> Dict[str, Any]:
+    """Metadata for an entry that could not be inspected.
+
+    The pipeline stores these records too ("files must not be lost because
+    they could not be read"), so the shape is the same as a successful
+    ``get_standardized_metadata`` result.
+    """
+    return {
+        "name": name,
+        "path": path,
+        "type": "ERROR",
+        "extension": extension,
+        "size": "N/A",
+        "size_bytes": None,
+        "hash": "N/A",
+        "created": "N/A",
+        "modified": "N/A",
+        "accessed": "N/A",
+        "readable": False,
+        "writable": False,
+        "executable": False,
+        "processing_time": "N/A",
+        "error": message,
+    }
+
+
+def iter_tree(path: str, compute_hashes: bool = True) -> Iterator[Dict[str, Any]]:
+    """Yield file/directory metadata for everything under ``path``.
+
+    This is the streaming form of :func:`read_tree`.  It exists because the
+    list form does not scale: each entry is a metadata dictionary of roughly
+    1.7 KB (measured), so a million-file tree needs ~1.7 GB of resident memory
+    just to be enumerated and ten million needs ~17 GB - before a single byte
+    of file content is read.  A generator lets the pipeline hold one batch at a
+    time instead.
+
+    Directory walking uses ``os.scandir`` with ``followlinks=False``: symlink
+    cycles cannot recurse, ``DirEntry.stat`` avoids a second ``stat`` syscall
+    per entry, and no ``Path.resolve()`` (a chain of syscalls) is needed to
+    stay loop-safe.  Errors on individual entries are yielded as ``ERROR``
+    records rather than aborting the walk, which is the behaviour the pipeline
+    depends on for locked, unreadable or vanishing files.
+
+    Args:
+        path: Root directory (a file path yields a single record).
+        compute_hashes: When True (the default, and the historical behaviour of
+            :func:`read_tree`) each readable file below
+            :data:`HASH_INLINE_MAX_BYTES` is hashed while being enumerated.
+            The ingestion pipeline passes ``False``: hashing there is done by
+            the parallel store stage, which computes the same streamed SHA-256
+            exactly once and would otherwise duplicate a full serialized read
+            of the whole corpus before processing began.  Metadata produced
+            with ``False`` carries :data:`HASH_DEFERRED_SENTINEL`, which
+            storage already recognises as "compute the real hash yourself" -
+            the same contract that has always applied to files above the
+            threshold.
+    """
+    root_path = Path(path)
+
+    # A single stat tells us whether the root exists / is a file / is a dir.
+    try:
+        root_stat = os.stat(path)
+    except FileNotFoundError:
+        yield _error_metadata(root_path.name, str(root_path), "none",
+                              "Root path does not exist")
+        return
+    except PermissionError as perm_err:
+        yield _error_metadata(root_path.name, str(root_path), "none",
+                              f"Permission denied accessing root path: {perm_err}")
+        return
+    except OSError as os_err:
+        yield _error_metadata(root_path.name, str(root_path), "none",
+                              f"Error accessing root path: {os_err}")
+        return
+    except Exception as exc:  # pragma: no cover - defensive
+        yield _error_metadata(Path(path).name if path else "Unknown",
+                              str(path) if path else "Unknown", "none",
+                              f"Critical error in read_tree: {exc}")
+        return
+
+    if stat_module.S_ISREG(root_stat.st_mode):
+        # A file was passed: enumerate exactly it (with the same error handling
+        # used for every other entry).
+        try:
+            info = get_standardized_metadata(path, compute_hash=compute_hashes)
+        except Exception as exc:
+            info = _error_metadata(root_path.name, str(root_path),
+                                   root_path.suffix.lower() or "none",
+                                   f"Unexpected error: {exc}")
+        if info:
+            yield info
+        return
+
+    def _directory_identity(stat_result) -> Optional[tuple]:
+        """Identity of a directory for cycle detection, or None when unusable.
+
+        ``(st_dev, st_ino)`` is only a real identity when the filesystem reports
+        a usable inode.  Windows volumes - and some network, FAT and virtual
+        mounts - report ``st_ino == 0`` for every entry.  Treating those zeros as
+        inode numbers gives every directory the *same* key, so the walk visits
+        the first directory it meets and silently skips every other directory
+        and all the files inside them: a nested tree collapses to a handful of
+        entries, and the files that were never enumerated are files the pipeline
+        can never process.  Zero (or a missing value) therefore means "identity
+        unavailable", and the caller falls back to the resolved real path, which
+        still catches symlink, bind-mount and hardlinked-root cycles.
+        """
+        try:
+            if not stat_result or not stat_result.st_ino:
+                return None
+            return (stat_result.st_dev, stat_result.st_ino)
+        except Exception:
+            return None
+
+    def _real_directory_path(directory: str) -> str:
+        """Canonical path of a directory, used when no inode identity exists."""
+        try:
+            return os.path.realpath(directory)
+        except Exception:
+            return os.path.abspath(directory)
+
+    #: Directories already visited, keyed by (device, inode) where the
+    #: filesystem reports one, otherwise by canonical path.  Bounding the guard
+    #: to directories keeps loop safety without holding one entry per file for
+    #: the whole walk.
+    visited_dirs = set()
+    visited_paths = set()
+    try:
+        root_key = _directory_identity(root_stat)
+        if root_key is not None:
+            visited_dirs.add(root_key)
+        else:
+            visited_paths.add(_real_directory_path(str(root_path)))
+    except Exception:
+        pass
+
+    def _walk(current: str) -> Iterator[Dict[str, Any]]:
+        try:
+            with os.scandir(current) as entries:
+                items = list(entries)
+        except PermissionError as perm_err:
+            yield _error_metadata(os.path.basename(current) or current, current,
+                                  "none", f"Permission denied: {perm_err}")
+            return
+        except OSError as os_err:
+            yield _error_metadata(os.path.basename(current) or current, current,
+                                  "none", f"OS error: {os_err}")
+            return
+        except Exception as exc:  # pragma: no cover - defensive
+            yield _error_metadata(os.path.basename(current) or current, current,
+                                  "none", f"Unexpected error: {exc}")
+            return
+
+        subdirectories = []
+        for entry in items:
+            try:
+                entry_path = entry.path
+                try:
+                    info = get_standardized_metadata(entry_path,
+                                                     compute_hash=compute_hashes,
+                                                     dir_entry=entry)
+                except Exception as exc:
+                    info = _error_metadata(entry.name, entry_path,
+                                           os.path.splitext(entry.name)[1].lower() or "none",
+                                           f"Unexpected error: {exc}")
+                if not info:
+                    continue
+                if not info.get("readable", True):
+                    info["error"] = "File is not readable (permission denied)"
+                yield info
+
+                if info.get("type") == "DIRECTORY" and not entry.is_symlink():
+                    # Track the real identity of the directory, not its path:
+                    # two names for the same directory (bind mount, hardlinked
+                    # tree root) must not be walked twice.  When the filesystem
+                    # cannot supply an inode, identity falls back to the
+                    # canonical path - never to a shared zero value, which would
+                    # make every directory look like the same one.
+                    try:
+                        st = entry.stat(follow_symlinks=False)
+                    except OSError:
+                        st = None
+                    key = _directory_identity(st)
+                    if key is not None:
+                        if key not in visited_dirs:
+                            visited_dirs.add(key)
+                            subdirectories.append(entry_path)
+                    else:
+                        real = _real_directory_path(entry_path)
+                        if real not in visited_paths:
+                            visited_paths.add(real)
+                            subdirectories.append(entry_path)
+            except PermissionError as perm_err:
+                yield _error_metadata(getattr(entry, "name", str(entry)),
+                                      getattr(entry, "path", str(entry)), "none",
+                                      f"Permission denied: {perm_err}")
+            except OSError as os_err:
+                yield _error_metadata(getattr(entry, "name", str(entry)),
+                                      getattr(entry, "path", str(entry)), "none",
+                                      f"OS error: {os_err}")
+            except Exception as exc:
+                yield _error_metadata(getattr(entry, "name", str(entry)),
+                                      getattr(entry, "path", str(entry)), "none",
+                                      f"Unexpected error: {exc}")
+
+        for subdirectory in subdirectories:
+            yield from _walk(subdirectory)
+
+    yield from _walk(str(root_path))
+
+
+def read_tree(path: str, compute_hashes: bool = True) -> list:
     """
     Read directory tree and return list of file metadata.
     PRODUCTION-READY: Handles all edge cases including permission errors, symlinks, and very long paths.
     Ensures NO files are lost, even if they can't be accessed.
-    
+
     Args:
         path: Directory path
-        
+        compute_hashes: Hash readable files while listing (see :func:`iter_tree`).
+            :func:`iter_tree` is the streaming form and is what large
+            ingestions should use.
+
     Returns:
         List of file metadata dictionaries (includes files with errors)
     """
-    file_info_list = []
-    visited_paths = set()  # Track visited paths to prevent infinite loops from symlinks
-    max_path_length = 260  # Windows MAX_PATH limit (can be extended with \\?\ prefix)
-    
     try:
-        root_path = Path(path)
-        if not root_path.exists():
-            # Return error metadata for non-existent root
-            error_info = {
-                "name": root_path.name,
-                "path": str(root_path),
-                "type": "ERROR",
-                "extension": "none",
-                "size": "N/A",
-                "size_bytes": None,
-                "hash": "N/A",
-                "created": "N/A",
-                "modified": "N/A",
-                "accessed": "N/A",
-                "readable": False,
-                "writable": False,
-                "executable": False,
-                "processing_time": "N/A",
-                "error": "Root path does not exist"
-            }
-            file_info_list.append(error_info)
-            return file_info_list
-        
-        # Use try-except around rglob to handle permission errors gracefully
-        try:
-            # PRODUCTION: Handle very long paths on Windows
-            if os.name == 'nt' and len(str(root_path.absolute())) > max_path_length:
-                # Use extended path prefix for Windows
-                extended_path = f"\\\\?\\{root_path.absolute()}"
-                root_path = Path(extended_path)
-            
-            # Iterate through all files and directories
-            for p in root_path.rglob("*"):
-                try:
-                    # PRODUCTION: Prevent infinite loops from symlinks
-                    path_str = str(p.resolve())  # Resolve symlinks
-                    if path_str in visited_paths:
-                        continue
-                    visited_paths.add(path_str)
-                    
-                    # PRODUCTION: Skip if path is too long (even with extended prefix)
-                    if len(str(p)) > 32767:  # Windows MAX_PATH extended limit
-                        error_info = {
-                            "name": p.name if len(p.name) < 100 else p.name[:100] + "...",
-                            "path": str(p)[:500] + "..." if len(str(p)) > 500 else str(p),
-                            "type": "ERROR",
-                            "extension": "none",
-                            "size": "N/A",
-                            "size_bytes": None,
-                            "hash": "N/A",
-                            "created": "N/A",
-                            "modified": "N/A",
-                            "accessed": "N/A",
-                            "readable": False,
-                            "writable": False,
-                            "executable": False,
-                            "processing_time": "N/A",
-                            "error": "Path too long (exceeds Windows MAX_PATH limit)"
-                        }
-                        file_info_list.append(error_info)
-                        continue
-                    
-                    # Get metadata - this handles errors internally
-                    file_info = get_standardized_metadata(p)
-                    if file_info:
-                        # PRODUCTION: Ensure error information is preserved
-                        if not file_info.get('readable', True):
-                            file_info['error'] = "File is not readable (permission denied)"
-                        file_info_list.append(file_info)
-                
-                except PermissionError as perm_err:
-                    # PRODUCTION: Store file info even if we can't access it
-                    error_info = {
-                        "name": p.name if hasattr(p, 'name') else str(p),
-                        "path": str(p),
-                        "type": "ERROR",
-                        "extension": p.suffix.lower() if hasattr(p, 'suffix') else "none",
-                        "size": "N/A",
-                        "size_bytes": None,
-                        "hash": "N/A",
-                        "created": "N/A",
-                        "modified": "N/A",
-                        "accessed": "N/A",
-                        "readable": False,
-                        "writable": False,
-                        "executable": False,
-                        "processing_time": "N/A",
-                        "error": f"Permission denied: {str(perm_err)}"
-                    }
-                    file_info_list.append(error_info)
-                
-                except OSError as os_err:
-                    # PRODUCTION: Store file info for OS errors (network drives, etc.)
-                    error_info = {
-                        "name": p.name if hasattr(p, 'name') else str(p),
-                        "path": str(p),
-                        "type": "ERROR",
-                        "extension": p.suffix.lower() if hasattr(p, 'suffix') else "none",
-                        "size": "N/A",
-                        "size_bytes": None,
-                        "hash": "N/A",
-                        "created": "N/A",
-                        "modified": "N/A",
-                        "accessed": "N/A",
-                        "readable": False,
-                        "writable": False,
-                        "executable": False,
-                        "processing_time": "N/A",
-                        "error": f"OS error: {str(os_err)}"
-                    }
-                    file_info_list.append(error_info)
-                
-                except Exception as e:
-                    # PRODUCTION: Catch-all for any other errors - still store file info
-                    error_info = {
-                        "name": p.name if hasattr(p, 'name') else str(p),
-                        "path": str(p),
-                        "type": "ERROR",
-                        "extension": p.suffix.lower() if hasattr(p, 'suffix') else "none",
-                        "size": "N/A",
-                        "size_bytes": None,
-                        "hash": "N/A",
-                        "created": "N/A",
-                        "modified": "N/A",
-                        "accessed": "N/A",
-                        "readable": False,
-                        "writable": False,
-                        "executable": False,
-                        "processing_time": "N/A",
-                        "error": f"Unexpected error: {str(e)}"
-                    }
-                    file_info_list.append(error_info)
-        
-        except PermissionError as root_perm_err:
-            # PRODUCTION: If we can't access the root, return error info
-            error_info = {
-                "name": root_path.name,
-                "path": str(root_path),
-                "type": "ERROR",
-                "extension": "none",
-                "size": "N/A",
-                "size_bytes": None,
-                "hash": "N/A",
-                "created": "N/A",
-                "modified": "N/A",
-                "accessed": "N/A",
-                "readable": False,
-                "writable": False,
-                "executable": False,
-                "processing_time": "N/A",
-                "error": f"Permission denied accessing root path: {str(root_perm_err)}"
-            }
-            file_info_list.append(error_info)
-        
-        except Exception as root_err:
-            # PRODUCTION: Catch-all for root-level errors
-            error_info = {
-                "name": root_path.name,
-                "path": str(root_path),
-                "type": "ERROR",
-                "extension": "none",
-                "size": "N/A",
-                "size_bytes": None,
-                "hash": "N/A",
-                "created": "N/A",
-                "modified": "N/A",
-                "accessed": "N/A",
-                "readable": False,
-                "writable": False,
-                "executable": False,
-                "processing_time": "N/A",
-                "error": f"Error accessing root path: {str(root_err)}"
-            }
-            file_info_list.append(error_info)
-    
+        return list(iter_tree(path, compute_hashes=compute_hashes))
     except Exception as e:
-        # PRODUCTION: Final catch-all - return at least the root path with error
-        error_info = {
-            "name": Path(path).name if path else "Unknown",
-            "path": str(path) if path else "Unknown",
-            "type": "ERROR",
-            "extension": "none",
-            "size": "N/A",
-            "size_bytes": None,
-            "hash": "N/A",
-            "created": "N/A",
-            "modified": "N/A",
-            "accessed": "N/A",
-            "readable": False,
-            "writable": False,
-            "executable": False,
-            "processing_time": "N/A",
-            "error": f"Critical error in read_tree: {str(e)}"
-        }
-        file_info_list.append(error_info)
-    
-    return file_info_list
-
+        return [_error_metadata(Path(path).name if path else "Unknown",
+                                str(path) if path else "Unknown", "none",
+                                f"Critical error in read_tree: {e}")]
 
 def create_standardized_result(file_path: str, content_data: Any, 
                                processing_time: Optional[float] = None) -> Dict[str, Any]:

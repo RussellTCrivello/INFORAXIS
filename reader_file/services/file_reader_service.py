@@ -9,7 +9,6 @@ based on file extension, following the same design pattern as the database layer
 import os
 import logging
 from typing import Dict, Any, Optional, Set, List
-from pathlib import Path
 
 from core.detect_binanry_utils import (
     CONFIDENCE_STRONG,
@@ -96,6 +95,10 @@ class FileReaderService:
         '.ts': 'RemainingFileReader',
         # WebM is a video container.
         '.webm': 'VideoFileReader',
+        # Tab-separated values are the same structured table as CSV, and the
+        # OfficeFileReader path is the one that populates content['rows'] /
+        # content['headers'] for the storage pipeline's table extraction.
+        '.tsv': 'OfficeFileReader',
     }
 
     def _build_extension_map(self):
@@ -158,7 +161,8 @@ class FileReaderService:
     # ------------------------------------------------------------------
     #: Compound extensions whose full form carries more information than the
     #: single-component magic-byte sniff (a .tar.gz sniffs as plain '.gz').
-    COMPOUND_EXTENSIONS = ('.tar.gz', '.tar.bz2', '.tar.xz')
+    COMPOUND_EXTENSIONS = ('.tar.gz', '.tar.bz2', '.tar.xz',
+                           '.tgz', '.tbz2', '.txz')
 
     @staticmethod
     def normalize_extension(extension: Optional[str]) -> str:
@@ -213,6 +217,34 @@ class FileReaderService:
             'detection_note': None,
         }
 
+        # FORMAT-01: the signature sniffer answers "which extension"; the format
+        # service answers the questions the pipeline actually needs - format
+        # identity (a .docm is not a .docx), MIME type, container features
+        # (macros, encryption, signatures, template/slideshow variants) and the
+        # declared-vs-detected discrepancies. It is additive: every existing key
+        # keeps its meaning, and callers that ignore the new keys behave exactly
+        # as before.
+        try:
+            from core.formats import identify as identify_format
+
+            identification = identify_format(file_path, declared_name=None)
+            decision['format_id'] = identification.format_id
+            decision['format_family'] = identification.family.value
+            decision['mime_type'] = identification.mime
+            decision['format_version'] = identification.version
+            decision['format_features'] = identification.features
+            decision['format_discrepancies'] = [
+                discrepancy.as_dict() for discrepancy in identification.discrepancies]
+            decision['format_identification'] = identification.as_dict()
+            if identification.extension and identification.extension != detected:
+                decision['detected_extension'] = identification.extension
+                detected = identification.extension
+            if identification.confidence and identification.confidence != confidence:
+                decision['detection_confidence'] = identification.confidence
+                confidence = identification.confidence
+        except Exception as exc:  # identification is additive; never fatal
+            decision['format_identification_error'] = str(exc)
+
         # A compound archive extension is more specific than the single
         # compression-layer signature the sniffer reports for the same bytes.
         if declared in self.COMPOUND_EXTENSIONS:
@@ -241,6 +273,31 @@ class FileReaderService:
             )
             if not declared:
                 decision['effective_extension'] = ''
+            return decision
+
+        # A declared extension the content contradicts outright does not get to
+        # choose the reader, even when the content evidence is only a heuristic.
+        # A text file called .png is not a PNG: the format service rejects the
+        # declared type for these bytes (it records
+        # ``declared_type_rejected_for_content``), and honouring the name sent
+        # the file to the image reader, which failed with "cannot identify
+        # image file" - an ERROR line for a file whose text was perfectly
+        # readable. Only that explicit rejection can override a usable
+        # extension, so nothing else changes route.
+        rejected = (
+            decision.get('format_identification', {})
+            .get('features', {})
+            .get('declared_type_rejected_for_content')
+        )
+        if rejected and self.is_supported(detected):
+            decision['effective_extension'] = detected
+            decision['detection_method'] = 'content-heuristic'
+            decision['extension_mismatch'] = True
+            decision['detection_note'] = (
+                f'declared extension {declared} names {rejected}, which cannot '
+                f'hold this content; the bytes are {detected or "text"} and the '
+                f'content decides'
+            )
             return decision
 
         if declared and self.is_supported(declared):

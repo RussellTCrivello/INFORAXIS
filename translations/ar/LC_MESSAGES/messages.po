@@ -281,7 +281,7 @@ msgid "Invalid request. Please check your input."
 msgstr "طلب غير صالح. يرجى التحقق من المدخلات."
 
 msgid "Authentication required. Please log in."
-msgstr "المصادقة مطلوبة. يرجى تسجيل الدخول."
+msgstr "المصادقة مطلوبة. يُرجى تسجيل الدخول."
 
 msgid "You do not have permission to perform this action."
 msgstr "ليس لديك صلاحية لتنفيذ هذا الإجراء."
@@ -290,7 +290,7 @@ msgid "The requested resource was not found."
 msgstr "لم يتم العثور على المورد المطلوب."
 
 msgid "Too many requests. Please wait a moment and try again."
-msgstr "طلبات كثيرة جداً. يرجى الانتظار قليلاً والمحاولة مرة أخرى."
+msgstr "طلبات كثيرة جدًا. يُرجى الانتظار قليلًا والمحاولة مرة أخرى."
 
 msgid "Server error. Please try again later."
 msgstr "خطأ في الخادم. يرجى المحاولة مرة أخرى لاحقاً."
@@ -1074,7 +1074,7 @@ msgid "Disk I/O"
 msgstr "قراءة/كتابة القرص"
 
 msgid "Analysis paused"
-msgstr "تم إيقاف التحليل مؤقتاً"
+msgstr "تم إيقاف التحليل مؤقتًا"
 
 msgid "Stop analysis? Progress will be lost."
 msgstr "إيقاف التحليل؟ سيتم فقدان التقدم."
@@ -7463,7 +7463,7 @@ msgid "Hash:"
 msgstr "التجزئة:"
 
 msgid "No matches"
-msgstr "لا"
+msgstr "لا توجد نتائج مطابقة"
 
 msgid "Chart library not loaded"
 msgstr "لم يتم تحميل مكتبة الرسوم البيانية"
@@ -8164,7 +8164,7 @@ msgid "Metadata extraction"
 msgstr "استخراج البيانات الوصفية"
 
 msgid "Validation failed"
-msgstr "فشل التحقق"
+msgstr "فشل التحقق من الصلاحية"
 
 msgid "Domain import"
 msgstr "استيراد بيانات النطاق"
@@ -8309,8 +8309,12 @@ msgstr "تاريخ التعيين"
 msgid "Assigned By"
 msgstr "تم التعيين بواسطة"
 
-msgid "Assigned manually by analysts. Fully separate from the smart classification shown beside it."
-msgstr "معيَّنة يدويًا بواسطة المحللين. منفصلة تمامًا عن التصنيف الذكي المعروض بجانبها."
+msgid ""
+"Assigned manually by analysts. Fully separate from the smart classification "
+"shown beside it."
+msgstr ""
+"معيَّنة يدويًا بواسطة المحللين. منفصلة تمامًا عن التصنيف الذكي المعروض "
+"بجانبها."
 
 msgid "Assignments"
 msgstr "التعيينات"
@@ -8342,8 +8346,11 @@ msgstr "اختر فئة المحلل…"
 msgid "Delete category (files return to uncategorized)"
 msgstr "حذف الفئة (تعود الملفات إلى غير مصنفة)"
 
-msgid "Every categorization action with analyst, timestamp, category, originating query and affected files."
-msgstr "كل إجراء تصنيف مع المحلل والوقت والفئة واستعلام المنشأ والملفات المتأثرة."
+msgid ""
+"Every categorization action with analyst, timestamp, category, originating "
+"query and affected files."
+msgstr ""
+"كل إجراء تصنيف مع المحلل والوقت والفئة واستعلام المنشأ والملفات المتأثرة."
 
 msgid "Export CSV"
 msgstr "تصدير CSV"
@@ -8363,8 +8370,12 @@ msgstr "تصفية حسب الاستعلام الذي أظهر الملفات…
 msgid "Manage Analyst Categories"
 msgstr "إدارة فئات المحلل"
 
-msgid "Manual, analyst-driven categorization layer — fully separate from system-generated smart categorization."
-msgstr "طبقة تصنيف يدوية يقودها المحلل — منفصلة تمامًا عن التصنيف الذكي الذي يولّده النظام."
+msgid ""
+"Manual, analyst-driven categorization layer — fully separate from system-"
+"generated smart categorization."
+msgstr ""
+"طبقة تصنيف يدوية يقودها المحلل — منفصلة تمامًا عن التصنيف الذكي الذي يولّده "
+"النظام."
 
 msgid "New analyst category name…"
 msgstr "اسم فئة محلل جديدة…"
@@ -8384,7 +8395,9 @@ msgstr "استعلام المنشأ"
 msgid "Originating Search Query"
 msgstr "استعلام البحث المنشأ"
 
-msgid "Remove analyst categories from selected files (returns them to uncategorized scope)"
+msgid ""
+"Remove analyst categories from selected files (returns them to uncategorized"
+" scope)"
 msgstr "إزالة فئات المحلل من الملفات المحددة (تعيدها إلى نطاق غير المصنفة)"
 
 msgid "Search Scope"
@@ -8402,14 +8415,25 @@ msgstr "عرض الملفات في هذه الفئة"
 msgid "Smart Categories"
 msgstr "الفئات الذكية"
 
-msgid "These labels belong exclusively to the analyst (manual) taxonomy. They are never shared with smart categories."
-msgstr "تنتمي هذه التسميات حصريًا إلى تصنيف المحلل (اليدوي)، ولا تتم مشاركتها مطلقًا مع الفئات الذكية."
+msgid ""
+"These labels belong exclusively to the analyst (manual) taxonomy. They are "
+"never shared with smart categories."
+msgstr ""
+"تنتمي هذه التسميات حصريًا إلى تصنيف المحلل (اليدوي)، ولا تتم مشاركتها مطلقًا"
+" مع الفئات الذكية."
 
-msgid "This file has no analyst-assigned category yet. Assign one from the Advanced Search results."
-msgstr "لا توجد لهذا الملف فئة محلل معيَّنة بعد. عيِّن واحدة من نتائج البحث المتقدم."
+msgid ""
+"This file has no analyst-assigned category yet. Assign one from the Advanced"
+" Search results."
+msgstr ""
+"لا توجد لهذا الملف فئة محلل معيَّنة بعد. عيِّن واحدة من نتائج البحث المتقدم."
 
-msgid "This scope filters on analyst (manual) categorization only. It is completely independent of smart categorization."
-msgstr "يعمل هذا النطاق على تصنيف المحلل (اليدوي) فقط، وهو مستقل تمامًا عن التصنيف الذكي."
+msgid ""
+"This scope filters on analyst (manual) categorization only. It is completely"
+" independent of smart categorization."
+msgstr ""
+"يعمل هذا النطاق على تصنيف المحلل (اليدوي) فقط، وهو مستقل تمامًا عن التصنيف "
+"الذكي."
 
 msgid "Uncategorized Files Only"
 msgstr "الملفات غير المصنفة فقط"
@@ -8453,11 +8477,18 @@ msgstr "اختر فئة محلل أو اكتب فئة جديدة"
 msgid "Smart"
 msgstr "ذكي"
 
-msgid "Delete analyst category \"{name}\"? Its assignments are removed and affected files return to uncategorized status."
-msgstr "حذف فئة المحلل \"{name}\"؟ ستُزال تعييناتها وتعود الملفات المتأثرة إلى حالة غير مصنفة."
+msgid ""
+"Delete analyst category \"{name}\"? Its assignments are removed and affected"
+" files return to uncategorized status."
+msgstr ""
+"حذف فئة المحلل \"{name}\"؟ ستُزال تعييناتها وتعود الملفات المتأثرة إلى حالة "
+"غير مصنفة."
 
-msgid "Remove analyst category from this file? It returns to uncategorized status for search scope."
-msgstr "إزالة فئة المحلل من هذا الملف؟ سيعود إلى حالة غير مصنف لأغراض نطاق البحث."
+msgid ""
+"Remove analyst category from this file? It returns to uncategorized status "
+"for search scope."
+msgstr ""
+"إزالة فئة المحلل من هذا الملف؟ سيعود إلى حالة غير مصنف لأغراض نطاق البحث."
 
 msgid "Remove failed"
 msgstr "فشلت الإزالة"
@@ -8507,22 +8538,38 @@ msgstr "تحديد للتصنيف اليدوي"
 msgid "Select {file} for manual categorization"
 msgstr "تحديد {file} للتصنيف اليدوي"
 
-msgid "Remove all analyst categories from {count} selected file(s)? They will return to \"uncategorized\" for analyst search scope. Smart categories are not affected."
-msgstr "إزالة جميع فئات المحلل من {count} ملف/ملفات محددة؟ ستعود إلى \"غير مصنفة\" لنطاق بحث المحلل. الفئات الذكية لن تتأثر."
+msgid ""
+"Remove all analyst categories from {count} selected file(s)? They will "
+"return to \"uncategorized\" for analyst search scope. Smart categories are "
+"not affected."
+msgstr ""
+"إزالة جميع فئات المحلل من {count} ملف/ملفات محددة؟ ستعود إلى \"غير مصنفة\" "
+"لنطاق بحث المحلل. الفئات الذكية لن تتأثر."
 
 msgid "Assigned \"{category}\" to {count} file(s)"
 msgstr "تم تعيين \"{category}\" لـ {count} ملف/ملفات"
 
-msgid "Find exactly what you need with powerful filters and intelligent algorithms"
+msgid ""
+"Find exactly what you need with powerful filters and intelligent algorithms"
 msgstr "اعثر على ما تحتاجه بالضبط باستخدام عوامل تصفية قوية وخوارزميات ذكية"
 
-msgid "Search files, content, categories... (supports multiple words, quotes, AND/OR/NOT)"
-msgstr "ابحث في الملفات والمحتوى والفئات... (يدعم عدة كلمات وعلامات الاقتباس و AND/OR/NOT)"
+msgid ""
+"Search files, content, categories... (supports multiple words, quotes, "
+"AND/OR/NOT)"
+msgstr ""
+"ابحث في الملفات والمحتوى والفئات... (يدعم عدة كلمات وعلامات الاقتباس و "
+"AND/OR/NOT)"
 
-msgid "Searching without a source or side filter may be slow on large datasets. Continue?"
-msgstr "قد يكون البحث دون تصفية حسب المصدر أو الجانب بطيئًا على مجموعات البيانات الكبيرة. هل تريد المتابعة؟"
+msgid ""
+"Searching without a source or side filter may be slow on large datasets. "
+"Continue?"
+msgstr ""
+"قد يكون البحث دون تصفية حسب المصدر أو الجانب بطيئًا على مجموعات البيانات "
+"الكبيرة. هل تريد المتابعة؟"
 
-msgid "Selecting a source or side limits search to that scope, improving performance"
+msgid ""
+"Selecting a source or side limits search to that scope, improving "
+"performance"
 msgstr "يحدد اختيار المصدر أو الجانب نطاق البحث به، مما يحسّن الأداء"
 
 msgid "Sort"
@@ -8540,8 +8587,13 @@ msgstr "لا توجد فئات محلل بعد."
 msgid "content view"
 msgstr "عرض المحتوى"
 
-msgid "Remove all analyst categories from this file? It will return to \"uncategorized\" for analyst search scope. Smart categories are not affected."
-msgstr "هل تريد إزالة جميع فئات المحلل من هذا الملف؟ سيعود إلى \"غير مصنف\" ضمن نطاق بحث المحلل. الفئات الذكية لن تتأثر."
+msgid ""
+"Remove all analyst categories from this file? It will return to "
+"\"uncategorized\" for analyst search scope. Smart categories are not "
+"affected."
+msgstr ""
+"هل تريد إزالة جميع فئات المحلل من هذا الملف؟ سيعود إلى \"غير مصنف\" ضمن نطاق"
+" بحث المحلل. الفئات الذكية لن تتأثر."
 
 msgid "Removed analyst categories from {count} file(s)"
 msgstr "تمت إزالة فئات المحلل من {count} ملف/ملفات"
@@ -8581,3 +8633,689 @@ msgstr "الشريحة التالية"
 
 msgid "Sheets"
 msgstr "أوراق العمل"
+
+msgid " · {n} staged"
+msgstr " · {n} في التجهيز"
+
+#: templates/Operations/input.html:278
+msgid "0 = use the system default (bounded by CPU and the database pool)."
+msgstr ""
+"0 = استخدام الإعداد الافتراضي للنظام (محدود بعدد أنوية المعالج ومجمّع "
+"اتصالات قاعدة البيانات)."
+
+#: templates/403.html:10
+msgid "403"
+msgstr "403"
+
+#: templates/Operations/input.html:328
+msgid ""
+"A dry run walks the input and reports what would happen — it writes nothing."
+msgstr ""
+"التشغيل التجريبي يمرّ على المدخلات ويبيّن ما سيحدث — دون كتابة أي شيء."
+
+#: templates/Operations/input.html:131
+msgid "Add files, or drop them here"
+msgstr "أضف ملفات، أو أفلتها هنا"
+
+#: templates/Operations/input.html:352
+msgid "All jobs"
+msgstr "كل المهام"
+
+msgid "Allowed roots — click to use one:"
+msgstr "المسارات الجذرية المسموح بها — انقر لاستخدام أحدها:"
+
+#: templates/Operations/input.html:115
+msgid "Any size: large files stream in chunks"
+msgstr "أي حجم: تُنقل الملفات الكبيرة على شكل أجزاء متتابعة"
+
+msgid "archive safety"
+msgstr "سلامة الأرشيف"
+
+#: templates/Operations/input.html:313
+msgid ""
+"archives, compressed files, e-mail attachments, embedded objects — extracted"
+" with parent/child links"
+msgstr ""
+"الأرشيفات والملفات المضغوطة ومرفقات البريد والكائنات المدمجة — تُستخرج مع "
+"روابط الأب/الابن"
+
+#: templates/Analysis/dashboard.html:128
+msgid ""
+"Bringing Files In: open \"Input / Ingestion\" in the sidebar to add files - "
+"one file, a whole folder, or a path on the server"
+msgstr ""
+"إدخال الملفات: افتح «الإدخال / الاستيعاب» في الشريط الجانبي لإضافة ملفات — "
+"ملف واحد أو مجلد كامل أو مسار على الخادم"
+
+#: templates/Operations/input.html:170
+msgid "Check"
+msgstr "فحص"
+
+#: templates/Operations/input.html:284
+msgid "Checkpoint handling"
+msgstr "معالجة نقاط التحقق"
+
+#: templates/Operations/input.html:282
+msgid "Checkpoints"
+msgstr "نقاط التحقق"
+
+msgid "Choose a server path"
+msgstr "اختر مسارًا على الخادم"
+
+#: templates/Operations/input.html:138
+msgid "Choose files"
+msgstr "اختر ملفات"
+
+#: templates/Operations/input.html:141
+msgid "Choose folder"
+msgstr "اختر مجلدًا"
+
+#: templates/Operations/input.html:58
+msgid "Choose what to ingest"
+msgstr "اختر ما سيُستوعب"
+
+#: templates/Operations/input.html:155
+msgid "Clear all"
+msgstr "مسح الكل"
+
+#: templates/Operations/input.html:313
+msgid "Containers"
+msgstr "الحاويات"
+
+#: templates/Operations/input.html:312
+msgid "content hash + source + side"
+msgstr "بصمة المحتوى + المصدر + الجهة"
+
+msgid "direct upload"
+msgstr "الرفع المباشر"
+
+msgid "disabled — no roots configured"
+msgstr "معطّل — لا توجد مسارات جذرية مُهيّأة"
+
+#: templates/Operations/input.html:134
+msgid "Drop files or folders here"
+msgstr "أفلت الملفات أو المجلدات هنا"
+
+#: templates/Operations/input.html:92
+msgid "dry run"
+msgstr "تشغيل تجريبي"
+
+#: templates/Operations/input.html:311
+msgid "Duplicate detection"
+msgstr "كشف التكرار"
+
+msgid "duplicate detection"
+msgstr "كشف التكرار"
+
+#: templates/Operations/input.html:254
+msgid ""
+"Duplicates are decided by content hash + source + side: the same file can "
+"exist under a different source without being a duplicate."
+msgstr ""
+"يُحدَّد التكرار ببصمة المحتوى والمصدر والجهة: يمكن أن يوجد الملف نفسه تحت "
+"مصدر مختلف دون أن يُعدّ مكررًا."
+
+msgid "engine capabilities"
+msgstr "قدرات المحرك"
+
+msgid "engine default workers"
+msgstr "العاملون الافتراضيون للمحرك"
+
+#: templates/Operations/input.html:76
+msgid "Engine defaults"
+msgstr "إعدادات المحرك الافتراضية"
+
+msgid "Enter a path first."
+msgstr "أدخل مسارًا أولًا."
+
+#: templates/Operations/input.html:35
+msgid "Everything that brings files into the system — in one place."
+msgstr "كل ما يجلب الملفات إلى النظام — في مكان واحد."
+
+#: templates/Operations/input.html:315
+msgid "extracted and indexed for search"
+msgstr "تُستخرج وتُفهرس للبحث"
+
+#: templates/Operations/input.html:317
+msgid "Failure handling"
+msgstr "معالجة الإخفاقات"
+
+#: templates/Analysis/file_classification.html:3
+msgid "File Analysis System"
+msgstr "نظام تحليل الملفات"
+
+#: templates/components/file_nav.html:20
+msgid "File navigation"
+msgstr "التنقل بين الملفات"
+
+#: templates/Operations/input.html:165
+msgid "File or folder on the server"
+msgstr "ملف أو مجلد على الخادم"
+
+msgid "Files selected"
+msgstr "الملفات المختارة"
+
+#: templates/Operations/input.html:233
+msgid "Filter sides"
+msgstr "تصفية الجهات"
+
+#: templates/Operations/input.html:233
+msgid "Filter sides…"
+msgstr "تصفية الجهات…"
+
+#: templates/Operations/input.html:202
+msgid "Filter sources"
+msgstr "تصفية المصادر"
+
+#: templates/Operations/input.html:202
+msgid "Filter sources…"
+msgstr "تصفية المصادر…"
+
+#: templates/Operations/input.html:123
+msgid "Folders reachable by the server"
+msgstr "المجلدات التي يصل إليها الخادم"
+
+#: templates/Operations/input.html:168
+msgid "for example /data/inbox"
+msgstr "مثال: /data/inbox"
+
+msgid "fresh start"
+msgstr "بداية جديدة"
+
+#: templates/Operations/input.html:335
+msgid "Hide preflight"
+msgstr "إخفاء الفحص المسبق"
+
+#: templates/Operations/input.html:263
+msgid "How should it be processed?"
+msgstr "كيف ستُعالَج؟"
+
+#: templates/Operations/input.html:312
+msgid "Identity"
+msgstr "الهوية"
+
+#: templates/Operations/input.html:39
+msgid "Import center"
+msgstr "مركز الاستيراد"
+
+#: templates/Operations/input.html:177
+msgid "Include subdirectories"
+msgstr "تضمين المجلدات الفرعية"
+
+#: templates/Operations/input.html:51
+msgid "Ingestion steps"
+msgstr "خطوات الاستيعاب"
+
+#: templates/Operations/input.html:109
+msgid "Input mode"
+msgstr "وضع الإدخال"
+
+msgid ""
+"Inside “{root}”. The dry run confirms what it contains — nothing has been "
+"read yet."
+msgstr "داخل «{root}». يؤكد التشغيل التجريبي ما يحتويه — ولم يُقرأ شيء بعد."
+
+msgid "Job {id} created — opening it…"
+msgstr "أُنشئت المهمة {id} — يجري فتحها…"
+
+msgid "large files"
+msgstr "الملفات الكبيرة"
+
+msgid "Largest"
+msgstr "الأكبر"
+
+#: templates/Operations/input.html:84
+msgid "Launch"
+msgstr "بدء"
+
+#: templates/Operations/input.html:264
+msgid "Leave the defaults unless this run needs something specific."
+msgstr "اترك الإعدادات الافتراضية ما لم تكن هذه الجولة تحتاج شيئًا خاصًا."
+
+#: templates/Operations/input.html:348
+msgid "Live state"
+msgstr "الحالة المباشرة"
+
+msgid "Mode"
+msgstr "الوضع"
+
+#: templates/Operations/input.html:209
+msgid "Name *"
+msgstr "الاسم *"
+
+#: templates/Operations/input.html:197
+msgid "New"
+msgstr "جديد"
+
+#: templates/Operations/input.html:238
+msgid "New side"
+msgstr "جهة جديدة"
+
+#: templates/Operations/input.html:207
+msgid "New source"
+msgstr "مصدر جديد"
+
+#: templates/components/file_nav.html:56
+msgid "Next file: %(name)s (Alt+Right)"
+msgstr "الملف التالي: %(name)s (Alt+Right)"
+
+msgid "no checkpoints"
+msgstr "لا توجد نقاط تحقق"
+
+msgid ""
+"No ingestion roots are configured — server paths stay disabled until they "
+"are."
+msgstr ""
+"لا توجد مسارات استيعاب مُهيّأة — تبقى مسارات الخادم معطّلة حتى تُهيّأ."
+
+msgid "No INGESTION_ROOTS configured — server paths are disabled."
+msgstr "لم يُهيّأ INGESTION_ROOTS — مسارات الخادم معطّلة."
+
+msgid "no jobs yet"
+msgstr "لا توجد مهام بعد"
+
+msgid "None exist yet — create one with “New”."
+msgstr "لا يوجد شيء بعد — أنشئ واحدًا عبر «جديد»."
+
+#: templates/components/file_nav.html:45
+msgid "Not in the current view"
+msgstr "ليس ضمن العرض الحالي"
+
+msgid "Not ready yet"
+msgstr "غير جاهز بعد"
+
+#: templates/Operations/input.html:200
+msgid "Not selected"
+msgstr "غير محدد"
+
+msgid "not staged"
+msgstr "لم يُجهَّز"
+
+msgid "Nothing in the queue has failed"
+msgstr "لا شيء في قائمة الانتظار قد فشل"
+
+#: templates/Operations/input.html:356
+msgid "Nothing is running."
+msgstr "لا شيء يعمل الآن."
+
+msgid "Nothing matches that filter."
+msgstr "لا شيء يطابق هذا المرشّح."
+
+#: templates/Operations/input.html:380
+msgid "Nothing selected yet"
+msgstr "لم يُحدَّد شيء بعد"
+
+msgid "Nothing was staged — add files again."
+msgstr "لم يُجهَّز أي ملف — أضف الملفات مرة أخرى."
+
+#: templates/Operations/input.html:316
+msgid "OCR"
+msgstr "OCR"
+
+msgid ""
+"Off writes no checkpoint: a crash means the next run starts from the "
+"beginning."
+msgstr ""
+"الإيقاف لا يكتب نقطة تحقق: عند تعطّل التشغيل تبدأ الجولة التالية من البداية."
+
+#: templates/Operations/input.html:273
+msgid "One worker fewer"
+msgstr "عامل أقل"
+
+#: templates/Operations/input.html:276
+msgid "One worker more"
+msgstr "عامل إضافي"
+
+msgid "Open job"
+msgstr "فتح المهمة"
+
+#: templates/Operations/input.html:135
+msgid "or choose them from this computer"
+msgstr "أو اخترها من هذا الحاسوب"
+
+#: templates/Operations/input.html:317
+msgid "per file: one unreadable object never stops the run"
+msgstr "لكل ملف: كائن واحد غير قابل للقراءة لا يوقف الجولة أبدًا"
+
+#: templates/components/file_nav.html:41
+msgid "Position in the current view"
+msgstr "الموضع ضمن العرض الحالي"
+
+#: templates/components/file_nav.html:47
+msgid "Position unavailable"
+msgstr "الموضع غير متاح"
+
+msgid ""
+"Preflight finished. Nothing was read into the system and nothing was "
+"written."
+msgstr "انتهى الفحص المسبق. لم يُقرأ شيء إلى النظام ولم يُكتب شيء."
+
+#: templates/Operations/input.html:334
+msgid "Preflight result"
+msgstr "نتيجة الفحص المسبق"
+
+#: templates/Operations/input.html:85
+msgid "Preflight, then start"
+msgstr "افحص مسبقًا ثم ابدأ"
+
+#: templates/components/file_nav.html:26
+msgid "Previous file: %(name)s (Alt+Left)"
+msgstr "الملف السابق: %(name)s (Alt+Left)"
+
+#: templates/Operations/input.html:46
+msgid "Reading engine capabilities…"
+msgstr "جارٍ قراءة قدرات المحرك…"
+
+#: templates/Operations/input.html:354
+msgid "Reading…"
+msgstr "جارٍ القراءة…"
+
+msgid "Ready to run"
+msgstr "جاهز للتشغيل"
+
+msgid "Ready: {n} file(s) · {v}"
+msgstr "جاهز: {n} ملف · {v}"
+
+msgid "Ready: {path}"
+msgstr "جاهز: {path}"
+
+#: templates/Operations/input.html:361
+msgid "Recently finished"
+msgstr "انتهت حديثًا"
+
+#: templates/Operations/input.html:301
+msgid "Record throughput and phases for this job"
+msgstr "تسجيل معدل النقل والمراحل لهذه المهمة"
+
+#: templates/Operations/input.html:145
+msgid "Release to add"
+msgstr "أفلت للإضافة"
+
+msgid "Remove {name}"
+msgstr "إزالة {name}"
+
+#: templates/Operations/input.html:286
+msgid "Resume"
+msgstr "استئناف"
+
+#: templates/Operations/input.html:292
+msgid ""
+"Resume continues an interrupted run; finished files are not processed twice."
+msgstr "الاستئناف يكمل جولة متقطعة؛ الملفات المكتملة لا تُعالج مرتين."
+
+#: templates/Operations/input.html:351
+msgid "Running now"
+msgstr "قيد التشغيل الآن"
+
+msgid "sampled from the walk"
+msgstr "من عيّنة من الجولة"
+
+msgid "server path"
+msgstr "مسار على الخادم"
+
+msgid "Server path set"
+msgstr "تم تحديد مسار الخادم"
+
+msgid "server paths"
+msgstr "مسارات الخادم"
+
+msgid ""
+"Server-path input is disabled: no INGESTION_ROOTS are configured. Set them "
+"in Settings (or the INGESTION_ROOTS environment variable) to enable it."
+msgstr ""
+"إدخال مسار الخادم معطّل: لم يُهيّأ INGESTION_ROOTS. هيّئه في الإعدادات (أو "
+"متغيّر البيئة INGESTION_ROOTS) لتفعيله."
+
+#: templates/Operations/input.html:311
+msgid "SHA-256 of the content, streamed"
+msgstr "SHA-256 للمحتوى، يُحسب بالتدفق"
+
+msgid "Side chosen"
+msgstr "تم اختيار الجهة"
+
+msgid "Side could not be created: {message}"
+msgstr "تعذّر إنشاء الجهة: {message}"
+
+msgid "Side “{name}” created and selected."
+msgstr "أُنشئت الجهة «{name}» وتم اختيارها."
+
+#: templates/Operations/input.html:67
+msgid "Source and side"
+msgstr "المصدر والجهة"
+
+msgid "Source and side are mandatory"
+msgstr "المصدر والجهة إلزاميان"
+
+#: templates/Operations/input.html:188
+msgid ""
+"Source and side travel with every file and become part of its identity."
+msgstr "المصدر والجهة يرافقان كل ملف ويصبحان جزءًا من هويته."
+
+msgid "Source chosen"
+msgstr "تم اختيار المصدر"
+
+msgid "Source could not be created: {message}"
+msgstr "تعذّر إنشاء المصدر: {message}"
+
+msgid "Source “{name}” created and selected."
+msgstr "أُنشئ المصدر «{name}» وتم اختياره."
+
+msgid "Sources and sides could not be loaded: {message}"
+msgstr "تعذّر تحميل المصادر والجهات: {message}"
+
+msgid "Staging failed: {message}"
+msgstr "فشل التجهيز: {message}"
+
+msgid "Staging files — keep this page open."
+msgstr "جارٍ تجهيز الملفات — أبقِ هذه الصفحة مفتوحة."
+
+msgid "Staging stopped. Files already staged stay staged and can be reused."
+msgstr "توقف التجهيز. الملفات المجهَّزة تبقى مجهَّزة ويمكن إعادة استخدامها."
+
+msgid "staging…"
+msgstr "جارٍ التجهيز…"
+
+#: templates/Operations/input.html:91
+msgid "start"
+msgstr "البداية"
+
+#: templates/Operations/import_center.html:51
+msgid "Start batch import"
+msgstr "بدء الاستيراد بالدفعات"
+
+#: templates/Operations/input.html:288
+msgid "Start fresh"
+msgstr "البدء من جديد"
+
+msgid ""
+"Start fresh ignores an earlier checkpoint and walks everything again — "
+"deduplication still prevents double storage."
+msgstr ""
+"البدء من جديد يتجاهل نقطة تحقق سابقة ويمرّ على كل شيء مرة أخرى — ويمنع كشف "
+"التكرار التخزين المزدوج."
+
+#: templates/Operations/input.html:381
+msgid "Start with step 1 — add files or a server path."
+msgstr "ابدأ بالخطوة 1 — أضف ملفات أو مسارًا على الخادم."
+
+msgid "Stop staging"
+msgstr "إيقاف التجهيز"
+
+msgid "stored as {name}"
+msgstr "مخزّن باسم {name}"
+
+#: templates/Operations/input.html:315
+msgid "Text & metadata"
+msgstr "النص والبيانات الوصفية"
+
+msgid ""
+"That path is outside every configured root ({roots}). Ingestion is fail-"
+"closed by design."
+msgstr ""
+"هذا المسار خارج كل مسار جذري مُهيّأ ({roots}). صُمّم الاستيعاب ليرفض ما هو "
+"خارجها."
+
+msgid "The engine accepted the request but returned no job id."
+msgstr "قبل المحرك الطلب لكنه لم يُعد معرّف مهمة."
+
+msgid ""
+"This browser cannot read a dropped folder. Use “Choose folder” — it works on"
+" Windows, macOS and Linux."
+msgstr ""
+"هذا المتصفح لا يستطيع قراءة مجلد مُفلَت. استخدم «اختر مجلدًا» — فهو يعمل على"
+" Windows وmacOS وLinux."
+
+msgid "This browser cannot send a whole folder — drag it here instead."
+msgstr ""
+"هذا المتصفح لا يستطيع إرسال مجلد كامل — اسحبه وأفلته هنا بدلًا من ذلك."
+
+msgid ""
+"This browser context has no hashing API (serve the app over https, or open "
+"it on localhost): chunks are verified by the server at the end instead."
+msgstr ""
+"سياق هذا المتصفح لا يتيح واجهة التجزئة (شغّل التطبيق عبر https أو افتحه على "
+"localhost): سيتحقق الخادم من الأجزاء في النهاية بدلًا من ذلك."
+
+msgid ""
+"This browser did not report the folder structure, so these files are placed "
+"without their folders."
+msgstr ""
+"لم يُبلّغ هذا المتصفح عن بنية المجلدات، لذا تُوضع هذه الملفات دون مجلداتها."
+
+#: templates/Operations/input.html:114
+msgid "This computer"
+msgstr "هذا الحاسوب"
+
+msgid "this computer"
+msgstr "هذا الحاسوب"
+
+#: templates/components/analyst_classify.html:52
+msgid ""
+"This file has no analyst-assigned category yet. Assign one here, or from the"
+" Advanced Search results."
+msgstr ""
+"لا توجد فئة مُعيَّنة من المحلّل لهذا الملف بعد. عيّن واحدة هنا أو من نتائج "
+"البحث المتقدم."
+
+#: templates/components/file_nav.html:34
+msgid "This is the first file in the current view"
+msgstr "هذا أول ملف في العرض الحالي"
+
+#: templates/components/file_nav.html:64
+msgid "This is the last file in the current view"
+msgstr "هذا آخر ملف في العرض الحالي"
+
+#: templates/Operations/input.html:368
+msgid "This run"
+msgstr "هذه الجولة"
+
+msgid "Transfers"
+msgstr "عمليات النقل"
+
+msgid "up to {v}"
+msgstr "حتى {v}"
+
+#: templates/Operations/input.html:105
+msgid ""
+"Upload from this computer — files or whole folders — or point the engine at "
+"a folder already on the server."
+msgstr ""
+"ارفع من هذا الحاسوب — ملفات أو مجلدات كاملة — أو وجّه المحرك إلى مجلد موجود "
+"على الخادم."
+
+#: templates/Operations/input.html:316
+msgid ""
+"used when an engine is available; a missing engine never fails the file"
+msgstr "يُستخدم عند توفر محرك؛ وغياب المحرك لا يُفشل الملف"
+
+msgid "Volume"
+msgstr "الحجم"
+
+#: templates/Operations/input.html:104
+msgid "What should be ingested?"
+msgstr "ما الذي سيُستوعب؟"
+
+#: templates/Operations/input.html:309
+msgid "What this pipeline always does"
+msgstr "ما تفعله هذه المنظومة دائمًا"
+
+#: templates/Operations/input.html:187
+msgid "Where does it belong?"
+msgstr "إلى أين ينتمي؟"
+
+msgid "Working…"
+msgstr "جارٍ العمل…"
+
+#: templates/Operations/input.html:314
+msgid "zip/tar/gz and more, with path-traversal protection"
+msgstr "zip/tar/gz وغيرها، مع حماية من اجتياز المسارات"
+
+msgid "{name} could not be staged: {message}"
+msgstr "تعذّر تجهيز {name}: {message}"
+
+msgid "{n} already in the list — not added twice."
+msgstr "{n} موجود بالفعل في القائمة — لم يُضف مرتين."
+
+msgid "{n} configured root(s)"
+msgstr "{n} مسار جذري مُهيّأ"
+
+msgid "{n} file(s) could not be staged — see the list."
+msgstr "تعذّر تجهيز {n} ملف — راجع القائمة."
+
+msgid "{n} file(s) failed to stage"
+msgstr "فشل تجهيز {n} ملف"
+
+msgid "{n} file(s) queued — {v} in total."
+msgstr "تم وضع {n} ملف في قائمة الانتظار — {v} في المجموع."
+
+msgid "{n} file(s) selected"
+msgstr "{n} ملف محدد"
+
+msgid "{n} file(s) · {v}"
+msgstr "{n} ملف · {v}"
+
+msgid "{n} MB chunks, up to {v}"
+msgstr "أجزاء بحجم {n} ميغابايت، حتى {v}"
+
+msgid "{n} worker(s)"
+msgstr "{n} عامل"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "hashing"
+msgstr "التجزئة"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "ready"
+msgstr "جاهز"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "chunked"
+msgstr "مجزّأ"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "staged"
+msgstr "مجهَّز"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "failed"
+msgstr "فشل"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "file"
+msgstr "ملف"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "resume"
+msgstr "استئناف"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "monitored"
+msgstr "مُراقَب"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "unavailable"
+msgstr "غير متاح"
+
+#: static/js/modules/charts/chart-customizer.js
+msgid "Applied"
+msgstr "تم التطبيق"

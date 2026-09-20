@@ -567,6 +567,13 @@ def test_no_progress_left_pending_after_a_cancel():
         assert snap["in_progress"] == 0
         assert snap["files_done"] == snap["total_files"]
         assert snap["percent"] == 100
-        assert snap["files_skipped"] > 0
+        # Cancellation is its own terminal state, not SKIPPED. Conflating the
+        # two made "we stopped on request" indistinguishable from "we chose not
+        # to process this" in reports and in discovered=filed reconciliation.
+        assert snap["files_cancelled"] > 0, snap
+        assert snap["files_skipped"] == 0, snap
+        assert (snap["files_completed"] + snap["files_failed"] + snap["files_skipped"]
+                + snap["files_unsupported"] + snap.get("files_retryable", 0)
+                + snap["files_cancelled"] == snap["total_files"]), snap
     finally:
         shutil.rmtree(root, ignore_errors=True)

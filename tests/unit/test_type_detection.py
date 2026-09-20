@@ -226,6 +226,38 @@ class TestResolver:
         assert decision["effective_extension"] == ".pdf"
         assert reader is reader_service.pdf_reader
 
+    # Both spellings of one format are the same type: the resolver must not
+    # report a content/extension contradiction (which the router logs as a
+    # warning) for a .jpeg, .tif or .mpg file, and must still route it to a
+    # registered reader.
+    @pytest.mark.parametrize(
+        "name, head",
+        [
+            ("photo.jpeg", b"\xFF\xD8\xFF\xE0\x00\x10JFIF"),
+            ("scan.tif", b"II*\x00"),
+            ("clip.mpg", b"\x00\x00\x01\xBA"),
+        ],
+    )
+    def test_extension_alias_is_not_a_contradiction(
+        self, reader_service, tmp_path, name, head
+    ):
+        target = tmp_path / name
+        target.write_bytes(head + b"\x00" * 256)
+        d = reader_service.resolve_type_for_file(str(target))
+        assert d["extension_mismatch"] is False
+        assert d["detection_note"] is None
+        assert reader_service.is_supported(d["effective_extension"])
+
+    def test_canonical_spelling_is_used_without_a_declared_extension(
+        self, reader_service, tmp_path
+    ):
+        """Without a name to consult, the signature's own spelling is reported."""
+        target = tmp_path / "nameless"
+        target.write_bytes(b"\xFF\xD8\xFF\xDB" + b"\x00" * 64)
+        d = reader_service.resolve_type_for_file(str(target))
+        assert d["detected_extension"] == ".jpg"
+        assert d["effective_extension"] == ".jpg"
+
 
 # ----------------------------------------------------------------------
 # Router end-to-end (the real processing path)

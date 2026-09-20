@@ -2,19 +2,18 @@
 ThreadManager - Individual thread management
 Provides full lifecycle control for threads with priority, monitoring, and communication.
 """
+import logging
 import threading
 import time
 import queue
 import traceback
 import inspect
-import multiprocessing as mp
-from multiprocessing import Pool
-import asyncio
 from dataclasses import dataclass
-from typing import Dict, List, Callable, Any, Optional, Coroutine, Tuple
+from typing import Dict, List, Callable, Any, Optional
 from enum import Enum
 from datetime import datetime
-import psutil
+
+logger = logging.getLogger(__name__)
 
 
 class ThreadPriority(Enum):
@@ -194,7 +193,11 @@ class ThreadManager:
             if auto_start:
                 managed.start()
             
-            print(f"[ThreadMgr] Created thread: {thread_id} ({name})")
+            # Per-thread submission is a hot path (one call per processed file),
+            # so it is logged at debug level.  Unconditional stdout writes here
+            # interleaved with the reader's carriage-return progress line and
+            # garbled the console output during large ingestions.
+            logger.debug(f"Created thread: {thread_id} ({name})")
             return thread_id
     
     def start_thread(self, thread_id: str):
@@ -210,14 +213,37 @@ class ThreadManager:
                 self.threads[thread_id].inbox.put(message)
     
     def receive_from_thread(self, thread_id: str, timeout: float = 0.1) -> Optional[Any]:
-        """Receive message from thread"""
+        """Receive a message from a thread's outbox.
+
+        The manager lock is held only long enough to resolve the thread's
+        outbox; the blocking ``get`` happens outside it.  Holding the
+        process-wide manager lock across a blocking queue read serialised
+        *every* manager operation (thread creation, message receipt, state
+        reads) behind each individual wait - with one message wait per file that
+        put a hard ceiling on ingestion throughput no matter how many workers
+        were configured.
+        """
         with self.lock:
-            if thread_id in self.threads:
-                try:
-                    return self.threads[thread_id].outbox.get(timeout=timeout)
-                except queue.Empty:
-                    return None
-        return None
+            entry = self.threads.get(thread_id)
+            outbox = entry.outbox if entry is not None else None
+        if outbox is None:
+            return None
+        try:
+            return outbox.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def receive_from_thread_nowait(self, thread_id: str) -> Optional[Any]:
+        """Non-blocking receive: ``None`` when the outbox has nothing ready."""
+        with self.lock:
+            entry = self.threads.get(thread_id)
+            outbox = entry.outbox if entry is not None else None
+        if outbox is None:
+            return None
+        try:
+            return outbox.get_nowait()
+        except queue.Empty:
+            return None
     
     def pause_thread(self, thread_id: str):
         """Pause thread execution"""
@@ -282,7 +308,10 @@ class ThreadManager:
                     if thread.metrics.state == ThreadState.RUNNING and not thread.is_alive():
                         thread.metrics.state = ThreadState.ERROR
                         thread.metrics.error_msg = "Thread died unexpectedly"
-                        print(f"[Monitor] Thread {tid} died unexpectedly!")
+                        # Warning from the monitor thread: logging keeps the
+                        # line from being spliced into the progress output of a
+                        # running ingestion.
+                        logger.warning(f"Thread {tid} died unexpectedly")
             
             time.sleep(interval)
     
@@ -316,8 +345,32 @@ class ThreadManager:
                 del self.threads[tid]
             
             if to_remove:
-                print(f"[ThreadMgr] Cleaned up {len(to_remove)} threads")
+                logger.debug(f"Cleaned up {len(to_remove)} threads")
     
+    def discard_finished_thread(self, thread_id: str) -> bool:
+        """Remove a *finished* thread's registry entry.
+
+        The registry keeps one entry per created thread, with two queues, its
+        metrics and a reference to the worker's arguments.  Nothing pruned it,
+        so a long ingestion retained one dead thread object per processed file -
+        measured at hundreds of live thread objects and tens of megabytes for a
+        1000-file run, and unbounded in the millions.  Removal is refused while
+        the underlying thread is alive, so a caller can never lose track of
+        running work; the caller is expected to have collected the outbox
+        first, which is exactly what the reader's collector does.
+        """
+        with self.lock:
+            entry = self.threads.get(thread_id)
+            if entry is None:
+                return False
+            try:
+                if entry.is_alive():
+                    return False
+            except Exception:
+                pass
+            del self.threads[thread_id]
+            return True
+
     def get_statistics(self) -> Dict:
         """Get thread statistics"""
         with self.lock:

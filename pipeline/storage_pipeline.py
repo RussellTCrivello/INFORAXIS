@@ -22,7 +22,7 @@ except ImportError:
 
 from Hdg_Err_Ex_Log import (
     handle_error, is_connection_error, is_retryable_error,
-    ErrorCategory, ErrorSeverity, format_validation_error
+    ErrorCategory, ErrorSeverity
 )
 from core.content_markers import strip_structural_markers
 
@@ -167,9 +167,23 @@ class StoragePipeline:
         # NOTE: DatabaseHub may not exist - it's optional for storage functionality
         # Storage works with db_service alone, db_hub is only needed for advanced features
         # CRITICAL FIX: Use shared DatabaseHub instance to prevent connection pool exhaustion
+        db_hub_owned = db_hub is not None
         if db_hub is None:
             # Use singleton pattern to prevent multiple connection pools
             with StoragePipeline._shared_db_hub_lock:
+                if StoragePipeline._shared_db_hub is not None:
+                    # Re-check readiness: the shared hub is dropped when the
+                    # database configuration changes (settings/config.py
+                    # invalidate_database_connections) or when a caller closed
+                    # it.  Rebuilding it here self-heals the pipeline instead
+                    # of leaving every later store without a hub - the previous
+                    # behaviour that silently degraded duplicate detection and
+                    # triggered per-file "connection unhealthy" handling.
+                    try:
+                        if not StoragePipeline._shared_db_hub.db._pool:
+                            StoragePipeline._shared_db_hub = None
+                    except Exception:
+                        StoragePipeline._shared_db_hub = None
                 if StoragePipeline._shared_db_hub is None:
                     try:
                         from database import DatabaseHub
@@ -188,6 +202,11 @@ class StoragePipeline:
                 db_hub = StoragePipeline._shared_db_hub
         
         self.db_hub = db_hub
+        #: True when this pipeline created its own hub and may therefore close
+        #: it.  The class-shared hub is owned by the pipeline class: a nested
+        #: reader that closes it would break every other reader in the process
+        #: (the "Database connection unhealthy, attempting reconnect..." loop).
+        self.db_hub_owned = db_hub_owned
         
         # Store source and side names (optional in constructor, but mandatory in _store_file_sync)
         # No defaults - source and side must be explicitly provided
@@ -202,6 +221,13 @@ class StoragePipeline:
         #: lets the reader classify a resolved duplicate as "nothing new was
         #: stored" instead of counting it as a fresh success.  Bounded by
         #: :data:`_OUTCOME_KEEP`.
+        #: name -> id caches for source/side resolution (see _resolve_source_id).
+        #: Small by construction: a run uses a handful of names, and each entry
+        #: is one integer.  Invalidated on reconnect/reconfiguration.
+        self._source_id_cache: Dict[str, int] = {}
+        self._side_id_cache: Dict[str, int] = {}
+        self._entity_lock = threading.Lock()
+
         self._store_outcomes: "OrderedDict[str, str]" = OrderedDict()
         self._outcome_lock = threading.Lock()
 
@@ -249,6 +275,97 @@ class StoragePipeline:
         s['consistency_issues'] = issues
         return s
     
+    # ------------------------------------------------------------------
+    # Source / side resolution (cached, keyed)
+    # ------------------------------------------------------------------
+    def _resolve_source_id(self, name: str) -> Optional[int]:
+        """Return the id for ``name``, creating it if needed.
+
+        Cached per name: a run stores thousands of files under one source, and
+        the previous implementation re-read the entire ``sources`` table for
+        each of them.  On a cache miss the repository's ``ON CONFLICT`` upsert
+        resolves-or-creates in one statement, so concurrent workers cannot
+        race (which used to cost the file its real source).
+        """
+        with self._entity_lock:
+            cached = self._source_id_cache.get(name)
+        if cached is not None:
+            return cached
+        try:
+            source_id = self.db_service.get_or_create_source(name=name, importance=1.0)
+        except Exception as exc:
+            logger.error(f"Failed to resolve source '{name}': {exc}")
+            source_id = None
+        if source_id:
+            with self._entity_lock:
+                self._source_id_cache[name] = source_id
+            logger.debug(f"Resolved source: {name} (ID: {source_id})")
+            return source_id
+
+        # Fallback chain, preserved from the previous implementation: a known
+        # fallback source, then whatever source exists, so a file is never lost
+        # because its declared source could not be created.
+        try:
+            fallback_name = "__FALLBACK_SOURCE__"
+            fallback_id = self.db_service.get_or_create_source(
+                name=fallback_name, importance=0.5
+            )
+            if fallback_id:
+                with self._entity_lock:
+                    self._source_id_cache[fallback_name] = fallback_id
+                logger.warning(f"Using fallback source '{fallback_name}' (ID: {fallback_id})")
+                return fallback_id
+        except Exception as fallback_error:
+            logger.error(f"Failed to create fallback source: {fallback_error}")
+        try:
+            existing = self.db_service.get_all_sources()
+            if existing:
+                logger.warning(f"Using first available source (ID: {existing[0][0]}) as last resort")
+                return existing[0][0]
+        except Exception as exc:
+            logger.debug(f"Could not list sources: {exc}")
+        logger.error("No sources available and cannot create one - file cannot be stored")
+        return None
+
+    def _resolve_side_id(self, name: str) -> Optional[int]:
+        """Return the id for ``name``, creating it if needed (see above)."""
+        with self._entity_lock:
+            cached = self._side_id_cache.get(name)
+        if cached is not None:
+            return cached
+        try:
+            side_id = self.db_service.get_or_create_side(name=name, importance=1.0)
+        except Exception as exc:
+            logger.error(f"Failed to resolve side '{name}': {exc}")
+            side_id = None
+        if side_id:
+            with self._entity_lock:
+                self._side_id_cache[name] = side_id
+            logger.debug(f"Resolved side: {name} (ID: {side_id})")
+            return side_id
+
+        try:
+            fallback_name = "__FALLBACK_SIDE__"
+            fallback_id = self.db_service.get_or_create_side(
+                name=fallback_name, importance=0.5
+            )
+            if fallback_id:
+                with self._entity_lock:
+                    self._side_id_cache[fallback_name] = fallback_id
+                logger.warning(f"Using fallback side '{fallback_name}' (ID: {fallback_id})")
+                return fallback_id
+        except Exception as fallback_error:
+            logger.error(f"Failed to create fallback side: {fallback_error}")
+        try:
+            existing = self.db_service.get_all_sides()
+            if existing:
+                logger.warning(f"Using first available side (ID: {existing[0][0]}) as last resort")
+                return existing[0][0]
+        except Exception as exc:
+            logger.debug(f"Could not list sides: {exc}")
+        logger.error("No sides available and cannot create one - file cannot be stored")
+        return None
+
     def _store_file_sync(
         self,
         file_info: Dict[str, Any],
@@ -291,114 +408,47 @@ class StoragePipeline:
             logger.warning(f"Using fallback side name '{effective_side_name}' to ensure file is stored")
         
         # Get or create source and side using ContentDBService
-        # First, try to get existing sources/sides
-        all_sources = self.db_service.get_all_sources()
-        source_id = None
-        for sid, sname in all_sources:
-            if sname == effective_source_name:
-                source_id = sid
-                break
-        
-        # Create source if it doesn't exist
+        #
+        # Resolution is cached per name and done with a single keyed statement.
+        # The previous code called ``get_all_sources()`` (an unbounded
+        # ``SELECT`` over the whole table) and then linearly searched it - on
+        # *every stored file*.  Cost therefore grew with database cardinality
+        # times file count: with 100k sources and 10M files that is a terabyte
+        # of row transfer and a python-level scan per file.  The names used by a
+        # run are stable, so one lookup per name is enough, and the upsert is
+        # already concurrency-safe.
+        source_id = self._resolve_source_id(effective_source_name)
         if source_id is None:
-            try:
-                source_id = self.db_service.create_source(
-                    name=effective_source_name,
-                    country="",
-                    job="",
-                    importance=1.0
-                )
-                logger.info(f"Created new source: {effective_source_name} (ID: {source_id})")
-            except Exception as e:
-                logger.error(f"Failed to create source '{effective_source_name}': {e}")
-                # CRITICAL: Don't return None - try to use a fallback source or create with retry
-                # Attempt to get/create a fallback source
-                try:
-                    fallback_source_name = "__FALLBACK_SOURCE__"
-                    all_sources = self.db_service.get_all_sources()
-                    for sid, sname in all_sources:
-                        if sname == fallback_source_name:
-                            source_id = sid
-                            logger.warning(f"Using fallback source '{fallback_source_name}' (ID: {source_id})")
-                            break
-                    if source_id is None:
-                        source_id = self.db_service.create_source(
-                            name=fallback_source_name,
-                            country="",
-                            job="",
-                            importance=0.5
-                        )
-                        logger.warning(f"Created fallback source '{fallback_source_name}' (ID: {source_id})")
-                except Exception as fallback_error:
-                    logger.error(f"Failed to create fallback source: {fallback_error}")
-                    # Last resort: use first available source or fail gracefully
-                    all_sources = self.db_service.get_all_sources()
-                    if all_sources:
-                        source_id = all_sources[0][0]
-                        logger.warning(f"Using first available source (ID: {source_id}) as last resort")
-                    else:
-                        logger.error("No sources available and cannot create one - file cannot be stored")
-                        self.stats['files_failed'] += 1
-                        return None
-        
-        # Get or create side
-        all_sides = self.db_service.get_all_sides()
-        side_id = None
-        for sid, sname in all_sides:
-            if sname == effective_side_name:
-                side_id = sid
-                break
-        
-        # Create side if it doesn't exist
+            self.stats['files_failed'] += 1
+            return None
+
+        side_id = self._resolve_side_id(effective_side_name)
         if side_id is None:
-            try:
-                side_id = self.db_service.create_side(
-                    name=effective_side_name,
-                    importance=1.0
-                )
-                logger.info(f"Created new side: {effective_side_name} (ID: {side_id})")
-            except Exception as e:
-                logger.error(f"Failed to create side '{effective_side_name}': {e}")
-                # CRITICAL: Don't return None - try to use a fallback side or create with retry
-                # Attempt to get/create a fallback side
-                try:
-                    fallback_side_name = "__FALLBACK_SIDE__"
-                    all_sides = self.db_service.get_all_sides()
-                    for sid, sname in all_sides:
-                        if sname == fallback_side_name:
-                            side_id = sid
-                            logger.warning(f"Using fallback side '{fallback_side_name}' (ID: {side_id})")
-                            break
-                    if side_id is None:
-                        side_id = self.db_service.create_side(
-                            name=fallback_side_name,
-                            importance=0.5
-                        )
-                        logger.warning(f"Created fallback side '{fallback_side_name}' (ID: {side_id})")
-                except Exception as fallback_error:
-                    logger.error(f"Failed to create fallback side: {fallback_error}")
-                    # Last resort: use first available side or fail gracefully
-                    all_sides = self.db_service.get_all_sides()
-                    if all_sides:
-                        side_id = all_sides[0][0]
-                        logger.warning(f"Using first available side (ID: {side_id}) as last resort")
-                    else:
-                        logger.error("No sides available and cannot create one - file cannot be stored")
-                        self.stats['files_failed'] += 1
-                        return None
+            self.stats['files_failed'] += 1
+            return None
+
         max_retries = 2
         retry_count = 0
         
         while retry_count <= max_retries:
             try:
-                # Check database connection health (only if db_hub is available)
-                # CRITICAL: Don't fail if connection check fails - retry will handle it
+                # Reconnect only when the database link is genuinely gone.
+                #
+                # The previous check treated *load* as failure: when the pool
+                # was busy (or the pool object had already been closed by
+                # another component) it declared the database unhealthy and
+                # called ``_reconnect()``, which tore down and rebuilt the pool
+                # from the callback of a store transaction.  With several
+                # workers doing this repeatedly the rebuilds multiplied
+                # connections until PostgreSQL answered
+                # "FATAL: sorry, too many clients already".  ``rebuild_pool``
+                # keeps a usable pool untouched, is rate-limited across
+                # threads, and is verified by a health check, so a reconnect
+                # can no longer be triggered by a busy pool.
                 if self.db_hub:
-                    if not self.db_hub._check_connection_health():
-                        logger.warning("Database connection unhealthy, attempting reconnect...")
-                        if not self.db_hub._reconnect():
+                    try:
+                        if not self.db_hub.db.rebuild_pool():
                             logger.error("Failed to reconnect to database - will retry in outer loop")
-                            # Don't return None here - let retry logic handle it
                             if retry_count >= max_retries:
                                 # Only fail after all retries exhausted
                                 logger.error("All retries exhausted - cannot store file")
@@ -407,6 +457,8 @@ class StoragePipeline:
                             retry_count += 1
                             time.sleep(1.0 * retry_count)
                             continue
+                    except Exception as hub_err:
+                        logger.debug(f"Connection health check unavailable: {hub_err}")
                 
                 # Extract metadata and content (with validation)
                 metadata = result.get('Metadata', {})
@@ -462,8 +514,10 @@ class StoragePipeline:
                         file_hash = hash_file(file_path_for_hash)
                         logger.debug("Computed content hash for %s", os.path.basename(file_path_for_hash))
                     except HashingError as hash_exc:
-                        logger.error("Hashing failed for %s - refusing to store under a fake identity",
-                                     file_path_for_hash)
+                        logger.error(
+                            "Hashing failed for %s - refusing to store under a fake identity: %s",
+                            file_path_for_hash, hash_exc,
+                        )
                         self.stats['files_failed'] = self.stats.get('files_failed', 0) + 1
                         self.stats.setdefault('storage_failed', 0)
                         self.stats['storage_failed'] = self.stats.get('storage_failed', 0) + 1
@@ -503,7 +557,7 @@ class StoragePipeline:
                     else:
                         # Hash exists but db_hub not available - proceed with storage
                         # ContentDBService will handle duplicates via database constraints or return existing path_id
-                        logger.debug(f"Hash exists but cannot check for duplicate path_id (db_hub not available). Proceeding with storage - database will handle duplicates.")
+                        logger.debug("Hash exists but cannot check for duplicate path_id (db_hub not available). Proceeding with storage - database will handle duplicates.")
                         # Continue to storage - don't return None
                 
                 # Step 3: Prepare file metadata for storage
@@ -656,10 +710,21 @@ class StoragePipeline:
                             content_words = []
                             content_date = None
                 
-                # Set file_status: 'Read' if file contains content OR OCR was successful
+                # Set file_status: 'Read' only when the artifact yielded content.
+                # 'Read' means "this file had readable content", not "this file
+                # was touched": a deliberately skipped artifact (for example an
+                # icon below the image reader's minimum size), an unsupported
+                # type, or a container whose readers produced nothing is
+                # 'Unread' with its own processing_status explaining why. Every
+                # input to is_read is content evidence that a reader produced:
+                # indexed words from the extracted text, OCR text the image
+                # reader actually returned, or the reader's own
+                # extraction_info['extracted'/'stored'] signal. Metadata the
+                # pipeline adds about the file must never be counted here (see
+                # the identity note in _extract_text_from_content).
                 # This ensures images with extracted text are marked as 'Read' even if tokenization fails
                 has_content = bool(content_words)
-                has_ocr_text = bool(text and text.strip())
+                has_ocr_text = bool(str(content.get('text') or '').strip())
                 is_read = has_content or (ocr_successful and has_ocr_text) or has_extracted_text
                 file_status = 'Read' if is_read else 'Unread'
                 
@@ -924,7 +989,7 @@ class StoragePipeline:
                         
                         if is_duplicate:
                             storage_details = [
-                                f"⚠️  DUPLICATE FILE DETECTED (already processed)",
+                                "⚠️  DUPLICATE FILE DETECTED (already processed)",
                                 f"   File: {file_name}",
                                 f"   Path ID: {path_id} (existing)",
                                 f"   Hash ID: {hash_id}",
@@ -934,7 +999,7 @@ class StoragePipeline:
                             ]
                         else:
                             storage_details = [
-                                f"✅ FILE SUCCESSFULLY STORED IN DATABASE (using ContentDBService with transactions)",
+                                "✅ FILE SUCCESSFULLY STORED IN DATABASE (using ContentDBService with transactions)",
                                 f"   File: {file_name}",
                                 f"   Path ID: {path_id}",
                                 f"   Hash ID: {hash_id}",
@@ -1024,13 +1089,6 @@ class StoragePipeline:
                         time.sleep(1.0 * retry_count)
                         continue
                 
-                # OLD CODE BELOW - DEPRECATED: This section is now replaced by ContentDBService.process_full_document()
-                # The code above should always return (either path_id or None), so this should never execute
-                # Keeping for reference but disabled to prevent errors
-                # If execution reaches here, it means the new code path didn't return properly
-                logger.error("ERROR: Execution reached deprecated code path. This should not happen.")
-                self.stats['files_failed'] += 1
-                return None
                 
             except Exception as e:
                 # Handle any unexpected errors in the main storage flow
@@ -1058,7 +1116,7 @@ class StoragePipeline:
                             time.sleep(1.0)
                             continue
                         else:
-                            logger.error(f"Failed to reconnect, will retry entire operation")
+                            logger.error("Failed to reconnect, will retry entire operation")
                             time.sleep(2.0 * retry_count)  # Exponential backoff
                             continue
                     
@@ -1105,337 +1163,18 @@ class StoragePipeline:
                     self.stats['files_failed'] += 1
                     return None
                 
-                # ========================================================================
-                # DEPRECATED CODE PATH - DISABLED
-                # This code should NEVER execute. All storage now uses ContentDBService.process_full_document()
-                # If execution reaches here, it's a critical bug - the new code path should have returned.
-                # ========================================================================
-                logger.critical("CRITICAL ERROR: Execution reached deprecated code path at line 750+. This should never happen.")
-                logger.critical("The new ContentDBService.process_full_document() code should have returned path_id or None.")
-                logger.critical("This deprecated code uses db_hub operations that no longer exist and will cause AttributeError.")
-                # Return None immediately to prevent execution of deprecated code
+                # Fail-safe: every supported path above returns (a path_id or
+                # None). Reaching this point means control fell through a branch
+                # that did not, so the file's outcome would otherwise be lost -
+                # count it as failed and say so loudly rather than continuing.
+                logger.critical(
+                    "Storage fell through every return path for %s; the file is "
+                    "counted as failed and no path row was written.",
+                    file_info.get('path', 'unknown') if file_info else 'unknown',
+                )
                 self.stats['files_failed'] += 1
                 return None
                 
-                # OLD CODE BELOW IS DISABLED - DO NOT UNCOMMENT
-                # The code below uses db_hub.path_operations, db_hub.word_operations, etc. which don't exist
-                # All storage should use ContentDBService.process_full_document() instead
-                """
-                # DISABLED OLD CODE - Uncomment only for debugging
-                # Step 4: Verify hash exists before proceeding (critical for transaction safety)
-                # This ensures hash_id is valid even if there were transaction issues
-                hash_verified = False
-                hash_verify_attempts = 0
-                max_hash_verify_attempts = 3
-                
-                while hash_verify_attempts < max_hash_verify_attempts and not hash_verified:
-                    try:
-                        # Verify hash exists in database (get_hash_by_id returns hash string or None)
-                        # Use ContentDBService hashs_repo instead of db_hub.hash_operations
-                        verified_hash_value = self.db_service.hashs_repo.get_hash_by_id(hash_id) if self.db_service else None
-                        if verified_hash_value is None:
-                            # Hash doesn't exist, need to recreate it
-                            logger.warning(f"Hash ID {hash_id} not found in database, recreating hash...")
-                            new_hash_id = self.db_service.create_hash(
-                                file_hash, source_id, side_id
-                            ) if self.db_service else None
-                            if new_hash_id:
-                                hash_id = new_hash_id
-                                hash_verified = True
-                            else:
-                                hash_verify_attempts += 1
-                                if hash_verify_attempts < max_hash_verify_attempts:
-                                    logger.warning(f"Failed to recreate hash, retrying (attempt {hash_verify_attempts}/{max_hash_verify_attempts})...")
-                                    time.sleep(0.5 * hash_verify_attempts)
-                                    continue
-                                else:
-                                    error_msg = "Failed to verify or recreate hash after multiple attempts"
-                                    handle_error(
-                                        Exception(error_msg),
-                                        category=ErrorCategory.DATABASE,
-                                        severity=ErrorSeverity.HIGH,
-                                        context={
-                                            'operation': 'verify_hash',
-                                            'hash_id': hash_id,
-                                            'file_hash': file_hash[:16] + '...'
-                                        },
-                                        suggested_action='Check database connection and hash table'
-                                    )
-                                    if retry_count < max_retries:
-                                        retry_count += 1
-                                        logger.info(f"Retrying entire file storage (attempt {retry_count}/{max_retries})...")
-                                        continue
-                                    self.stats['files_failed'] += 1
-                                    return None
-                        else:
-                            # Hash exists, verify it matches our file_hash (safety check)
-                            if verified_hash_value != file_hash:
-                                logger.warning(f"Hash ID {hash_id} exists but hash value mismatch. Expected: {file_hash[:16]}..., Got: {verified_hash_value[:16]}...")
-                                # This shouldn't happen, but if it does, recreate hash
-                                new_hash_id = self.db_service.create_hash(
-                                    file_hash, source_id, side_id
-                                )
-                                if new_hash_id:
-                                    hash_id = new_hash_id
-                                    hash_verified = True
-                                else:
-                                    hash_verify_attempts += 1
-                                    if hash_verify_attempts < max_hash_verify_attempts:
-                                        continue
-                                    else:
-                                        self.stats['files_failed'] += 1
-                                        return None
-                            else:
-                                hash_verified = True
-                    except Exception as verify_error:
-                        hash_verify_attempts += 1
-                        if is_connection_error(verify_error):
-                            logger.warning(f"Connection error verifying hash, attempting reconnect...")
-                            self.db_hub._reconnect()
-                        if hash_verify_attempts < max_hash_verify_attempts:
-                            logger.warning(f"Error verifying hash, retrying (attempt {hash_verify_attempts}/{max_hash_verify_attempts}): {verify_error}")
-                            time.sleep(0.5 * hash_verify_attempts)
-                            continue
-                        else:
-                            error_msg = f"Failed to verify hash after multiple attempts: {verify_error}"
-                            handle_error(
-                                Exception(error_msg),
-                                category=ErrorCategory.DATABASE_CONNECTION if is_connection_error(verify_error) else ErrorCategory.DATABASE,
-                                severity=ErrorSeverity.HIGH,
-                                context={
-                                    'operation': 'verify_hash',
-                                    'hash_id': hash_id,
-                                    'file_hash': file_hash[:16] + '...'
-                                },
-                                suggested_action='Check database connection'
-                            )
-                            if retry_count < max_retries:
-                                retry_count += 1
-                                logger.info(f"Retrying entire file storage (attempt {retry_count}/{max_retries})...")
-                                continue
-                            self.stats['files_failed'] += 1
-                            return None
-                
-                if not hash_verified:
-                    self.stats['files_failed'] += 1
-                    return None
-                
-                # Step 5: Extract coordinates if available
-                coordinates = self._extract_coordinates(content)
-                
-                # Step 6: Store metadata (with validation and retry)
-                path_id = None
-                metadata_retry_count = 0
-                max_metadata_retries = 2
-                
-                # Prepare error message if content has errors
-                error_message = None
-                if has_content_error:
-                    error_message = content.get('error', 'Unknown error')
-                    if isinstance(error_message, str):
-                        # Truncate if too long
-                        error_message = error_message[:10000] if len(error_message) > 10000 else error_message
-                
-                while metadata_retry_count <= max_metadata_retries and path_id is None:
-                    try:
-                        path_id = self.db_hub.path_operations.store_metadata(
-                            file_info, hash_id, file_status='Unread', coordinates=coordinates, error_message=error_message
-                        )
-                        if not path_id:
-                            if metadata_retry_count < max_metadata_retries:
-                                metadata_retry_count += 1
-                                logger.warning(f"Metadata storage returned None, retrying (attempt {metadata_retry_count}/{max_metadata_retries})...")
-                                time.sleep(0.5 * metadata_retry_count)
-                                continue
-                            else:
-                                error_msg = "Failed to store metadata after multiple attempts"
-                                handle_error(
-                                    Exception(error_msg),
-                                    category=ErrorCategory.DATABASE,
-                                    severity=ErrorSeverity.HIGH,
-                                    context={
-                                        'operation': 'store_metadata',
-                                        'file_path': file_info.get('path', 'unknown')[:100],
-                                        'hash_id': hash_id
-                                    },
-                                    suggested_action='Check database connection and file_path uniqueness constraint'
-                                )
-                                if retry_count < max_retries:
-                                    retry_count += 1
-                                    logger.info(f"Retrying entire file storage (attempt {retry_count}/{max_retries})...")
-                                    continue
-                                self.stats['files_failed'] += 1
-                                return None
-                    except Exception as metadata_error:
-                        if is_retryable_error(metadata_error) and metadata_retry_count < max_metadata_retries:
-                            metadata_retry_count += 1
-                            logger.warning(f"Retryable error storing metadata, retrying (attempt {metadata_retry_count}/{max_metadata_retries}): {metadata_error}")
-                            # Trigger reconnection if it's a connection error
-                            if is_connection_error(metadata_error):
-                                logger.warning("Connection error detected, attempting reconnect...")
-                                if not self.db_hub._reconnect():
-                                    logger.error("Failed to reconnect after metadata error")
-                                    # Still continue to retry if we haven't exhausted retries
-                                    if metadata_retry_count <= max_metadata_retries:
-                                        time.sleep(0.5 * metadata_retry_count)
-                                        continue
-                            else:
-                                time.sleep(0.5 * metadata_retry_count)
-                            continue
-                        else:
-                            handle_error(
-                                metadata_error,
-                                category=ErrorCategory.DATABASE_CONNECTION if is_connection_error(metadata_error) else ErrorCategory.DATABASE,
-                                severity=ErrorSeverity.MEDIUM,
-                                context={'operation': 'store_metadata', 'file_path': file_info.get('path', 'unknown')[:100]}
-                            )
-                            if retry_count < max_retries:
-                                retry_count += 1
-                                # Try to reconnect before retrying entire operation
-                                if is_connection_error(metadata_error):
-                                    logger.warning("Connection error in metadata storage, attempting reconnect before full retry...")
-                                    self.db_hub._reconnect()
-                                continue
-                            self.stats['files_failed'] += 1
-                            return None
-                
-                # Step 6: Verify path exists before storing content (critical for transaction safety)
-                if path_id:
-                    path_verified = False
-                    path_verify_attempts = 0
-                    max_path_verify_attempts = 3
-                    
-                    while path_verify_attempts < max_path_verify_attempts and not path_verified:
-                        try:
-                            # Verify path exists by trying to get it
-                            verified_path = self.db_hub.path_operations.get_path_by_id(path_id)
-                            if verified_path is None:
-                                # Path doesn't exist, need to recreate metadata
-                                logger.warning(f"Path ID {path_id} not found in database, recreating metadata...")
-                                # Recreate metadata with verified hash_id
-                                new_path_id = self.db_hub.path_operations.store_metadata(
-                                    file_info, hash_id, file_status='Unread', coordinates=coordinates, error_message=error_message
-                                )
-                                if new_path_id:
-                                    path_id = new_path_id
-                                    path_verified = True
-                                else:
-                                    path_verify_attempts += 1
-                                    if path_verify_attempts < max_path_verify_attempts:
-                                        logger.warning(f"Failed to recreate path, retrying (attempt {path_verify_attempts}/{max_path_verify_attempts})...")
-                                        time.sleep(0.5 * path_verify_attempts)
-                                        continue
-                                    else:
-                                        logger.error(f"Failed to verify or recreate path after multiple attempts, skipping content storage")
-                                        path_id = None  # Mark as failed so we skip content storage
-                                        break
-                            else:
-                                path_verified = True
-                        except Exception as verify_error:
-                            path_verify_attempts += 1
-                            if is_connection_error(verify_error):
-                                logger.warning(f"Connection error verifying path, attempting reconnect...")
-                                self.db_hub._reconnect()
-                            if path_verify_attempts < max_path_verify_attempts:
-                                logger.warning(f"Error verifying path, retrying (attempt {path_verify_attempts}/{max_path_verify_attempts}): {verify_error}")
-                                time.sleep(0.5 * path_verify_attempts)
-                                continue
-                            else:
-                                logger.error(f"Failed to verify path after multiple attempts: {verify_error}, skipping content storage")
-                                path_id = None  # Mark as failed so we skip content storage
-                                break
-                
-                # Step 7: Extract and store content (skip if content has errors or path verification failed)
-                text = None
-                text_length = 0
-                content_stored = False
-                
-                if path_id and not has_content_error:
-                    logger.info(f"Extracting text content for path_id {path_id}, file: {file_info.get('path', 'unknown')[:100]}")
-                    text = self._extract_text_from_content(content)
-                    
-                    if text:
-                        text_length = len(text)
-                        logger.info(f"Extracted {text_length} characters of text for path_id {path_id}")
-                        
-                        success = self._store_content_pipeline(text, path_id)
-                        if success:
-                            content_stored = True
-                            logger.info(f"Content successfully stored for path_id {path_id} ({text_length} chars)")
-                            # Update status to 'Read' (non-critical, so wrap in try-except)
-                            try:
-                                if not self.db_hub._check_connection_health():
-                                    self.db_hub._reconnect()
-                                self.db_hub.path_operations.update_file_status(path_id, 'Read')
-                            except Exception as status_error:
-                                logger.warning(f"Failed to update file status to 'Read' for path_id {path_id}: {status_error}")
-                                # Don't fail the operation - file is stored, just status update failed
-                        else:
-                            logger.warning(f"Content storage failed for path_id {path_id}, but metadata was stored")
-                    else:
-                        logger.warning(f"No text extracted from content for path_id {path_id}. Content may be empty or binary.")
-
-                else:
-                    # File has content error - error message already stored in metadata step
-                    logger.info(f"Metadata stored for file with content error, path_id: {path_id}, error: {error_message}")
-                
-                # Step 8: Title.
-                #
-                # _store_title_pipeline was removed. It called
-                # self.db_hub.word_operations and .title_operations, neither of
-                # which exists on DatabaseHub, so it raised AttributeError on
-                # every file with a title, logged it, and always returned False.
-                # Titles are stored by the content path instead
-                # (contents_db_service.create_title_content), which is verified
-                # to write titles_content rows. Keeping the local so the
-                # "Stored Components" report below is unchanged in shape.
-                title = self._extract_title(result, file_info)
-                title_stored = False
-                
-                self.stats['files_stored'] += 1
-                self.stats['files_processed'] += 1
-                
-                # ========== STORAGE COMPLETE - CLEAR SUCCESS MESSAGE ==========
-                # This message appears AFTER all storage operations are complete
-                file_name = file_info.get('name', 'unknown')
-                file_path = file_info.get('path', 'unknown')
-                file_size = file_info.get('size_bytes', 0)
-                file_size_mb = file_size / (1024 * 1024) if file_size > 0 else 0
-                
-                # Build comprehensive storage confirmation message
-                storage_details = []
-                storage_details.append(f"✅ FILE SUCCESSFULLY STORED IN DATABASE")
-                storage_details.append(f"   File: {file_name}")
-                storage_details.append(f"   Path ID: {path_id}")
-                storage_details.append(f"   Source: {effective_source_name} (ID: {source_id})")
-                storage_details.append(f"   Side: {effective_side_name} (ID: {side_id})")
-                storage_details.append(f"   Hash: {file_hash[:16]}...")
-                
-                if file_size_mb > 0:
-                    storage_details.append(f"   Size: {file_size_mb:.2f} MB ({file_size:,} bytes)")
-                
-                # Indicate what was stored
-                stored_components = ["Metadata"]
-                if content_stored and text:
-                    stored_components.append(f"Content ({text_length:,} chars)")
-                elif path_id and not has_content_error:
-                    stored_components.append("Content (empty)")
-                if title_stored:
-                    stored_components.append("Title")
-                if has_content_error:
-                    stored_components.append("Error Information")
-                
-                storage_details.append(f"   Stored Components: {', '.join(stored_components)}")
-                storage_details.append(f"   Status: {'Read' if content_stored and text else 'Unread'}")
-                storage_details.append(f"   Database Record: paths.id = {path_id}")
-                
-                # Log the complete message
-                success_message = "\n".join(storage_details)
-                logger.info(success_message)
-                print(success_message)  # Also print to console for visibility
-                
-                return path_id
-                """  # End of disabled old code block
                 
             except Exception as e:
                 # Use improved error detection from error_handling module
@@ -1462,7 +1201,7 @@ class StoragePipeline:
                             time.sleep(1.0)
                             continue
                         else:
-                            logger.error(f"Failed to reconnect, will retry entire operation")
+                            logger.error("Failed to reconnect, will retry entire operation")
                             time.sleep(2.0 * retry_count)  # Exponential backoff
                             continue
                     
@@ -1594,8 +1333,18 @@ class StoragePipeline:
         ):
             return "unsupported", error_text[:STATUS_DETAIL_MAX_LENGTH]
 
-        # 2. Explicit extraction failure.
+        # 2. Explicit extraction failure - except a held file, which is not a
+        #    failed one. The artifact is fine; something else has it open.
+        #    The stored vocabulary has no 'locked' state (the CHECK constraint
+        #    from migration 0007), so the distinction is carried visibly in
+        #    status_detail and counted as OUTCOME_LOCKED by the run's ledger.
+        #    The marker list is shared with classify_result, so the row and the
+        #    accounting cannot disagree about what "locked" means.
         if error_text:
+            from pipeline.progress_ledger import LOCK_ERROR_MARKERS
+
+            if any(marker in lowered for marker in LOCK_ERROR_MARKERS):
+                return "failed", f"locked: {error_text}"[:STATUS_DETAIL_MAX_LENGTH]
             return "failed", error_text[:STATUS_DETAIL_MAX_LENGTH]
 
         # 3. Deliberately skipped (icon, below the reader's size floor, ...).
@@ -1629,6 +1378,35 @@ class StoragePipeline:
                 )
 
         warnings = []
+
+        # 4b. A container that was only partly read. The reader names the
+        #     members it could not decode; recording this as 'processed' would
+        #     claim the whole archive was read, and recording it as 'failed'
+        #     would discard the members that were read. (Only RAR needs an
+        #     external decoder, so this is the archive case.)
+        members_unreadable = info.get("members_unreadable")
+        if isinstance(members_unreadable, dict) and members_unreadable:
+            unread_count = sum(
+                value for value in members_unreadable.values()
+                if isinstance(value, int)
+            )
+            total = info.get("members_total")
+            read = info.get("members_read")
+            reasons = ", ".join(sorted(
+                str(reason).replace("_", " ") for reason in members_unreadable
+            ))
+            if total is None:
+                detail = (
+                    f"{unread_count} archive member(s) could not be read"
+                    + (f" ({reasons})" if reasons else "")
+                )
+            else:
+                detail = f"{unread_count} of {total} archive members could not be read"
+                if reasons:
+                    detail += f" ({reasons})"
+                if read is not None:
+                    detail += f"; {read} read"
+            warnings.append(detail)
         if content.get("ocr_attempted") and not content.get("ocr_successful"):
             warnings.append("ocr attempted but produced no text")
         if info.get("engine_error"):
@@ -1642,6 +1420,14 @@ class StoragePipeline:
         #    successfully - that is a different fact from failing to read it.
         if content.get("text") or pages or file_status == "Read":
             return "processed", None
+        # The reader knows *why* there was no text (an SVG with no text
+        # elements, an icon below the size floor, a scanned page with no OCR
+        # engine); reporting the generic phrase loses that. It is still a
+        # successful read, so the state stays 'processed'.
+        if info.get("reason"):
+            return "processed", f"no extractable text: {info['reason']}"[
+                :STATUS_DETAIL_MAX_LENGTH
+            ]
         return "processed", "no extractable text"
 
     HIERARCHY_SEPARATOR = "::"
@@ -1778,27 +1564,33 @@ class StoragePipeline:
                 provenance["ocr"] = ocr
 
         # ---- type detection, when the reader recorded it ----
-        detection = content.get("type_detection")
-        if isinstance(detection, dict) and detection:
-            provenance["detection"] = {
-                key: detection.get(key)
-                for key in (
-                    "declared_extension", "detected_extension",
-                    "detection_method", "detection_confidence",
-                    "extension_mismatch",
-                )
-                if detection.get(key) is not None
-            } or None
-            if provenance["detection"] is None:
-                provenance.pop("detection", None)
+        # The forensic record of identity: original name and extension,
+        # detected format (exact variant), MIME type, version and container
+        # features, and every declared-vs-detected discrepancy. Recorded for
+        # every artifact, not only the ones whose reader happened to report it.
+        detection = _detection_record(content)
+        if detection:
+            provenance["detection"] = detection
 
         # ---- extraction diagnostics ----
         info = content.get("extraction_info")
         if isinstance(info, dict) and info:
             diagnostics = {
                 key: info.get(key)
-                for key in ("error", "reason", "skipped", "skip_reason",
-                            "engine_error", "preprocessing")
+                for key in (
+                    "error", "reason", "skipped", "skip_reason",
+                    "engine_error", "preprocessing",
+                    # Archive containers: how much of the member set was read
+                    # and what stopped the rest (a missing decoder, most
+                    # often), so the condition is queryable after the run.
+                    "decoder_missing", "members_total", "members_read",
+                    "members_unreadable",
+                    # HTML: where a document's characters went (visible text
+                    # versus inline script/style and excluded comments).
+                    "visible_text_chars", "script_chars", "style_chars",
+                    "comment_chars_excluded", "inline_code_truncated",
+                    "embedded_code_chars",
+                )
                 if info.get(key) is not None
             }
             if diagnostics:
@@ -1916,8 +1708,6 @@ class StoragePipeline:
             return None
         
         try:
-            from datetime import datetime
-            
             # Extract dates using ContentProcessor patterns
             dates_found = []
             
@@ -2069,8 +1859,12 @@ class StoragePipeline:
                     # Store only OCR text (no metadata)
                     ordered_content.append((0, 'direct_text', 0, text_to_store, ocr_coords_data))
                 else:
-                    # Log why no text was stored
-                    reason = extraction_info.get('reason', 'unknown')
+                    # Log why no text was stored. Never print a placeholder:
+                    # if a reader states no reason, say that the reader stated
+                    # none - "unknown" reads like a property of the file.
+                    reason = extraction_info.get('reason') or (
+                        'no reason reported by the reader'
+                    )
                     error = extraction_info.get('error', '')
                     skipped = extraction_info.get('skipped', False)
                     
@@ -2689,6 +2483,42 @@ class StoragePipeline:
             
             # Join with double newline for readability
             combined_text = '\n\n'.join(text_parts)
+
+            # FORENSIC-01: evidence that lives outside the visible body must be
+            # searchable. Comments, tracked deletions, hidden text, headers and
+            # footers, notes, spreadsheet formulas, PDF annotations and
+            # JavaScript, and macro source are all content; before this they
+            # were extracted but never indexed, so an examiner searching for a
+            # term inside a tracked change found nothing. The readers place this
+            # flattened text in 'forensic_text' (additive key: absent for
+            # readers that have not been extended). It IS content of this
+            # artifact, so it joins the content channel and counts as evidence
+            # that the artifact could be read.
+            forensic_text = str(content.get('forensic_text') or '').strip()
+            if forensic_text:
+                combined_text = (f"{combined_text}\n\n{forensic_text}"
+                                 if combined_text.strip() else forensic_text)
+
+            # IDENTITY (original name, declared extension, detected
+            # format/MIME/version, container features and every
+            # declared-vs-detected discrepancy) is metadata *about* the artifact,
+            # not content *of* it, and it is already recorded structurally:
+            # _build_extraction_provenance persists it per artifact as
+            # paths.extraction_provenance -> 'detection', which the lineage API
+            # surfaces (see docs/operations.md). Folding the flattened identity
+            # lines into this content text used to make an artifact look
+            # readable when nothing had been read - a 20x20 icon that the image
+            # reader deliberately skipped was stored as file_status='Read' with
+            # 200 characters of "content" that were nothing but labels such as
+            # "Original name: icon.png" - which broke the documented meaning of
+            # file_status and the Unread status contract
+            # (tests/integration/test_status_persisted.py), polluted the
+            # full-text word index with ~10 boilerplate labels per artifact, and
+            # put the labels in front of the examiner in the content display.
+            # Identity stays searchable where it belongs: as a structured,
+            # queryable record (SELECT ... WHERE extraction_provenance ->
+            # 'detection' ->> 'extension_mismatch' = 'true'), not as fake body
+            # text. Do not re-add it here.
             
             # Log extraction summary for debugging
             if ordered_content:
@@ -2984,3 +2814,73 @@ class StoragePipeline:
         # Close database connection if needed
         # Currently db_hub is managed externally, so just log
         logger.info("Storage pipeline shutdown")
+
+#: Provenance kept about identification. Bounded on purpose: the DB copy must
+#: stay small enough to write for millions of artifacts, so long lists are
+#: truncated with an explicit count rather than silently dropped.
+_DETECTION_SCALAR_KEYS = (
+    "declared_name", "declared_extension", "detected_extension",
+    "detection_method", "detection_confidence", "extension_mismatch",
+    "format_id", "format_family", "mime_type", "format_version",
+)
+_DETECTION_LIST_LIMIT = 25
+
+
+def _detection_record(content: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The stored identity record for one artifact, or None when absent.
+
+    Accepts both shapes that exist in the pipeline: the reader service's
+    ``type_detection`` decision and the richer ``format_identification`` block a
+    reader may attach. Nothing is invented: a field is recorded only when the
+    identifier produced it.
+    """
+    decision = content.get("type_detection")
+    identification = content.get("format_identification")
+    if not isinstance(decision, dict):
+        decision = {}
+    if not isinstance(identification, dict):
+        identification = decision.get("format_identification")
+    if not isinstance(identification, dict):
+        identification = {}
+
+    merged: Dict[str, Any] = {}
+    for key in _DETECTION_SCALAR_KEYS:
+        value = decision.get(key)
+        if value is None:
+            value = identification.get(key)
+        if value is not None:
+            merged[key] = value
+
+    features = identification.get("features") or decision.get("format_features")
+    if isinstance(features, dict) and features:
+        trimmed: Dict[str, Any] = {}
+        for key, value in features.items():
+            if isinstance(value, (list, tuple, set)):
+                items = list(value)
+                if len(items) > _DETECTION_LIST_LIMIT:
+                    trimmed[key] = items[:_DETECTION_LIST_LIMIT]
+                    trimmed[f"{key}_total"] = len(items)
+                else:
+                    trimmed[key] = items
+            elif isinstance(value, (str, int, float, bool)) or value is None:
+                trimmed[key] = value
+        merged["features"] = trimmed
+
+    evidence = identification.get("evidence")
+    if isinstance(evidence, (list, tuple)) and evidence:
+        merged["evidence"] = list(evidence)[:_DETECTION_LIST_LIMIT]
+
+    discrepancies = decision.get("format_discrepancies") or identification.get("discrepancies")
+    if isinstance(discrepancies, (list, tuple)) and discrepancies:
+        merged["discrepancies"] = [
+            item if isinstance(item, dict) else {"kind": str(item)}
+            for item in list(discrepancies)[:_DETECTION_LIST_LIMIT]
+        ]
+
+    confidence = identification.get("confidence")
+    if confidence and "detection_confidence" not in merged:
+        merged["detection_confidence"] = confidence
+
+    return merged or None
+
+

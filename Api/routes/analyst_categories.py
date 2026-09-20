@@ -40,7 +40,7 @@ from Api.services.analyst_categories import (
     normalize_scope,
 )
 from core.errors import client_error
-from core.security.rate_limit import limiter
+from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 from core.security.flask_ext import write_access_required
 
 logger = logging.getLogger(__name__)
@@ -249,6 +249,7 @@ def register_analyst_category_routes(app):
     # Listing / filters / stats / audit (FR-4.2)
     # ==================================================================
 
+    @limiter.limit(INTERACTIVE_READ_LIMIT)
     @app.route("/api/analyst/assignments")
     def api_analyst_assignments():
         """Filtered assignment list for the Analyst Categorization View.

@@ -13,6 +13,7 @@ import logging
 from Api.utils.title import display_titles_sorted, filter_titles_by_search
 from core.serialization import pack_int_list, unpack_int_list
 from core.errors import client_error
+from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ def get_file_filter_conditions():
     return conditions, params
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/categories', methods=['GET'])
 def api_archives_categories():
     """Get categories with cursor-based pagination"""
@@ -380,6 +382,7 @@ def api_archives_categories():
         return jsonify({'success': False, 'error': 'An error occurred while loading categories. Please try again.'}), 500
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/keywords', methods=['GET'])
 def api_archives_keywords():
     """Get keywords with cursor-based pagination"""
@@ -558,6 +561,7 @@ def api_archives_keywords():
 # FLASK API ROUTES
 # ============================================================================
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/titles', methods=['GET'])
 def api_archives_titles():
     """
@@ -766,6 +770,7 @@ def api_archives_titles():
         return client_error(e, subsystem='Api.routes.archives_api', success_key='success', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/titles/all', methods=['GET'])
 def api_archives_titles_all():
     """
@@ -902,6 +907,7 @@ def api_archives_titles_all():
         return client_error(e, subsystem='Api.routes.archives_api', success_key='success', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/titles/count', methods=['GET'])
 def api_archives_titles_count():
     """Get total count of titles"""
@@ -918,6 +924,7 @@ def api_archives_titles_count():
         logger.error(f"Error in api_archives_titles_count: {e}", exc_info=True)
         return client_error(e, subsystem='Api.routes.archives_api', success_key='success', status=500)
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/sources', methods=['GET'])
 def api_archives_sources():
     """Get sources with cursor-based pagination"""
@@ -1110,6 +1117,7 @@ def api_archives_sources():
         return client_error(e, subsystem='Api.routes.archives_api', success_key='success', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/sides', methods=['GET'])
 def api_archives_sides():
     """Get sides with cursor-based pagination"""
@@ -1298,6 +1306,7 @@ def api_archives_sides():
         return client_error(e, subsystem='Api.routes.archives_api', success_key='success', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/hashs', methods=['GET'])
 def api_archives_hashs():
     """Get hashs with cursor-based pagination"""
@@ -1431,6 +1440,7 @@ def api_archives_hashs():
         return client_error(e, subsystem='Api.routes.archives_api', success_key='success', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/addresses', methods=['GET'])
 def api_archives_addresses():
     """Get addresses (words) with cursor-based pagination - WITHOUT similarity comparison"""
@@ -1508,6 +1518,7 @@ def api_archives_addresses():
         return client_error(e, subsystem='Api.routes.archives_api', success_key='success', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/geolocation', methods=['GET'])
 def api_archives_geolocation():
     """Get files with latitude and longitude coordinates with cursor-based pagination"""

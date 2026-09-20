@@ -58,6 +58,29 @@ class ResourceLimits:
     memory_limit_percent: float = 80.0
 
 
+#: Memory pressure is the only signal that can crash the process, so it is the
+#: one that throttles work. CPU near 100 % is what a saturation-capable,
+#: I/O-bound pipeline *looks like* when it is healthy - the previous monitor
+#: treated "CPU > 85 %" as overload, shrank the worker pool while the run was
+#: busy (a 2-core host was reduced from 8 workers to 2 within seconds, then
+#: logged "System overload detected" for the rest of the run), and pushed whole
+#: sub-trees through the sequential fallback. These are the only two numbers
+#: that decide throttling now.
+MEMORY_EMERGENCY_PERCENT = 92.0
+MEMORY_PRESSURE_PERCENT = 85.0
+
+#: Worker ceiling for a single instance, before the per-instance split. The
+#: pipeline is I/O-bound (hashing, DB, extraction), so oversubscribing cores is
+#: the normal way to keep them busy; the old ceiling of 4 could never reach the
+#: 8 or 16 workers configured in settings on a larger host.
+MAX_WORKERS_PER_INSTANCE = 16
+#: Memory assumed per worker when deciding how many fit (measured RSS of the
+#: ingest pipeline per in-flight worker is well under this).
+WORKER_MEMORY_BUDGET_GB = 0.35
+#: Cores left for the OS, the database and the gateway.
+RESERVED_CORES = 2
+
+
 class ResourceCoordinator:
     """
     Coordinates resource usage across multiple application instances.
@@ -225,26 +248,17 @@ class ResourceCoordinator:
                 web_count += 1
             total_instances += 1
         
-        # Calculate safe worker count
-        # Reserve 2 cores for system, divide remaining cores among instances
-        available_cores = max(1, self.cpu_count - 2)
-        
-        if total_instances == 1:
-            # Only this instance - use more resources
-            max_workers = min(4, available_cores)
-        elif total_instances == 2:
-            # Two instances - split resources
-            max_workers = max(1, available_cores // 2)
-        else:
-            # Multiple instances - be conservative
-            max_workers = max(1, available_cores // total_instances)
-        
-        # For web instances, use fewer workers (they're usually lighter)
+        # Calculate safe worker count.
+        #
+        # Two independent caps: cores (oversubscribed on purpose, the work is
+        # I/O-bound) and memory (never oversubscribed - that is what crashes).
+        max_workers = self._worker_ceiling(total_instances)
+
+        # For web instances, keep a worker's worth of the pool for request work.
         if self.instance_type == 'web':
             max_workers = max(1, max_workers - 1)
-        
-        # Ensure minimum of 1 worker
-        max_workers = max(1, min(max_workers, 4))
+
+        max_workers = max(1, max_workers)
         
         # Calculate database pool size
         # Need enough connections for concurrent workers + buffer
@@ -288,91 +302,146 @@ class ResourceCoordinator:
         self._monitor_thread.start()
     
     def _monitor_loop(self):
-        """Background monitoring loop"""
+        """Watch memory pressure and the configured worker ceiling.
+
+        What this loop does *not* do any more: shrink the worker pool because
+        the CPU is busy. That behaviour turned a healthy saturated run into a
+        starved one and, through the reader's overload check, into sequential
+        processing for every extracted sub-tree. What it does: react to memory
+        pressure, which is a genuinely fatal condition, and restore the
+        configured worker count once the pressure passes.
+        """
         self._system_overload = False
         self._last_cpu_percent = 0.0
         self._last_memory_percent = 0.0
-        
+
         while self._monitoring:
             try:
-                # Update instance registration
                 self._update_instance()
-                
-                # Check system resources
+
                 try:
                     cpu_percent = self.get_cpu_percent()
-                    memory = psutil.virtual_memory()
-                    memory_percent = memory.percent
-                    
+                    memory_percent = psutil.virtual_memory().percent
+
                     self._last_cpu_percent = cpu_percent
                     self._last_memory_percent = memory_percent
                 except Exception as e:
                     logger.debug(f"Error checking system resources: {e}")
-                    continue  # Skip this monitoring cycle
-                
-                # If system is overloaded, reduce workers and set overload flag
-                overload_threshold = 85.0  # Lower threshold for proactive response
-                was_overloaded = self._system_overload
-                
-                if cpu_percent > overload_threshold or memory_percent > overload_threshold:
-                    self._system_overload = True
-                    if not was_overloaded:  # Only log when overload state changes
-                        logger.warning(
-                            f"System overload detected: CPU={cpu_percent:.1f}%, "
-                            f"Memory={memory_percent:.1f}%"
-                        )
-                        # Immediately yield CPU to prevent freezing
-                        try:
-                            time.sleep(0.1)  # Small yield to prevent immediate freeze
-                        except:
-                            pass
-                    # Aggressively reduce workers when overloaded
-                    if self.resource_limits.max_workers > 1:
-                        # Reduce by 2 if severely overloaded (>95%), otherwise by 1
-                        reduction = 2 if cpu_percent > 95.0 or memory_percent > 95.0 else 1
-                        self.resource_limits.max_workers = max(1, self.resource_limits.max_workers - reduction)
-                        logger.info(
-                            f"Reduced workers to {self.resource_limits.max_workers} "
-                            f"(reduced by {reduction}) due to system load"
-                        )
-                else:
-                    # System recovered - gradually increase workers if below limit
-                    if self._system_overload:
-                        self._system_overload = False
-                        logger.info(
-                            f"System recovered: CPU={cpu_percent:.1f}%, "
-                            f"Memory={memory_percent:.1f}%"
-                        )
-                    # Gradually restore workers when system is stable (below 70%)
-                    if cpu_percent < 70 and memory_percent < 70:
-                        if self.resource_limits.max_workers < self._calculate_optimal_workers():
-                            self.resource_limits.max_workers = min(
-                                self.resource_limits.max_workers + 1,
-                                self._calculate_optimal_workers()
-                            )
-                
-                # Sleep for monitoring interval
-                time.sleep(5)  # Check every 5 seconds for faster response
-                
+                    continue
+
+                action = self._evaluate_pressure(cpu_percent, memory_percent)
+
+                if action == "reduced":
+                    logger.info(
+                        "Reduced workers to %d (memory pressure %.1f%%)",
+                        self.resource_limits.max_workers, memory_percent,
+                    )
+                elif action == "restored":
+                    logger.info(
+                        "Restored workers to %d (CPU=%.1f%%, Memory=%.1f%%)",
+                        self.resource_limits.max_workers, cpu_percent, memory_percent,
+                    )
+
+                time.sleep(5)
+
             except Exception as e:
                 logger.debug(f"Error in monitoring loop: {e}")
                 time.sleep(5)
-    
-    def _calculate_optimal_workers(self) -> int:
-        """Calculate optimal worker count based on available resources"""
+
+    def _count_instances(self) -> int:
+        """How many instances are running, this one included.
+
+        The registration file does not list an instance until it writes itself
+        there, so a coordinator that has not registered yet must count itself.
+        """
         instances = self._get_running_instances()
-        total_instances = len(instances)
+        total = len(instances)
         if self.instance_id not in instances:
-            total_instances += 1
-        
-        available_cores = max(1, self.cpu_count - 2)
-        if total_instances == 1:
-            return min(4, available_cores)
-        elif total_instances == 2:
-            return max(1, available_cores // 2)
-        else:
-            return max(1, available_cores // total_instances)
-    
+            total += 1
+        return max(1, total)
+
+    def _worker_ceiling(self, total_instances: Optional[int] = None) -> int:
+        """How many workers this instance may use, from cores *and* memory.
+
+        Cores set the concurrency the pipeline can usefully keep busy; memory
+        sets the hard limit (a worker that cannot allocate dies mid-file and
+        loses its work). Neither is guessed from the momentary CPU reading.
+
+        ``total_instances=None`` means "ask the registration file". Callers that
+        have just counted the instances themselves may pass the number they
+        computed; the monitor must not, or it would restore workers against a
+        single-instance ceiling while two instances are competing for the host
+        (the restore path used to do exactly that).
+        """
+        cores = max(1, self.cpu_count - RESERVED_CORES)
+        # The pipeline is I/O-bound: 2x cores is the useful ceiling when memory
+        # allows, because workers block on disk, hashing and the database.
+        cpu_bound = max(1, min(MAX_WORKERS_PER_INSTANCE, cores * 2))
+        try:
+            memory_bound = int(self.total_memory_gb / WORKER_MEMORY_BUDGET_GB)
+        except Exception:
+            memory_bound = cpu_bound
+        memory_bound = max(1, memory_bound)
+        ceiling = max(1, min(cpu_bound, memory_bound, MAX_WORKERS_PER_INSTANCE))
+        if total_instances is None:
+            total_instances = self._count_instances()
+        if total_instances > 1:
+            ceiling = max(1, ceiling // total_instances)
+        return ceiling
+
+    def _evaluate_pressure(self, cpu_percent: float,
+                           memory_percent: float) -> str:
+        """Apply one resource sample to the worker budget.
+
+        The policy in one place, so it is testable without a live monitor
+        thread and so the two mistakes this project already made cannot come
+        back silently:
+
+        * CPU saturation (``cpu_percent`` high) is *not* overload. This is an
+          I/O-bound pipeline; busy cores are what a healthy run looks like.
+          Treating it as overload shrank the pool mid-run and pushed whole
+          extracted sub-trees onto the sequential path.
+        * memory pressure *is* overload, and it is fatal if ignored: a worker
+          that cannot allocate dies mid-file and loses its work.
+
+        Returns ``"reduced"`` when the budget was lowered, ``"restored"`` when
+        it was raised back toward the ceiling, ``"none"`` otherwise. The
+        ``_system_overload`` flag (memory only) is kept in step for callers.
+        """
+        was_overloaded = self._system_overload
+        overloaded = memory_percent > MEMORY_PRESSURE_PERCENT
+        self._system_overload = overloaded
+
+        if overloaded:
+            if not was_overloaded:
+                logger.warning(
+                    "Memory pressure detected: CPU=%.1f%%, Memory=%.1f%% "
+                    "(memory is the throttle signal; CPU saturation alone is "
+                    "not overloaded for an I/O-bound pipeline)",
+                    cpu_percent, memory_percent,
+                )
+            if self.resource_limits.max_workers > 1:
+                reduction = 2 if memory_percent > MEMORY_EMERGENCY_PERCENT else 1
+                self.resource_limits.max_workers = max(
+                    1, self.resource_limits.max_workers - reduction
+                )
+                return "reduced"
+            return "none"
+
+        action = "none"
+        if was_overloaded:
+            action = "restored"
+        # Restore toward the ceiling as soon as pressure is gone, at the
+        # configured rate rather than "one worker per cycle".
+        ceiling = self._worker_ceiling()
+        if self.resource_limits.max_workers < ceiling:
+            step = max(1, ceiling // 4)
+            self.resource_limits.max_workers = min(
+                ceiling, self.resource_limits.max_workers + step
+            )
+            action = "restored"
+        return action
+
     def _cleanup(self):
         """Clean up instance registration"""
         try:
@@ -435,7 +504,9 @@ class ResourceCoordinator:
         Check if system is currently overloaded.
         
         Returns:
-            True if system is overloaded (CPU > 85% or Memory > 85%)
+            True while *memory* is under pressure (above
+            ``MEMORY_PRESSURE_PERCENT``). CPU saturation is not overload: this
+            pipeline is I/O-bound, so busy cores mean the run is healthy.
         """
         return self._system_overload
     

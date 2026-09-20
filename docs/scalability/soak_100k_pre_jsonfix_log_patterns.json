@@ -1,0 +1,124 @@
+{
+ "total_records": 1892916,
+ "levels": {
+  "DEBUG": 555227,
+  "INFO": 1238635,
+  "WARNING": 99050,
+  "ERROR": 4
+ },
+ "needles": {
+  "retry": 70,
+  "pool exhausted": 1,
+  "too many clients": 0,
+  "reconnect": 0,
+  "no engine is available": 0,
+  "failed to store": 0,
+  "no files were stored": 0,
+  "traceback": 0,
+  "out of memory": 0,
+  "memoryerror": 0
+ },
+ "patterns_overflow": 0,
+ "top_patterns": [
+  [
+   "Database connection healthy; no pool rebuild needed",
+   160020
+  ],
+  [
+   "Document processed successfully: path_id=N, hash_id=N",
+   160020
+  ],
+  [
+   "Service transaction committed successfully",
+   160020
+  ],
+  [
+   "Document stored successfully using ContentDBService: path_id=N, hash_id=N",
+   160020
+  ],
+  [
+   "[STORAGE] \u2705 Successfully stored - Path ID: N | Hash ID: N | Status: Read | Words: N",
+   100567
+  ],
+  [
+   "Extracted content: N items, types: {'direct_content': N}, total length: N chars",
+   80021
+  ],
+  [
+   "[STORAGE] \ud83d\udcbe Storing to database - File: member_N.txt | Type: .txt | Status: Read | Content Words: N | Title Words: N",
+   60000
+  ],
+  [
+   "\u2705 FILE SUCCESSFULLY STORED IN DATABASE (using ContentDBService with transactions)\n   File: member_N.txt\n   Path ID: N\n   Hash ID: N\n   Source: soak_traceN (ID: ",
+   60000
+  ],
+  [
+   "[STORAGE] \u2705 Successfully stored - Path ID: N | Hash ID: N | Status: Unread | Words: N",
+   59453
+  ],
+  [
+   "Created thread: thread_N (Process-member_N.txt)",
+   58770
+  ],
+  [
+   "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+   40000
+  ],
+  [
+   "Resolved side: soak_side (ID: N)",
+   29561
+  ],
+  [
+   "Resolved source: soak_traceN (ID: N)",
+   27195
+  ],
+  [
+   "Created thread: thread_N (Process-fN.txt)",
+   20000
+  ],
+  [
+   "Created thread: thread_N (Process-fN.json)",
+   20000
+  ],
+  [
+   "Created thread: thread_N (Process-fN.csv)",
+   20000
+  ],
+  [
+   "Created thread: thread_N (Process-fN.binary)",
+   20000
+  ],
+  [
+   "Created thread: thread_N (Process-fN.zip)",
+   20000
+  ],
+  [
+   "Extracted content: N items, types: {'csv_rows': N}, total length: N chars",
+   20000
+  ],
+  [
+   "[STORAGE] \ud83d\udcbe Storing to database - File: fN.csv | Type: .csv | Status: Read | Content Words: N | Title Words: N | Content Date: N-N-N",
+   20000
+  ],
+  [
+   "\ud83d\udce6 PROCESSING EXTRACTED FILES FROM ARCHIVE",
+   20000
+  ],
+  [
+   "Source:        fN.zip",
+   20000
+  ],
+  [
+   "Location:      <path>",
+   20000
+  ],
+  [
+   "Mode:          PARALLEL (fast)",
+   20000
+  ],
+  [
+   "\u2705 FILE SUCCESSFULLY STORED IN DATABASE (using ContentDBService with transactions)\n   File: fN.binary\n   Path ID: N\n   Hash ID: N\n   Source: soak_traceN (ID: N)\n",
+   20000
+  ]
+ ]
+}

@@ -79,10 +79,23 @@ class DatabaseHub:
             raise
     
     def reconnect(self):
-        """Reconnect to database (reinitialize connection pool)"""
-        self.db.close_all()
+        """Reconnect to database (rebuild the shared pool only if it is broken).
+
+        Reconnection is for lost connections, not for load.  The check happens
+        in :meth:`Database.rebuild_pool`, which keeps an already-usable pool
+        and rate-limits rebuilds so concurrent workers cannot each create a
+        new pool - that loop was what multiplied connections until PostgreSQL
+        answered "too many clients already".
+        """
         try:
-            self.db = Database()
+            if not self.db.rebuild_pool():
+                # Last resort: drop this handle and build a new one.  The pool
+                # itself is process-wide, so this only replaces the wrapper.
+                try:
+                    self.db.close_all()
+                except Exception:
+                    pass
+                self.db = Database()
             # Verify pool was initialized
             if not self.db._pool:
                 raise ConnectionError("Database connection pool not initialized after reconnection")

@@ -33,7 +33,6 @@ const pageDetectors = [
         if (path === '/search/enhanced') return 'search-enhanced';
         if (path === '/search/advanced') return 'search-advanced';
         if (path === '/search') return 'search';
-        if (path === '/upload') return 'upload';
         if (path === '/' || path === '/dashboard') return 'dashboard';
         if (path.includes('/dashboard/comprehensive')) return 'comprehensive-dashboard';
         if (path.includes('/notifications')) return 'notifications';
@@ -63,7 +62,6 @@ const pageHandlers = {
     'search': () => import('./search-page.js'),
     'search-enhanced': () => import('./search-enhanced-page.js'),
     'search-advanced': () => import('./search-advanced-page.js'),
-    'upload': () => import('./upload-page.js'),
     'dashboard': () => import('./dashboard-page.js'),
     'comprehensive-dashboard': () => import('./comprehensive-dashboard-page.js'),
     'notifications': () => import('./notifications-page.js'),

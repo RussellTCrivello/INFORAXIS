@@ -19,7 +19,6 @@ const pageHandlers = {
     'search': () => import('./search-page.js'),
     'search-enhanced': () => import('./search-enhanced-page.js'),
     'search-advanced': () => import('./search-advanced-page.js'),
-    'upload': () => import('./upload-page.js'),
     'dashboard': () => import('./dashboard-page.js'),
     'notifications': () => import('./notifications-page.js'),
     'import-export': () => import('./import-export-page.js'),

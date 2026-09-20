@@ -25,6 +25,7 @@ provenance, and be independently searchable.
 import datetime
 import io
 import itertools
+import os
 import sys
 import zipfile
 from email.message import EmailMessage
@@ -39,7 +40,30 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 pytestmark = pytest.mark.integration
 
-FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+def _find_font():
+    """A TrueType font that exists on this platform.
+
+    The rasterised fixtures used to hardcode a Debian font path, so on Windows
+    every test that needed an image fixture errored with
+    ``OSError: cannot open resource`` before it could check anything. Look for a
+    real font in the usual places; if none is present, fall back to Pillow's
+    bundled default so the fixture still renders text.
+    """
+    candidates = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/Library/Fonts/Arial.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+    )
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+FONT = _find_font()
 _SEQ = itertools.count()
 
 M_EMAIL_TO_ZIP_TO_DOCX_IMG = "CHAINADOCX 1148"
@@ -54,8 +78,14 @@ def rasterise(text):
     ImageDraw = pytest.importorskip("PIL.ImageDraw")
     ImageFont = pytest.importorskip("PIL.ImageFont")
     img = Image.new("RGB", (1000, 260), "white")
-    ImageDraw.Draw(img).text((40, 100), text,
-                             font=ImageFont.truetype(FONT, 38), fill="black")
+    if FONT is not None:
+        font = ImageFont.truetype(FONT, 38)
+    else:  # no system font: Pillow always ships a usable default
+        try:
+            font = ImageFont.load_default(size=38)
+        except TypeError:  # Pillow < 9.2 has no size argument
+            font = ImageFont.load_default()
+    ImageDraw.Draw(img).text((40, 100), text, font=font, fill="black")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()

@@ -41,3 +41,135 @@ def test_input_options_info_endpoint(app, admin_client, monkeypatch):
     body = admin_client.get("/api/input/options-info").get_json()
     assert body["ingestion_roots_configured"] is True
     assert body["server_path_import_available"] is True
+
+
+def test_upload_url_redirects_to_the_single_ingestion_page(app, admin_client):
+    """One interface: the old /upload URL still resolves, to the same page.
+
+    The interface toggle that used to gate /upload still applies - the alias
+    either lands on the ingestion page or (when the interface is switched off)
+    on the dashboard, exactly as before the merge.
+    """
+    from settings import get_interface_manager
+
+    response = admin_client.get("/upload", follow_redirects=False)
+    assert response.status_code == 302
+    location = response.headers["Location"]
+
+    followed = admin_client.get("/upload", follow_redirects=True)
+    assert followed.status_code == 200
+
+    if get_interface_manager().is_interface_enabled("upload_files"):
+        assert location.endswith("/operations/input")
+        assert b"Start Analysis" in followed.data
+    else:
+        # Switched off: the gate sends the alias to the dashboard, as before.
+        assert "/upload" not in location
+        assert b"Start Analysis" not in followed.data
+
+
+def test_the_ingestion_page_ships_the_single_interface(app, admin_client):
+    """The page loads its own controller, stylesheet and endpoint map."""
+    html = admin_client.get("/operations/input").get_data(as_text=True)
+    assert "js/pages/ingestion-studio-page.js" in html
+    assert "css/ingestion.css" in html
+    assert "ingestionPageData" in html
+    # Both input modes are named on the page, not hidden behind tabs.
+    assert "This computer" in html
+    assert "Server path" in html
+    # The pipeline the engine runs is stated, not offered as dead checkboxes.
+    assert "What this pipeline always does" in html
+
+
+def test_all_three_input_modes_are_wired_in_the_markup(app, admin_client):
+    """Single file, whole folder and server path each have a real control.
+
+    The browser-side behaviour (a Windows file dialog, a folder dragged from
+    Explorer) cannot be exercised here; what can be proven headlessly is that
+    the page ships the controls and the attributes browsers key off, and that
+    the same selection reaches the API (tests/integration/
+    test_input_upload_pipeline.py feeds it exactly what a Windows browser
+    sends).
+    """
+    html = admin_client.get("/operations/input").get_data(as_text=True)
+
+    # single file: a multi-select file input, plus the modal-less picker button
+    assert 'id="fileInput"' in html and "multiple" in html
+    # whole folder: webkitdirectory is what makes a picker return a tree, and
+    # `directory` is the standards-name some engines look at
+    assert 'id="folderInput"' in html
+    assert "webkitdirectory" in html and "directory" in html
+    # server path: a free-text field, plus the recursive walk toggle
+    assert 'id="serverPath"' in html and 'id="recursive"' in html
+    # drag and drop is wired for both files and folders
+    assert 'id="dropZone"' in html
+
+
+def test_the_removed_interface_is_gone_and_the_task_api_is_not(app, admin_client):
+    """The duplicated page went; the task-manager API it shared a prefix with did not.
+
+    ``/upload/process-path`` was the deleted page's own ingestion entry point
+    (a second, differently-shaped pipeline). ``/upload/active-tasks`` belongs to
+    Api/task_manager.py, whose tasks the import flows create and the dashboard
+    polls - removing it would break live progress, so it must keep answering.
+    """
+    assert admin_client.post("/upload/process-path", json={}).status_code == 404
+
+    active = admin_client.get("/upload/active-tasks")
+    assert active.status_code == 200
+    assert active.get_json()["success"] is True
+
+
+def test_the_sidebar_shows_one_shortcut_per_destination(app, admin_client):
+    """One page, one icon: the retired upload shortcut must not come back.
+
+    Consolidating the upload page into /operations/input left its sidebar
+    entry behind, so the navigation showed two icons - "Input / Ingestion" and
+    the old "Upload Files" - that went to the same page. The duplicate is
+    removed and the switch that used to gate it (upload_files) now gates the
+    surviving entry, so it still means "does the operator see a way in".
+
+    Counted from the rendered navigation: every data-endpoint the sidebar
+    declares must be unique, and ingestion must be declared exactly once.
+    """
+    import re
+
+    html = admin_client.get("/operations/input").get_data(as_text=True)
+    navigation = html.split('class="sidebar-nav"', 1)[1].split("</ul>", 1)[0]
+
+    endpoints = re.findall(r'data-endpoint="([^"]+)"', navigation)
+    duplicates = sorted({e for e in endpoints if endpoints.count(e) > 1})
+    assert not duplicates, f"the sidebar lists the same destination twice: {duplicates}"
+    assert endpoints.count("operations_input_page") == 1
+
+    # The retired entry's icon and label are gone from the navigation, while
+    # the retired page's URL still lands on the surviving page.
+    assert "bi-cloud-upload" not in navigation
+    assert ">Upload Files<" not in navigation
+    assert admin_client.get("/upload", follow_redirects=False).headers["Location"].endswith(
+        "/operations/input")
+
+
+def test_the_settings_offer_one_ingestion_switch(app, admin_client):
+    """``upload_files`` and the retired core twin ``file_upload`` both pointed at
+    the upload page, so Settings listed two switches for the same interface -
+    one of which gated nothing at all. The listing now matches the interface
+    registry, which holds exactly one ingestion interface.
+    """
+    from settings import get_interface_manager
+
+    manager = get_interface_manager()
+    listed = manager.get_interfaces_by_category()
+    flat = {name: entry for group in listed.values() for name, entry in group.items()}
+
+    assert "file_upload" not in flat, "the retired duplicate switch is listed again"
+    assert "upload_files" in flat
+    entry = flat["upload_files"]
+    assert entry["name"] == "Input / Ingestion"
+    assert entry["endpoint"] == "operations_input_page"
+
+    # The switch still controls the navigation entry it always meant to gate.
+    assert manager.is_interface_enabled_by_endpoint("operations_input_page") == \
+        manager.is_interface_enabled("upload_files")
+    assert manager.is_interface_enabled_by_endpoint("files.upload_page") == \
+        manager.is_interface_enabled("upload_files")

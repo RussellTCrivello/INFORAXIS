@@ -55,7 +55,8 @@ def hash_file(
         raise ValueError("chunk_size must be >= 1")
 
     path = Path(file_path)
-    try:
+
+    def _digest() -> str:
         h = hashlib.new(algorithm)
         with open(path, "rb") as f:
             while True:
@@ -64,6 +65,16 @@ def hash_file(
                     break
                 h.update(chunk)
         return h.hexdigest()
+
+    try:
+        # Routed through the compute gateway: device selection and per-workload
+        # metering in one place.  The CPU path is what is used whenever no
+        # verified accelerator backend exists, and it produces exactly the same
+        # digest - the gateway is told the workload, never the other way round,
+        # so extraction identity cannot drift with the chosen device.
+        from core.compute import WorkloadKind, submit_compute
+
+        return submit_compute(WorkloadKind.HASHING, _digest)
     except HashingError:
         raise
     except OSError as exc:

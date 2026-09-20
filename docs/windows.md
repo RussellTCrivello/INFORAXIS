@@ -104,6 +104,38 @@ nssm start FileAnalysis
 | Path validation | Case-insensitive, separator-tolerant containment (`core/path_safety.py`) |
 | Upload staging | `%LOCALAPPDATA%\file-analysis\uploads\<id>\` by default |
 | Data root | `%LOCALAPPDATA%\file-analysis` unless `APP_DATA_DIR` set |
-| Long paths | `\\?\` prefix applied automatically above 260 chars |
+| Long paths | The app does not opt in itself: a stored path over `OPERATIONS_MAX_STAGED_PATH_CHARS` (240 here) is refused for that file with its length and the limit, and whether longer paths work at all depends on the machine's `LongPathsEnabled` setting |
 | Console | UTF-8 with `errors="replace"` on win32 (all entry points) |
 | Production WSGI | waitress (pure Python); gunicorn is not available on Windows |
+
+## Verify the three inputs before accepting a build
+
+The engine's three ways in - one file, a whole folder, and a path on the
+server - are checked by a script that runs *on this machine*, using the same
+application code and the same endpoints the browser calls:
+
+```bat
+.venv\Scripts\python.exe scripts\verify_windows_ingestion.py --username admin
+```
+
+It prompts for the password, signs in, and prints `PASS` / `FAIL` / `SKIP` per
+check, with the platform, the data root, the parsed `INGESTION_ROOTS` and the
+Windows long-path setting at the top so the result can be read in context:
+
+* one file chosen on its own (content and checksum verified on disk),
+* a whole folder, exactly as the browser reports it - forward slashes,
+  backslashes and a drive-qualified path - with the folder tree verified on the
+  real filesystem,
+* names Windows refuses (`CON`, `NUL`, `aux`, trailing dots, `: * ? " < > |`)
+  staged and *read back*, which only the real filesystem can answer,
+* the staged-path length limit, on both sides of it,
+* a typed server path (dry run, nothing is read), the separator/case variants a
+  Windows operator types, and the refusals for outside-root and traversal,
+* a large file staged in chunks, with the assembled file's checksum verified,
+* the retired surfaces: `/upload` -> 302 `/operations/input`,
+  `POST /upload/process-path` -> 404, and all three controls present on the page.
+
+Add `--server-path "C:\Case 2026-014\Evidence"` to dry-run a folder of your own
+inside a configured root, and `--json` for machine-readable output. Nothing is
+ingested and the staged files it creates are removed again before it exits; the
+exit code is 0 only when nothing failed.

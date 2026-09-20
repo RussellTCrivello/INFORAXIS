@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
+import subprocess
 import time
 import zipfile
 import bz2
@@ -24,7 +26,7 @@ import lzma
 import tarfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Iterable, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +47,16 @@ class ArchiveEncrypted(ArchiveSafetyError):
 
 class ArchiveTimeout(ArchiveSafetyError):
     pass
+
+
+class ArchiveDecoderUnavailable(ArchiveSafetyError):
+    """The format needs an external decoder and none is installed.
+
+    Deliberately not an ``ArchiveSafetyError`` body-failure: the container was
+    identified, opened and parsed. Reporting this as corruption (or as a
+    generic "Extraction failed") tells the operator to re-read a file that is
+    perfectly intact, when the only thing missing is a binary.
+    """
 
 
 @dataclass
@@ -182,6 +194,20 @@ class ExtractionResult:
     files_extracted: int = 0
     bytes_extracted: int = 0
     skipped: List[str] = field(default_factory=list)
+    #: Members the container declares, whether or not they could be read.
+    members_total: Optional[int] = None
+    #: Reason -> count for members that were declared but not materialised.
+    #: Never None: "nothing was unreadable" is an empty map, not a missing one,
+    #: so callers can compare it without a guard.
+    members_unreadable: dict = field(default_factory=dict)
+    #: True when members needed a decoder that this machine does not have, so
+    #: part of the archive could not be read. Callers report this; they must
+    #: not hide it, and it must never be confused with corruption.
+    decoder_missing: bool = False
+    #: Concrete, actionable text naming what to install.
+    decoder_hint: Optional[str] = None
+    #: Free-form notes carried into the file's status detail.
+    notes: List[str] = field(default_factory=list)
 
 
 def _policy_for_file(policy: ExtractionPolicy, name: str) -> None:
@@ -198,6 +224,35 @@ def _destination_checks(policy: ExtractionPolicy, dest: Path, member_size: int) 
         )
 
 
+def _prepare_output_dir(output_dir) -> Path:
+    """Return an **empty** output directory for a fresh extraction.
+
+    Extraction publishes the complete member set of one source file. An output
+    directory left over from an earlier attempt (crash, retry, or a previous
+    archive that occupied the same name) would otherwise be indistinguishable
+    from the current archive's members, and the pipeline would ingest stale
+    children as if they belonged to this source - the extraction equivalent of
+    reusing a stale hash.
+
+    This is done here, in the single choke point every format goes through,
+    rather than at each call site, so a new extraction backend cannot forget it.
+    """
+    root = Path(output_dir)
+    if root.is_symlink() or root.is_file():
+        root.unlink()
+    elif root.is_dir():
+        for child in root.iterdir():
+            try:
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child, ignore_errors=True)
+                else:
+                    child.unlink()
+            except OSError as exc:  # pragma: no cover - permission/lock edge
+                logger.warning("Could not clear %s from %s: %s", child, root, exc)
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def extract_zip(
     archive_path: str | os.PathLike,
     output_dir: str | os.PathLike,
@@ -206,8 +261,7 @@ def extract_zip(
 ) -> ExtractionResult:
     """Safely extract a ZIP archive member-by-member."""
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
 
@@ -273,8 +327,7 @@ def extract_tar(
 ) -> ExtractionResult:
     """Safely extract a TAR archive (incl. .tar.gz/.tar.bz2/.tar.xz)."""
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
 
@@ -340,8 +393,7 @@ def extract_single_file(
 ) -> ExtractionResult:
     """Safely extract a single-file stream (gzip/bzip2/xz)."""
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     result = ExtractionResult(output_dir=root)
 
     opener = {"gzip": gzip.open, "bzip2": bz2.open, "xz": lzma.open}[codec]
@@ -385,8 +437,7 @@ def extract_7z(
         raise ArchiveSafetyError("py7zr is not installed; cannot extract 7z archives") from exc
 
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
 
@@ -422,41 +473,434 @@ def extract_7z(
     return result
 
 
+# ----------------------------------------------------------------------
+# RAR decoder discovery
+# ----------------------------------------------------------------------
+# RAR is the one supported container that cannot be decoded in Python: the
+# compressed streams are a proprietary LZ+arithmetic family spanning eleven
+# archive generations, and ``rarfile`` is a front end that always drives an
+# external binary. Neither WinRAR nor 7-Zip adds itself to ``PATH`` on Windows,
+# so an operator who *has* a decoder installed still gets ``RarCannotExec``.
+#
+# rarfile's own probe is not a capability check - it accepts anything that
+# answers ``bsdtar --version`` or ``7z i`` - so a decoder is only configured
+# here after it has been observed to support RAR. GNU tar answers
+# ``--version`` too and cannot read RAR at all; configuring it would turn a
+# clear failure into silent garbage.
+_WINDOWS_DECODER_LOCATIONS = (
+    # (family, environment variable holding the root, relative candidates)
+    ("unrar", "ProgramFiles", (r"WinRAR\UnRAR.exe",)),
+    ("unrar", "ProgramFiles(x86)", (r"WinRAR\UnRAR.exe",)),
+    ("unrar", "LocalAppData", (r"Programs\WinRAR\UnRAR.exe",)),
+    ("7z", "ProgramFiles", (r"7-Zip\7z.exe", r"7-Zip\7za.exe")),
+    ("7z", "ProgramFiles(x86)", (r"7-Zip\7z.exe", r"7-Zip\7za.exe")),
+    ("7z", "LocalAppData", (r"Programs\7-Zip\7z.exe",)),
+    ("7z", "ChocolateyInstall", (r"bin\7z.exe",)),
+    # Windows 10 1803+ ships libarchive's bsdtar, which reads RAR4 and
+    # (libarchive >= 3.4) RAR5.
+    ("bsdtar", "SystemRoot", (r"System32\tar.exe",)),
+    ("bsdtar", "windir", (r"System32\tar.exe",)),
+)
+
+#: Tool names rarfile resolves through ``PATH``, in rarfile's own preference
+#: order (unrar > unar > 7z > 7zz > bsdtar). ``tar`` is deliberately absent:
+#: on POSIX that name is GNU tar, which cannot read RAR.
+RAR_DECODER_TOOL_NAMES = ("unrar", "unar", "7z", "7zz", "7za", "bsdtar")
+
+#: Which rarfile global each decoder family configures.
+_RARFILE_TOOL_GLOBALS = {
+    "unrar": ("UNRAR_TOOL",),
+    "unar": ("UNAR_TOOL",),
+    "7z": ("SEVENZIP_TOOL", "SEVENZIP2_TOOL"),
+    "bsdtar": ("BSDTAR_TOOL",),
+}
+
+#: Shown verbatim whenever a decoder is missing, so the operator knows exactly
+#: what to do. Kept concrete: what to install, where to get it, what changes.
+RAR_DECODER_HINT = (
+    "No RAR decoder is installed. Install 7-Zip (https://7-zip.org/) or "
+    "WinRAR/UnRAR (https://www.rarlab.com/) and re-run the ingest to read "
+    "every member. Members stored uncompressed are read and CRC32-verified "
+    "without a decoder; compressed members need one."
+)
+
+#: How long a decoder is given to answer its capability probe.
+_DECODER_PROBE_TIMEOUT = 15.0
+
+#: Why a declared member was not materialised. A closed vocabulary: the
+#: operator-facing text is derived from these keys, so a new reason cannot
+#: appear in a log without a phrase being defined for it.
+MEMBER_NEEDS_DECODER = "decoder_required"
+MEMBER_UNREADABLE = "unreadable"
+MEMBER_REJECTED = "rejected_by_policy"
+
+#: Human phrases for the reason vocabulary, used in status text.
+MEMBER_REASON_TEXT = {
+    MEMBER_NEEDS_DECODER: "need an external decoder",
+    MEMBER_UNREADABLE: "could not be read (damaged or unsupported)",
+    MEMBER_REJECTED: "rejected by the extraction safety policy",
+}
+
+
+def _family_for_tool_name(name: str) -> Optional[str]:
+    """Map an executable name to a decoder family."""
+    base = os.path.basename(name).lower()
+    if base.startswith("7z"):
+        return "7z"
+    if "unrar" in base:
+        return "unrar"
+    if "unar" in base:
+        return "unar"
+    if "bsdtar" in base or "tar" == base:
+        return "bsdtar"
+    return None
+
+
+def _run_probe(command: List[str]) -> str:
+    """Run a capability probe, returning its combined output ('' on failure)."""
+    try:
+        completed = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            timeout=_DECODER_PROBE_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return (completed.stdout or b"").decode("utf-8", "replace")
+
+
+def decoder_supports_rar(path: str, family: Optional[str] = None) -> bool:
+    """True when the executable at ``path`` can actually read RAR archives.
+
+    Each family is asked the question in its own language:
+
+    * ``unrar``    - prints its usage (containing "UNRAR") when run bare;
+    * ``unar``     - ``-version`` identifies The Unarchiver;
+    * ``7z``/``7za`` - ``i`` lists the supported formats and codecs; RAR must
+      appear in that list;
+    * ``bsdtar``   - ``--version`` must identify bsdtar/libarchive (GNU tar
+      answers this command too, which is exactly why the identity matters).
+    """
+    family = family or _family_for_tool_name(path)
+    if family == "unrar":
+        output = _run_probe([path])
+        return "unrar" in output.lower()
+    if family == "unar":
+        output = _run_probe([path, "-version"])
+        return "unar" in output.lower() or "unarchiver" in output.lower()
+    if family == "7z":
+        output = _run_probe([path, "i"]).lower()
+        return "7-zip" in output and "rar" in output
+    if family == "bsdtar":
+        output = _run_probe([path, "--version"]).lower()
+        return "bsdtar" in output or "libarchive" in output
+    return False
+
+
+def _candidate_decoder_paths() -> List[Tuple[str, str]]:
+    """``(family, absolute path)`` pairs where a decoder may be installed."""
+    candidates: List[Tuple[str, str]] = []
+    for family, env_root, relatives in _WINDOWS_DECODER_LOCATIONS:
+        root = os.environ.get(env_root)
+        if not root:
+            continue
+        for relative in relatives:
+            candidates.append((family, os.path.join(root, relative)))
+    return candidates
+
+
+def find_rar_decoder() -> Optional[Tuple[str, str]]:
+    """Return ``(family, executable)`` for a decoder that can read RAR, or None.
+
+    ``PATH`` is consulted first - that is what rarfile itself uses and it
+    keeps the configured value a bare name - then the standard install
+    locations of WinRAR, 7-Zip and the bundled Windows bsdtar. Every
+    candidate must pass :func:`decoder_supports_rar`; a binary that merely
+    exists is not accepted.
+    """
+    for name in RAR_DECODER_TOOL_NAMES:
+        found = shutil.which(name)
+        if not found:
+            continue
+        family = _family_for_tool_name(name) or _family_for_tool_name(found)
+        if family in ("bsdtar", "7z") and not decoder_supports_rar(found, family):
+            # bsdtar and 7z are the two families whose names are shared with
+            # unrelated tools (GNU tar; assorted "7z"-named wrappers), so the
+            # capability probe decides.
+            logger.debug("Ignoring %s: it cannot read RAR archives", found)
+            continue
+        return family or "unrar", found
+    for family, candidate in _candidate_decoder_paths():
+        if os.path.isfile(candidate) and decoder_supports_rar(candidate, family):
+            return family, candidate
+    return None
+
+
+def configure_rar_decoder() -> Optional[str]:
+    """Point ``rarfile`` at an installed RAR decoder; return what was configured.
+
+    rarfile caches the first successful probe for the process lifetime, so a
+    discovered path is assigned to the module global it uses and the probe is
+    re-run with ``force=True``. A failure to configure is not fatal here: the
+    caller still gets a usable result: members stored uncompressed are read
+    without it (see :func:`extract_rar`).
+    """
+    try:
+        import rarfile
+    except ImportError:  # pragma: no cover - optional dependency
+        return None
+
+    found = find_rar_decoder()
+    if not found:
+        return None
+    family, executable = found
+
+    if os.path.dirname(executable):
+        for global_name in _RARFILE_TOOL_GLOBALS.get(family, ()):
+            if hasattr(rarfile, global_name):
+                setattr(rarfile, global_name, executable)
+        try:
+            rarfile.tool_setup(force=True)
+        except Exception as exc:
+            logger.warning(
+                "Found a RAR decoder at %s but rarfile cannot drive it: %s",
+                executable, exc,
+            )
+            return None
+    return executable
+
+
+def rar_decoder_status() -> str:
+    """Human-readable statement of RAR decoding available on this machine.
+
+    Called on the failure path and in logs, so it never raises: it reports
+    either the decoder that will be used or the fact that none is available.
+    """
+    found = find_rar_decoder()
+    if not found:
+        return "no RAR decoder installed"
+    family, executable = found
+    return f"{family} decoder at {executable}"
+
+
 def extract_rar(
     archive_path: str | os.PathLike,
     output_dir: str | os.PathLike,
     policy: ExtractionPolicy = DEFAULT_POLICY,
 ) -> ExtractionResult:
-    """Safely extract a RAR archive member-by-member (requires rarfile + unrar)."""
+    """Safely extract a RAR archive, member by member.
+
+    ``rarfile`` reads RAR4 and RAR5 headers itself, without any external tool,
+    and reads members stored uncompressed the same way; only *compressed*
+    streams need unrar/unar/7-Zip/bsdtar. That is what makes a partial read
+    possible, and this function is where it happens:
+
+    * every member that can be read is extracted, CRC-verified by rarfile;
+    * a member whose stream needs a decoder that is not installed is recorded
+      under :data:`MEMBER_NEEDS_DECODER` and the loop continues to the next
+      member - the old implementation let the first such member abort the whole
+      archive, which is why a 66 MB container became a single failed row with
+      no children and no reason;
+    * a member that fails for any other reason is recorded under
+      :data:`MEMBER_UNREADABLE`, and any bytes already written for it are
+      removed rather than published as though they were the member;
+    * the result states the counts, so the caller can report "n of m members
+      could not be read" instead of a generic failure.
+
+    Encrypted archives raise :class:`ArchiveEncrypted` - a password is a
+    different fix from a missing binary, and calling either one "extraction
+    failed" told the operator nothing. A container that is not RAR at all, or is
+    too damaged to parse, raises :class:`ArchiveSafetyError`.
+    """
+    configure_rar_decoder()
+
     try:
         import rarfile
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ArchiveSafetyError("rarfile is not installed; cannot extract RAR archives") from exc
+    except ImportError as exc:  # pragma: no cover - declared dependency
+        raise ArchiveDecoderUnavailable(
+            "RAR support requires the rarfile package, which is not installed"
+            " (pip install rarfile)"
+        ) from exc
 
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
 
-    with rarfile.RarFile(str(archive_path)) as rf:
-        infos = rf.infolist()
+    with _open_rar(rarfile, archive_path) as rf:
+        infos = list(rf.infolist())
+        result.members_total = len(infos)
+
+        if not infos:
+            # No member was declared. Either the headers are encrypted (rarfile
+            # says so), the archive is genuinely empty, or the parser stopped at
+            # a damaged header - rarfile records that in strerror(), which is
+            # the only honest thing to report about it.
+            if rf.needs_password():
+                raise ArchiveEncrypted(
+                    "Archive headers are encrypted and no password was supplied"
+                )
+            parser_error = _safe_strerror(rf)
+            result.notes.append(
+                "container declares no members"
+                + (
+                    f" (parser reported: {parser_error})"
+                    if parser_error
+                    else " (empty archive, or a header the parser could not follow)"
+                )
+            )
+            return result
+
         if len(infos) > policy.max_files:
             raise ArchiveSafetyError(
                 f"Archive contains {len(infos)} members (limit {policy.max_files})"
             )
-        for info in infos:
-            _check_deadline(deadline)
-            if info.is_dir():
-                continue
+        if _is_solid(rf):
+            result.notes.append("solid archive: members share a compression stream")
+        volumes = _volume_count(rf)
+        if volumes > 1:
+            result.notes.append(
+                f"multi-volume set of {volumes} parts: members continued in "
+                "other volumes are not present in this file"
+            )
+        if _has_comment(rf):
+            result.notes.append("archive comment present")
+
+        _extract_rar_members(rarfile, rf, infos, root, policy, deadline, result)
+
+    if result.members_unreadable.get(MEMBER_NEEDS_DECODER):
+        result.decoder_missing = True
+        result.decoder_hint = RAR_DECODER_HINT
+        result.notes.append(
+            f"{result.members_unreadable[MEMBER_NEEDS_DECODER]} member(s) need an "
+            f"external RAR decoder ({rar_decoder_status()})"
+        )
+    return result
+
+
+def _open_rar(rarfile, archive_path):
+    """Open a RAR container, translating rarfile's failures into ours.
+
+    Handler order matters: ``PasswordRequired``, ``RarCannotExec`` and
+    ``RarWrongPassword`` are all subclasses of the parse errors (or of
+    ``RarExecError``) and each one names a different fix.
+    """
+    try:
+        return rarfile.RarFile(str(archive_path))
+    except rarfile.PasswordRequired as exc:
+        raise ArchiveEncrypted(
+            "Archive headers are encrypted and no password was supplied"
+        ) from exc
+    except rarfile.RarWrongPassword as exc:
+        raise ArchiveEncrypted(f"RAR password rejected: {exc}") from exc
+    except rarfile.RarCannotExec as exc:
+        # No decoder, or a decoder that cannot be executed. Not a property of
+        # this container: it may be perfectly intact.
+        raise ArchiveDecoderUnavailable(str(exc)) from exc
+    except rarfile.NoCrypto as exc:
+        raise ArchiveDecoderUnavailable(
+            f"RAR headers are encrypted and the crypto backend is unavailable: {exc}"
+        ) from exc
+    except rarfile.NotRarFile as exc:
+        raise ArchiveSafetyError(f"not a RAR container: {exc}") from exc
+    except rarfile.BadRarFile as exc:
+        raise ArchiveSafetyError(
+            f"RAR container is damaged or unsupported: {exc}"
+        ) from exc
+
+
+def _safe_strerror(rf) -> Optional[str]:
+    """rarfile's recorded header-parse error, when it has one."""
+    try:
+        error = rf.strerror()
+    except Exception:  # pragma: no cover - defensive
+        return None
+    return str(error) if error else None
+
+
+def _is_solid(rf) -> bool:
+    try:
+        return bool(rf.is_solid())
+    except Exception:  # pragma: no cover - needs a decoder to answer
+        return False
+
+
+def _volume_count(rf) -> int:
+    try:
+        return len(rf.volumelist())
+    except Exception:  # pragma: no cover - needs a decoder to answer
+        return 0
+
+
+def _has_comment(rf) -> bool:
+    try:
+        return bool(rf.comment)
+    except Exception:  # pragma: no cover - needs a decoder to answer
+        return False
+
+
+def _record_unreadable(result: ExtractionResult, name: str, reason: str,
+                       dest: Optional[Path] = None) -> None:
+    """Count a member that was declared but not materialised.
+
+    A partially written destination is deleted first: publishing half a member
+    is the same forensic error as publishing a wrong one - downstream it is
+    indistinguishable from a complete file.
+    """
+    if dest is not None:
+        try:
+            if dest.exists():
+                dest.unlink()
+        except OSError:  # pragma: no cover - best effort
+            logger.warning("Could not remove partial extraction of %s", name)
+    result.members_unreadable[reason] = result.members_unreadable.get(reason, 0) + 1
+    result.skipped.append(f"{name} ({MEMBER_REASON_TEXT.get(reason, reason)})")
+
+
+def _extract_rar_members(rarfile, rf, infos, root: Path, policy: ExtractionPolicy,
+                         deadline, result: ExtractionResult) -> None:
+    """Extract each member, isolating per-member failure from the archive."""
+    total_bytes = 0
+    for info in infos:
+        _check_deadline(deadline)
+        if info.is_dir():
+            continue
+        if info.needs_password():
+            # An encrypted member cannot be read without its password; there is
+            # nothing to be gained by continuing, and the operator's fix is to
+            # supply it.
+            raise ArchiveEncrypted(
+                f"Member {info.filename!r} is encrypted and no password was supplied"
+            )
+
+        try:
             safe_name = validate_member_path(info.filename)
             dest = safe_destination(root, safe_name)
             _destination_checks(policy, dest, info.file_size)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            if root not in dest.resolve().parents:
-                raise ArchiveSafetyError(
-                    f"Archive member escapes extraction root: {info.filename!r}"
-                )
+            _policy_for_file(policy, safe_name)
+        except ArchiveSafetyError as exc:
+            # A rejected member is a policy decision about that member, not a
+            # reason to discard the rest of the container: the unsafe member is
+            # refused before anything is written, and the readable members are
+            # still evidence. It is recorded under its own reason so the report
+            # does not call a refused member "damaged".
+            logger.warning("Refusing RAR member %r: %s", info.filename, exc)
+            _record_unreadable(result, info.filename, MEMBER_REJECTED)
+            continue
+
+        total_bytes += max(0, int(info.file_size or 0))
+        if total_bytes > policy.max_bytes:
+            raise ArchiveSafetyError("RAR extraction exceeded the byte limit")
+
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if root not in dest.resolve().parents and dest != root:
+            raise ArchiveSafetyError(
+                f"Archive member escapes extraction root: {info.filename!r}"
+            )
+
+        try:
             with rf.open(info) as src, open(dest, "wb") as out:
                 copied = 0
                 while True:
@@ -466,10 +910,26 @@ def extract_rar(
                         break
                     copied += len(chunk)
                     out.write(chunk)
+        except rarfile.RarCannotExec as exc:
+            # This member's stream needs a decoder that is not installed. The
+            # container is intact and the other members are still readable.
+            logger.debug("RAR member needs a decoder (%s): %s", exc, info.filename)
+            _record_unreadable(result, info.filename, MEMBER_NEEDS_DECODER, dest)
+            continue
+        except (rarfile.Error, OSError, EOFError, ValueError) as exc:
+            logger.warning(
+                "RAR member could not be read (%s: %s): %s",
+                type(exc).__name__, exc, info.filename,
+            )
+            _record_unreadable(result, info.filename, MEMBER_UNREADABLE, dest)
+            continue
+
+        try:
             os.chmod(dest, 0o600)
-            result.files_extracted += 1
-            result.bytes_extracted += copied
-    return result
+        except OSError:  # pragma: no cover - Windows/ACL variance
+            pass
+        result.files_extracted += 1
+        result.bytes_extracted += copied
 
 
 def _verify_tree_within(root: Path, current: Path, policy: ExtractionPolicy) -> None:

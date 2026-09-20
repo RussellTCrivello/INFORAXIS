@@ -105,7 +105,7 @@ Per Phase 23 this is classified **MISSING / FUTURE FUNCTIONALITY** — not inven
 | Files | `/files` | file/files_list.html | pages/files-list-page.js | VERIFIED |
 | File detail | `/file/<id>` | file/file_detail.html | pages/file-detail-page.js | VERIFIED |
 | Full content | `/file/<id>/full-content` | file/full_content.html | pages/full-content-page.js | VERIFIED |
-| Upload | `/upload` | file/upload.html | pages/upload-page.js | VERIFIED (302 — see §4) |
+| Upload | `/upload` | *superseded — redirects to `/operations/input`, which is served by `templates/Operations/input.html` + `pages/ingestion-studio-page.js` (interface consolidation)* | VERIFIED (302 — see §4) |
 | Search | `/search` | Search/search.html | pages/search-page.js | VERIFIED |
 | Advanced search | `/search/advanced` | Search/search_advanced.html | pages/search-advanced-page.js | VERIFIED |
 | Enhanced search | `/search/enhanced` | Search/search_enhanced.html | pages/search-enhanced-page.js | VERIFIED |
@@ -160,6 +160,11 @@ All 17 `url_for()` targets in `templates/base.html` resolve to registered endpoi
 | `GET /api/dashboard/stats`, `/api/keywords` | 200 | 200 | 200 |
 
 *The `/upload/process-path` 403 is path containment, not authorization — valid ingestion paths succeed for all three roles.*
+
+*Superseded: that endpoint belonged to the second upload interface and was removed with it. The
+same containment check now guards the single interface's server-path mode —
+`POST /api/input/jobs` and the server paths accepted by `POST /api/input/uploads` — so the
+behaviour tabulated above still holds, one URL over.*
 
 ---
 

@@ -9,6 +9,7 @@ plus ``StoragePipeline._extract_csv_text``, which is keyed on
 ``content['rows']`` - were unreachable dead code.
 """
 
+import base64
 import sys
 from pathlib import Path
 
@@ -178,3 +179,64 @@ class TestCsvRowCap:
         assert content["rows_stored"] == 2
         assert content["truncated"] is False
         assert "truncation_note" not in content
+
+
+class TestDeclaredVsContentMismatch:
+    """A name that contradicts the bytes must not choose the reader.
+
+    Reported from a real ingest: ``fake-png.png`` is plain text, and the
+    declared extension was honoured, so the image reader was handed the file
+    and logged
+
+        ERROR ... Error processing fake-png.png: cannot identify image file
+
+    for a file whose text was perfectly readable. The format service already
+    knows the declared type cannot hold these bytes; the router now needs to
+    act on it.
+    """
+
+    def test_text_file_named_png_is_read_as_text(self, router, tmp_path):
+        target = tmp_path / "fake-png.png"
+        target.write_bytes(b"MARKER plain text inside a png-named file\n" * 8)
+        content = process(router, target)
+        assert "error" not in content, content
+        assert "MARKER" in content["content"]
+        assert content["word_count"] == 56
+
+    def test_text_file_named_zip_is_read_as_text(self, router, tmp_path):
+        target = tmp_path / "evidence.zip"
+        target.write_bytes(b"this never was an archive, only words\n" * 10)
+        content = process(router, target)
+        assert "error" not in content, content
+        assert "archive" in content["content"]
+
+    def test_the_decision_records_why_the_name_was_set_aside(self, reader_service,
+                                                             tmp_path):
+        target = tmp_path / "fake-png.png"
+        target.write_bytes(b"plain text with a lying extension\n" * 5)
+        _, decision = reader_service.resolve_reader_for_file(str(target), ".png")
+        assert decision["effective_extension"] == ".txt"
+        assert decision["extension_mismatch"] is True
+        assert "cannot hold this content" in decision["detection_note"]
+
+    def test_a_genuine_png_still_reaches_the_image_reader(self, reader_service,
+                                                          tmp_path):
+        """The override must not capture files whose content agrees with them."""
+        png = tmp_path / "real.png"
+        png.write_bytes(base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ"
+            "DwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        ))
+        reader, decision = reader_service.resolve_reader_for_file(str(png), ".png")
+        assert type(reader).__name__ == "ImageFileReader"
+        assert decision["effective_extension"] == ".png"
+        assert decision["extension_mismatch"] is False
+
+    def test_a_svg_still_reaches_the_svg_reader(self, router, tmp_path):
+        """SVG is an image family whose content *is* text: it must not be
+        diverted to the plain-text reader by the same rule."""
+        svg = tmp_path / "chart.svg"
+        svg.write_bytes(
+            b'<svg xmlns="http://www.w3.org/2000/svg"><text>MARKER</text></svg>'
+        )
+        assert "MARKER" in process(router, svg)["text"]

@@ -2,9 +2,10 @@
    Analyst classification control (shared)
    --------------------------------------------------------------------------
    Loaded by EVERY content display interface (File Detail, Full Content
-   Reader) so the analyst-classify card and its toast look identical
-   everywhere. Self-contained violet tokens (FR-1.4): the analyst (manual)
-   namespace is visually distinct from the blue/gray smart classification.
+   Reader, and the file preview pop-up on the archives page) so the
+   analyst-classify card and its toast look identical everywhere.
+   Self-contained violet tokens (FR-1.4): the analyst (manual) namespace is
+   visually distinct from the blue/gray smart classification.
    -------------------------------------------------------------------------- */
 
 .analyst-classify {
@@ -157,4 +158,26 @@
 
 .analyst-action-toast.toast-error {
     background: #b91c1c;
+}
+
+/* --------------------------------------------------------------------------
+   Slot for the card inside a container rather than a page
+
+   The file preview pop-up renders the same card at the top of its
+   "Classification & Analysis" column, above the smart classification it must
+   not be confused with. That column scrolls, so the slot keeps the card's own
+   height (flex-shrink: 0) and the card sizes itself to the narrower column.
+   -------------------------------------------------------------------------- */
+.analyst-classify-slot {
+    flex: 0 0 auto;
+    padding: 0.75rem 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+.analyst-classify-slot .analyst-classify {
+    border-radius: 0.5rem;
+}
+
+.analyst-classify-slot .analyst-classify-controls {
+    flex-wrap: wrap;
 }

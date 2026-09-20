@@ -433,7 +433,7 @@ msgid "Analysis View Navigation"
 msgstr "ניווט בתצוגות ניתוח"
 
 msgid "Analysis paused"
-msgstr "הניתוח הושהה"
+msgstr "הניתוח מושהה"
 
 msgid "Analysis started for"
 msgstr "הניתוח החל עבור"
@@ -8154,7 +8154,9 @@ msgstr "מועד ההקצאה"
 msgid "Assigned By"
 msgstr "הוקצה על ידי"
 
-msgid "Assigned manually by analysts. Fully separate from the smart classification shown beside it."
+msgid ""
+"Assigned manually by analysts. Fully separate from the smart classification "
+"shown beside it."
 msgstr "הוקצו ידנית על ידי אנליסטים. הפרדה מלאה מהסיווג החכם המוצג לצידן."
 
 msgid "Assignments"
@@ -8187,8 +8189,12 @@ msgstr "בחר קטגוריית אנליסט…"
 msgid "Delete category (files return to uncategorized)"
 msgstr "מחק קטגוריה (הקבצים חוזרים ללא קטגוריה)"
 
-msgid "Every categorization action with analyst, timestamp, category, originating query and affected files."
-msgstr "כל פעולת קטגוריזציה עם האנליסט, חותמת הזמן, הקטגוריה, שאילתת המקור והקבצים שהושפעו."
+msgid ""
+"Every categorization action with analyst, timestamp, category, originating "
+"query and affected files."
+msgstr ""
+"כל פעולת קטגוריזציה עם האנליסט, חותמת הזמן, הקטגוריה, שאילתת המקור והקבצים "
+"שהושפעו."
 
 msgid "Export CSV"
 msgstr "ייצוא CSV"
@@ -8208,8 +8214,12 @@ msgstr "סינון לפי השאילתה שחשפה את הקבצים…"
 msgid "Manage Analyst Categories"
 msgstr "ניהול קטגוריות אנליסט"
 
-msgid "Manual, analyst-driven categorization layer — fully separate from system-generated smart categorization."
-msgstr "שכבת קטגוריזציה ידנית מונחית אנליסט — מופרדת לחלוטין מהקטגוריזציה החכמה שנוצרת על ידי המערכת."
+msgid ""
+"Manual, analyst-driven categorization layer — fully separate from system-"
+"generated smart categorization."
+msgstr ""
+"שכבת קטגוריזציה ידנית מונחית אנליסט — מופרדת לחלוטין מהקטגוריזציה החכמה "
+"שנוצרת על ידי המערכת."
 
 msgid "New analyst category name…"
 msgstr "שם קטגוריית אנליסט חדשה…"
@@ -8229,7 +8239,9 @@ msgstr "שאילתת מקור"
 msgid "Originating Search Query"
 msgstr "שאילתת החיפוש המקורית"
 
-msgid "Remove analyst categories from selected files (returns them to uncategorized scope)"
+msgid ""
+"Remove analyst categories from selected files (returns them to uncategorized"
+" scope)"
 msgstr "הסר קטגוריות אנליסט מהקבצים שנבחרו (מחזיר אותם להיקף לא מקוטגר)"
 
 msgid "Search Scope"
@@ -8247,14 +8259,24 @@ msgstr "הצג קבצים בקטגוריה זו"
 msgid "Smart Categories"
 msgstr "קטגוריות חכמות"
 
-msgid "These labels belong exclusively to the analyst (manual) taxonomy. They are never shared with smart categories."
-msgstr "תוויות אלה שייכות אך ורק לטקסונומיה של האנליסט (הידנית), והן לעולם אינן משותפות עם קטגוריות חכמות."
+msgid ""
+"These labels belong exclusively to the analyst (manual) taxonomy. They are "
+"never shared with smart categories."
+msgstr ""
+"תוויות אלה שייכות אך ורק לטקסונומיה של האנליסט (הידנית), והן לעולם אינן "
+"משותפות עם קטגוריות חכמות."
 
-msgid "This file has no analyst-assigned category yet. Assign one from the Advanced Search results."
+msgid ""
+"This file has no analyst-assigned category yet. Assign one from the Advanced"
+" Search results."
 msgstr "לקובץ זה עדיין אין קטגוריית אנליסט. הקצו אחת מתוצאות החיפוש המתקדם."
 
-msgid "This scope filters on analyst (manual) categorization only. It is completely independent of smart categorization."
-msgstr "היקף זה מסנן לפי קטגוריזציית אנליסט (ידנית) בלבד, והוא בלתי תלוי לחלוטין בקטגוריזציה חכמה."
+msgid ""
+"This scope filters on analyst (manual) categorization only. It is completely"
+" independent of smart categorization."
+msgstr ""
+"היקף זה מסנן לפי קטגוריזציית אנליסט (ידנית) בלבד, והוא בלתי תלוי לחלוטין "
+"בקטגוריזציה חכמה."
 
 msgid "Uncategorized Files Only"
 msgstr "קבצים לא מקוטגרים בלבד"
@@ -8298,11 +8320,19 @@ msgstr "בחרו קטגוריית אנליסט או הקלידו חדשה"
 msgid "Smart"
 msgstr "חכם"
 
-msgid "Delete analyst category \"{name}\"? Its assignments are removed and affected files return to uncategorized status."
-msgstr "למחוק את קטגוריית האנליסט \"{name}\"? ההקצאות שלה יוסרו והקבצים שהושפעו יחזרו למצב לא מקוטגר."
+msgid ""
+"Delete analyst category \"{name}\"? Its assignments are removed and affected"
+" files return to uncategorized status."
+msgstr ""
+"למחוק את קטגוריית האנליסט \"{name}\"? ההקצאות שלה יוסרו והקבצים שהושפעו "
+"יחזרו למצב לא מקוטגר."
 
-msgid "Remove analyst category from this file? It returns to uncategorized status for search scope."
-msgstr "להסיר את קטגוריית האנליסט מקובץ זה? הוא יחזור למצב לא מקוטגר לצורך היקף החיפוש."
+msgid ""
+"Remove analyst category from this file? It returns to uncategorized status "
+"for search scope."
+msgstr ""
+"להסיר את קטגוריית האנליסט מקובץ זה? הוא יחזור למצב לא מקוטגר לצורך היקף "
+"החיפוש."
 
 msgid "Remove failed"
 msgstr "ההסרה נכשלה"
@@ -8352,22 +8382,35 @@ msgstr "בחר לקטגוריזציה ידנית"
 msgid "Select {file} for manual categorization"
 msgstr "בחר את {file} לקטגוריזציה ידנית"
 
-msgid "Remove all analyst categories from {count} selected file(s)? They will return to \"uncategorized\" for analyst search scope. Smart categories are not affected."
-msgstr "להסיר את כל קטגוריות האנליסט מ-{count} קבצים שנבחרו? הם יחזרו למצב \"לא מקוטגר\" עבור היקף החיפוש של האנליסט. קטגוריות חכמות לא יושפעו."
+msgid ""
+"Remove all analyst categories from {count} selected file(s)? They will "
+"return to \"uncategorized\" for analyst search scope. Smart categories are "
+"not affected."
+msgstr ""
+"להסיר את כל קטגוריות האנליסט מ-{count} קבצים שנבחרו? הם יחזרו למצב \"לא "
+"מקוטגר\" עבור היקף החיפוש של האנליסט. קטגוריות חכמות לא יושפעו."
 
 msgid "Assigned \"{category}\" to {count} file(s)"
 msgstr "\"{category}\" הוקצה ל-{count} קובץ/קבצים"
 
-msgid "Find exactly what you need with powerful filters and intelligent algorithms"
+msgid ""
+"Find exactly what you need with powerful filters and intelligent algorithms"
 msgstr "מצאו בדיוק את מה שאתם צריכים עם מסננים חזקים ואלגוריתמים חכמים"
 
-msgid "Search files, content, categories... (supports multiple words, quotes, AND/OR/NOT)"
+msgid ""
+"Search files, content, categories... (supports multiple words, quotes, "
+"AND/OR/NOT)"
 msgstr "חפשו קבצים, תוכן, קטגוריות... (תומך במספר מילים, מרכאות, AND/OR/NOT)"
 
-msgid "Searching without a source or side filter may be slow on large datasets. Continue?"
-msgstr "חיפוש ללא מסנן מקור או צד עשוי להיות איטי במאגרי נתונים גדולים. להמשיך?"
+msgid ""
+"Searching without a source or side filter may be slow on large datasets. "
+"Continue?"
+msgstr ""
+"חיפוש ללא מסנן מקור או צד עשוי להיות איטי במאגרי נתונים גדולים. להמשיך?"
 
-msgid "Selecting a source or side limits search to that scope, improving performance"
+msgid ""
+"Selecting a source or side limits search to that scope, improving "
+"performance"
 msgstr "בחירת מקור או צד מגבילה את החיפוש להיקף זה ומשפרת את הביצועים"
 
 msgid "Sort"
@@ -8385,8 +8428,13 @@ msgstr "אין עדיין קטגוריות אנליסט."
 msgid "content view"
 msgstr "תצוגת תוכן"
 
-msgid "Remove all analyst categories from this file? It will return to \"uncategorized\" for analyst search scope. Smart categories are not affected."
-msgstr "להסיר את כל קטגוריות האנליסט מהקובץ הזה? הוא יחזור למצב \"ללא קטגוריה\" בטווח החיפוש של האנליסט. קטגוריות חכמות לא מושפעות."
+msgid ""
+"Remove all analyst categories from this file? It will return to "
+"\"uncategorized\" for analyst search scope. Smart categories are not "
+"affected."
+msgstr ""
+"להסיר את כל קטגוריות האנליסט מהקובץ הזה? הוא יחזור למצב \"ללא קטגוריה\" "
+"בטווח החיפוש של האנליסט. קטגוריות חכמות לא מושפעות."
 
 msgid "Removed analyst categories from {count} file(s)"
 msgstr "הוסרו קטגוריות אנליסט מ-{count} קבצים"
@@ -8426,3 +8474,685 @@ msgstr "שקופית הבאה"
 
 msgid "Sheets"
 msgstr "גליונות"
+
+msgid " · {n} staged"
+msgstr " · {n} בהכנה"
+
+#: templates/Operations/input.html:278
+msgid "0 = use the system default (bounded by CPU and the database pool)."
+msgstr ""
+"0 = שימוש בברירת המחדל של המערכת (מוגבל במעבד ובמאגר החיבורים של מסד "
+"הנתונים)."
+
+#: templates/403.html:10
+msgid "403"
+msgstr "403"
+
+#: templates/Operations/input.html:328
+msgid ""
+"A dry run walks the input and reports what would happen — it writes nothing."
+msgstr "הרצה יבשה עוברת על הקלט ומדווחת מה יקרה — בלי לכתוב דבר."
+
+#: templates/Operations/input.html:131
+msgid "Add files, or drop them here"
+msgstr "הוסף קבצים, או שחרר אותם כאן"
+
+#: templates/Operations/input.html:352
+msgid "All jobs"
+msgstr "כל המשימות"
+
+msgid "Allowed roots — click to use one:"
+msgstr "נתיבי שורש מותרים — לחץ כדי להשתמש באחד:"
+
+#: templates/Operations/input.html:115
+msgid "Any size: large files stream in chunks"
+msgstr "כל גודל: קבצים גדולים נזרמים במקטעים"
+
+msgid "archive safety"
+msgstr "בטיחות ארכיון"
+
+#: templates/Operations/input.html:313
+msgid ""
+"archives, compressed files, e-mail attachments, embedded objects — extracted"
+" with parent/child links"
+msgstr ""
+"ארכיונים, קבצים דחוסים, קבצים מצורפים בדואר ואובייקטים מוטמעים — מחולצים עם "
+"קישורי אב/בן"
+
+#: templates/Analysis/dashboard.html:128
+msgid ""
+"Bringing Files In: open \"Input / Ingestion\" in the sidebar to add files - "
+"one file, a whole folder, or a path on the server"
+msgstr ""
+"הבאת קבצים: פתח \"קלט / קליטה\" בסרגל הצד כדי להוסיף קבצים — קובץ בודד, "
+"תיקייה שלמה או נתיב בשרת"
+
+#: templates/Operations/input.html:170
+msgid "Check"
+msgstr "בדיקה"
+
+#: templates/Operations/input.html:284
+msgid "Checkpoint handling"
+msgstr "טיפול בנקודות ביקורת"
+
+#: templates/Operations/input.html:282
+msgid "Checkpoints"
+msgstr "נקודות ביקורת"
+
+msgid "Choose a server path"
+msgstr "בחר נתיב בשרת"
+
+#: templates/Operations/input.html:138
+msgid "Choose files"
+msgstr "בחר קבצים"
+
+#: templates/Operations/input.html:141
+msgid "Choose folder"
+msgstr "בחר תיקייה"
+
+#: templates/Operations/input.html:58
+msgid "Choose what to ingest"
+msgstr "בחר מה לקלוט"
+
+#: templates/Operations/input.html:155
+msgid "Clear all"
+msgstr "נקה הכול"
+
+#: templates/Operations/input.html:313
+msgid "Containers"
+msgstr "מכילים"
+
+#: templates/Operations/input.html:312
+msgid "content hash + source + side"
+msgstr "גיבוב תוכן + מקור + צד"
+
+msgid "direct upload"
+msgstr "העלאה ישירה"
+
+msgid "disabled — no roots configured"
+msgstr "מושבת — לא הוגדרו נתיבי שורש"
+
+#: templates/Operations/input.html:134
+msgid "Drop files or folders here"
+msgstr "שחרר כאן קבצים או תיקיות"
+
+#: templates/Operations/input.html:92
+msgid "dry run"
+msgstr "הרצה יבשה"
+
+#: templates/Operations/input.html:311
+msgid "Duplicate detection"
+msgstr "זיהוי כפילויות"
+
+msgid "duplicate detection"
+msgstr "זיהוי כפילויות"
+
+#: templates/Operations/input.html:254
+msgid ""
+"Duplicates are decided by content hash + source + side: the same file can "
+"exist under a different source without being a duplicate."
+msgstr ""
+"כפילות נקבעת לפי גיבוב התוכן + מקור + צד: אותו קובץ יכול להתקיים תחת מקור "
+"אחר בלי להיחשב לכפילות."
+
+msgid "engine capabilities"
+msgstr "יכולות המנוע"
+
+msgid "engine default workers"
+msgstr "עובדי ברירת המחדל של המנוע"
+
+#: templates/Operations/input.html:76
+msgid "Engine defaults"
+msgstr "ברירות המחדל של המנוע"
+
+msgid "Enter a path first."
+msgstr "הזן נתיב תחילה."
+
+#: templates/Operations/input.html:35
+msgid "Everything that brings files into the system — in one place."
+msgstr "כל מה שמביא קבצים למערכת — במקום אחד."
+
+#: templates/Operations/input.html:315
+msgid "extracted and indexed for search"
+msgstr "מחולץ ומאונדקס לחיפוש"
+
+#: templates/Operations/input.html:317
+msgid "Failure handling"
+msgstr "טיפול בכשלים"
+
+#: templates/Analysis/file_classification.html:3
+msgid "File Analysis System"
+msgstr "מערכת ניתוח קבצים"
+
+#: templates/components/file_nav.html:20
+msgid "File navigation"
+msgstr "ניווט בין קבצים"
+
+#: templates/Operations/input.html:165
+msgid "File or folder on the server"
+msgstr "קובץ או תיקייה בשרת"
+
+msgid "Files selected"
+msgstr "קבצים נבחרו"
+
+#: templates/Operations/input.html:233
+msgid "Filter sides"
+msgstr "סינון צדדים"
+
+#: templates/Operations/input.html:233
+msgid "Filter sides…"
+msgstr "סינון צדדים…"
+
+#: templates/Operations/input.html:202
+msgid "Filter sources"
+msgstr "סינון מקורות"
+
+#: templates/Operations/input.html:202
+msgid "Filter sources…"
+msgstr "סינון מקורות…"
+
+#: templates/Operations/input.html:123
+msgid "Folders reachable by the server"
+msgstr "תיקיות שהשרת יכול להגיע אליהן"
+
+#: templates/Operations/input.html:168
+msgid "for example /data/inbox"
+msgstr "לדוגמה /data/inbox"
+
+msgid "fresh start"
+msgstr "התחלה חדשה"
+
+#: templates/Operations/input.html:335
+msgid "Hide preflight"
+msgstr "הסתר בדיקה מקדימה"
+
+#: templates/Operations/input.html:263
+msgid "How should it be processed?"
+msgstr "כיצד לעבד?"
+
+#: templates/Operations/input.html:312
+msgid "Identity"
+msgstr "זהות"
+
+#: templates/Operations/input.html:39
+msgid "Import center"
+msgstr "מרכז הייבוא"
+
+#: templates/Operations/input.html:177
+msgid "Include subdirectories"
+msgstr "כלול תיקיות משנה"
+
+#: templates/Operations/input.html:51
+msgid "Ingestion steps"
+msgstr "שלבי הקליטה"
+
+#: templates/Operations/input.html:109
+msgid "Input mode"
+msgstr "מצב קלט"
+
+msgid ""
+"Inside “{root}”. The dry run confirms what it contains — nothing has been "
+"read yet."
+msgstr "בתוך \"{root}\". ההרצה היבשה מאשרת מה יש בו — דבר לא נקרא עדיין."
+
+msgid "Job {id} created — opening it…"
+msgstr "המשימה {id} נוצרה — נפתחת…"
+
+msgid "large files"
+msgstr "קבצים גדולים"
+
+msgid "Largest"
+msgstr "הגדול ביותר"
+
+#: templates/Operations/input.html:84
+msgid "Launch"
+msgstr "הפעל"
+
+#: templates/Operations/input.html:264
+msgid "Leave the defaults unless this run needs something specific."
+msgstr "השאר את ברירות המחדל אלא אם ההרצה הזו צריכה משהו מיוחד."
+
+#: templates/Operations/input.html:348
+msgid "Live state"
+msgstr "מצב חי"
+
+msgid "Mode"
+msgstr "מצב"
+
+#: templates/Operations/input.html:209
+msgid "Name *"
+msgstr "שם *"
+
+#: templates/Operations/input.html:197
+msgid "New"
+msgstr "חדש"
+
+#: templates/Operations/input.html:238
+msgid "New side"
+msgstr "צד חדש"
+
+#: templates/Operations/input.html:207
+msgid "New source"
+msgstr "מקור חדש"
+
+#: templates/components/file_nav.html:56
+msgid "Next file: %(name)s (Alt+Right)"
+msgstr "הקובץ הבא: %(name)s (Alt+Right)"
+
+msgid "no checkpoints"
+msgstr "אין נקודות ביקורת"
+
+msgid ""
+"No ingestion roots are configured — server paths stay disabled until they "
+"are."
+msgstr "לא הוגדרו נתיבי קליטה — נתיבי השרת יישארו מושבתים עד שיוגדרו."
+
+msgid "No INGESTION_ROOTS configured — server paths are disabled."
+msgstr "INGESTION_ROOTS לא הוגדר — נתיבי השרת מושבתים."
+
+msgid "no jobs yet"
+msgstr "אין משימות עדיין"
+
+msgid "None exist yet — create one with “New”."
+msgstr "עדיין אין — צור אחד עם \"חדש\"."
+
+#: templates/components/file_nav.html:45
+msgid "Not in the current view"
+msgstr "לא בתצוגה הנוכחית"
+
+msgid "Not ready yet"
+msgstr "עדיין לא מוכן"
+
+#: templates/Operations/input.html:200
+msgid "Not selected"
+msgstr "לא נבחר"
+
+msgid "not staged"
+msgstr "לא בהכנה"
+
+msgid "Nothing in the queue has failed"
+msgstr "דבר בתור לא נכשל"
+
+#: templates/Operations/input.html:356
+msgid "Nothing is running."
+msgstr "דבר לא פועל."
+
+msgid "Nothing matches that filter."
+msgstr "דבר לא תואם את המסנן הזה."
+
+#: templates/Operations/input.html:380
+msgid "Nothing selected yet"
+msgstr "עדיין לא נבחר דבר"
+
+msgid "Nothing was staged — add files again."
+msgstr "דבר לא הוכן — הוסף קבצים שוב."
+
+#: templates/Operations/input.html:316
+msgid "OCR"
+msgstr "OCR"
+
+msgid ""
+"Off writes no checkpoint: a crash means the next run starts from the "
+"beginning."
+msgstr "כיבוי אינו כותב נקודת ביקורת: קריסה משמעה שההרצה הבאה תתחיל מהתחלה."
+
+#: templates/Operations/input.html:273
+msgid "One worker fewer"
+msgstr "עובד אחד פחות"
+
+#: templates/Operations/input.html:276
+msgid "One worker more"
+msgstr "עובד אחד יותר"
+
+msgid "Open job"
+msgstr "פתח משימה"
+
+#: templates/Operations/input.html:135
+msgid "or choose them from this computer"
+msgstr "או בחר אותם מהמחשב הזה"
+
+#: templates/Operations/input.html:317
+msgid "per file: one unreadable object never stops the run"
+msgstr "לכל קובץ: אובייקט אחד שלא ניתן לקרוא אינו עוצר את ההרצה"
+
+#: templates/components/file_nav.html:41
+msgid "Position in the current view"
+msgstr "מיקום בתצוגה הנוכחית"
+
+#: templates/components/file_nav.html:47
+msgid "Position unavailable"
+msgstr "המיקום אינו זמין"
+
+msgid ""
+"Preflight finished. Nothing was read into the system and nothing was "
+"written."
+msgstr "הבדיקה המקדימה הסתיימה. דבר לא נקרא למערכת ודבר לא נכתב."
+
+#: templates/Operations/input.html:334
+msgid "Preflight result"
+msgstr "תוצאת בדיקה מקדימה"
+
+#: templates/Operations/input.html:85
+msgid "Preflight, then start"
+msgstr "בדוק מראש, ואז הפעל"
+
+#: templates/components/file_nav.html:26
+msgid "Previous file: %(name)s (Alt+Left)"
+msgstr "הקובץ הקודם: %(name)s (Alt+Left)"
+
+#: templates/Operations/input.html:46
+msgid "Reading engine capabilities…"
+msgstr "קורא את יכולות המנוע…"
+
+#: templates/Operations/input.html:354
+msgid "Reading…"
+msgstr "קורא…"
+
+msgid "Ready to run"
+msgstr "מוכן להרצה"
+
+msgid "Ready: {n} file(s) · {v}"
+msgstr "מוכן: {n} קבצים · {v}"
+
+msgid "Ready: {path}"
+msgstr "מוכן: {path}"
+
+#: templates/Operations/input.html:361
+msgid "Recently finished"
+msgstr "הסתיימו לאחרונה"
+
+#: templates/Operations/input.html:301
+msgid "Record throughput and phases for this job"
+msgstr "תעד קצב ושלבים עבור המשימה הזו"
+
+#: templates/Operations/input.html:145
+msgid "Release to add"
+msgstr "שחרר כדי להוסיף"
+
+msgid "Remove {name}"
+msgstr "הסר {name}"
+
+#: templates/Operations/input.html:286
+msgid "Resume"
+msgstr "המשך"
+
+#: templates/Operations/input.html:292
+msgid ""
+"Resume continues an interrupted run; finished files are not processed twice."
+msgstr "המשך משלים הרצה שנפסקה; קבצים שהושלמו אינם מעובדים פעמיים."
+
+#: templates/Operations/input.html:351
+msgid "Running now"
+msgstr "פועל כעת"
+
+msgid "sampled from the walk"
+msgstr "מדגם מהסריקה"
+
+msgid "server path"
+msgstr "נתיב בשרת"
+
+msgid "Server path set"
+msgstr "נתיב השרת נקבע"
+
+msgid "server paths"
+msgstr "נתיבים בשרת"
+
+msgid ""
+"Server-path input is disabled: no INGESTION_ROOTS are configured. Set them "
+"in Settings (or the INGESTION_ROOTS environment variable) to enable it."
+msgstr ""
+"קלט נתיב בשרת מושבת: INGESTION_ROOTS לא הוגדר. הגדר אותו בהגדרות (או במשתנה "
+"הסביבה INGESTION_ROOTS) כדי לאפשר זאת."
+
+#: templates/Operations/input.html:311
+msgid "SHA-256 of the content, streamed"
+msgstr "SHA-256 של התוכן, בזרימה"
+
+msgid "Side chosen"
+msgstr "הצד נבחר"
+
+msgid "Side could not be created: {message}"
+msgstr "לא ניתן ליצור צד: {message}"
+
+msgid "Side “{name}” created and selected."
+msgstr "הצד \"{name}\" נוצר ונבחר."
+
+#: templates/Operations/input.html:67
+msgid "Source and side"
+msgstr "מקור וצד"
+
+msgid "Source and side are mandatory"
+msgstr "מקור וצד הם חובה"
+
+#: templates/Operations/input.html:188
+msgid ""
+"Source and side travel with every file and become part of its identity."
+msgstr "המקור והצד מלווים כל קובץ והופכים לחלק מהזהות שלו."
+
+msgid "Source chosen"
+msgstr "המקור נבחר"
+
+msgid "Source could not be created: {message}"
+msgstr "לא ניתן ליצור מקור: {message}"
+
+msgid "Source “{name}” created and selected."
+msgstr "המקור \"{name}\" נוצר ונבחר."
+
+msgid "Sources and sides could not be loaded: {message}"
+msgstr "לא ניתן היה לטעון מקורות וצדדים: {message}"
+
+msgid "Staging failed: {message}"
+msgstr "ההכנה נכשלה: {message}"
+
+msgid "Staging files — keep this page open."
+msgstr "מכין קבצים — השאר דף זה פתוח."
+
+msgid "Staging stopped. Files already staged stay staged and can be reused."
+msgstr "ההכנה הופסקה. קבצים שכבר הוכנו נשארים בהכנה וניתנים לשימוש חוזר."
+
+msgid "staging…"
+msgstr "מכין…"
+
+#: templates/Operations/input.html:91
+msgid "start"
+msgstr "התחלה"
+
+#: templates/Operations/import_center.html:51
+msgid "Start batch import"
+msgstr "התחל ייבוא באצווה"
+
+#: templates/Operations/input.html:288
+msgid "Start fresh"
+msgstr "התחל מחדש"
+
+msgid ""
+"Start fresh ignores an earlier checkpoint and walks everything again — "
+"deduplication still prevents double storage."
+msgstr ""
+"התחלה מחדש מתעלמת מנקודת ביקורת קודמת ועוברת על הכול שוב — זיהוי הכפילויות "
+"עדיין מונע אחסון כפול."
+
+#: templates/Operations/input.html:381
+msgid "Start with step 1 — add files or a server path."
+msgstr "התחל בשלב 1 — הוסף קבצים או נתיב בשרת."
+
+msgid "Stop staging"
+msgstr "עצור הכנה"
+
+msgid "stored as {name}"
+msgstr "נשמר בשם {name}"
+
+#: templates/Operations/input.html:315
+msgid "Text & metadata"
+msgstr "טקסט ומטא-נתונים"
+
+msgid ""
+"That path is outside every configured root ({roots}). Ingestion is fail-"
+"closed by design."
+msgstr ""
+"הנתיב הזה מחוץ לכל נתיב שורש מוגדר ({roots}). הקליטה מתוכננת להיכשל בסגור."
+
+msgid "The engine accepted the request but returned no job id."
+msgstr "המנוע קיבל את הבקשה אך לא החזיר מזהה משימה."
+
+msgid ""
+"This browser cannot read a dropped folder. Use “Choose folder” — it works on"
+" Windows, macOS and Linux."
+msgstr ""
+"הדפדפן הזה אינו יכול לקרוא תיקייה שנשחררה. השתמש ב\"בחר תיקייה\" — זה עובד "
+"ב-Windows, macOS ו-Linux."
+
+msgid "This browser cannot send a whole folder — drag it here instead."
+msgstr "הדפדפן הזה אינו יכול לשלוח תיקייה שלמה — גרור אותה לכאן במקום."
+
+msgid ""
+"This browser context has no hashing API (serve the app over https, or open "
+"it on localhost): chunks are verified by the server at the end instead."
+msgstr ""
+"להקשר הדפדפן הזה אין API גיבוב (הגש את האפליקציה ב-https, או פתח אותה "
+"ב-localhost): השרת יאמת את המקטעים בסוף במקום זאת."
+
+msgid ""
+"This browser did not report the folder structure, so these files are placed "
+"without their folders."
+msgstr ""
+"הדפדפן הזה לא דיווח על מבנה התיקיות, ולכן קבצים אלה ממוקמים בלי התיקיות "
+"שלהם."
+
+#: templates/Operations/input.html:114
+msgid "This computer"
+msgstr "המחשב הזה"
+
+msgid "this computer"
+msgstr "המחשב הזה"
+
+#: templates/components/analyst_classify.html:52
+msgid ""
+"This file has no analyst-assigned category yet. Assign one here, or from the"
+" Advanced Search results."
+msgstr ""
+"לקובץ הזה אין עדיין קטגוריה שהוקצתה על ידי אנליסט. הקצה אחת כאן, או מתוצאות "
+"החיפוש המתקדם."
+
+#: templates/components/file_nav.html:34
+msgid "This is the first file in the current view"
+msgstr "זהו הקובץ הראשון בתצוגה הנוכחית"
+
+#: templates/components/file_nav.html:64
+msgid "This is the last file in the current view"
+msgstr "זהו הקובץ האחרון בתצוגה הנוכחית"
+
+#: templates/Operations/input.html:368
+msgid "This run"
+msgstr "ההרצה הזו"
+
+msgid "Transfers"
+msgstr "העברות"
+
+msgid "up to {v}"
+msgstr "עד {v}"
+
+#: templates/Operations/input.html:105
+msgid ""
+"Upload from this computer — files or whole folders — or point the engine at "
+"a folder already on the server."
+msgstr ""
+"העלה מהמחשב הזה — קבצים או תיקיות שלמות — או הצבע את המנוע על תיקייה שכבר "
+"נמצאת בשרת."
+
+#: templates/Operations/input.html:316
+msgid ""
+"used when an engine is available; a missing engine never fails the file"
+msgstr "בשימוש כאשר מנוע זמין; מנוע חסר אינו מכשיל את הקובץ"
+
+msgid "Volume"
+msgstr "נפח"
+
+#: templates/Operations/input.html:104
+msgid "What should be ingested?"
+msgstr "מה לקלוט?"
+
+#: templates/Operations/input.html:309
+msgid "What this pipeline always does"
+msgstr "מה הצינור הזה תמיד עושה"
+
+#: templates/Operations/input.html:187
+msgid "Where does it belong?"
+msgstr "לאן זה שייך?"
+
+msgid "Working…"
+msgstr "עובד…"
+
+#: templates/Operations/input.html:314
+msgid "zip/tar/gz and more, with path-traversal protection"
+msgstr "zip/tar/gz ועוד, עם הגנה מפני מעבר נתיבים"
+
+msgid "{name} could not be staged: {message}"
+msgstr "לא ניתן להכין את {name}: {message}"
+
+msgid "{n} already in the list — not added twice."
+msgstr "{n} כבר ברשימה — לא נוסף פעמיים."
+
+msgid "{n} configured root(s)"
+msgstr "{n} נתיבי שורש מוגדרים"
+
+msgid "{n} file(s) could not be staged — see the list."
+msgstr "{n} קבצים לא הוכנו — ראה הרשימה."
+
+msgid "{n} file(s) failed to stage"
+msgstr "{n} קבצים נכשלו בהכנה"
+
+msgid "{n} file(s) queued — {v} in total."
+msgstr "{n} קבצים בתור — {v} בסך הכול."
+
+msgid "{n} file(s) selected"
+msgstr "{n} קבצים נבחרו"
+
+msgid "{n} file(s) · {v}"
+msgstr "{n} קבצים · {v}"
+
+msgid "{n} MB chunks, up to {v}"
+msgstr "מקטעים של {n} MB, עד {v}"
+
+msgid "{n} worker(s)"
+msgstr "{n} עובדים"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "hashing"
+msgstr "גיבוב"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "ready"
+msgstr "מוכן"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "chunked"
+msgstr "במקטעים"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "staged"
+msgstr "בהכנה"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "failed"
+msgstr "נכשל"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "file"
+msgstr "קובץ"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "resume"
+msgstr "המשך"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "monitored"
+msgstr "במעקב"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "unavailable"
+msgstr "לא זמין"
+
+#: static/js/modules/charts/chart-customizer.js
+msgid "Applied"
+msgstr "הוחל"

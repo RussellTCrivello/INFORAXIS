@@ -104,18 +104,6 @@ class IngestionService:
     def _resolve_identifier(self, value: str, kind: str) -> str:
         """INJ-04: resolve an identifier according to the API contract.
 
-        * non-numeric value            -> an entity name, used as-is
-        * numeric, matches an id       -> resolved to the entity's name
-        * numeric, matches a *name*    -> used as-is (legitimate numeric-looking
-          names such as a side literally named '9' stay addressable, and the
-          check is idempotent under the double validation pass)
-        * numeric, matches neither     -> rejected (previously fell through to
-          the name-based pipeline, silently creating garbage entities
-          literally named '999999')
-        """
-    def _resolve_identifier(self, value: str, kind: str) -> str:
-        """INJ-04: resolve an identifier according to the API contract.
-
         Precedence is deterministic and idempotent (validate() runs more than
         once per job, and a first pass may rewrite an id into a numeric-looking
         name such as side '9'):
@@ -190,12 +178,16 @@ class IngestionService:
                 # guidance for the disabled-roots case.
                 if "disabled" in str(exc):
                     raise IngestionValidationError(str(exc)) from exc
+                # Echo the path as submitted. `Path(raw).name` was wrong twice
+                # over: on Windows it reduces `C:\Windows\System32` to
+                # `System32`, and on POSIX it turns `/etc` into `etc`, so the
+                # operator is told about a path they did not type.
                 raise IngestionValidationError(
-                    f"Path not allowed: {Path(str(raw)).name}"
+                    f"Path not allowed: {str(raw).strip()}"
                 ) from exc
             if not resolved.exists():
                 raise IngestionValidationError(
-                    f"Path does not exist: {Path(str(raw)).name}"
+                    f"Path does not exist: {str(raw).strip()}"
                 )
             validated.append(str(resolved))
         # Second pass invariants that don't need per-path errors surfaced.
@@ -546,9 +538,14 @@ class IngestionService:
                 "files_skipped": live.get("files_skipped"),
                 "files_unsupported": live.get("files_unsupported"),
                 "files_retryable": live.get("files_retryable"),
+                "files_locked": live.get("files_locked"),
+                "files_cancelled": live.get("files_cancelled"),
                 "files_in_progress": live.get("in_progress"),
                 "files_pending": live.get("files_pending"),
                 "children_by_parent": live.get("children_by_parent"),
+                "children_by_parent_overflow": live.get("children_by_parent_overflow"),
+                "containers_in_flight": live.get("containers_in_flight"),
+                "container_work_outstanding": live.get("container_work_outstanding"),
                 # The closing percentage and completion flag. Without these the
                 # final persisted stats describe the counts but not the state the
                 # progress bar should render, so the API's statistics.percent was
@@ -568,7 +565,19 @@ class IngestionService:
             })
         except Exception:
             pass
-        if results:
+        # Bytes processed: prefer the reader's exact running total.  The
+        # per-file result list is a bounded window on large runs (each entry
+        # carries extracted content), so summing it would silently under-report
+        # once the window filled; the reader tracks every file's size whether
+        # or not its dictionary was retained.
+        exact = None
+        try:
+            exact = (reader.get_statistics() or {}).get("bytes_processed")
+        except Exception:
+            exact = None
+        if exact is not None:
+            stats["bytes_processed"] = exact
+        elif results:
             bytes_total = 0
             for r in results:
                 if isinstance(r, dict):

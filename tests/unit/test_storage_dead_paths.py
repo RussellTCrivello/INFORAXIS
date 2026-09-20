@@ -1,9 +1,18 @@
 """Locks in the DatabaseHub call-site investigation as executable evidence.
 
 These tests encode the conclusions of PHASE2_DBHUB_INVESTIGATION.md so that a
-future change which makes the dead code reachable - or which deletes the
-disabled block without noticing what it guarded - fails loudly instead of
-silently changing behaviour.
+future change which reintroduces the dead code, or which makes a fall-through
+look like a successful store, fails loudly instead of silently changing
+behaviour.
+
+They were written while the legacy storage implementation was still present as a
+>5 000-character string literal inside ``_store_file_sync`` (inert, because an
+unconditional ``return None`` preceded it). That block has since been deleted
+outright - dead code that cannot run, cannot be reviewed and cannot be
+maintained is worse than no code - so the assertions below now guard the
+*stronger* invariant: the legacy implementation is gone, no live code anywhere
+uses the DatabaseHub attributes it called, and the single remaining
+"should never happen" branch is loud and accounted.
 
 They analyse the module with ``ast`` rather than reading it, because the whole
 point is that some occurrences of ``db_hub.<x>_operations`` are text inside a
@@ -92,8 +101,10 @@ class TestOperationsAttributesDoNotExist:
         assert not hasattr(DatabaseHub, "__getattr__")
 
 
-class TestDisabledBlock:
-    def test_a_large_string_literal_disables_the_old_path(self):
+class TestLegacyBlockIsGone:
+    """The inert legacy implementation was deleted, not kept for reference."""
+
+    def test_no_large_string_literal_remains_in_the_storage_helper(self):
         tree = parse(PIPELINE)
         blocks = [
             node
@@ -102,54 +113,44 @@ class TestDisabledBlock:
             and isinstance(node.value, str)
             and len(node.value) > 5000
         ]
-        assert blocks, "the disabled block is no longer a string literal"
-        block = blocks[0]
-
-        # The block must stay a string literal *inside* the storage helper, so
-        # it cannot execute.  Assert the structural property instead of the
-        # literal line numbers, which move whenever the helper above it grows.
-        enclosing = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and node.lineno <= block.lineno <= (node.end_lineno or node.lineno)
-        ]
-        assert enclosing, "the disabled block is no longer inside a function"
-        innermost = max(enclosing, key=lambda node: node.lineno)
-        assert innermost.name == "_store_file_sync", (
-            f"the disabled legacy block moved out of _store_file_sync "
-            f"(now in {innermost.name})"
-        )
-        assert (block.end_lineno or 0) - block.lineno > 200, (
-            "the disabled legacy block shrank unexpectedly"
+        assert blocks == [], (
+            "a large string literal reappeared in storage_pipeline.py at lines "
+            f"{[b.lineno for b in blocks]}; a disabled copy of the storage path "
+            "must not be re-added - delete dead code instead of commenting it out"
         )
 
-    def test_every_path_operations_site_is_inside_that_string(self):
-        sites, _textual, in_string, _lines = operation_sites(PIPELINE)
+    def test_no_path_operations_site_remains_anywhere(self):
+        sites, textual, in_string, source_lines = operation_sites(PIPELINE)
         path_sites = [ln for ln, attr, _ in sites if attr == "path_operations"]
-        # AST only yields code sites; path_operations has none.
         assert path_sites == [], (
-            f"path_operations became live code at {path_sites}"
+            f"db_hub.path_operations is used as live code at {path_sites}, but "
+            "DatabaseHub does not define it"
         )
-        source = PIPELINE.read_text(encoding="utf-8").splitlines()
-        textual = [
-            i for i, line in enumerate(source, 1)
+        textual_sites = [
+            i for i, line in enumerate(source_lines, 1)
             if "db_hub.path_operations" in line and not line.lstrip().startswith("#")
         ]
-        assert textual, "expected the historical occurrences to still be present"
-        for lineno in textual:
-            assert lineno in in_string, f"L{lineno} is now executable code"
-
-    def test_execution_cannot_reach_the_disabled_block(self):
-        """The guard that makes the block inert must still precede it."""
-        source = PIPELINE.read_text(encoding="utf-8")
-        guard = "return None"
-        marker = "# OLD CODE BELOW IS DISABLED - DO NOT UNCOMMENT"
-        assert marker in source
-        assert source.index(guard) < source.index(marker), (
-            "the return that prevents execution of the disabled block now "
-            "comes after it"
+        assert textual_sites == [], (
+            f"db_hub.path_operations still appears at {textual_sites}; the "
+            "historical block that used it has been removed"
         )
+
+    def test_fall_through_is_loud_and_accounted(self):
+        """The guard that replaced the disabled block.
+
+        Every supported path returns before it; if control somehow falls through
+        anyway, the branch must count the file as failed and say so - a
+        fall-through reported as a successful store is the failure mode that
+        matters here.
+        """
+        source = PIPELINE.read_text(encoding="utf-8")
+        assert "Storage fell through every return path" in source, (
+            "the fail-safe for a storage fall-through was removed"
+        )
+        fail_safe = source.index("Storage fell through every return path")
+        tail = source[fail_safe:fail_safe + 600]
+        assert "files_failed" in tail, "the fall-through no longer counts a failure"
+        assert "return None" in tail, "the fall-through no longer returns"
 
 
 class TestStoreContentPipelineRemoved:
@@ -190,19 +191,18 @@ class TestStoreContentPipelineRemoved:
         assert definitions == [], f"live definition reappeared at {definitions}"
         assert calls == [], f"live call reappeared at {calls}"
 
-    def test_the_only_textual_reference_is_inside_the_disabled_block(self):
-        """The historical disabled block is kept on purpose; it is a string."""
-        tree = parse(PIPELINE)
-        in_string = string_literal_lines(tree)
+    def test_no_reference_remains_at_all(self):
+        """The historical block that mentioned it was deleted with it."""
         source_lines = PIPELINE.read_text(encoding="utf-8").splitlines()
         occurrences = [
             i
             for i, line in enumerate(source_lines, 1)
             if "_store_content_pipeline" in line
         ]
-        assert occurrences, "expected the disabled block's historical reference"
-        live = [i for i in occurrences if i not in in_string]
-        assert live == [], f"L{live} reference the removed method as real code"
+        assert occurrences == [], (
+            f"_store_content_pipeline still referenced at {occurrences}; it called "
+            "DatabaseHub attributes that do not exist"
+        )
 
     @pytest.mark.parametrize("attribute", OPERATION_ATTRIBUTES)
     def test_no_live_code_uses_the_missing_dbhub_attribute(self, attribute):

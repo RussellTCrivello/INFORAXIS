@@ -6,9 +6,9 @@ Optimized for speed and reliability
 """
 
 import os
+import re
 import logging
 from typing import Dict, Any, Optional, Set
-from pathlib import Path
 import threading
 import warnings
 
@@ -21,6 +21,22 @@ logger = logging.getLogger(__name__)
 # Suppress PIL warning about palette images with transparency
 warnings.filterwarnings('ignore', message='.*Palette images with Transparency.*', category=UserWarning, module='PIL')
 
+#: Minimum width/height, in pixels, for OCR to be attempted at all.
+#:
+#: Below this floor a raster cannot hold a readable text line: the recogniser
+#: returns noise or nothing while still costing a full tesseract launch, and on
+#: a corpus of icons and thumbnails that cost dominates the run. The outcome is
+#: an *explicit* skip - ``extraction_info["skipped"] = True`` with
+#: ``skip_reason = "too_small"`` - which the storage layer records as the
+#: first-class ``skipped`` processing state and the ledger counts as skipped.
+#: That is deliberately not the same as discarding the file: it is stored, its
+#: metadata is kept, and the reason travels with the row.
+#:
+#: The value is the reader's documented 50px floor (see the contract tests in
+#: tests/unit/test_ocr_engines.py and the corpus description in
+#: tests/integration/test_status_persisted.py).
+MIN_OCR_DIMENSION = 50
+
 # Global cache for library imports
 _LIBS_CACHE = {}
 _LIBS_LOCK = threading.Lock()
@@ -28,6 +44,28 @@ _LIBS_LOCK = threading.Lock()
 # Cache for tesseract availability check
 _TESSERACT_AVAILABLE = None
 _TESSERACT_CHECKED = False
+
+# Installed tesseract language packs, keyed by the tesseract binary in use.
+# ``pytesseract.get_languages`` spawns a tesseract process; the reader used to
+# ask for the list once per file, which is pure overhead on a corpus of images.
+_TESSERACT_LANGUAGE_CACHE = {}
+_TESSERACT_LANGUAGE_LOCK = threading.Lock()
+
+
+def _installed_tesseract_languages(pytesseract):
+    """Return the set of installed tesseract language packs (cached).
+
+    Raises like ``get_languages`` does when tesseract cannot be queried, so the
+    caller keeps deciding availability exactly as before.
+    """
+    binary = getattr(pytesseract, "tesseract_cmd", None) or "tesseract"
+    with _TESSERACT_LANGUAGE_LOCK:
+        cached = _TESSERACT_LANGUAGE_CACHE.get(binary)
+    if cached is None:
+        cached = set(pytesseract.get_languages(config=""))
+        with _TESSERACT_LANGUAGE_LOCK:
+            _TESSERACT_LANGUAGE_CACHE[binary] = cached
+    return cached
 _TESSERACT_LOCK = threading.Lock()
 
 # Default OCR languages - Hebrew prioritized for RTL text
@@ -162,13 +200,28 @@ class ImageFileReader(BaseReader):
                 width, height = img.size
                 img_format = img.format
                 
-                # Even small/icon images are content-bearing input. Do not
-                # discard them before OCR; the caller must receive either text
-                # or an explicit retryable OCR failure.
                 result["extraction_info"].update({
                     "image_size": f"{width}x{height}",
                     "image_format": img_format
                 })
+
+                # Size floor (see MIN_OCR_DIMENSION). Small images are not
+                # discarded: they are recorded as an explicit, terminal skip
+                # with the reason, so a downstream reader can always tell
+                # "deliberately not attempted" from "attempted and failed".
+                if width < MIN_OCR_DIMENSION or height < MIN_OCR_DIMENSION:
+                    result["extraction_info"].update({
+                        "skipped": True,
+                        "skip_reason": "too_small",
+                        "reason": "too_small",
+                        "min_ocr_dimension": MIN_OCR_DIMENSION,
+                    })
+                    logger.info(
+                        "[EXTRACTION] Skipping OCR for %s: %dx%d is below the "
+                        "%dpx floor (stored as an explicit skip, not a failure)",
+                        os.path.basename(filepath), width, height, MIN_OCR_DIMENSION,
+                    )
+                    return result
                 
                 # Extract GPS location (for paths.coordinates field, not content)
                 location_info = None
@@ -194,7 +247,7 @@ class ImageFileReader(BaseReader):
                 requested_languages = list(languages or DEFAULT_OCR_LANGUAGES)
                 if use_tesseract:
                     try:
-                        installed_languages = set(pytesseract.get_languages(config=""))
+                        installed_languages = _installed_tesseract_languages(pytesseract)
                         missing_languages = [
                             code for code in requested_languages
                             if code not in installed_languages
@@ -388,8 +441,103 @@ class ImageFileReader(BaseReader):
                 }
             }
     
+    #: Elements whose text is part of an SVG document. SVG 1.1/2 defines
+    #: <text>/<tspan>/<textPath> and <title>/<desc>; editors add flow trees
+    #: (Inkscape), which are collected too.
+    SVG_TEXT_TAGS = frozenset({
+        "text", "tspan", "textPath", "tref", "title", "desc",
+        "flowRoot", "flowDiv", "flowPara", "flowSpan",
+    })
+
+    #: Cap on text taken from a single SVG (a chart exported with tens of
+    #: thousands of labels must not become an unbounded content blob).
+    SVG_TEXT_LIMIT = 2_000_000
+
+    @classmethod
+    def _collect_svg_text(cls, xml_bytes):
+        """Return ``(lines, element_count, parse_failure)`` for an SVG document.
+
+        Text is read with an XML parser instead of a regex, so nested
+        ``<tspan>`` runs, entity references and non-ASCII characters come out as
+        text and never as markup. Each top-level text element becomes one line,
+        which is how the document lays text out; whitespace runs inside an
+        element are layout, so they collapse to single spaces. ``parse_failure``
+        is None when the document parsed.
+        """
+        import xml.etree.ElementTree as ET
+
+        def local_name(tag):
+            if isinstance(tag, str) and tag.startswith("{"):
+                return tag.split("}", 1)[1]
+            return tag if isinstance(tag, str) else ""
+
+        def gather(node, pieces):
+            """Depth-first text of ``node`` in document order."""
+            if node.text:
+                pieces.append(node.text)
+            for child in list(node):
+                gather(child, pieces)
+                if child.tail:
+                    pieces.append(child.tail)
+
+        try:
+            root = ET.fromstring(xml_bytes)
+        except ET.ParseError as exc:
+            return [], 0, f"svg_malformed_xml: {exc}"
+
+        lines = []
+        element_count = 0
+
+        def visit(node):
+            """Collect one line per top-level text element, in document order."""
+            nonlocal element_count
+            if local_name(node.tag) in cls.SVG_TEXT_TAGS:
+                # A text element starts a line; text nested inside it (a
+                # <tspan>, or an <a> wrapper) belongs to that same line, so
+                # this branch does not descend further.
+                pieces = []
+                gather(node, pieces)
+                joined = re.sub(r"\s+", " ", "".join(pieces)).strip()
+                if joined:
+                    lines.append(joined)
+                    element_count += 1
+                return
+            for child in list(node):
+                visit(child)
+
+        visit(root)
+        return lines, element_count, None
+
+    @staticmethod
+    def _svg_text_by_stripping(content):
+        """Recover text from markup that the XML pass could not use.
+
+        Used for a malformed document, and for a well-formed one whose text is
+        not inside text elements. Comments, script and style blocks are removed
+        first so their code is not mistaken for document text.
+        """
+        body = re.sub(r"<!--.*?-->", " ", content, flags=re.DOTALL)
+        body = re.sub(
+            r"<(script|style)\b.*?</\1>", " ", body,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        body = re.sub(r"<[^>]*>", " ", body)
+        return re.sub(r"\s+", " ", body).strip()
+
     def read_svg_file(self, filepath):
-        """Read SVG file (text content only)"""
+        """Read an SVG (XML vector) file.
+
+        SVG stores its text in the markup, so no OCR is involved: the text is
+        parsed out of the document. The previous implementation regexed only
+        ``<text>`` (missing ``<title>``/``<desc>``, Inkscape flow text and
+        multi-line runs) and returned no ``reason`` field at all, which the
+        storage layer logged as "Reason: unknown" for a real ingest - a
+        condition with no explanation is indistinguishable from a defect.
+
+        Every outcome carries an explicit reason now, and content this reader
+        does not turn into text (embedded raster images, vector paths, embedded
+        script/style) is counted and named rather than left implicit.
+        """
         try:
             if not os.path.exists(filepath):
                 return {
@@ -398,59 +546,136 @@ class ImageFileReader(BaseReader):
                     "ocr_successful": False,
                     "extraction_info": {
                         "error": "File not found",
+                        "reason": "file_not_found",
                         "extracted": False,
-                        "stored": False
-                    }
+                        "stored": False,
+                    },
                 }
-            
-            with open(filepath, 'r', encoding='utf-8') as file:
-                content = file.read()
-            
-            # Extract text from SVG (simple extraction)
-            import re
-            # Extract text from <text> tags
-            text_matches = re.findall(r'<text[^>]*>(.*?)</text>', content, re.DOTALL | re.IGNORECASE)
-            extracted_text = '\n'.join(text_matches) if text_matches else ""
-            
+
+            with open(filepath, "rb") as handle:
+                raw = handle.read()
+            content = raw.decode("utf-8", "replace")
+
+            lines, text_elements, parse_failure = self._collect_svg_text(raw)
+            reason = None
+            recovered = False
+            if not lines:
+                stripped = self._svg_text_by_stripping(content)
+                if stripped:
+                    recovered = True
+                    lines = [stripped]
+                    text_elements = 1
+                    reason = (
+                        f"{parse_failure}; text recovered by stripping markup"
+                        if parse_failure else
+                        "svg_text_recovered_from_markup"
+                    )
+                else:
+                    reason = parse_failure
+
+            extracted_text = "\n".join(lines)[:self.SVG_TEXT_LIMIT]
+            has_text = bool(extracted_text.strip())
+
+            # Content that does not become text: counted, never silently
+            # dropped. An SVG is vector, so there is no raster to recognise;
+            # an embedded <image> would have to be rasterised first, which this
+            # reader does not do.
+            image_count = len(re.findall(r"<image\b", content, re.IGNORECASE))
+            path_count = len(re.findall(r"<path\b", content, re.IGNORECASE))
+            code_chars = sum(
+                len(match.group(0)) for match in re.finditer(
+                    r"<(?:script|style)\b.*?</(?:script|style)>", content,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+            )
+
+            if has_text:
+                reason = reason or "svg_text_extracted"
+            elif reason is None:
+                reason = "svg_has_no_text_elements"
+                if image_count:
+                    reason += (
+                        f"; {image_count} embedded raster image(s) are not OCR'd"
+                        " (an SVG is vector text, not a scanned image)"
+                    )
+                elif path_count:
+                    reason += (
+                        f"; {path_count} vector path element(s) found, which may"
+                        " be outlined (converted) text that no extractor can read"
+                    )
+            if has_text and code_chars:
+                reason += f"; {code_chars} chars of embedded script/style not indexed"
+
             result = {
                 "text": extracted_text,
                 "ocr_attempted": False,
-                "ocr_successful": bool(extracted_text and extracted_text.strip()),
+                "ocr_successful": has_text,
                 "extraction_info": {
-                    "extracted": bool(extracted_text and extracted_text.strip()),
-                    "stored": bool(extracted_text and extracted_text.strip()),
-                    "text_length": len(extracted_text.strip()) if extracted_text else 0,
-                    "word_count": len(extracted_text.strip().split()) if extracted_text else 0,
+                    "extracted": has_text,
+                    "stored": has_text,
+                    # The document was read and the conclusion is that it holds
+                    # no extractable text (vector-only artwork, outlined paths).
+                    # Saying so explicitly keeps the run's accounting from
+                    # reporting a successfully read file as a broken one: the
+                    # database records this outcome as processed, with the
+                    # reason in status_detail.
+                    "empty_result": not has_text,
+                    "reason": reason,
+                    "text_length": len(extracted_text.strip()),
+                    "word_count": len(extracted_text.split()),
                     "coordinate_count": 0,
-                    "file_type": "SVG"
-                }
+                    "file_type": "SVG",
+                    "text_elements": text_elements,
+                    "embedded_images": image_count,
+                    "vector_paths": path_count,
+                    "embedded_code_chars": code_chars,
+                    "recovered_from_markup": recovered,
+                },
             }
-            
-            # Extract basic SVG metadata
+
             width_match = re.search(r'width=["\'](\d+(?:\.\d+)?)["\']', content)
             height_match = re.search(r'height=["\'](\d+(?:\.\d+)?)["\']', content)
             viewbox_match = re.search(r'viewBox=["\']([^"\']+)["\']', content)
-            
+
             if width_match:
                 result["extraction_info"]["image_width"] = width_match.group(1)
             if height_match:
                 result["extraction_info"]["image_height"] = height_match.group(1)
             if viewbox_match:
                 result["extraction_info"]["viewBox"] = viewbox_match.group(1)
-            
+
+            if has_text:
+                logger.info(
+                    "[EXTRACTION] SVG text: %d chars, %d word(s) from %d text "
+                    "element(s) in %s",
+                    result["extraction_info"]["text_length"],
+                    result["extraction_info"]["word_count"],
+                    text_elements, os.path.basename(str(filepath)),
+                )
+            else:
+                logger.info(
+                    "[EXTRACTION] SVG has no extractable text (%s): %s",
+                    os.path.basename(str(filepath)), reason,
+                )
             return result
+
         except Exception as e:
+            logger.error(
+                "[EXTRACTION] Error reading SVG %s: %s",
+                os.path.basename(str(filepath)), e,
+            )
             return {
                 "text": "",
                 "ocr_attempted": False,
                 "ocr_successful": False,
                 "extraction_info": {
                     "error": str(e),
+                    "reason": "svg_read_error",
                     "extracted": False,
-                    "stored": False
-                }
+                    "stored": False,
+                },
             }
-    
+
     def _is_tesseract_available(self):
         """Check if tesseract is installed and available (cached)"""
         global _TESSERACT_AVAILABLE, _TESSERACT_CHECKED
@@ -472,7 +697,6 @@ class ImageFileReader(BaseReader):
     
     def _get_libraries(self):
         """Get image processing libraries (cached)"""
-        global _LIBS_CACHE
         
         with _LIBS_LOCK:
             if _LIBS_CACHE:
@@ -627,93 +851,107 @@ class ImageFileReader(BaseReader):
 
         return result
     
+    def _tesseract_recognize_once(self, image, lang, pytesseract, config):
+        """Recognise text *and* word boxes from a single tesseract run.
+
+        ``image_to_string`` and ``image_to_data`` each launch tesseract and each
+        perform the full recognition again: obtaining the reading twice per PSM
+        mode was pure duplicated work. Tesseract can emit both renderings from
+        one recognition - the ``txt`` output configuration plus
+        ``-c tessedit_create_tsv=1`` - and the TSV is parsed with the same
+        helper ``image_to_data`` uses, so the text, the boxes and their order
+        are exactly what the previous two calls produced, minus one process
+        launch and one recognition per mode.
+
+        When the installed pytesseract does not expose the primitives, the
+        historical two-call sequence is used unchanged: output never depends on
+        the library version.
+        """
+        run_tesseract = getattr(pytesseract, "run_tesseract", None)
+        file_to_dict = getattr(pytesseract, "file_to_dict", None)
+        save_image = getattr(pytesseract, "save", None)
+
+        if run_tesseract is not None and file_to_dict is not None and save_image is not None:
+            try:
+                combined_config = f"-c tessedit_create_tsv=1 {config.strip()}".strip()
+                with save_image(image) as (base, input_filename):
+                    run_tesseract(
+                        input_filename=input_filename,
+                        output_filename_base=base,
+                        extension="txt",
+                        lang=lang,
+                        config=combined_config,
+                        nice=0,
+                        timeout=0,
+                    )
+                    with open(f"{base}.txt", encoding="utf-8") as handle:
+                        text = handle.read()
+                    with open(f"{base}.tsv", encoding="utf-8") as handle:
+                        tsv = handle.read()
+                return text, self._extract_coordinates_from_data(
+                    file_to_dict(tsv, "\t", -1)
+                )
+            except Exception as exc:
+                logger.debug(
+                    "Single-run txt+tsv OCR pass unavailable for config %r (%s); "
+                    "using separate text and coordinate calls", config, exc,
+                )
+
+        text = ""
+        coordinates = []
+        try:
+            text = str(pytesseract.image_to_string(image, lang=lang, config=config) or "")
+        except Exception:
+            text = ""
+        if text and text.strip():
+            try:
+                ocr_data = pytesseract.image_to_data(
+                    image, lang=lang, config=config,
+                    output_type=pytesseract.Output.DICT
+                )
+                coordinates = self._extract_coordinates_from_data(ocr_data)
+            except Exception:
+                coordinates = []
+        return text, coordinates
+
     def _extract_text_comprehensive(self, ocr_target, lang, pytesseract, base_config=None):
         """
-        Extract text and coordinates using multiple PSM modes.
-        Preserves formatting and structure.
-        
+        Extract text and coordinates, trying PSM modes in their historical order.
+
+        The ladder and its precedence are unchanged - sparse text (PSM 11)
+        first, then a uniform block (PSM 6), then fully automatic (PSM 3) or the
+        caller's config - and so is the rule that the first mode producing text
+        is the one that is kept.
+
+        What changed is how much work each rung costs. The old implementation
+        ran *every* mode unconditionally and recognised the image twice per mode
+        (once for the string, once for the boxes): up to eight tesseract
+        launches per image, most of whose results were then thrown away. A mode
+        is now attempted only when the previous one found nothing, and each
+        attempt is a single recognition.
+
         Args:
             ocr_target: PIL Image ready for OCR
             lang: Language string
             pytesseract: pytesseract module
-            base_config: Base config string (optional)
-        
+            base_config: Base config string (used for the last resort, as before)
+
         Returns:
             dict: {"text": str, "ocr_coordinates": list}
         """
-        result = {"text": "", "ocr_coordinates": []}
-        
-        # Primary: PSM 11 (Sparse text) - finds ALL text regardless of layout
-        primary_text = ""
-        primary_coords = []
-        try:
-            config_11 = f"--oem 3 --psm 11"
-            primary_text = pytesseract.image_to_string(ocr_target, lang=lang, config=config_11)
-            if primary_text:
-                primary_text = str(primary_text)
-                try:
-                    ocr_data = pytesseract.image_to_data(
-                        ocr_target, lang=lang, config=config_11,
-                        output_type=pytesseract.Output.DICT
-                    )
-                    primary_coords = self._extract_coordinates_from_data(ocr_data)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        
-        # Secondary: PSM 6 (Uniform block) - preserves paragraph structure
-        secondary_text = ""
-        secondary_coords = []
-        try:
-            config_6 = f"--oem 3 --psm 6"
-            secondary_text = pytesseract.image_to_string(ocr_target, lang=lang, config=config_6)
-            if secondary_text:
-                secondary_text = str(secondary_text)
-                try:
-                    ocr_data = pytesseract.image_to_data(
-                        ocr_target, lang=lang, config=config_6,
-                        output_type=pytesseract.Output.DICT
-                    )
-                    secondary_coords = self._extract_coordinates_from_data(ocr_data)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        
-        # Use primary (PSM 11) if successful
-        if primary_text and primary_text.strip():
-            result["text"] = primary_text.rstrip()
-            result["ocr_coordinates"] = primary_coords
-            return result
-        elif secondary_text and secondary_text.strip():
-            result["text"] = secondary_text.rstrip()
-            result["ocr_coordinates"] = secondary_coords
-            return result
-        
-        # Fallback: PSM 3 (Fully automatic) or base_config
-        try:
-            if base_config:
-                config_3 = base_config
-            else:
-                config_3 = f"--oem 3 --psm 3"
-            fallback_text = pytesseract.image_to_string(ocr_target, lang=lang, config=config_3)
-            if fallback_text and fallback_text.strip():
-                result["text"] = str(fallback_text).rstrip()
-                try:
-                    ocr_data = pytesseract.image_to_data(
-                        ocr_target, lang=lang, config=config_3,
-                        output_type=pytesseract.Output.DICT
-                    )
-                    result["ocr_coordinates"] = self._extract_coordinates_from_data(ocr_data)
-                except Exception:
-                    pass
-                return result
-        except Exception:
-            pass
-        
-        return result
-    
+        configs = [
+            "--oem 3 --psm 11",
+            "--oem 3 --psm 6",
+            base_config if base_config else "--oem 3 --psm 3",
+        ]
+        for config in configs:
+            text, coordinates = self._tesseract_recognize_once(
+                ocr_target, lang, pytesseract, config
+            )
+            if text and text.strip():
+                return {"text": str(text).rstrip(), "ocr_coordinates": coordinates}
+        return {"text": "", "ocr_coordinates": []}
+
     def _extract_coordinates_from_data(self, ocr_data):
         """
         Extract bounding box coordinates from OCR data

@@ -4,12 +4,13 @@ Handles in-browser preview of images, PDFs, and documents
 """
 
 import logging
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any
 from pathlib import Path
 import mimetypes
 import base64
 from io import BytesIO
 from Api.utils import get_connection, return_connection
+from core.file_utils import load_spreadsheet_workbook
 
 try:
     from PIL import Image
@@ -310,42 +311,61 @@ class FilePreviewService:
                 'preview_type': 'error',
                 'error': 'openpyxl not available for XLSX preview'
             }
-        
+
+        wb = None
         try:
-            wb = openpyxl.load_workbook(file_path, read_only=True)
-            if len(wb.sheetnames) > 0:
-                ws = wb[wb.sheetnames[0]]
-                
-                # Extract text from first 100 rows
-                rows_data = []
-                for i, row in enumerate(ws.iter_rows(values_only=True), 1):
-                    if i > 100:
-                        break
-                    rows_data.append([str(cell) if cell is not None else '' for cell in row])
-                
-                return {
-                    'preview_type': 'document',
-                    'mime_type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    'data': rows_data,
-                    'metadata': {
-                        'sheet_name': wb.sheetnames[0],
-                        'total_sheets': len(wb.sheetnames),
-                        'rows_previewed': len(rows_data)
-                    }
-                }
-            else:
+            # Read by content when the name is not a supported spreadsheet
+            # suffix: openpyxl refuses a *path* by extension before it looks at
+            # the bytes, so a spreadsheet stored under an inherited container
+            # name (e.g. ``attachment_00520.docx``) previewed as an error even
+            # though the ingestion pipeline had identified it as xlsx. The same
+            # rule serves the ingestion reader - see
+            # core.file_utils.OPENPYXL_PATH_SUFFIXES.
+            wb = load_spreadsheet_workbook(file_path, read_only=True)
+            if not wb.sheetnames:
                 return {
                     'preview_type': 'error',
                     'error': 'XLSX file has no sheets'
                 }
-                
+
+            ws = wb[wb.sheetnames[0]]
+
+            # Extract text from first 100 rows
+            rows_data = []
+            for i, row in enumerate(ws.iter_rows(values_only=True), 1):
+                if i > 100:
+                    break
+                rows_data.append([str(cell) if cell is not None else ''
+                                  for cell in row])
+
+            return {
+                'preview_type': 'document',
+                'mime_type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'data': rows_data,
+                'metadata': {
+                    'sheet_name': wb.sheetnames[0],
+                    'total_sheets': len(wb.sheetnames),
+                    'rows_previewed': len(rows_data)
+                }
+            }
+
         except Exception as e:
             logger.error(f"Error previewing XLSX {file_path}: {e}", exc_info=True)
             return {
                 'preview_type': 'error',
                 'error': f'Error processing XLSX: {str(e)}'
             }
-    
+        finally:
+            # A read-only workbook streams rows from the stream it was opened
+            # from; it has to be closed here or the descriptor stays open for
+            # the life of the process.
+            if wb is not None:
+                try:
+                    wb.close()
+                except Exception:
+                    logger.debug("Could not close workbook for %s", file_path,
+                                 exc_info=True)
+
     @staticmethod
     def _preview_text(file_path: str) -> Dict[str, Any]:
         """Generate text file preview."""

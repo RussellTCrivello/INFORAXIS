@@ -81,7 +81,9 @@ CSRF: missing token → 400, bogus token → 400, valid token → reaches busine
 
 ### Filesystem (§15)
 
-`/upload/process-path`: `/etc/passwd`, traversal, `./../../`, symlink inside an approved root, `C:\`, UNC, `/proc/self/environ`, non-existent → all 403. Equivalent path found and verified: `/api/import-export/batch-import` takes arbitrary `file_paths` but routes through the **same** `validate_ingestion_path` — `/etc/passwd` → 422 rejected; analysts and viewers → 403.
+`/upload/process-path` (retired with the duplicate upload interface; the check below is the one that
+still runs, now on the single interface's server-path mode): `/etc/passwd`, traversal, `./../../`,
+symlink inside an approved root, `C:\`, UNC, `/proc/self/environ`, non-existent → all 403. Equivalent path found and verified: `/api/import-export/batch-import` takes arbitrary `file_paths` but routes through the **same** `validate_ingestion_path` — `/etc/passwd` → 422 rejected; analysts and viewers → 403.
 
 ### XSS (§14)
 

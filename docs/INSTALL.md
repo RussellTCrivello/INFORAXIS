@@ -500,19 +500,72 @@ the app's **Settings** page.
 
 ### E11. I forgot the admin password
 
-With access to the computer you can always recover:
+You do not have to lose any data or any other account.
+
+**Easiest (Windows):** double-click **`reset_password.bat`** in the app folder.
+It lists the accounts, asks which one to reset (press ENTER for `admin`),
+resets it, and leaves the window open so you can read the result.
+
+**From a command prompt** (in the app folder, with the app's Python — the
+`.venv` created by `setup.bat`):
+
+```bat
+.venv\Scripts\python.exe scripts\reset_admin_password.py --list   :: who can log in?
+.venv\Scripts\python.exe scripts\reset_admin_password.py          :: reset 'admin'
+.venv\Scripts\python.exe scripts\reset_admin_password.py --username administrator
+.venv\Scripts\python.exe scripts\reset_admin_password.py --password "My own long password"
+```
+
+(Before running these, stop the server with CTRL+C in its window if you want to
+be sure nothing else is writing to the database — it is not required, the
+script is safe while the server runs.)
+
+(The same commands work on Linux/macOS with `python scripts/reset_admin_password.py`.)
+
+The script uses the app's own password hashing and the app's own database
+configuration (`DB_*` in `.env`, or the Settings page values), so it always
+hits the database the server uses — it prints which one. What it does:
+
+1. Generates a one-time random password, or uses the one you passed with
+   `--password` (at least 12 characters).
+2. Writes it to `%LOCALAPPDATA%\file-analysis\runtime\recovery_admin_password.txt`
+   (owner-only permissions) and tells you the exact `type` command to read it.
+   It is never printed to the console or written to the logs.
+3. Flags the account **must change password**, so the temporary password stops
+   working as soon as you choose your own on the profile page.
+4. Revokes every session of that account and clears the lockout counter — a
+   locked-out admin can go straight back in, and a browser someone left logged
+   in is logged out.
+5. Writes an audit entry (`user.password_recovery`).
+
+Nothing else is touched: other accounts, their roles, their analyst categories,
+their assignments and the audit trail all stay as they are. The server does not
+have to be restarted — but stop it if you prefer; the script is independent of
+it.
+
+**Not sure of the user name?** Run it with `--list`. **The only admin account
+was demoted or deactivated?** Run it with `--promote` (or `--activate`) — that
+is deliberately a separate, explicit flag, and the change is audited too.
+
+<details>
+<summary>Fallback: reset by deleting the accounts (loses them)</summary>
+
+Only if the script cannot run (for example you no longer have the Python
+environment). This **deletes every account**, including any analysts and
+viewers you created, and rebuilds a single administrator on the next start:
 
 1. Stop the server.
 2. In `.env`, set a new `APP_ADMIN_PASSWORD=...` (temporary).
-3. Delete the users so bootstrap recreates the admin — easiest via pgAdmin:
-   open database `analysis` → Query Tool → run:
+3. In pgAdmin: database `analysis` → Query Tool →
    ```sql
    DELETE FROM sessions;
    DELETE FROM users;
    ```
 4. Start the server → the admin is recreated with your temporary password →
-   log in → change it on the profile page → **remove `APP_ADMIN_PASSWORD`
-   from `.env`** and restart.
+   log in → change it on the profile page → **remove `APP_ADMIN_PASSWORD` from
+   `.env`** and restart.
+
+</details>
 
 ### E12. The black window shows lots of WARNING/ERROR lines at startup
 
@@ -571,6 +624,9 @@ EVERY DAY:
 
 RECONFIGURE:
   python install.py --configure
+
+FORGOT THE ADMIN PASSWORD:
+  Double-click reset_password.bat   (details: section E11)
 ```
 
 Further reading for advanced topics: `docs/` folder —

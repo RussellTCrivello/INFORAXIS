@@ -18,6 +18,160 @@ from .settings_models import AllSettings, InterfaceConfig
 logger = logging.getLogger(__name__)
 
 
+#: Interface switches that no longer correspond to anything. ``file_upload``
+#: was the "core" twin of ``upload_files``: it pointed at the same endpoint and
+#: gated no route (the endpoint map resolves files.upload_page to
+#: ``upload_files``), so Settings offered two switches for one page. The key is
+#: not deleted from anyone's settings file - it is simply no longer listed, so
+#: a stored value cannot break anything and the listing always matches the
+#: interface registry above.
+RETIRED_INTERFACES = frozenset({"file_upload"})
+
+#: What each interface switch controls: label, one-line explanation, icon
+#: and the endpoint it gates. Kept next to the retired-key set above so every
+#: listing (Settings' grouped view and the flat API view) describes an
+#: interface the same way - a switch whose label disagrees with the page it
+#: opens is how "Upload Files" outlived the page it named.
+INTERFACE_METADATA: Dict[str, Dict[str, str]] = {
+    "dashboard": {
+        "name": "Dashboard",
+        "description": "Main dashboard with overview statistics",
+        "icon": "bi-speedometer2",
+        "endpoint": "index"
+    },
+    "comprehensive_dashboard": {
+        "name": "Comprehensive Dashboard",
+        "description": "Detailed dashboard with comprehensive analytics",
+        "icon": "bi-graph-up",
+        "endpoint": "comprehensive_dashboard"
+    },
+    "charts_dashboard": {
+        "name": "Charts Dashboard",
+        "description": "Dashboard with interactive charts and visualizations",
+        "icon": "bi-bar-chart",
+        "endpoint": "charts_dashboard"
+    },
+    "file_analysis": {
+        "name": "INFORAXIS",
+        "description": "Analyze individual files and their properties",
+        "icon": "bi-file-earmark-text",
+        "endpoint": "archives_page"
+    },
+    "path_analysis": {
+        "name": "Path Analysis",
+        "description": "Analyze file paths and directory structures",
+        "icon": "bi-folder",
+        "endpoint": "path_analysis_page"
+    },
+    "batch_analysis": {
+        "name": "Batch Analysis",
+        "description": "Analyze multiple files in batches",
+        "icon": "bi-files",
+        "endpoint": "analysis_batch"
+    },
+    "sources": {
+        "name": "Sources",
+        "description": "Manage data sources",
+        "icon": "bi-database",
+        "endpoint": "sources_list"
+    },
+    "sides": {
+        "name": "Sides",
+        "description": "Manage data sides",
+        "icon": "bi-layers",
+        "endpoint": "sides_list"
+    },
+    "email_words": {
+        "name": "Email Words",
+        "description": "Manage email-related words",
+        "icon": "bi-envelope",
+        "endpoint": "email_words"
+    },
+    "search": {
+        "name": "Search",
+        "description": "Basic search functionality",
+        "icon": "bi-search",
+        "endpoint": "search_page"
+    },
+    "advanced_search": {
+        "name": "Advanced Search",
+        "description": "Advanced search with filters and options",
+        "icon": "bi-search-heart",
+        "endpoint": "search_advanced"
+    },
+    "upload_files": {
+        # One interface, named for what it now is: /operations/input is
+        # the single surface for a single file, a whole folder, a server
+        # path and the jobs they create. The old "Upload Files" page is
+        # a redirect to it, so the switch keeps its original meaning
+        # (does the operator see a way in from the menu) and its
+        # original key (existing settings files stay valid).
+        "name": "Input / Ingestion",
+        "description": "Bring evidence in - one file, a whole folder, or "
+                       "a path on the server - and follow the jobs it creates",
+        "icon": "bi-folder-plus",
+        "endpoint": "operations_input_page"
+    },
+    "file_library": {
+        "name": "File Library",
+        "description": "Browse and manage file library",
+        "icon": "bi-folder2-open",
+        "endpoint": "files.files_list"
+    },
+    "keywords": {
+        "name": "Keywords",
+        "description": "Manage keywords",
+        "icon": "bi-tags",
+        "endpoint": "keywords_list"
+    },
+    "words": {
+        "name": "Words",
+        "description": "Manage words dictionary",
+        "icon": "bi-book",
+        "endpoint": "words_list"
+    },
+    "categories": {
+        "name": "Categories",
+        "description": "Manage categories",
+        "icon": "bi-tags",
+        "endpoint": "categories_list"
+    },
+    "notifications": {
+        "name": "Notifications",
+        "description": "View and manage notifications",
+        "icon": "bi-bell",
+        "endpoint": "notifications_page"
+    },
+    "settings": {
+        "name": "Settings",
+        "description": "System settings and configuration",
+        "icon": "bi-gear",
+        "endpoint": "settings_page"
+    },
+    "file_browser": {
+        "name": "File Browser",
+        "description": "Core file browser functionality",
+        "icon": "bi-folder",
+        "endpoint": "files.files_list",
+        "category": "core"
+    },
+    "analytics": {
+        "name": "Analytics",
+        "description": "System analytics and reporting",
+        "icon": "bi-graph-up-arrow",
+        "endpoint": "analytics",
+        "category": "analysis"
+    },
+    "page_tips": {
+        "name": "Page Tips & Documentation",
+        "description": "Enable or disable comprehensive tips and instructions on each page. Tips explain all interface elements, features, how to use them, and how to add/manage data. When enabled, tips appear at the top of each page with detailed explanations.",
+        "icon": "bi-lightbulb",
+        "endpoint": "",
+        "category": "user"
+    }
+}
+
+
 class SettingsAdapter:
     """
     Adapter class that provides backward compatibility with old settings API.
@@ -158,148 +312,12 @@ class SettingsAdapter:
     
     def get_all_interfaces(self) -> Dict[str, Dict[str, Any]]:
         """Get all interfaces with metadata (old API style)"""
-        # Interface metadata definitions
-        interface_metadata = {
-            "dashboard": {
-                "name": "Dashboard",
-                "description": "Main dashboard with overview statistics",
-                "icon": "bi-speedometer2",
-                "endpoint": "index"
-            },
-            "comprehensive_dashboard": {
-                "name": "Comprehensive Dashboard",
-                "description": "Detailed dashboard with comprehensive analytics",
-                "icon": "bi-graph-up",
-                "endpoint": "comprehensive_dashboard"
-            },
-            "charts_dashboard": {
-                "name": "Charts Dashboard",
-                "description": "Dashboard with interactive charts and visualizations",
-                "icon": "bi-bar-chart",
-                "endpoint": "charts_dashboard"
-            },
-            "file_analysis": {
-                "name": "INFORAXIS",
-                "description": "Analyze individual files and their properties",
-                "icon": "bi-file-earmark-text",
-                "endpoint": "archives_page"
-            },
-            "path_analysis": {
-                "name": "Path Analysis",
-                "description": "Analyze file paths and directory structures",
-                "icon": "bi-folder",
-                "endpoint": "path_analysis_page"
-            },
-            "batch_analysis": {
-                "name": "Batch Analysis",
-                "description": "Analyze multiple files in batches",
-                "icon": "bi-files",
-                "endpoint": "analysis_batch"
-            },
-            "sources": {
-                "name": "Sources",
-                "description": "Manage data sources",
-                "icon": "bi-database",
-                "endpoint": "sources_list"
-            },
-            "sides": {
-                "name": "Sides",
-                "description": "Manage data sides",
-                "icon": "bi-layers",
-                "endpoint": "sides_list"
-            },
-            "email_words": {
-                "name": "Email Words",
-                "description": "Manage email-related words",
-                "icon": "bi-envelope",
-                "endpoint": "email_words"
-            },
-            "search": {
-                "name": "Search",
-                "description": "Basic search functionality",
-                "icon": "bi-search",
-                "endpoint": "search_page"
-            },
-            "advanced_search": {
-                "name": "Advanced Search",
-                "description": "Advanced search with filters and options",
-                "icon": "bi-search-heart",
-                "endpoint": "search_advanced"
-            },
-            "upload_files": {
-                "name": "Upload Files",
-                "description": "Upload and manage files",
-                "icon": "bi-cloud-upload",
-                "endpoint": "files.upload_page"
-            },
-            "file_library": {
-                "name": "File Library",
-                "description": "Browse and manage file library",
-                "icon": "bi-folder2-open",
-                "endpoint": "files.files_list"
-            },
-            "keywords": {
-                "name": "Keywords",
-                "description": "Manage keywords",
-                "icon": "bi-tags",
-                "endpoint": "keywords_list"
-            },
-            "words": {
-                "name": "Words",
-                "description": "Manage words dictionary",
-                "icon": "bi-book",
-                "endpoint": "words_list"
-            },
-            "categories": {
-                "name": "Categories",
-                "description": "Manage categories",
-                "icon": "bi-tags",
-                "endpoint": "categories_list"
-            },
-            "notifications": {
-                "name": "Notifications",
-                "description": "View and manage notifications",
-                "icon": "bi-bell",
-                "endpoint": "notifications_page"
-            },
-            "settings": {
-                "name": "Settings",
-                "description": "System settings and configuration",
-                "icon": "bi-gear",
-                "endpoint": "settings_page"
-            },
-            "file_upload": {
-                "name": "File Upload",
-                "description": "Core file upload functionality",
-                "icon": "bi-upload",
-                "endpoint": "files.upload_page",
-                "category": "core"
-            },
-            "file_browser": {
-                "name": "File Browser",
-                "description": "Core file browser functionality",
-                "icon": "bi-folder",
-                "endpoint": "files.files_list",
-                "category": "core"
-            },
-            "analytics": {
-                "name": "Analytics",
-                "description": "System analytics and reporting",
-                "icon": "bi-graph-up-arrow",
-                "endpoint": "analytics",
-                "category": "analysis"
-            },
-            "page_tips": {
-                "name": "Page Tips & Documentation",
-                "description": "Enable or disable comprehensive tips and instructions on each page. Tips explain all interface elements, features, how to use them, and how to add/manage data. When enabled, tips appear at the top of each page with detailed explanations.",
-                "icon": "bi-lightbulb",
-                "endpoint": "",
-                "category": "user"
-            }
-        }
-        
+        interface_metadata = INTERFACE_METADATA
+
         interfaces = {}
         for interface_id, config in self.settings.interfaces.interfaces.items():
+            if interface_id in RETIRED_INTERFACES:
+                continue
             interface_dict = config.to_dict()
             # Add metadata if available
             if interface_id in interface_metadata:
@@ -325,10 +343,18 @@ class SettingsAdapter:
         """Get interfaces grouped by category (old API style)"""
         by_category = {}
         for interface_id, config in self.settings.interfaces.interfaces.items():
+            if interface_id in RETIRED_INTERFACES:
+                continue
             category = config.category
             if category not in by_category:
                 by_category[category] = {}
-            by_category[category][interface_id] = config.to_dict()
+            entry = config.to_dict()
+            metadata = INTERFACE_METADATA.get(interface_id)
+            if metadata:
+                # Settings renders this entry, so it must name the interface and
+                # the page it opens - not a title-cased id from a retired page.
+                entry.update(metadata)
+            by_category[category][interface_id] = entry
         return by_category
     
     def set_interface_enabled(self, interface_id: str, enabled: bool) -> None:
@@ -390,6 +416,10 @@ class SettingsAdapter:
             'words_list': 'words',
             'categories_list': 'categories',
             
+            # Both spellings of the one ingestion surface resolve to the
+            # interface that owns it: /operations/input and the /upload
+            # alias kept for bookmarks.
+            'operations_input_page': 'upload_files',
             'files.upload_page': 'upload_files',
             'files.files_list': 'file_library',
             'files.file_detail': 'file_library',

@@ -1,344 +1,414 @@
 {% extends 'base.html' %}
+{#
+  Single ingestion interface.
+
+  This page replaces two competing upload screens (/operations/input and the
+  CLI-styled /upload): one interface, one pipeline (ingestion jobs), all of the
+  capabilities either of them had - browser file and folder upload, large files
+  by chunked staging, server paths inside the configured roots, source/side
+  classification with inline creation, dry run, worker/checkpoint/monitoring
+  options, and live progress.
+
+  Structure: a numbered step rail on the left (Source -> Classification ->
+  Processing -> Launch) so the operator always knows where they are and what is
+  still missing, a work column in the middle, and a telemetry column that shows
+  what the engine is doing right now. The launch dock at the bottom is sticky:
+  the readiness summary, the single blocking reason (when there is one) and the
+  two actions stay in reach no matter how long the file list grows.
+#}
 
 {% block title %}{{ _('Input / Ingestion') }}{% endblock %}
 {% block page_type %}default{% endblock %}
 {% block page_title %}{{ _('Input / Ingestion') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ingestion.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
-  <ul class="nav nav-tabs mb-3" id="inputTabs">
-    <li class="nav-item"><a class="nav-link active" href="#basic" data-bs-toggle="tab">{{ _('Basic') }}</a></li>
-    <li class="nav-item"><a class="nav-link" href="#advanced" data-bs-toggle="tab">{{ _('Advanced') }}</a></li>
-  </ul>
+<div class="ing" id="ingestionStudio" data-csrf="{{ csrf_token() }}">
 
-  <div class="row g-3">
-    <div class="col-lg-7">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title"><i class="bi bi-folder-plus me-2"></i>{{ _('Source') }}</h5>
-
-          <ul class="nav nav-pills mb-3" id="sourceType">
-            <li class="nav-item"><button class="nav-link active" data-mode="upload" type="button">{{ _('Upload files') }}</button></li>
-            <li class="nav-item"><button class="nav-link" data-mode="server" type="button">{{ _('Server path') }}</button></li>
-          </ul>
-
-          <div id="uploadSection">
-            <div id="dropZone" class="border border-2 border-dashed rounded p-5 text-center text-muted"
-                 style="cursor:pointer;">
-              <i class="bi bi-cloud-arrow-up fs-1 d-block mb-2"></i>
-              {{ _('Drag & drop files here, or click to browse') }}
-              <input type="file" id="fileInput" multiple class="d-none">
-            </div>
-            <ul id="fileList" class="list-group mt-2"></ul>
-          </div>
-
-          <div id="serverSection" class="d-none">
-            <label class="form-label">{{ _('Server file or folder path') }}</label>
-            <input type="text" id="serverPath" class="form-control"
-                   placeholder="/data/inbox">
-            <div class="form-check form-check-inline mt-2">
-              <input class="form-check-input" type="checkbox" id="recursive" checked>
-              <label class="form-check-label" for="recursive">{{ _('Recursive (include subdirectories)') }}</label>
-            </div>
-            <div class="form-text" id="rootsNote"></div>
-          </div>
-
-          <hr>
-          <h5 class="card-title"><i class="bi bi-tags me-2"></i>{{ _('Storage classification') }}</h5>
-          <div class="row g-2">
-            <div class="col-md-6">
-              <label class="form-label">{{ _('Source') }} <span class="text-danger">*</span></label>
-              <select id="sourceSelect" class="form-select"></select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">{{ _('Side') }} <span class="text-danger">*</span></label>
-              <select id="sideSelect" class="form-select"></select>
-            </div>
-          </div>
-          <details class="mt-2">
-            <summary class="text-primary" style="cursor:pointer;">{{ _('Create new source / side') }}</summary>
-            <div class="row g-2 mt-2" id="newSourceForm">
-              <div class="col-md-6"><input id="nsName" class="form-control" placeholder="{{ _('Source name *') }}"></div>
-              <div class="col-md-6"><input id="nsJob" class="form-control" placeholder="{{ _('Job / role *') }}"></div>
-              <div class="col-md-6"><input id="nsCountry" class="form-control" placeholder="{{ _('Country *') }}"></div>
-              <div class="col-md-6"><input id="nsCity" class="form-control" placeholder="{{ _('City') }}"></div>
-              <div class="col-md-4"><input id="nsImportance" class="form-control" placeholder="{{ _('Importance 0.0-1.0') }}" value="0.5"></div>
-              <div class="col-md-8"><input id="nsDesc" class="form-control" placeholder="{{ _('Description') }}"></div>
-              <div class="col-12"><button id="btnCreateSource" class="btn btn-outline-primary btn-sm">{{ _('Create source') }}</button></div>
-            </div>
-            <div class="row g-2 mt-1" id="newSideForm">
-              <div class="col-md-6"><input id="nsdName" class="form-control" placeholder="{{ _('Side name *') }}"></div>
-              <div class="col-md-4"><input id="nsdImportance" class="form-control" placeholder="{{ _('Importance 0.0-1.0') }}" value="0.5"></div>
-              <div class="col-md-2"><button id="btnCreateSide" class="btn btn-outline-primary btn-sm">{{ _('Create side') }}</button></div>
-            </div>
-          </details>
-        </div>
-      </div>
+  {# ---------------------------------------------------------------- head -- #}
+  <header class="ing-head">
+    <div class="ing-head-text">
+      <h1>{{ _('Ingestion') }}</h1>
+      <p>{{ _('Everything that brings files into the system — in one place.') }}</p>
     </div>
+    <div class="ing-head-actions">
+      <a class="ing-ghost-btn" href="/operations/jobs"><i class="bi bi-clock-history"></i> {{ _('Jobs') }}</a>
+      <a class="ing-ghost-btn" href="/operations/import"><i class="bi bi-box-arrow-in-down"></i> {{ _('Import center') }}</a>
+    </div>
+  </header>
 
-    <div class="col-lg-5">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title"><i class="bi bi-sliders me-2"></i>{{ _('Processing') }}</h5>
+  {# Every fact below is reported by /api/input/options-info - nothing here is
+     decoration: it tells the operator exactly what the engine will do. #}
+  <div class="ing-capabilities" id="capabilities" aria-live="polite">
+    <span class="ing-cap ing-cap-loading"><span class="ing-spinner"></span> {{ _('Reading engine capabilities…') }}</span>
+  </div>
 
-          <div class="advanced-only d-none">
-            <div class="row g-2">
-              <div class="col-md-4">
-                <label class="form-label">{{ _('Workers') }}</label>
-                <input type="number" id="optWorkers" class="form-control" value="0" min="0" max="64">
-                <div class="form-text">{{ _('0 = system default') }}</div>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">{{ _('Checkpoint') }}</label>
-                <select id="optCheckpoint" class="form-select">
-                  <option value="auto" selected>{{ _('Auto (resume)') }}</option>
-                  <option value="fresh">{{ _('Fresh') }}</option>
-                  <option value="off">{{ _('Off') }}</option>
-                </select>
-              </div>
-              <div class="col-md-4 d-flex align-items-end">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="optMonitoring" checked>
-                  <label class="form-check-label" for="optMonitoring">{{ _('Monitoring') }}</label>
-                </div>
+  <div class="ing-grid">
+    {# ------------------------------------------------------------ rail -- #}
+    <nav class="ing-rail" aria-label="{{ _('Ingestion steps') }}">
+      <ol id="stepRail">
+        <li class="ing-step is-current" data-step="source">
+          <button type="button" class="ing-step-btn" data-goto="panelSource">
+            <span class="ing-step-dot"><span class="ing-step-num">1</span><i class="bi bi-check-lg"></i></span>
+            <span class="ing-step-body">
+              <strong>{{ _('Source') }}</strong>
+              <small id="railSourceState">{{ _('Choose what to ingest') }}</small>
+            </span>
+          </button>
+        </li>
+        <li class="ing-step" data-step="classify">
+          <button type="button" class="ing-step-btn" data-goto="panelClassify">
+            <span class="ing-step-dot"><span class="ing-step-num">2</span><i class="bi bi-check-lg"></i></span>
+            <span class="ing-step-body">
+              <strong>{{ _('Classification') }}</strong>
+              <small id="railClassifyState">{{ _('Source and side') }}</small>
+            </span>
+          </button>
+        </li>
+        <li class="ing-step" data-step="processing">
+          <button type="button" class="ing-step-btn" data-goto="panelProcessing">
+            <span class="ing-step-dot"><span class="ing-step-num">3</span><i class="bi bi-check-lg"></i></span>
+            <span class="ing-step-body">
+              <strong>{{ _('Processing') }}</strong>
+              <small id="railProcessingState">{{ _('Engine defaults') }}</small>
+            </span>
+          </button>
+        </li>
+        <li class="ing-step" data-step="launch">
+          <button type="button" class="ing-step-btn" data-goto="panelLaunch">
+            <span class="ing-step-dot"><span class="ing-step-num">4</span><i class="bi bi-check-lg"></i></span>
+            <span class="ing-step-body">
+              <strong>{{ _('Launch') }}</strong>
+              <small id="railLaunchState">{{ _('Preflight, then start') }}</small>
+            </span>
+          </button>
+        </li>
+      </ol>
+      <div class="ing-rail-facts">
+        <span class="ing-kbd-hint"><kbd>Ctrl</kbd><kbd>Enter</kbd> {{ _('start') }}</span>
+        <span class="ing-kbd-hint"><kbd>Ctrl</kbd><kbd>D</kbd> {{ _('dry run') }}</span>
+      </div>
+    </nav>
+
+    {# --------------------------------------------------------- work area -- #}
+    <div class="ing-work">
+
+      {# ---------------------------------------------------------- step 1 -- #}
+      <section class="ing-card" id="panelSource" aria-labelledby="panelSourceTitle">
+        <div class="ing-card-head">
+          <span class="ing-card-index">1</span>
+          <div>
+            <h2 id="panelSourceTitle">{{ _('What should be ingested?') }}</h2>
+            <p>{{ _('Upload from this computer — files or whole folders — or point the engine at a folder already on the server.') }}</p>
+          </div>
+        </div>
+
+        <div class="ing-mode" role="tablist" aria-label="{{ _('Input mode') }}" id="modeSwitch">
+          <button type="button" class="ing-mode-btn is-active" role="tab" aria-selected="true"
+                  data-mode="upload" id="modeUpload">
+            <i class="bi bi-cloud-arrow-up"></i>
+            <span>
+              <strong>{{ _('This computer') }}</strong>
+              <small>{{ _('Any size: large files stream in chunks') }}</small>
+            </span>
+          </button>
+          <button type="button" class="ing-mode-btn" role="tab" aria-selected="false"
+                  data-mode="server" id="modeServer">
+            <i class="bi bi-hdd-network"></i>
+            <span>
+              <strong>{{ _('Server path') }}</strong>
+              <small id="serverModeNote">{{ _('Folders reachable by the server') }}</small>
+            </span>
+          </button>
+        </div>
+
+        {# ---- upload mode ---- #}
+        <div class="ing-pane" id="paneUpload">
+          <div class="ing-drop" id="dropZone" tabindex="0" role="button"
+               aria-label="{{ _('Add files, or drop them here') }}">
+            <div class="ing-drop-inner">
+              <i class="bi bi-box-arrow-in-down"></i>
+              <p class="ing-drop-title">{{ _('Drop files or folders here') }}</p>
+              <p class="ing-drop-sub">{{ _('or choose them from this computer') }}</p>
+              <div class="ing-drop-actions">
+                <button type="button" class="ing-soft-btn" id="pickFilesBtn">
+                  <i class="bi bi-file-earmark-plus"></i> {{ _('Choose files') }}
+                </button>
+                <button type="button" class="ing-soft-btn" id="pickFolderBtn">
+                  <i class="bi bi-folder-plus"></i> {{ _('Choose folder') }}
+                </button>
               </div>
             </div>
-            <hr>
+            <div class="ing-drop-veil" id="dropVeil"><span>{{ _('Release to add') }}</span></div>
           </div>
+          <input type="file" id="fileInput" multiple class="d-none">
+          <input type="file" id="folderInput" webkitdirectory directory multiple class="d-none">
 
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="optDedup" checked disabled>
-            <label class="form-check-label" for="optDedup">
-              {{ _('SHA-256 content hashing & deduplication') }}
-              <span class="badge bg-secondary">{{ _('always on') }}</span>
-            </label>
+          <div class="ing-queue d-none" id="queueBlock">
+            <div class="ing-queue-head">
+              <span id="queueSummary" class="ing-queue-summary"></span>
+              <div class="ing-queue-tools">
+                <button type="button" class="ing-link-btn" id="clearQueueBtn">
+                  <i class="bi bi-x-circle"></i> {{ _('Clear all') }}
+                </button>
+              </div>
+            </div>
+            <ul class="ing-queue-list" id="fileList" aria-live="polite"></ul>
           </div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="optArchives" checked disabled>
-            <label class="form-check-label" for="optArchives">
-              {{ _('Archive extraction (zip/tar/gz; traversal-protected)') }}
-              <span class="badge bg-secondary">{{ _('always on') }}</span>
-            </label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="optText" checked disabled>
-            <label class="form-check-label" for="optText">{{ _('Text extraction & indexing') }}</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="optMetadata" checked disabled>
-            <label class="form-check-label" for="optMetadata">{{ _('Metadata extraction') }}</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="optOcr" checked disabled>
-            <label class="form-check-label" for="optOcr">{{ _('OCR when available') }}</label>
-          </div>
-          <div class="form-text mt-1">{{ _("Extraction options reflect the engine's default pipeline.") }}</div>
+        </div>
 
-          <hr>
-          <div class="d-flex gap-2">
-            <button id="btnDryRun" class="btn btn-outline-secondary">{{ _('Dry run') }}</button>
-            <button id="btnStart" class="btn btn-primary flex-grow-1">
-              <i class="bi bi-play-fill"></i> {{ _('Start Analysis') }}
+        {# ---- server path mode ---- #}
+        <div class="ing-pane d-none" id="paneServer">
+          <label class="ing-label" for="serverPath">{{ _('File or folder on the server') }}</label>
+          <div class="ing-input-row">
+            <input type="text" id="serverPath" class="ing-input" spellcheck="false"
+                   placeholder="{{ _('for example /data/inbox') }}" autocomplete="off">
+            <button type="button" class="ing-soft-btn" id="checkPathBtn">
+              <i class="bi bi-search"></i> {{ _('Check') }}
             </button>
           </div>
-          <div id="inputMsg" class="mt-3"></div>
-          <div id="dryRunBox" class="d-none mt-2 border rounded p-3 bg-light small"></div>
+          <div class="ing-roots" id="rootsBox" aria-live="polite"></div>
+          <label class="ing-switch">
+            <input type="checkbox" id="recursive" checked>
+            <span class="ing-switch-track"><span class="ing-switch-thumb"></span></span>
+            <span>{{ _('Include subdirectories') }}</span>
+          </label>
         </div>
+      </section>
+
+      {# ---------------------------------------------------------- step 2 -- #}
+      <section class="ing-card" id="panelClassify" aria-labelledby="panelClassifyTitle">
+        <div class="ing-card-head">
+          <span class="ing-card-index">2</span>
+          <div>
+            <h2 id="panelClassifyTitle">{{ _('Where does it belong?') }}</h2>
+            <p>{{ _('Source and side travel with every file and become part of its identity.') }}</p>
+          </div>
+        </div>
+
+        <div class="ing-classify">
+          <div class="ing-slot" id="slotSource">
+            <div class="ing-slot-head">
+              <span class="ing-slot-label">{{ _('Source') }} <em>*</em></span>
+              <button type="button" class="ing-link-btn" data-open-form="sourceForm">
+                <i class="bi bi-plus-lg"></i> {{ _('New') }}
+              </button>
+            </div>
+            <div class="ing-slot-value" id="sourceDisplay" data-empty="true">{{ _('Not selected') }}</div>
+            <input type="search" class="ing-input ing-filter" id="sourceFilter"
+                   placeholder="{{ _('Filter sources…') }}" aria-label="{{ _('Filter sources') }}">
+            <ul class="ing-pick-list" id="sourceList" role="listbox"
+                aria-label="{{ _('Sources') }}"></ul>
+
+            <div class="ing-inline-form d-none" id="sourceForm">
+              <div class="ing-inline-title">{{ _('New source') }}</div>
+              <div class="ing-inline-grid">
+                <input id="nsName" class="ing-input" placeholder="{{ _('Name *') }}">
+                <input id="nsJob" class="ing-input" placeholder="{{ _('Job / role *') }}">
+                <input id="nsCountry" class="ing-input" placeholder="{{ _('Country *') }}">
+                <input id="nsCity" class="ing-input" placeholder="{{ _('City') }}">
+                <input id="nsImportance" class="ing-input" type="number" step="0.1" min="0" max="1" value="0.5"
+                       placeholder="{{ _('Importance 0.0-1.0') }}">
+                <input id="nsDesc" class="ing-input" placeholder="{{ _('Description') }}">
+              </div>
+              <div class="ing-inline-actions">
+                <button type="button" class="ing-primary-btn ing-small" id="btnCreateSource">{{ _('Create source') }}</button>
+                <button type="button" class="ing-link-btn" data-close-form="sourceForm">{{ _('Cancel') }}</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="ing-slot" id="slotSide">
+            <div class="ing-slot-head">
+              <span class="ing-slot-label">{{ _('Side') }} <em>*</em></span>
+              <button type="button" class="ing-link-btn" data-open-form="sideForm">
+                <i class="bi bi-plus-lg"></i> {{ _('New') }}
+              </button>
+            </div>
+            <div class="ing-slot-value" id="sideDisplay" data-empty="true">{{ _('Not selected') }}</div>
+            <input type="search" class="ing-input ing-filter" id="sideFilter"
+                   placeholder="{{ _('Filter sides…') }}" aria-label="{{ _('Filter sides') }}">
+            <ul class="ing-pick-list" id="sideList" role="listbox"
+                aria-label="{{ _('Sides') }}"></ul>
+
+            <div class="ing-inline-form d-none" id="sideForm">
+              <div class="ing-inline-title">{{ _('New side') }}</div>
+              <div class="ing-inline-grid">
+                <input id="nsdName" class="ing-input" placeholder="{{ _('Name *') }}">
+                <input id="nsdImportance" class="ing-input" type="number" step="0.1" min="0" max="1" value="0.5"
+                       placeholder="{{ _('Importance 0.0-1.0') }}">
+              </div>
+              <div class="ing-inline-actions">
+                <button type="button" class="ing-primary-btn ing-small" id="btnCreateSide">{{ _('Create side') }}</button>
+                <button type="button" class="ing-link-btn" data-close-form="sideForm">{{ _('Cancel') }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="ing-note">
+          <i class="bi bi-fingerprint"></i>
+          {{ _('Duplicates are decided by content hash + source + side: the same file can exist under a different source without being a duplicate.') }}
+        </p>
+      </section>
+
+      {# ---------------------------------------------------------- step 3 -- #}
+      <section class="ing-card" id="panelProcessing" aria-labelledby="panelProcessingTitle">
+        <div class="ing-card-head">
+          <span class="ing-card-index">3</span>
+          <div>
+            <h2 id="panelProcessingTitle">{{ _('How should it be processed?') }}</h2>
+            <p>{{ _('Leave the defaults unless this run needs something specific.') }}</p>
+          </div>
+        </div>
+
+        <div class="ing-options">
+          <div class="ing-option">
+            <label class="ing-label" for="optWorkers">{{ _('Workers') }}</label>
+            <div class="ing-stepper">
+              <button type="button" class="ing-step-btn-sm" data-step-target="optWorkers" data-delta="-1"
+                      aria-label="{{ _('One worker fewer') }}">−</button>
+              <input type="number" id="optWorkers" class="ing-input" value="0" min="0" max="64">
+              <button type="button" class="ing-step-btn-sm" data-step-target="optWorkers" data-delta="1"
+                      aria-label="{{ _('One worker more') }}">+</button>
+            </div>
+            <div class="ing-help">{{ _('0 = use the system default (bounded by CPU and the database pool).') }}</div>
+          </div>
+
+          <div class="ing-option">
+            <span class="ing-label">{{ _('Checkpoints') }}</span>
+            <div class="ing-segment" id="optCheckpoint" role="radiogroup"
+                 aria-label="{{ _('Checkpoint handling') }}">
+              <button type="button" class="is-active" role="radio" aria-checked="true" data-value="auto">
+                {{ _('Resume') }}
+              </button>
+              <button type="button" role="radio" aria-checked="false" data-value="fresh">{{ _('Start fresh') }}</button>
+              <button type="button" role="radio" aria-checked="false" data-value="off">{{ _('Off') }}</button>
+            </div>
+            <div class="ing-help" id="checkpointHelp">
+              {{ _('Resume continues an interrupted run; finished files are not processed twice.') }}
+            </div>
+          </div>
+
+          <div class="ing-option">
+            <span class="ing-label">{{ _('Monitoring') }}</span>
+            <label class="ing-switch">
+              <input type="checkbox" id="optMonitoring" checked>
+              <span class="ing-switch-track"><span class="ing-switch-thumb"></span></span>
+              <span>{{ _('Record throughput and phases for this job') }}</span>
+            </label>
+          </div>
+        </div>
+
+        {# The pipeline is not a set of switches the operator may flip - it is
+           what the engine does. Stating it as facts beats disabled checkboxes. #}
+        <details class="ing-spec" id="pipelineSpec">
+          <summary>{{ _('What this pipeline always does') }}</summary>
+          <dl>
+            <dt>{{ _('Duplicate detection') }}</dt><dd>{{ _('SHA-256 of the content, streamed') }}</dd>
+            <dt>{{ _('Identity') }}</dt><dd>{{ _('content hash + source + side') }}</dd>
+            <dt>{{ _('Containers') }}</dt><dd>{{ _('archives, compressed files, e-mail attachments, embedded objects — extracted with parent/child links') }}</dd>
+            <dt>{{ _('Archives') }}</dt><dd>{{ _('zip/tar/gz and more, with path-traversal protection') }}</dd>
+            <dt>{{ _('Text & metadata') }}</dt><dd>{{ _('extracted and indexed for search') }}</dd>
+            <dt>{{ _('OCR') }}</dt><dd>{{ _('used when an engine is available; a missing engine never fails the file') }}</dd>
+            <dt>{{ _('Failure handling') }}</dt><dd>{{ _('per file: one unreadable object never stops the run') }}</dd>
+          </dl>
+        </details>
+      </section>
+
+      {# ---------------------------------------------------------- step 4 -- #}
+      <section class="ing-card" id="panelLaunch" aria-labelledby="panelLaunchTitle">
+        <div class="ing-card-head">
+          <span class="ing-card-index">4</span>
+          <div>
+            <h2 id="panelLaunchTitle">{{ _('Preflight, then start') }}</h2>
+            <p>{{ _('A dry run walks the input and reports what would happen — it writes nothing.') }}</p>
+          </div>
+        </div>
+
+        <div class="ing-preflight d-none" id="preflight" aria-live="polite">
+          <div class="ing-preflight-head">
+            <span class="ing-preflight-title"><i class="bi bi-clipboard-check"></i> {{ _('Preflight result') }}</span>
+            <button type="button" class="ing-link-btn" id="closePreflight" aria-label="{{ _('Hide preflight') }}">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <div class="ing-tiles" id="preflightTiles"></div>
+          <div class="ing-preflight-notes" id="preflightNotes"></div>
+        </div>
+
+        <div class="ing-launch-notes" id="launchNotes"></div>
+      </section>
+    </div>
+
+    {# -------------------------------------------------------- telemetry -- #}
+    <aside class="ing-telemetry" aria-label="{{ _('Live state') }}">
+      <div class="ing-live">
+        <div class="ing-live-head">
+          <span><i class="bi bi-activity"></i> {{ _('Running now') }}</span>
+          <a href="/operations/jobs" class="ing-link-btn">{{ _('All jobs') }}</a>
+        </div>
+        <div id="liveSummary" class="ing-live-summary">{{ _('Reading…') }}</div>
+        <ul class="ing-live-list" id="liveJobs" aria-live="polite"></ul>
+        <div class="ing-live-empty d-none" id="liveEmpty">{{ _('Nothing is running.') }}</div>
+      </div>
+
+      <div class="ing-live">
+        <div class="ing-live-head">
+          <span><i class="bi bi-clock"></i> {{ _('Recently finished') }}</span>
+        </div>
+        <ul class="ing-live-list" id="recentJobs" aria-live="polite"></ul>
+      </div>
+
+      <div class="ing-live">
+        <div class="ing-live-head">
+          <span><i class="bi bi-cpu"></i> {{ _('This run') }}</span>
+        </div>
+        <dl class="ing-run-facts" id="runFacts"></dl>
+      </div>
+    </aside>
+  </div>
+
+  {# -------------------------------------------------------------- dock -- #}
+  <div class="ing-dock" id="launchDock">
+    <div class="ing-dock-readiness">
+      <span class="ing-dock-dot" id="dockDot"></span>
+      <div>
+        <strong id="dockHeadline">{{ _('Nothing selected yet') }}</strong>
+        <small id="dockDetail">{{ _('Start with step 1 — add files or a server path.') }}</small>
       </div>
     </div>
+    <div class="ing-dock-actions">
+      <button type="button" class="ing-soft-btn" id="btnDryRun">
+        <i class="bi bi-clipboard-check"></i> {{ _('Dry run') }}
+      </button>
+      <button type="button" class="ing-primary-btn" id="btnStart" disabled>
+        <span class="ing-primary-label"><i class="bi bi-play-fill"></i> {{ _('Start Analysis') }}</span>
+        <span class="ing-primary-progress d-none" id="startProgress"></span>
+      </button>
+    </div>
   </div>
+
+  <div class="ing-msg" id="inputMsg" role="status" aria-live="polite"></div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-(function () {
-  const csrf = document.querySelector('meta[name="csrf-token"]');
-  const headers = {'X-CSRFToken': csrf ? csrf.content : '{{ csrf_token() }}'};
-  let mode = 'upload';
-  let selected = [];
-
-  // mode switch
-  document.querySelectorAll('#sourceType button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#sourceType button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      mode = btn.dataset.mode;
-      document.getElementById('uploadSection').classList.toggle('d-none', mode !== 'upload');
-      document.getElementById('serverSection').classList.toggle('d-none', mode !== 'server');
-    });
-  });
-
-  // drag & drop
-  const dz = document.getElementById('dropZone');
-  const fi = document.getElementById('fileInput');
-  dz.addEventListener('click', () => fi.click());
-  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('bg-light'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('bg-light'));
-  dz.addEventListener('drop', e => {
-    e.preventDefault(); dz.classList.remove('bg-light');
-    addFiles(e.dataTransfer.files);
-  });
-  fi.addEventListener('change', () => addFiles(fi.files));
-  function addFiles(list) {
-    const ul = document.getElementById('fileList');
-    ul.innerHTML = '';
-    selected = Array.from(list);
-    selected.forEach(f => {
-      const li = document.createElement('li');
-      li.className = 'list-group-item py-1 small d-flex justify-content-between';
-      li.innerHTML = `<span>${f.name}</span><span class="text-muted">${(f.size/1048576).toFixed(2)} MB</span>`;
-      ul.appendChild(li);
-    });
-  }
-
-  // selects
-  async function loadSelects() {
-    const [s, d] = await Promise.all([
-      fetch('/api/input/sources').then(r => r.json()),
-      fetch('/api/input/sides').then(r => r.json())
-    ]);
-    fill('sourceSelect', s.sources || []);
-    fill('sideSelect', d.sides || []);
-  }
-  function fill(id, rows) {
-    const el = document.getElementById(id);
-    el.innerHTML = '<option value="">{{ _('-- select --') }}</option>' +
-      rows.map(r => `<option value="${r.name}">${r.name}</option>`).join('');
-  }
-  loadSelects();
-
-  fetch('/api/import/validate', {method:'POST', headers:{'Content-Type':'application/json', ...headers},
-    body: JSON.stringify({type:'batch_import', file_paths: []})}).then(()=>{});
-  fetch('/api/input/options-info').then(r => r.json()).then(d => {
-    if (d && d.ingestion_roots_configured !== undefined) {
-      document.getElementById('rootsNote').textContent =
-        d.ingestion_roots_configured ? {{ _('Server paths are restricted to configured ingestion roots.')|tojson }} :
-        'Server-path input is disabled (no ingestion roots configured). Use file upload.';
-    }
-  }).catch(() => {});
-
-  // create source/side
-  document.getElementById('btnCreateSource').addEventListener('click', async () => {
-    const body = {
-      name: v('nsName'), job: v('nsJob'), country: v('nsCountry'),
-      city: v('nsCity') || null, description: v('nsDesc') || null,
-      importance: parseFloat(v('nsImportance') || '0.5')
-    };
-    const r = await fetch('/api/input/sources', {method:'POST',
-      headers:{'Content-Type':'application/json', ...headers}, body: JSON.stringify(body)});
-    const d = await r.json();
-    msg(d.success ? {{ _('Source created.')|tojson }} : (d.error && d.error.message) || {{ _('Failed.')|tojson }}, d.success);
-    if (d.success) loadSelects();
-  });
-  document.getElementById('btnCreateSide').addEventListener('click', async () => {
-    const body = {name: v('nsdName'), importance: parseFloat(v('nsdImportance') || '0.5')};
-    const r = await fetch('/api/input/sides', {method:'POST',
-      headers:{'Content-Type':'application/json', ...headers}, body: JSON.stringify(body)});
-    const d = await r.json();
-    msg(d.success ? {{ _('Side created.')|tojson }} : (d.error && d.error.message) || {{ _('Failed.')|tojson }}, d.success);
-    if (d.success) loadSelects();
-  });
-
-  function v(id){ return document.getElementById(id).value.trim(); }
-  function msg(text, ok) {
-    const el = document.getElementById('inputMsg');
-    el.innerHTML = `<div class="alert ${ok ? 'alert-success' : 'alert-danger'} py-2">${text}</div>`;
-  }
-
-  function payload(dryRun) {
-    const base = {
-      source: v('sourceSelect'), side: v('sideSelect'),
-      recursive: document.getElementById('recursive').checked,
-      dry_run: dryRun,
-      processing: {
-        max_workers: parseInt(v('optWorkers') || '0', 10),
-        checkpoint: v('optCheckpoint'),
-        enable_monitoring: document.getElementById('optMonitoring').checked
-      }
-    };
-    if (mode === 'upload') {
-      return base;
-    }
-    base.path = v('serverPath');
-    return base;
-  }
-
-  function validate() {
-    if (!v('sourceSelect') || !v('sideSelect')) { msg({{ _('Select a source and a side.')|tojson }}, false); return false; }
-    if (mode === 'upload' && selected.length === 0) { msg({{ _('Add files to upload first.')|tojson }}, false); return false; }
-    if (mode === 'server' && !v('serverPath')) { msg({{ _('Enter a server path.')|tojson }}, false); return false; }
-    return true;
-  }
-
-  // dry run
-  document.getElementById('btnDryRun').addEventListener('click', async () => {
-    if (!validate()) return;
-    const box = document.getElementById('dryRunBox');
-    box.classList.remove('d-none');
-    box.textContent = {{ _('Analyzing…')|tojson }};
-    let resp;
-    if (mode === 'upload') {
-      const fd = new FormData();
-      selected.forEach(f => fd.append('files', f));
-      fd.append('source', v('sourceSelect'));
-      fd.append('side', v('sideSelect'));
-      fd.append('dry_run', 'true');
-      resp = await fetch('/api/input/uploads', {method:'POST', headers, body: fd});
-      const d = await resp.json();
-      if (!d.success) { box.textContent = d.error ? d.error.message : {{ _('Upload failed')|tojson }}; return; }
-      const p = await fetch('/api/input/jobs', {method:'POST',
-        headers:{'Content-Type':'application/json', ...headers},
-        body: JSON.stringify({...payload(true), file_paths: d.staged_paths})});
-      const pd = await p.json();
-      renderDryRun(pd);
-    } else {
-      const p = await fetch('/api/input/jobs', {method:'POST',
-        headers:{'Content-Type':'application/json', ...headers},
-        body: JSON.stringify(payload(true))});
-      const pd = await p.json();
-      renderDryRun(pd);
-    }
-  });
-  function renderDryRun(pd) {
-    const box = document.getElementById('dryRunBox');
-    if (!pd.success) { box.textContent = pd.error ? pd.error.message : {{ _('Dry run failed')|tojson }}; return; }
-    const p = pd.preview || {};
-    box.innerHTML = `
-      <strong>Dry run</strong><br>
-      Files discovered: ${p.files_discovered ?? '—'}<br>
-      Eligible: ${p.files_eligible ?? '—'} · Unsupported: ${p.files_unsupported ?? '—'}<br>
-      Estimated size: ${((p.estimated_bytes || 0)/1048576).toFixed(2)} MB`;
-  }
-
-  // start
-  document.getElementById('btnStart').addEventListener('click', async () => {
-    if (!validate()) return;
-    document.getElementById('btnStart').disabled = true;
-    try {
-      let resp;
-      if (mode === 'upload') {
-        const fd = new FormData();
-        selected.forEach(f => fd.append('files', f));
-        fd.append('source', v('sourceSelect'));
-        fd.append('side', v('sideSelect'));
-        fd.append('recursive', document.getElementById('recursive').checked);
-        resp = await fetch('/api/input/jobs', {method:'POST', headers, body: fd});
-      } else {
-        resp = await fetch('/api/input/jobs', {method:'POST',
-          headers:{'Content-Type':'application/json', ...headers},
-          body: JSON.stringify(payload(false))});
-      }
-      const d = await resp.json();
-      if (d.success && d.job) {
-        window.location = '/operations/jobs/' + d.job.job_id;
-      } else {
-        msg((d.error && d.error.message) || {{ _('Job could not be created.')|tojson }}, false);
-      }
-    } finally {
-      document.getElementById('btnStart').disabled = false;
-    }
-  });
-})();
-</script>
+{# Endpoints and page links are data, not hard-coded strings in the module, so
+   a deployment that mounts the API elsewhere only has to change this map. #}
+<script type="application/json" id="ingestionPageData">{{ {
+    "optionsInfoUrl": "/api/input/options-info",
+    "sourcesUrl": "/api/input/sources",
+    "sidesUrl": "/api/input/sides",
+    "uploadsUrl": "/api/input/uploads",
+    "chunkedUrl": "/api/input/uploads/chunked",
+    "jobsUrl": "/api/input/jobs",
+    "jobsListUrl": "/api/jobs",
+    "jobsSummaryUrl": "/api/jobs/summary",
+    "jobsPageUrl": "/operations/jobs/"
+}|tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/pages/ingestion-studio-page.js') }}"></script>
 {% endblock %}

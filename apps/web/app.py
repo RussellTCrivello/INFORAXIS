@@ -60,7 +60,9 @@ app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 # Configure Flask-Babel for internationalization
 # RTL languages: ar, fa, he, ur
 # Only languages with complete translation catalogs are exposed here so the
-# interface is fully translated for every selectable language (en, ar, hr).
+# interface is fully translated for every selectable language (en, ar, he, fa).
+# A Croatian catalog exists and is kept in sync, but it is deliberately not
+# offered (see tests/integration/test_analyst_i18n.py for the pinned state).
 try:
     from settings.languages import SUPPORTED_LANGUAGES
 except ImportError:  # pragma: no cover

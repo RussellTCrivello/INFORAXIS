@@ -19,6 +19,28 @@ from Hdg_Err_Ex_Log import (
 logger = logging.getLogger(__name__)
 
 
+#: JSON text files are not always exactly one document.  JSON Lines / NDJSON
+#: (one document per line), concatenated pretty-printed documents and log
+#: exports are common shapes in real corpora; ``json.load`` rejects all of them
+#: with "Extra data", which used to fail the whole file and store no content.
+#: Such a file is read as a *document sequence* instead.
+#:
+#: Retention stays bounded: the document count is exact (the file is streamed
+#: once) while only the first documents are kept in memory, the same
+#: bounded-memory contract the rest of the pipeline follows.
+JSON_DOCUMENTS_MAX_RETAINED = 10000
+JSON_DOCUMENTS_MAX_BYTES = 8 * 1024 * 1024
+
+#: Streaming chunk size for the document-sequence reader (1 MiB).
+JSON_DOCUMENTS_CHUNK_BYTES = 1024 * 1024
+
+#: Largest single pending document buffer accepted before giving up.  A file
+#: that fails strict parsing and still has a megabyte-scale unterminated
+#: document is not a document sequence; refusing keeps memory bounded instead
+#: of buffering an arbitrarily large blob.
+JSON_DOCUMENTS_MAX_BUFFER_BYTES = 64 * 1024 * 1024
+
+
 class RemainingFileReader(BaseReader):
     """
     Reader for remaining file types (text-based files).
@@ -104,6 +126,85 @@ class RemainingFileReader(BaseReader):
         except Exception as e:
             return self.handle_read_error(e, file_path, "read_file")
 
+    def _read_json_documents(self, filepath: str, encoding: str) -> Optional[Dict[str, Any]]:
+        """Read a file that is a *sequence* of JSON documents.
+
+        Handles JSON Lines / NDJSON and concatenated documents.  The file is
+        streamed once: ``document_count`` is exact, while memory is bounded by
+        the retained window (``JSON_DOCUMENTS_MAX_RETAINED`` documents /
+        ``JSON_DOCUMENTS_MAX_BYTES`` of source text).
+
+        Returns ``None`` when the file is not a clean document sequence - for
+        example a valid first document followed by arbitrary text, or a single
+        unterminated document running past ``JSON_DOCUMENTS_MAX_BUFFER_BYTES``.
+        Refusing (rather than keeping a partial read) is deliberate: the
+        original parse error is then reported and nothing is fabricated.
+        """
+        import json as _json
+
+        decoder = _json.JSONDecoder()
+        documents: list = []
+        retained_bytes = 0
+        document_count = 0
+        truncated = False
+        buffer = ""
+        incomplete = False  # a document ran to the end of the buffer
+
+        with open(filepath, 'r', encoding=encoding) as file:
+            while True:
+                chunk = file.read(JSON_DOCUMENTS_CHUNK_BYTES)
+                if not chunk:
+                    break
+                buffer += chunk
+
+                cursor = 0
+                while True:
+                    start = cursor
+                    while start < len(buffer) and buffer[start] in ' \t\r\n':
+                        start += 1
+                    if start >= len(buffer):
+                        cursor = start
+                        incomplete = False
+                        break
+                    try:
+                        value, end = decoder.raw_decode(buffer, start)
+                    except ValueError:
+                        cursor = start
+                        incomplete = True
+                        break
+                    document_count += 1
+                    if (len(documents) < JSON_DOCUMENTS_MAX_RETAINED
+                            and retained_bytes < JSON_DOCUMENTS_MAX_BYTES):
+                        documents.append(value)
+                        retained_bytes += len(buffer[start:end])
+                    else:
+                        truncated = True
+                    cursor = end
+                    incomplete = False
+
+                if cursor:
+                    buffer = buffer[cursor:]
+                if len(buffer) > JSON_DOCUMENTS_MAX_BUFFER_BYTES:
+                    # One document larger than the buffer cap: not a document
+                    # sequence, and buffering it further is unbounded.
+                    return None
+                if incomplete and len(buffer) > JSON_DOCUMENTS_MAX_BUFFER_BYTES:
+                    return None
+
+        # The file is a document sequence only when the tail after the last
+        # decoded document is whitespace.  Anything else is not a clean
+        # sequence and keeps the original strict-parse error.
+        tail = buffer.strip()
+        if tail:
+            return None
+        if document_count < 2:
+            return None
+        return {
+            "documents": documents,
+            "document_count": document_count,
+            "truncated": truncated,
+        }
+
     def read_rtf_file(self, filepath: str) -> Dict[str, Any]:
         """Read an RTF file; strips control words when striprtf is available,
         falls back to plain text extraction otherwise (READER-02/READER-04)."""
@@ -179,7 +280,9 @@ class RemainingFileReader(BaseReader):
             encodings_to_try = [encoding, 'utf-8', 'latin-1', 'cp1252']
             data = None
             encoding_used = None
-            
+            documents = None
+            parse_errors = []
+
             for enc in encodings_to_try:
                 try:
                     with open(filepath, 'r', encoding=enc) as file:
@@ -190,8 +293,28 @@ class RemainingFileReader(BaseReader):
                     if enc == encodings_to_try[-1]:
                         raise
                     continue
+                except json.JSONDecodeError as decode_error:
+                    # Not a single document.  It may still be a sequence of
+                    # documents (JSON Lines / concatenated documents); that
+                    # shape is real evidence and must not be dropped.
+                    parse_errors.append((enc, decode_error))
+                    continue
+
+            if data is None and parse_errors:
+                for enc, decode_error in parse_errors:
+                    try:
+                        documents = self._read_json_documents(filepath, enc)
+                    except UnicodeDecodeError:
+                        continue
+                    except OSError:
+                        raise
+                    if documents is not None:
+                        encoding_used = enc
+                        break
+                if documents is None:
+                    raise parse_errors[-1][1]
             
-            if data is None:
+            if data is None and documents is None:
                 error_msg = "Could not decode file with any encoding"
                 handle_error(
                     UnicodeDecodeError('utf-8', b'', 0, 1, error_msg),
@@ -202,6 +325,23 @@ class RemainingFileReader(BaseReader):
                 result["error"] = error_msg
                 return result
             
+            if data is None and documents is not None:
+                # A document sequence: report the population exactly (counted
+                # while streaming) and the retained window explicitly, so a
+                # consumer can tell the difference between "this is all of it"
+                # and "this is a bounded sample of a larger file".
+                result["data"] = documents["documents"]
+                result["data_type"] = "list"
+                result["data_format"] = "json_documents"
+                result["item_count"] = documents["document_count"]
+                result["document_count"] = documents["document_count"]
+                result["retained_count"] = len(documents["documents"])
+                if documents["truncated"]:
+                    result["truncated"] = True
+                if encoding_used and encoding_used != encoding:
+                    result["encoding_used"] = encoding_used
+                return result
+
             result["data"] = data
             result["data_type"] = type(data).__name__
             if encoding_used and encoding_used != encoding:
@@ -524,12 +664,13 @@ class RemainingFileReader(BaseReader):
                 # For very large files, use smaller chunk sizes
                 if file_size > 10 * 1024 * 1024 * 1024:  # > 10GB
                     # Use 1MB chunks for very large files
-                    logger.warning(f"Memory error on large file ({file_size / (1024*1024*1024):.2f}GB), retrying with 1MB chunks")
+                    logger.warning(f"Memory error on large file ({file_size / (1024*1024*1024):.2f}GB), retrying with 1MB chunks: {e}")
                     # Force streaming mode with smaller chunks by modifying the method
                     # We'll use a recursive call but with a flag to use smaller chunks
                     return self._read_text_file_streaming(filepath, encoding, chunk_size=1024 * 1024)  # 1MB chunks
                 else:
                     # Standard retry with streaming
+                    logger.warning("Memory error on %s, retrying with streaming: %s", filepath, e)
                     return self.read_text_file(filepath, encoding)  # Will use streaming on retry
             except MemoryError as retry_err:
                 # Even streaming failed - file is too large
@@ -605,8 +746,50 @@ class RemainingFileReader(BaseReader):
         except Exception as e:
             return {"error": str(e), "filepath": filepath}
     
+    #: Cap on inline <script>/<style> text carried out of one HTML document.
+    #: A minified bundle is megabytes of code; the cap keeps one page from
+    #: dominating the word index, and any truncation is recorded.
+    HTML_INLINE_CODE_LIMIT = 1_000_000
+
+    @classmethod
+    def _html_inline_code(cls, soup):
+        """Return ``(script_text, style_text, truncated)`` for a parsed page.
+
+        ``BeautifulSoup.get_text()`` silently omits ``<script>``, ``<style>``
+        and comments. A standalone ``.js`` or ``.css`` file *is* an indexed
+        text format in this pipeline, so ignoring the same bytes inside HTML
+        treated identical content differently depending on its container - and
+        for a script-heavy page (a 77 KB single-page app whose visible text is
+        a few hundred characters) it dropped almost the whole document without
+        recording that it had. The code text is collected here, bounded, and
+        reported; the storage layer indexes it under its own label.
+        """
+        parts = {}
+        truncated = []
+        for label, selector in (("script", "script"), ("style", "style")):
+            chunks = [
+                tag.get_text() or "" for tag in soup.find_all(selector)
+            ]
+            text = "\n".join(chunk for chunk in chunks if chunk.strip())
+            if len(text) > cls.HTML_INLINE_CODE_LIMIT:
+                text = text[:cls.HTML_INLINE_CODE_LIMIT]
+                truncated.append(label)
+            parts[label] = text
+        return parts["script"], parts["style"], truncated
+
     def read_html_file(self, filepath, encoding='utf-8'):
-        """Read HTML file"""
+        """Read an HTML file: visible text, structure, and inline code.
+
+        ``text_content`` stays the document's visible text (its semantics are
+        unchanged downstream). ``script_text``/``style_text`` carry the inline
+        code that BeautifulSoup's ``get_text()`` drops, and it is also placed in
+        ``forensic_text`` - the channel FORENSIC-01 built for evidence outside
+        the visible body - so the same bytes are indexed inside HTML as they
+        are when they arrive as a standalone ``.js``/``.css`` file.
+        ``extraction_info`` records the size of everything that was, or was
+        not, turned into content, so "N characters from a much larger file" is
+        answerable from the result instead of being a mystery in the log.
+        """
         try:
             from bs4 import BeautifulSoup
         except ImportError:
@@ -623,11 +806,30 @@ class RemainingFileReader(BaseReader):
                 content = file.read()
             
             soup = BeautifulSoup(content, 'html.parser')
+            script_text, style_text, truncated = self._html_inline_code(soup)
+
+            # Comments are excluded from the content (they are not document
+            # text) but their size is recorded so nothing disappears silently.
+            comment_chars = sum(
+                len(str(comment)) for comment in soup.find_all(
+                    string=lambda node: type(node).__name__ == 'Comment'
+                )
+            )
             
+            # FORENSIC-01: inline code is content of this artifact. Labelled so
+            # a word found in a script is attributable when read back.
+            forensic_parts = []
+            if script_text.strip():
+                forensic_parts.append("--- Inline script ---\n" + script_text)
+            if style_text.strip():
+                forensic_parts.append("--- Inline style ---\n" + style_text)
+
             result = {
                 "filepath": filepath,
                 "title": soup.title.string if soup.title else None,
                 "text_content": soup.get_text(),
+                "script_text": script_text,
+                "style_text": style_text,
                 "links": [{"href": a.get('href'), "text": a.get_text()} for a in soup.find_all('a', href=True)],
                 "images": [{"src": img.get('src'), "alt": img.get('alt')} for img in soup.find_all('img')],
                 "headings": {
@@ -636,13 +838,33 @@ class RemainingFileReader(BaseReader):
                     "h3": [h.get_text() for h in soup.find_all('h3')]
                 },
                 "link_count": len(soup.find_all('a', href=True)),
-                "image_count": len(soup.find_all('img'))
+                "image_count": len(soup.find_all('img')),
+                "forensic_text": "\n\n".join(forensic_parts),
+                "extraction_info": {
+                    "visible_text_chars": len(soup.get_text()),
+                    "script_chars": len(script_text),
+                    "style_chars": len(style_text),
+                    "comment_chars_excluded": comment_chars,
+                    "inline_code_truncated": truncated,
+                }
             }
-            
+
+            # The breakdown is logged because a page whose visible text is a
+            # few hundred characters out of a large file looks like a failed
+            # extraction until the parts are named (it was reported that way).
+            logger.info(
+                "[EXTRACTION] HTML: %d visible chars, %d script chars, %d style "
+                "chars, %d comment chars excluded (%s)",
+                result["extraction_info"]["visible_text_chars"],
+                result["extraction_info"]["script_chars"],
+                result["extraction_info"]["style_chars"],
+                result["extraction_info"]["comment_chars_excluded"],
+                os.path.basename(str(filepath)),
+            )
             return result
         except Exception as e:
             return {"error": str(e), "filepath": filepath}
-    
+
     def read_binary_file(self, filepath, max_bytes=1024):
         """Read binary file"""
         try:

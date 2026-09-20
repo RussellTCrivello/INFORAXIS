@@ -243,7 +243,8 @@ def test_classify_card_on_file_detail_for_admin(admin_client, seeded):
     assert 'analyst-classify-page-data' in html
     assert 'js/modules/analyst-classify.js' in html
     # Write controls are rendered for an analyst/admin
-    assert 'id="analystClassifySelect"' in html
+    assert 'id="analystClassifyCard-select"' in html
+    assert 'data-analyst-assign' in html
     assert '"canCategorize": true' in html
 
 
@@ -253,7 +254,8 @@ def test_classify_card_on_file_detail_is_read_only_for_viewer(viewer_client, see
     html = resp.get_data(as_text=True)
     assert 'id="analystClassifyCard"' in html
     # No write controls for a viewer
-    assert 'id="analystClassifySelect"' not in html
+    assert 'id="analystClassifyCard-select"' not in html
+    assert 'data-analyst-assign' not in html
     assert '"canCategorize": false' in html
 
 
