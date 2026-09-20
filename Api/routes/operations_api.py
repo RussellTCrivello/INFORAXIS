@@ -463,6 +463,17 @@ def api_list_import_jobs():
 # ===========================================================================
 # Jobs / Operations Center (shared across job types)
 # ===========================================================================
+#: Limit for the read-only endpoints the Jobs page polls while a run is in
+#: progress. The default 60/minute is a budget for *user* requests, not for the
+#: application polling itself every two seconds: with the default in force the
+#: error endpoint answered 429 for the whole duration of a run, so the panel
+#: that explains what failed - the one thing an operator needs during a run -
+#: was never available (observed in a production ingest log, where every poll
+#: of ``/api/jobs/<id>/errors`` was throttled). Higher, still bounded: these
+#: return bounded, in-memory job state and remain behind authentication.
+_JOB_POLL_LIMIT = "600 per minute"
+
+
 @operations_bp.route("/api/jobs", methods=["GET"])
 def api_list_jobs():
     try:
@@ -480,6 +491,7 @@ def api_list_jobs():
 
 
 @operations_bp.route("/api/jobs/<job_id>", methods=["GET"])
+@limiter.limit(_JOB_POLL_LIMIT)
 def api_get_job(job_id):
     job, err = _job_or_404(job_id)
     if err:
@@ -489,6 +501,7 @@ def api_get_job(job_id):
 
 
 @operations_bp.route("/api/jobs/<job_id>/events", methods=["GET"])
+@limiter.limit(_JOB_POLL_LIMIT)
 def api_job_events(job_id):
     job, err = _job_or_404(job_id)
     if err:
@@ -503,6 +516,7 @@ def api_job_events(job_id):
 
 
 @operations_bp.route("/api/jobs/<job_id>/errors", methods=["GET"])
+@limiter.limit(_JOB_POLL_LIMIT)
 def api_job_errors(job_id):
     job, err = _job_or_404(job_id)
     if err:
@@ -513,6 +527,7 @@ def api_job_errors(job_id):
 
 
 @operations_bp.route("/api/jobs/<job_id>/results", methods=["GET"])
+@limiter.limit(_JOB_POLL_LIMIT)
 def api_job_results(job_id):
     job, err = _job_or_404(job_id)
     if err:
