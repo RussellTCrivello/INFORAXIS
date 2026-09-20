@@ -186,23 +186,8 @@
 }|tojson|safe }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/full-content-page.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='js/modules/content-formatter.js') }}"></script>
-<script type="application/json" id="analyst-classify-page-data">{{ {
-    "canCategorize": current_user.is_authenticated and current_user.has_role('admin', 'analyst'),
-    "translations": {
-        "noCategoriesYet": _('No analyst categories yet.'),
-        "confirmRemove": _('Remove analyst category from this file? It returns to uncategorized status for search scope.'),
-        "removeLabel": _('Remove'),
-        "chooseCategory": _('Choose analyst category…'),
-        "chooseOrCreateCategory": _('Choose an analyst category or type a new one'),
-        "sourceContext": _('content view'),
-        "assignedToast": _('Assigned "{category}" to {count} file(s)'),
-        "assignFailed": _('Analyst categorization failed'),
-        "removeAllConfirmFile": _('Remove all analyst categories from this file? It will return to "uncategorized" for analyst search scope. Smart categories are not affected.'),
-        "removedToast": _('Removed analyst categories from {count} file(s)'),
-        "removeFailed": _('Remove failed'),
-        "categoryRemoved": _('Analyst category removed')
-    }
-}|tojson|safe }}</script>
+{% from 'components/analyst_classify_page_data.html' import analyst_classify_page_data %}
+{{ analyst_classify_page_data(current_user.is_authenticated and current_user.has_role('admin', 'analyst')) }}
 <script type="module" src="{{ url_for('static', filename='js/modules/analyst-classify.js') }}"></script>
 {% endblock %}
 

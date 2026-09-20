@@ -1,29 +1,57 @@
 /**
  * Analyst classification from any content display interface.
  *
- * Shared by the File Detail page and the Full Content Reader. Lets an
+ * Shared by the File Detail page, the Full Content Reader and the file
+ * preview pop-up (the "File Details" modal on the archives page). Lets an
  * analyst/admin assign or remove ANALYST (manual) categories for the file
- * they are currently reading — without going back to Advanced Search or
+ * they are currently looking at — without going back to Advanced Search or
  * the Analyst View.
  *
  * All writes go through the existing, audit-logged endpoints:
  *   GET    /api/analyst/categories      — list analyst categories
+ *   GET    /api/analyst/assignments     — current assignments (per file_id)
  *   POST   /api/analyst/assign          — {path_ids, category_id | category_name, source_query}
  *   POST   /api/analyst/remove          — {path_ids}
  * (FR-1.4: analyst namespace only; the smart taxonomy is never touched.)
  *
- * The module self-initializes when a #analystClassifyCard element exists
- * on the page. Page-data translations come from the nearest
- * #analyst-classify-page-data JSON block (same pattern as the other page
- * scripts).
+ * Two ways in, one implementation:
+ *
+ *   * a page-level card (``#analystClassifyCard`` — File Detail, Reader) is
+ *     bound by this module's own self-initialization;
+ *   * a card inside a container that shows *different files over time* (the
+ *     preview modal, which has its own previous/next) is bound by calling
+ *     ``bindAnalystClassify(card, fileId)`` every time another file is
+ *     displayed, which re-points the card and refreshes its badges.
+ *
+ * Every lookup is scoped to the card element, never to a global id, so a page
+ * can hold a page-level card and a modal card at once without them fighting
+ * over the same controls.
+ *
+ * Page-data translations come from the nearest ``#analyst-classify-page-data``
+ * JSON block (same pattern as the other page scripts).
  */
 
-let t = null;
-let fileId = null;
-let cardEl = null;
+let translations = null;
+let canCategorize = false;
+let dataLoaded = false;
 
 function classifyT(key, fallback) {
-    return (t && t[key]) ? t[key] : fallback;
+    return (translations && translations[key]) ? translations[key] : fallback;
+}
+
+/** Read the page-data block once (translations + write permission). */
+function loadPageData() {
+    if (dataLoaded) return;
+    dataLoaded = true;
+    const dataEl = document.getElementById('analyst-classify-page-data');
+    if (!dataEl) return;
+    try {
+        const data = JSON.parse(dataEl.textContent);
+        translations = data.translations || {};
+        canCategorize = !!data.canCategorize;
+    } catch (e) {
+        /* fall back to the English defaults below */
+    }
 }
 
 function csrfToken() {
@@ -68,28 +96,52 @@ function showToast(message, isError = false) {
     toastTimer = setTimeout(() => toast.classList.remove('visible'), 3200);
 }
 
+/**
+ * The parts of a card, looked up inside it.
+ *
+ * Data attributes are the contract; the element ids are kept for styling and
+ * for anything that already addressed them. No getElementById here: two cards
+ * on one page must not resolve to the same controls.
+ */
+function cardParts(card) {
+    return {
+        badges: card.querySelector('[data-analyst-badges]') || card.querySelector('.analyst-classify-badges'),
+        select: card.querySelector('[data-analyst-select]') || card.querySelector('.analyst-classify-controls select'),
+        newName: card.querySelector('[data-analyst-new-name]') || card.querySelector('.analyst-classify-controls input'),
+        assignBtn: card.querySelector('[data-analyst-assign]'),
+        removeAllBtn: card.querySelector('[data-analyst-remove-all]'),
+    };
+}
+
+function currentFileId(card) {
+    const id = Number(card.dataset.fileId);
+    return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 /** Re-render the badge list from a categories array [{id, name}]. */
-function renderBadges(categories) {
-    const wrap = document.getElementById('analystClassifyBadges');
-    if (!wrap) return;
-    const canCategorize = !!cardEl.dataset.canCategorize;
+function renderBadges(card, categories) {
+    const { badges } = cardParts(card);
+    if (!badges) return;
+    const canWrite = canCategorize || card.dataset.canCategorize === 'true';
     if (!categories || !categories.length) {
-        wrap.innerHTML = `<span class="analyst-classify-empty" id="analystClassifyEmpty">${escapeHtml(classifyT('noCategoriesYet', 'No analyst categories yet.'))}</span>`;
+        badges.innerHTML = `<span class="analyst-classify-empty" data-analyst-empty>${escapeHtml(classifyT('noCategoriesYet', 'No analyst categories yet.'))}</span>`;
         return;
     }
-    wrap.innerHTML = categories.map(cat => `
+    badges.innerHTML = categories.map(cat => `
         <span class="badge analyst-category-badge" data-category-id="${cat.id}">
             <i class="bi bi-person-fill me-1" aria-hidden="true"></i>${escapeHtml(cat.name)}
-            ${canCategorize ? `
+            ${canWrite ? `
             <button type="button" class="badge-remove" data-remove-category-id="${cat.id}"
                     title="${escapeHtml(classifyT('confirmRemove', 'Remove analyst category from this file? It returns to uncategorized status for search scope.'))}"
                     aria-label="${escapeHtml(classifyT('removeLabel', 'Remove'))} ${escapeHtml(cat.name)}">&times;</button>` : ''}
         </span>`).join('');
 }
 
-/** Authoritative refresh: exact per-file assignments via the file_id
- *  filter (the same source the Analyst View uses). */
-async function reloadCurrentCategories() {
+/** Authoritative refresh: exact per-file assignments via the file_id filter
+ *  (the same source the Analyst View uses). */
+async function reloadCurrentCategories(card) {
+    const fileId = currentFileId(card);
+    if (!fileId) return;
     try {
         const res = await fetch(`/api/analyst/assignments?file_id=${fileId}&per_page=100`);
         if (!res.ok) return;
@@ -97,14 +149,14 @@ async function reloadCurrentCategories() {
         const rows = data.assignments || [];
         const seen = new Map();
         rows.forEach(r => seen.set(r.category_id, r.category_name));
-        renderBadges([...seen.entries()].map(([id, name]) => ({ id, name })));
+        renderBadges(card, [...seen.entries()].map(([id, name]) => ({ id, name })));
     } catch (e) {
         console.error('analyst-classify: refresh failed', e);
     }
 }
 
-async function loadCategoryOptions() {
-    const select = document.getElementById('analystClassifySelect');
+async function loadCategoryOptions(card) {
+    const { select } = cardParts(card);
     if (!select) return;
     try {
         const res = await fetch('/api/analyst/categories');
@@ -121,9 +173,10 @@ async function loadCategoryOptions() {
     }
 }
 
-async function assign() {
-    const select = document.getElementById('analystClassifySelect');
-    const newName = document.getElementById('analystClassifyNewName');
+async function assign(card) {
+    const fileId = currentFileId(card);
+    if (!fileId) return;
+    const { select, newName } = cardParts(card);
     const categoryId = select && select.value ? parseInt(select.value, 10) : null;
     const categoryName = newName && newName.value.trim() ? newName.value.trim() : null;
 
@@ -149,13 +202,15 @@ async function assign() {
                 .replace('{category}', data.category_name || categoryName || '')
                 .replace('{count}', String(data.assigned ?? 1))
         );
-        await reloadCurrentCategories();
+        await reloadCurrentCategories(card);
     } catch (e) {
         showToast(classifyT('assignFailed', 'Analyst categorization failed') + ': ' + e.message, true);
     }
 }
 
-async function removeAll() {
+async function removeAll(card) {
+    const fileId = currentFileId(card);
+    if (!fileId) return;
     if (!window.confirm(
         classifyT('removeAllConfirmFile', 'Remove all analyst categories from this file? It will return to "uncategorized" for analyst search scope. Smart categories are not affected.')
     )) return;
@@ -165,13 +220,15 @@ async function removeAll() {
             classifyT('removedToast', 'Removed analyst categories from {count} file(s)')
                 .replace('{count}', String(data.removed_assignments ?? 1))
         );
-        await reloadCurrentCategories();
+        await reloadCurrentCategories(card);
     } catch (e) {
         showToast(classifyT('removeFailed', 'Remove failed') + ': ' + e.message, true);
     }
 }
 
-async function removeOne(categoryId) {
+async function removeOne(card, categoryId) {
+    const fileId = currentFileId(card);
+    if (!fileId) return;
     if (!window.confirm(
         classifyT('confirmRemove', 'Remove analyst category from this file? It returns to uncategorized status for search scope.')
     )) return;
@@ -179,8 +236,9 @@ async function removeOne(categoryId) {
     // (bulk semantics), so single-category removal = remove all + reassign
     // the remaining ones. Simplest correct sequence:
     try {
-        const badges = [...document.querySelectorAll('#analystClassifyBadges .badge[data-category-id]')];
-        const remaining = badges
+        const { badges } = cardParts(card);
+        const current = [...(badges ? badges.querySelectorAll('.badge[data-category-id]') : [])];
+        const remaining = current
             .map(b => parseInt(b.dataset.categoryId, 10))
             .filter(id => id !== Number(categoryId));
         await apiPost('/api/analyst/remove', { path_ids: [Number(fileId)] });
@@ -192,50 +250,72 @@ async function removeOne(categoryId) {
             });
         }
         showToast(classifyT('categoryRemoved', 'Analyst category removed'));
-        await reloadCurrentCategories();
+        await reloadCurrentCategories(card);
     } catch (e) {
         showToast(classifyT('removeFailed', 'Remove failed') + ': ' + e.message, true);
     }
 }
 
-function init() {
-    cardEl = document.getElementById('analystClassifyCard');
-    if (!cardEl) return;
+/** Bind a card's controls once. Safe to call repeatedly for the same card. */
+export function bindAnalystClassifyCard(card) {
+    if (!card || card.dataset.analystBound === 'true') return false;
+    loadPageData();
+    card.dataset.analystBound = 'true';
 
-    const dataEl = document.getElementById('analyst-classify-page-data');
-    if (dataEl) {
-        try {
-            const data = JSON.parse(dataEl.textContent);
-            t = data.translations || {};
-            cardEl.dataset.canCategorize = data.canCategorize ? 'true' : 'false';
-        } catch (e) { /* fall back to defaults */ }
-    }
-
-    fileId = cardEl.dataset.fileId;
-
-    const assignBtn = document.getElementById('analystClassifyAssignBtn');
-    if (assignBtn) assignBtn.addEventListener('click', assign);
-    const removeAllBtn = document.getElementById('analystClassifyRemoveAllBtn');
-    if (removeAllBtn) removeAllBtn.addEventListener('click', removeAll);
-    const newName = document.getElementById('analystClassifyNewName');
-    if (newName) newName.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); assign(); } });
-
-    // Per-badge removal (event delegation — badges are re-rendered)
-    const badgesEl = document.getElementById('analystClassifyBadges');
-    if (badgesEl) {
-        badgesEl.addEventListener('click', e => {
-            const btn = e.target.closest('[data-remove-category-id]');
-            if (btn) removeOne(btn.dataset.removeCategoryId);
+    const { assignBtn, removeAllBtn, newName, badges } = cardParts(card);
+    if (assignBtn) assignBtn.addEventListener('click', () => assign(card));
+    if (removeAllBtn) removeAllBtn.addEventListener('click', () => removeAll(card));
+    if (newName) {
+        newName.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); assign(card); }
         });
     }
-
-    loadCategoryOptions();
+    if (badges) {
+        // Per-badge removal (event delegation — badges are re-rendered)
+        badges.addEventListener('click', e => {
+            const btn = e.target.closest('[data-remove-category-id]');
+            if (btn) removeOne(card, btn.dataset.removeCategoryId);
+        });
+    }
+    loadCategoryOptions(card);
+    return true;
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
+/**
+ * Point a card at a file and refresh what it shows.
+ *
+ * The preview modal displays one file after another (including through its
+ * own previous/next buttons), so the card is re-targeted on every display
+ * rather than created again: one card, one set of listeners, no stale state.
+ *
+ * @param {HTMLElement} card - the card element (rendered by the shared
+ *     analyst_classify macro, so page and modal markup cannot drift apart)
+ * @param {number|string} fileId - the file now on screen
+ * @returns {Promise<boolean>} whether the card was bound to that file
+ */
+export async function bindAnalystClassify(card, fileId) {
+    const id = Number(fileId);
+    if (!card || !Number.isInteger(id) || id <= 0) return false;
+    bindAnalystClassifyCard(card);
+    card.dataset.fileId = String(id);
+    // The empty-state text and the write controls depend on the page data.
+    const empty = card.querySelector('[data-analyst-empty]');
+    if (empty) empty.textContent = classifyT('noCategoriesYet', 'No analyst categories yet.');
+    await reloadCurrentCategories(card);
+    return true;
 }
 
-window.analystClassify = { refreshState: reloadCurrentCategories, reloadCurrentCategories };
+function init() {
+    const card = document.getElementById('analystClassifyCard');
+    if (!card) return;
+    loadPageData();
+    bindAnalystClassifyCard(card);
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+}

@@ -72,6 +72,49 @@ Enhanced Search `/search/enhanced`, and the `/api/search` API) accepts a
 
 Every action (assign, remove, category creation) is audit-logged (FR-1.5).
 
+## Categorizing from wherever a file is being read
+
+An analyst should not have to leave the file they are looking at. The same
+analyst card — same markup (`templates/components/analyst_classify.html`),
+same module (`static/js/modules/analyst-classify.js`), same audit-logged
+endpoints — is rendered on every surface that displays a file:
+
+| Surface | Card |
+|---|---|
+| File Detail (`/file/<id>`) | page-level card, bound to that file at load |
+| Full Content Reader (`/file/<id>/full-content`) | same card, slim variant, top of the page |
+| File preview pop-up (archives page) | same card at the top of the pop-up's *Classification & Analysis* column |
+
+The pop-up is the one that needs care: it shows one file after another (opened
+from a list, stepped through with its own previous/next), so a card bound once
+at page load would keep showing the first file's categories. Instead
+`file-details.js` calls
+
+```js
+bindAnalystClassify(card, fileId)   // from static/js/modules/analyst-classify.js
+```
+
+every time a file is displayed. That re-points the existing card at the new
+file and refreshes its badges from
+`GET /api/analyst/assignments?file_id=<id>`; the listeners are bound once, and
+assignments post the file id that is on screen, never a stale one.
+
+Two properties keep it safe to have more than one card on a page:
+
+* every lookup happens *inside the card element* (`card.querySelector(
+  '[data-analyst-badges]')` …), never through a global id, so a page holding a
+  page-level card and a modal card cannot cross-wire them;
+* the write controls are gated server-side on the same role check as the pages
+  — a viewer gets the read-only card, and the write endpoints refuse the
+  session regardless of what the DOM shows.
+
+Verified by `tests/unit/test_frontend_analyst_classify_modal.py` (runs the
+shipped module under node: re-pointing, badge refresh, stepping to the next
+file, two cards on one page, assignment targeting) and
+`tests/integration/test_analyst_classify_modal.py` (the real page ships the
+card inside the pop-up, with the styles, the page-data block and the role
+gate).
+
 ## Analyst Categorization View (`/analyst/categorization`) — FR-4
 
 A dedicated interface, visually distinct (violet banner/cards) from the
@@ -131,6 +174,12 @@ The global role policy applies automatically:
 * UI: `templates/Analyst/analyst_categorization.html`,
   `templates/Search/search_advanced.html`, `templates/Search/search.html`,
   `templates/Search/search_enhanced.html`, `templates/file/file_detail.html`
+* Shared in-place control: `templates/components/analyst_classify.html`,
+  `templates/components/analyst_classify_page_data.html`,
+  `static/js/modules/analyst-classify.js`, `static/css/analyst-classify.css`
+  (used by File Detail, the Reader and the file preview pop-up)
 * Page scripts/styles: `static/js/pages/analyst-categorization-page.js`,
   `static/js/pages/search-advanced-page.js`, `static/css/analyst-categorization.css`
-* Tests: `tests/integration/test_analyst_categorization.py`
+* Tests: `tests/integration/test_analyst_categorization.py`,
+  `tests/integration/test_analyst_classify_modal.py`,
+  `tests/unit/test_frontend_analyst_classify_modal.py`

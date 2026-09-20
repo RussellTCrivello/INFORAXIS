@@ -8,6 +8,7 @@ import { MODAL_ENABLED, translations } from '../core/config.js';
 import { escapeHtml, formatFileSize } from '../core/utils.js';
 import { updateFileNavigationButtons } from './file-navigation.js';
 import { clearModalSearch } from '../search/modal-search.js';
+import { bindAnalystClassify } from '../analyst-classify.js';
 
 /**
  * Show file details modal
@@ -91,6 +92,17 @@ export function showFileDetails(fileId, fileName, fileList = null, fileIndex = -
     // z-index is handled by CSS (10000)
     document.body.style.overflow = 'hidden';
     
+    // Analyst (manual) categorization for the file now on screen. The pop-up
+    // shows one file after another (opens, the list, its own previous/next),
+    // so the card is re-pointed at every display instead of being rebuilt -
+    // its listeners are bound once, its badges follow the file.
+    const analystSlot = document.getElementById('modalAnalystClassify');
+    const analystCard = analystSlot && analystSlot.querySelector('[data-analyst-classify]');
+    if (analystCard) {
+        bindAnalystClassify(analystCard, fileId).catch(err =>
+            console.error('Analyst classification card could not be bound:', err));
+    }
+
     // Load file details content
     loadFileDetailsContent(fileId, fileName);
     
