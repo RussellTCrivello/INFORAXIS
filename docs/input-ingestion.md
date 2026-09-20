@@ -160,6 +160,25 @@ errors and warnings, pause/resume/cancel, and the search index is updated as
 files complete. The ingestion page's telemetry column shows what is running and
 what finished recently, polled from `/api/jobs` and `/api/jobs/summary`.
 
+## One shortcut, one name, every language
+
+Consolidating the pages left the retired page's sidebar entry behind: the
+navigation showed **two** icons - "Input / Ingestion" and the old "Upload
+Files" - that opened this same page. The duplicate is gone; the surviving
+entry is the one the `upload_files` switch has always meant to control, and
+the switch's label in Settings now says "Input / Ingestion" with the page it
+opens, instead of naming a page that no longer exists. The `file_upload` twin
+switch is retired (its key is left in stored settings files, but it is not
+listed, because it gated nothing).
+
+Every string this interface shows is translated into each language the
+application offers - Arabic, Hebrew and Persian, plus the maintained Croatian
+catalog - and the page's own JavaScript strings are translated through the same
+catalog the server uses, so a JS-rendered update cannot come out in English
+while the rest of the page is not. `tests/integration/test_translation_coverage.py`
+derives the string lists from the templates and the page scripts, so a new
+string added without a translation fails there instead of shipping.
+
 ## What was removed
 
 * `templates/file/upload.html`, `static/js/pages/upload-page.js` — the second

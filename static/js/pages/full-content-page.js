@@ -231,8 +231,24 @@ function initializeReader() {
 let docMatches = [];        // whole-document matches [{start, end, line}]
 let currentDocMatch = -1;
 
-function t(key, fallback) {
-    return translations[key] || fallback;
+/**
+ * Translate a reader-page string.
+ *
+ * The interface catalog is keyed by the English source text (window.I18N.t,
+ * fed by the locale packs and the server catalog), which is also the key the
+ * DOM translation pass uses. Passing the English text here is what makes the
+ * reader's own status line - "Loading…", "Match 3 of 12", "Search cleared" -
+ * follow the interface language like every other string on the page instead of
+ * staying English. The per-page table is still consulted first for any key a
+ * template provides.
+ */
+function t(english, fallback) {
+    if (translations[english]) { return translations[english]; }
+    if (window.I18N && typeof window.I18N.t === 'function') {
+        const translated = window.I18N.t(english);
+        if (translated && translated !== english) { return translated; }
+    }
+    return fallback || english;
 }
 
 function readerPattern() {
@@ -340,7 +356,7 @@ function readerMatchLocationText(match) {
             }
         }
     }
-    return match && match.line ? t('onLine', ' · line {line}').replace('{line}', match.line) : '';
+    return match && match.line ? t(' · line {line}').replace('{line}', match.line) : '';
 }
 
 /** Load the chunk containing `offset` (deduplicated against the buffer). */
@@ -349,7 +365,7 @@ async function loadUntil(offset) {
     if (buffer.length && offset >= r.start && offset < r.end) return true;
     const limit = parseInt(elChunkSize ? elChunkSize.value : '50000', 10);
     try {
-        setStatus(t('loading', 'Loading…'));
+        setStatus(t('Loading…'));
         const chunkOffset = Math.max(0, Math.floor(offset / limit) * limit);
         const j = await fetchChunk(chunkOffset, limit);
         let data = j.content || '';
@@ -367,7 +383,7 @@ async function loadUntil(offset) {
         return true;
     } catch (e) {
         console.error('Failed to load region for match:', e);
-        setStatus(t('error', 'Error loading'));
+        setStatus(t('Error loading'));
         return false;
     }
 }
@@ -378,7 +394,7 @@ async function runSearch() {
     await fetchDocMatches();
     applyHighlights();
     if (docMatches.length === 0) {
-        setStatus(t('noMatches', 'No matches'));
+        setStatus(t('No matches'));
         return;
     }
     await gotoMatch(0);
@@ -386,7 +402,7 @@ async function runSearch() {
 
 async function gotoMatch(idx) {
     if (docMatches.length === 0) {
-        setStatus(t('noMatches', 'No matches'));
+        setStatus(t('No matches'));
         return;
     }
     currentDocMatch = ((idx % docMatches.length) + docMatches.length) % docMatches.length;
@@ -396,7 +412,7 @@ async function gotoMatch(idx) {
         if (!ok) return;
     }
     markCurrentInDom(true);
-    let status = t('matchOf', 'Match {current} of {total}')
+    let status = t('Match {current} of {total}')
         .replace('{current}', currentDocMatch + 1)
         .replace('{total}', docMatches.length);
     status += readerMatchLocationText(m);
@@ -431,7 +447,7 @@ function setupEventListeners() {
             currentDocMatch = -1;
             docMatches = [];
             if (elContent) clearHighlights(elContent);
-            setStatus(t('searchCleared', 'Search cleared'));
+            setStatus(t('Search cleared'));
         });
     }
     if (optCase) optCase.addEventListener('change', () => runSearch());

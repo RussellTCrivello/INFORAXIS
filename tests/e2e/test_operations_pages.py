@@ -118,3 +118,58 @@ def test_the_removed_interface_is_gone_and_the_task_api_is_not(app, admin_client
     active = admin_client.get("/upload/active-tasks")
     assert active.status_code == 200
     assert active.get_json()["success"] is True
+
+
+def test_the_sidebar_shows_one_shortcut_per_destination(app, admin_client):
+    """One page, one icon: the retired upload shortcut must not come back.
+
+    Consolidating the upload page into /operations/input left its sidebar
+    entry behind, so the navigation showed two icons - "Input / Ingestion" and
+    the old "Upload Files" - that went to the same page. The duplicate is
+    removed and the switch that used to gate it (upload_files) now gates the
+    surviving entry, so it still means "does the operator see a way in".
+
+    Counted from the rendered navigation: every data-endpoint the sidebar
+    declares must be unique, and ingestion must be declared exactly once.
+    """
+    import re
+
+    html = admin_client.get("/operations/input").get_data(as_text=True)
+    navigation = html.split('class="sidebar-nav"', 1)[1].split("</ul>", 1)[0]
+
+    endpoints = re.findall(r'data-endpoint="([^"]+)"', navigation)
+    duplicates = sorted({e for e in endpoints if endpoints.count(e) > 1})
+    assert not duplicates, f"the sidebar lists the same destination twice: {duplicates}"
+    assert endpoints.count("operations_input_page") == 1
+
+    # The retired entry's icon and label are gone from the navigation, while
+    # the retired page's URL still lands on the surviving page.
+    assert "bi-cloud-upload" not in navigation
+    assert ">Upload Files<" not in navigation
+    assert admin_client.get("/upload", follow_redirects=False).headers["Location"].endswith(
+        "/operations/input")
+
+
+def test_the_settings_offer_one_ingestion_switch(app, admin_client):
+    """``upload_files`` and the retired core twin ``file_upload`` both pointed at
+    the upload page, so Settings listed two switches for the same interface -
+    one of which gated nothing at all. The listing now matches the interface
+    registry, which holds exactly one ingestion interface.
+    """
+    from settings import get_interface_manager
+
+    manager = get_interface_manager()
+    listed = manager.get_interfaces_by_category()
+    flat = {name: entry for group in listed.values() for name, entry in group.items()}
+
+    assert "file_upload" not in flat, "the retired duplicate switch is listed again"
+    assert "upload_files" in flat
+    entry = flat["upload_files"]
+    assert entry["name"] == "Input / Ingestion"
+    assert entry["endpoint"] == "operations_input_page"
+
+    # The switch still controls the navigation entry it always meant to gate.
+    assert manager.is_interface_enabled_by_endpoint("operations_input_page") == \
+        manager.is_interface_enabled("upload_files")
+    assert manager.is_interface_enabled_by_endpoint("files.upload_page") == \
+        manager.is_interface_enabled("upload_files")

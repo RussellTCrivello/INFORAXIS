@@ -622,7 +622,7 @@ msgid "Attachments"
 msgstr "پیوست‌ها"
 
 msgid "Authentication required. Please log in."
-msgstr "احراز هویت لازم است. لطفاً وارد شوید."
+msgstr "احراز هویت الزامی است. لطفاً وارد شوید."
 
 msgid "Auto"
 msgstr "خودکار"
@@ -7225,7 +7225,7 @@ msgid "Toggle view mode"
 msgstr "تغییر حالت نمایش"
 
 msgid "Too many requests. Please wait a moment and try again."
-msgstr "درخواست‌های بیش از حد. لطفاً لحظه‌ای صبر کنید و دوباره تلاش کنید."
+msgstr "درخواست‌ها بیش از حد است. لطفاً کمی صبر کنید و دوباره تلاش کنید."
 
 msgid "Toolbar"
 msgstr "نوار ابزار"
@@ -8423,8 +8423,12 @@ msgstr "زمان انتساب"
 msgid "Assigned By"
 msgstr "انتساب توسط"
 
-msgid "Assigned manually by analysts. Fully separate from the smart classification shown beside it."
-msgstr "به‌صورت دستی توسط تحلیلگران انتساب یافته‌اند و کاملاً جدا از طبقه‌بندی هوشمند کنار آن هستند."
+msgid ""
+"Assigned manually by analysts. Fully separate from the smart classification "
+"shown beside it."
+msgstr ""
+"به‌صورت دستی توسط تحلیلگران انتساب یافته‌اند و کاملاً جدا از طبقه‌بندی "
+"هوشمند کنار آن هستند."
 
 msgid "Assignments"
 msgstr "انتساب‌ها"
@@ -8456,8 +8460,12 @@ msgstr "دسته‌بندی تحلیلگر را انتخاب کنید…"
 msgid "Delete category (files return to uncategorized)"
 msgstr "حذف دسته‌بندی (فایل‌ها به دسته‌بندی‌نشده بازمی‌گردند)"
 
-msgid "Every categorization action with analyst, timestamp, category, originating query and affected files."
-msgstr "هر عمل دسته‌بندی همراه با تحلیلگر، زمان، دسته‌بندی، پرس‌وجوی مبدأ و فایل‌های تأثیرپذیرفته."
+msgid ""
+"Every categorization action with analyst, timestamp, category, originating "
+"query and affected files."
+msgstr ""
+"هر عمل دسته‌بندی همراه با تحلیلگر، زمان، دسته‌بندی، پرس‌وجوی مبدأ و فایل‌های"
+" تأثیرپذیرفته."
 
 msgid "Export CSV"
 msgstr "برون‌بری CSV"
@@ -8477,8 +8485,12 @@ msgstr "پالایش بر اساس پرس‌وجویی که فایل‌ها را
 msgid "Manage Analyst Categories"
 msgstr "مدیریت دسته‌بندی‌های تحلیلگر"
 
-msgid "Manual, analyst-driven categorization layer — fully separate from system-generated smart categorization."
-msgstr "لایهٔ دسته‌بندی دستی به‌رهبری تحلیلگر — کاملاً جدا از دسته‌بندی هوشمندِ تولیدشده توسط سامانه."
+msgid ""
+"Manual, analyst-driven categorization layer — fully separate from system-"
+"generated smart categorization."
+msgstr ""
+"لایهٔ دسته‌بندی دستی به‌رهبری تحلیلگر — کاملاً جدا از دسته‌بندی هوشمندِ "
+"تولیدشده توسط سامانه."
 
 msgid "New analyst category name…"
 msgstr "نام دسته‌بندی جدید تحلیلگر…"
@@ -8498,8 +8510,12 @@ msgstr "پرس‌وجوی مبدأ"
 msgid "Originating Search Query"
 msgstr "پرس‌وجوی جستجوی مبدأ"
 
-msgid "Remove analyst categories from selected files (returns them to uncategorized scope)"
-msgstr "حذف دسته‌بندی‌های تحلیلگر از فایل‌های انتخاب‌شده (بازگشت به دامنهٔ دسته‌بندی‌نشده)"
+msgid ""
+"Remove analyst categories from selected files (returns them to uncategorized"
+" scope)"
+msgstr ""
+"حذف دسته‌بندی‌های تحلیلگر از فایل‌های انتخاب‌شده (بازگشت به دامنهٔ "
+"دسته‌بندی‌نشده)"
 
 msgid "Search Scope"
 msgstr "دامنهٔ جستجو"
@@ -8516,14 +8532,26 @@ msgstr "نمایش فایل‌ها در این دسته‌بندی"
 msgid "Smart Categories"
 msgstr "دسته‌بندی‌های هوشمند"
 
-msgid "These labels belong exclusively to the analyst (manual) taxonomy. They are never shared with smart categories."
-msgstr "این برچسب‌ها منحصراً به رده‌بندی تحلیلگر (دستی) تعلق دارند و هرگز با دسته‌بندی‌های هوشمند به اشتراک گذاشته نمی‌شوند."
+msgid ""
+"These labels belong exclusively to the analyst (manual) taxonomy. They are "
+"never shared with smart categories."
+msgstr ""
+"این برچسب‌ها منحصراً به رده‌بندی تحلیلگر (دستی) تعلق دارند و هرگز با "
+"دسته‌بندی‌های هوشمند به اشتراک گذاشته نمی‌شوند."
 
-msgid "This file has no analyst-assigned category yet. Assign one from the Advanced Search results."
-msgstr "این فایل هنوز دسته‌بندی تحلیلگر ندارد. یکی از نتایج جستجوی پیشرفته انتساب دهید."
+msgid ""
+"This file has no analyst-assigned category yet. Assign one from the Advanced"
+" Search results."
+msgstr ""
+"این فایل هنوز دسته‌بندی تحلیلگر ندارد. یکی از نتایج جستجوی پیشرفته انتساب "
+"دهید."
 
-msgid "This scope filters on analyst (manual) categorization only. It is completely independent of smart categorization."
-msgstr "این دامنه فقط بر دسته‌بندی تحلیلگر (دستی) اعمال می‌شود و کاملاً مستقل از دسته‌بندی هوشمند است."
+msgid ""
+"This scope filters on analyst (manual) categorization only. It is completely"
+" independent of smart categorization."
+msgstr ""
+"این دامنه فقط بر دسته‌بندی تحلیلگر (دستی) اعمال می‌شود و کاملاً مستقل از "
+"دسته‌بندی هوشمند است."
 
 msgid "Uncategorized Files Only"
 msgstr "فقط فایل‌های دسته‌بندی‌نشده"
@@ -8567,11 +8595,19 @@ msgstr "یک دسته‌بندی تحلیلگر انتخاب کنید یا مو�
 msgid "Smart"
 msgstr "هوشمند"
 
-msgid "Delete analyst category \"{name}\"? Its assignments are removed and affected files return to uncategorized status."
-msgstr "دسته‌بندی تحلیلگر «{name}» حذف شود؟ انتساب‌های آن حذف و فایل‌های تأثیرپذیرفته به وضعیت دسته‌بندی‌نشده بازمی‌گردند."
+msgid ""
+"Delete analyst category \"{name}\"? Its assignments are removed and affected"
+" files return to uncategorized status."
+msgstr ""
+"دسته‌بندی تحلیلگر «{name}» حذف شود؟ انتساب‌های آن حذف و فایل‌های "
+"تأثیرپذیرفته به وضعیت دسته‌بندی‌نشده بازمی‌گردند."
 
-msgid "Remove analyst category from this file? It returns to uncategorized status for search scope."
-msgstr "دسته‌بندی تحلیلگر از این فایل حذف شود؟ برای دامنهٔ جستجو به وضعیت دسته‌بندی‌نشده بازمی‌گردد."
+msgid ""
+"Remove analyst category from this file? It returns to uncategorized status "
+"for search scope."
+msgstr ""
+"دسته‌بندی تحلیلگر از این فایل حذف شود؟ برای دامنهٔ جستجو به وضعیت "
+"دسته‌بندی‌نشده بازمی‌گردد."
 
 msgid "Remove failed"
 msgstr "حذف ناموفق بود"
@@ -8621,23 +8657,43 @@ msgstr "انتخاب برای دسته‌بندی دستی"
 msgid "Select {file} for manual categorization"
 msgstr "انتخاب {file} برای دسته‌بندی دستی"
 
-msgid "Remove all analyst categories from {count} selected file(s)? They will return to \"uncategorized\" for analyst search scope. Smart categories are not affected."
-msgstr "همهٔ دسته‌بندی‌های تحلیلگر از {count} فایل انتخاب‌شده حذف شود؟ به «دسته‌بندی‌نشده» برای دامنهٔ جستجوی تحلیلگر بازمی‌گردند. دسته‌بندی‌های هوشمند تأثیری نمی‌پذیرند."
+msgid ""
+"Remove all analyst categories from {count} selected file(s)? They will "
+"return to \"uncategorized\" for analyst search scope. Smart categories are "
+"not affected."
+msgstr ""
+"همهٔ دسته‌بندی‌های تحلیلگر از {count} فایل انتخاب‌شده حذف شود؟ به "
+"«دسته‌بندی‌نشده» برای دامنهٔ جستجوی تحلیلگر بازمی‌گردند. دسته‌بندی‌های "
+"هوشمند تأثیری نمی‌پذیرند."
 
 msgid "Assigned \"{category}\" to {count} file(s)"
 msgstr "«{category}» به {count} فایل انتساب یافت"
 
-msgid "Find exactly what you need with powerful filters and intelligent algorithms"
-msgstr "دقیقاً آنچه را نیاز دارید با پالایه‌های قدرتمند و الگوریتم‌های هوشمند بیابید"
+msgid ""
+"Find exactly what you need with powerful filters and intelligent algorithms"
+msgstr ""
+"دقیقاً آنچه را نیاز دارید با پالایه‌های قدرتمند و الگوریتم‌های هوشمند بیابید"
 
-msgid "Search files, content, categories... (supports multiple words, quotes, AND/OR/NOT)"
-msgstr "جستجوی فایل‌ها، محتوا، دسته‌بندی‌ها... (پشتیبانی از چند کلمه، گیومه و AND/OR/NOT)"
+msgid ""
+"Search files, content, categories... (supports multiple words, quotes, "
+"AND/OR/NOT)"
+msgstr ""
+"جستجوی فایل‌ها، محتوا، دسته‌بندی‌ها... (پشتیبانی از چند کلمه، گیومه و "
+"AND/OR/NOT)"
 
-msgid "Searching without a source or side filter may be slow on large datasets. Continue?"
-msgstr "جستجو بدون پالایش منبع یا طرف ممکن است در مجموعه‌داده‌های بزرگ کند باشد. ادامه می‌دهید؟"
+msgid ""
+"Searching without a source or side filter may be slow on large datasets. "
+"Continue?"
+msgstr ""
+"جستجو بدون پالایش منبع یا طرف ممکن است در مجموعه‌داده‌های بزرگ کند باشد. "
+"ادامه می‌دهید؟"
 
-msgid "Selecting a source or side limits search to that scope, improving performance"
-msgstr "انتخاب منبع یا طرف، جستجو را به آن دامنه محدود می‌کند و کارایی را بهبود می‌دهد"
+msgid ""
+"Selecting a source or side limits search to that scope, improving "
+"performance"
+msgstr ""
+"انتخاب منبع یا طرف، جستجو را به آن دامنه محدود می‌کند و کارایی را بهبود "
+"می‌دهد"
 
 msgid "Sort"
 msgstr "مرتب‌سازی"
@@ -8654,8 +8710,14 @@ msgstr "هنوز دسته‌بندی تحلیلگری وجود ندارد."
 msgid "content view"
 msgstr "نمایش محتوا"
 
-msgid "Remove all analyst categories from this file? It will return to \"uncategorized\" for analyst search scope. Smart categories are not affected."
-msgstr "همه دسته‌بندی‌های تحلیلگری از این فایل حذف شوند؟ این فایل به وضعیت «دسته‌بندی‌نشده» در محدوده جستجوی تحلیلگر بازمی‌گردد. دسته‌بندی‌های هوشمند تحت تأثیر قرار نمی‌گیرند."
+msgid ""
+"Remove all analyst categories from this file? It will return to "
+"\"uncategorized\" for analyst search scope. Smart categories are not "
+"affected."
+msgstr ""
+"همه دسته‌بندی‌های تحلیلگری از این فایل حذف شوند؟ این فایل به وضعیت "
+"«دسته‌بندی‌نشده» در محدوده جستجوی تحلیلگر بازمی‌گردد. دسته‌بندی‌های هوشمند "
+"تحت تأثیر قرار نمی‌گیرند."
 
 msgid "Removed analyst categories from {count} file(s)"
 msgstr "دسته‌بندی‌های تحلیلگری از {count} فایل حذف شد"
@@ -8695,3 +8757,698 @@ msgstr "اسلاید بعدی"
 
 msgid "Sheets"
 msgstr "برگه‌ها"
+
+msgid " · {n} staged"
+msgstr " · {n} آماده‌شده"
+
+#: templates/Operations/input.html:278
+msgid "0 = use the system default (bounded by CPU and the database pool)."
+msgstr ""
+"0 = استفاده از پیش‌فرض سامانه (محدود به پردازنده و مخزن اتصال پایگاه داده)."
+
+#: templates/403.html:10
+msgid "403"
+msgstr "403"
+
+#: templates/Operations/input.html:328
+msgid ""
+"A dry run walks the input and reports what would happen — it writes nothing."
+msgstr ""
+"اجرای آزمایشی ورودی را می‌پیماید و می‌گوید چه رخ می‌دهد — بدون نوشتن چیزی."
+
+#: templates/Operations/input.html:131
+msgid "Add files, or drop them here"
+msgstr "فایل‌ها را بیفزایید یا اینجا رها کنید"
+
+#: templates/Operations/input.html:352
+msgid "All jobs"
+msgstr "همه کارها"
+
+msgid "Allowed roots — click to use one:"
+msgstr "مسیرهای ریشه مجاز — برای استفاده روی یکی کلیک کنید:"
+
+#: templates/Operations/input.html:115
+msgid "Any size: large files stream in chunks"
+msgstr "هر اندازه: فایل‌های بزرگ به‌صورت قطعه‌قطعه منتقل می‌شوند"
+
+msgid "archive safety"
+msgstr "ایمنی بایگانی"
+
+#: templates/Operations/input.html:313
+msgid ""
+"archives, compressed files, e-mail attachments, embedded objects — extracted"
+" with parent/child links"
+msgstr ""
+"بایگانی‌ها، فایل‌های فشرده، پیوست‌های ایمیل و اشیای جاسازی‌شده — با پیوندهای"
+" والد/فرزند استخراج می‌شوند"
+
+#: templates/Analysis/dashboard.html:128
+msgid ""
+"Bringing Files In: open \"Input / Ingestion\" in the sidebar to add files - "
+"one file, a whole folder, or a path on the server"
+msgstr ""
+"ورود فایل‌ها: «ورودی / دریافت» را در نوار کناری باز کنید تا فایل بیفزایید — "
+"یک فایل، یک پوشه کامل یا مسیری روی سرور"
+
+#: templates/Operations/input.html:170
+msgid "Check"
+msgstr "بررسی"
+
+#: templates/Operations/input.html:284
+msgid "Checkpoint handling"
+msgstr "مدیریت نقاط بازرسی"
+
+#: templates/Operations/input.html:282
+msgid "Checkpoints"
+msgstr "نقاط بازرسی"
+
+msgid "Choose a server path"
+msgstr "مسیری روی سرور انتخاب کنید"
+
+#: templates/Operations/input.html:138
+msgid "Choose files"
+msgstr "انتخاب فایل"
+
+#: templates/Operations/input.html:141
+msgid "Choose folder"
+msgstr "انتخاب پوشه"
+
+#: templates/Operations/input.html:58
+msgid "Choose what to ingest"
+msgstr "انتخاب کنید چه چیزی دریافت شود"
+
+#: templates/Operations/input.html:155
+msgid "Clear all"
+msgstr "پاک کردن همه"
+
+#: templates/Operations/input.html:313
+msgid "Containers"
+msgstr "ظرف‌ها"
+
+#: templates/Operations/input.html:312
+msgid "content hash + source + side"
+msgstr "هش محتوا + منبع + سمت"
+
+msgid "direct upload"
+msgstr "بارگذاری مستقیم"
+
+msgid "disabled — no roots configured"
+msgstr "غیرفعال — مسیر ریشه‌ای تنظیم نشده است"
+
+#: templates/Operations/input.html:134
+msgid "Drop files or folders here"
+msgstr "فایل‌ها یا پوشه‌ها را اینجا رها کنید"
+
+#: templates/Operations/input.html:92
+msgid "dry run"
+msgstr "اجرای آزمایشی"
+
+#: templates/Operations/input.html:311
+msgid "Duplicate detection"
+msgstr "تشخیص تکراری"
+
+msgid "duplicate detection"
+msgstr "تشخیص تکراری"
+
+#: templates/Operations/input.html:254
+msgid ""
+"Duplicates are decided by content hash + source + side: the same file can "
+"exist under a different source without being a duplicate."
+msgstr ""
+"تکراری بودن با هش محتوا + منبع + سمت تعیین می‌شود: یک فایل می‌تواند زیر "
+"منبعی دیگر باشد و تکراری شمرده نشود."
+
+msgid "engine capabilities"
+msgstr "توانمندی‌های موتور"
+
+msgid "engine default workers"
+msgstr "کارگرهای پیش‌فرض موتور"
+
+#: templates/Operations/input.html:76
+msgid "Engine defaults"
+msgstr "پیش‌فرض‌های موتور"
+
+msgid "Enter a path first."
+msgstr "نخست یک مسیر وارد کنید."
+
+#: templates/Operations/input.html:35
+msgid "Everything that brings files into the system — in one place."
+msgstr "هر آنچه فایل را به سامانه می‌آورد — در یک جا."
+
+#: templates/Operations/input.html:315
+msgid "extracted and indexed for search"
+msgstr "استخراج و برای جستجو نمایه می‌شود"
+
+#: templates/Operations/input.html:317
+msgid "Failure handling"
+msgstr "مدیریت شکست‌ها"
+
+#: templates/Analysis/file_classification.html:3
+msgid "File Analysis System"
+msgstr "سامانه تحلیل فایل"
+
+#: templates/components/file_nav.html:20
+msgid "File navigation"
+msgstr "پیمایش فایل‌ها"
+
+#: templates/Operations/input.html:165
+msgid "File or folder on the server"
+msgstr "فایل یا پوشه روی سرور"
+
+msgid "Files selected"
+msgstr "فایل‌های انتخاب‌شده"
+
+#: templates/Operations/input.html:233
+msgid "Filter sides"
+msgstr "صافی سمت‌ها"
+
+#: templates/Operations/input.html:233
+msgid "Filter sides…"
+msgstr "صافی سمت‌ها…"
+
+#: templates/Operations/input.html:202
+msgid "Filter sources"
+msgstr "صافی منابع"
+
+#: templates/Operations/input.html:202
+msgid "Filter sources…"
+msgstr "صافی منابع…"
+
+#: templates/Operations/input.html:123
+msgid "Folders reachable by the server"
+msgstr "پوشه‌هایی که سرور به آن‌ها دسترسی دارد"
+
+#: templates/Operations/input.html:168
+msgid "for example /data/inbox"
+msgstr "مثلاً /data/inbox"
+
+msgid "fresh start"
+msgstr "شروع تازه"
+
+#: templates/Operations/input.html:335
+msgid "Hide preflight"
+msgstr "پنهان کردن بررسی پیشین"
+
+#: templates/Operations/input.html:263
+msgid "How should it be processed?"
+msgstr "چگونه پردازش شود؟"
+
+#: templates/Operations/input.html:312
+msgid "Identity"
+msgstr "هویت"
+
+#: templates/Operations/input.html:39
+msgid "Import center"
+msgstr "مرکز درون‌ریزی"
+
+#: templates/Operations/input.html:177
+msgid "Include subdirectories"
+msgstr "شامل زیرپوشه‌ها"
+
+#: templates/Operations/input.html:51
+msgid "Ingestion steps"
+msgstr "گام‌های دریافت"
+
+#: templates/Operations/input.html:109
+msgid "Input mode"
+msgstr "حالت ورودی"
+
+msgid ""
+"Inside “{root}”. The dry run confirms what it contains — nothing has been "
+"read yet."
+msgstr ""
+"درون «{root}». اجرای آزمایشی تأیید می‌کند چه چیزی در آن است — هنوز چیزی "
+"خوانده نشده."
+
+msgid "Job {id} created — opening it…"
+msgstr "کار {id} ساخته شد — در حال باز شدن…"
+
+msgid "large files"
+msgstr "فایل‌های بزرگ"
+
+msgid "Largest"
+msgstr "بزرگ‌ترین"
+
+#: templates/Operations/input.html:84
+msgid "Launch"
+msgstr "آغاز"
+
+#: templates/Operations/input.html:264
+msgid "Leave the defaults unless this run needs something specific."
+msgstr "پیش‌فرض‌ها را رها کنید مگر آنکه این اجرا چیزی ویژه لازم داشته باشد."
+
+#: templates/Operations/input.html:348
+msgid "Live state"
+msgstr "وضعیت زنده"
+
+msgid "Mode"
+msgstr "حالت"
+
+#: templates/Operations/input.html:209
+msgid "Name *"
+msgstr "نام *"
+
+#: templates/Operations/input.html:197
+msgid "New"
+msgstr "جدید"
+
+#: templates/Operations/input.html:238
+msgid "New side"
+msgstr "سمت جدید"
+
+#: templates/Operations/input.html:207
+msgid "New source"
+msgstr "منبع جدید"
+
+#: templates/components/file_nav.html:56
+msgid "Next file: %(name)s (Alt+Right)"
+msgstr "فایل بعدی: %(name)s (Alt+Right)"
+
+msgid "no checkpoints"
+msgstr "نقطه بازرسی‌ای نیست"
+
+msgid ""
+"No ingestion roots are configured — server paths stay disabled until they "
+"are."
+msgstr ""
+"هیچ مسیر ریشه دریافت تنظیم نشده — مسیرهای سرور تا تنظیم شدن غیرفعال "
+"می‌مانند."
+
+msgid "No INGESTION_ROOTS configured — server paths are disabled."
+msgstr "INGESTION_ROOTS تنظیم نشده — مسیرهای سرور غیرفعال‌اند."
+
+msgid "no jobs yet"
+msgstr "هنوز کاری نیست"
+
+msgid "None exist yet — create one with “New”."
+msgstr "هنوز چیزی نیست — با «جدید» یک مورد بسازید."
+
+#: templates/components/file_nav.html:45
+msgid "Not in the current view"
+msgstr "در نمای کنونی نیست"
+
+msgid "Not ready yet"
+msgstr "هنوز آماده نیست"
+
+#: templates/Operations/input.html:200
+msgid "Not selected"
+msgstr "انتخاب نشده"
+
+msgid "not staged"
+msgstr "آماده نشده"
+
+msgid "Nothing in the queue has failed"
+msgstr "هیچ‌چیز در صف شکست نخورده"
+
+#: templates/Operations/input.html:356
+msgid "Nothing is running."
+msgstr "چیزی در حال اجرا نیست."
+
+msgid "Nothing matches that filter."
+msgstr "هیچ‌چیز با این صافی مطابقت ندارد."
+
+#: templates/Operations/input.html:380
+msgid "Nothing selected yet"
+msgstr "هنوز چیزی انتخاب نشده"
+
+msgid "Nothing was staged — add files again."
+msgstr "چیزی آماده نشد — فایل‌ها را دوباره بیفزایید."
+
+#: templates/Operations/input.html:316
+msgid "OCR"
+msgstr "OCR"
+
+msgid ""
+"Off writes no checkpoint: a crash means the next run starts from the "
+"beginning."
+msgstr ""
+"خاموش‌کردن نقطه بازرسی نمی‌نویسد: پس از فروریزش، اجرای بعدی از آغاز شروع "
+"می‌شود."
+
+#: templates/Operations/input.html:273
+msgid "One worker fewer"
+msgstr "یک کارگر کمتر"
+
+#: templates/Operations/input.html:276
+msgid "One worker more"
+msgstr "یک کارگر بیشتر"
+
+msgid "Open job"
+msgstr "باز کردن کار"
+
+#: templates/Operations/input.html:135
+msgid "or choose them from this computer"
+msgstr "یا آن‌ها را از این رایانه انتخاب کنید"
+
+#: templates/Operations/input.html:317
+msgid "per file: one unreadable object never stops the run"
+msgstr "برای هر فایل: یک شیء ناخوانا هرگز اجرا را متوقف نمی‌کند"
+
+#: templates/components/file_nav.html:41
+msgid "Position in the current view"
+msgstr "جایگاه در نمای کنونی"
+
+#: templates/components/file_nav.html:47
+msgid "Position unavailable"
+msgstr "جایگاه در دسترس نیست"
+
+msgid ""
+"Preflight finished. Nothing was read into the system and nothing was "
+"written."
+msgstr "بررسی پیشین پایان یافت. چیزی به سامانه خوانده نشد و چیزی نوشته نشد."
+
+#: templates/Operations/input.html:334
+msgid "Preflight result"
+msgstr "نتیجه بررسی پیشین"
+
+#: templates/Operations/input.html:85
+msgid "Preflight, then start"
+msgstr "نخست بررسی، سپس آغاز"
+
+#: templates/components/file_nav.html:26
+msgid "Previous file: %(name)s (Alt+Left)"
+msgstr "فایل پیشین: %(name)s (Alt+Left)"
+
+#: templates/Operations/input.html:46
+msgid "Reading engine capabilities…"
+msgstr "خواندن توانمندی‌های موتور…"
+
+#: templates/Operations/input.html:354
+msgid "Reading…"
+msgstr "در حال خواندن…"
+
+msgid "Ready to run"
+msgstr "آماده اجرا"
+
+msgid "Ready: {n} file(s) · {v}"
+msgstr "آماده: {n} فایل · {v}"
+
+msgid "Ready: {path}"
+msgstr "آماده: {path}"
+
+#: templates/Operations/input.html:361
+msgid "Recently finished"
+msgstr "به‌تازگی پایان یافته"
+
+#: templates/Operations/input.html:301
+msgid "Record throughput and phases for this job"
+msgstr "ثبت نرخ گذردهی و مراحل برای این کار"
+
+#: templates/Operations/input.html:145
+msgid "Release to add"
+msgstr "برای افزودن رها کنید"
+
+msgid "Remove {name}"
+msgstr "حذف {name}"
+
+#: templates/Operations/input.html:286
+msgid "Resume"
+msgstr "ادامه"
+
+#: templates/Operations/input.html:292
+msgid ""
+"Resume continues an interrupted run; finished files are not processed twice."
+msgstr ""
+"ادامه اجرای قطع‌شده را کامل می‌کند؛ فایل‌های تمام‌شده دوباره پردازش "
+"نمی‌شوند."
+
+#: templates/Operations/input.html:351
+msgid "Running now"
+msgstr "اکنون در حال اجرا"
+
+msgid "sampled from the walk"
+msgstr "نمونه‌برداری‌شده از پیمایش"
+
+msgid "server path"
+msgstr "مسیر سرور"
+
+msgid "Server path set"
+msgstr "مسیر سرور تعیین شد"
+
+msgid "server paths"
+msgstr "مسیرهای سرور"
+
+msgid ""
+"Server-path input is disabled: no INGESTION_ROOTS are configured. Set them "
+"in Settings (or the INGESTION_ROOTS environment variable) to enable it."
+msgstr ""
+"ورودی مسیر سرور غیرفعال است: INGESTION_ROOTS تنظیم نشده. آن را در تنظیمات "
+"(یا متغیر محیطی INGESTION_ROOTS) تنظیم کنید تا فعال شود."
+
+#: templates/Operations/input.html:311
+msgid "SHA-256 of the content, streamed"
+msgstr "SHA-256 محتوا، به‌صورت جریانی"
+
+msgid "Side chosen"
+msgstr "سمت انتخاب شد"
+
+msgid "Side could not be created: {message}"
+msgstr "سمت ساخته نشد: {message}"
+
+msgid "Side “{name}” created and selected."
+msgstr "سمت «{name}» ساخته و انتخاب شد."
+
+#: templates/Operations/input.html:67
+msgid "Source and side"
+msgstr "منبع و سمت"
+
+msgid "Source and side are mandatory"
+msgstr "منبع و سمت الزامی‌اند"
+
+#: templates/Operations/input.html:188
+msgid ""
+"Source and side travel with every file and become part of its identity."
+msgstr "منبع و سمت همراه هر فایل‌اند و بخشی از هویت آن می‌شوند."
+
+msgid "Source chosen"
+msgstr "منبع انتخاب شد"
+
+msgid "Source could not be created: {message}"
+msgstr "منبع ساخته نشد: {message}"
+
+msgid "Source “{name}” created and selected."
+msgstr "منبع «{name}» ساخته و انتخاب شد."
+
+msgid "Sources and sides could not be loaded: {message}"
+msgstr "بارگذاری منابع و سمت‌ها با شکست مواجه شد: {message}"
+
+msgid "Staging failed: {message}"
+msgstr "آماده‌سازی شکست خورد: {message}"
+
+msgid "Staging files — keep this page open."
+msgstr "در حال آماده‌سازی فایل‌ها — این صفحه را باز نگه دارید."
+
+msgid "Staging stopped. Files already staged stay staged and can be reused."
+msgstr ""
+"آماده‌سازی متوقف شد. فایل‌های آماده‌شده در همان حالت می‌مانند و قابل "
+"استفاده‌اند."
+
+msgid "staging…"
+msgstr "در حال آماده‌سازی…"
+
+#: templates/Operations/input.html:91
+msgid "start"
+msgstr "آغاز"
+
+#: templates/Operations/import_center.html:51
+msgid "Start batch import"
+msgstr "آغاز درون‌ریزی دسته‌ای"
+
+#: templates/Operations/input.html:288
+msgid "Start fresh"
+msgstr "شروع از نو"
+
+msgid ""
+"Start fresh ignores an earlier checkpoint and walks everything again — "
+"deduplication still prevents double storage."
+msgstr ""
+"شروع از نو نقطه بازرسی پیشین را نادیده می‌گیرد و همه‌چیز را از سر می‌پیماید "
+"— تشخیص تکراری همچنان از ذخیره دوباره جلوگیری می‌کند."
+
+#: templates/Operations/input.html:381
+msgid "Start with step 1 — add files or a server path."
+msgstr "با گام ۱ آغاز کنید — فایل یا مسیری روی سرور بیفزایید."
+
+msgid "Stop staging"
+msgstr "توقف آماده‌سازی"
+
+msgid "stored as {name}"
+msgstr "ذخیره‌شده با نام {name}"
+
+#: templates/Operations/input.html:315
+msgid "Text & metadata"
+msgstr "متن و فراداده"
+
+msgid ""
+"That path is outside every configured root ({roots}). Ingestion is fail-"
+"closed by design."
+msgstr ""
+"این مسیر بیرون از همه مسیرهای ریشه تنظیم‌شده است ({roots}). دریافت به‌صورت "
+"پیش‌فرض بسته طراحی شده است."
+
+msgid "The engine accepted the request but returned no job id."
+msgstr "موتور درخواست را پذیرفت اما شناسه کار را بازنگرداند."
+
+msgid ""
+"This browser cannot read a dropped folder. Use “Choose folder” — it works on"
+" Windows, macOS and Linux."
+msgstr ""
+"این مرورگر نمی‌تواند پوشه رهاشده را بخواند. از «انتخاب پوشه» استفاده کنید — "
+"روی Windows، macOS و Linux کار می‌کند."
+
+msgid "This browser cannot send a whole folder — drag it here instead."
+msgstr "این مرورگر نمی‌تواند پوشه کامل بفرستد — آن را اینجا رها کنید."
+
+msgid ""
+"This browser context has no hashing API (serve the app over https, or open "
+"it on localhost): chunks are verified by the server at the end instead."
+msgstr ""
+"این بافتار مرورگر API هش ندارد (برنامه را روی https سرو کنید یا روی "
+"localhost باز کنید): در پایان سرور قطعه‌ها را بررسی می‌کند."
+
+msgid ""
+"This browser did not report the folder structure, so these files are placed "
+"without their folders."
+msgstr ""
+"این مرورگر ساختار پوشه‌ها را گزارش نکرد، بنابراین این فایل‌ها بدون "
+"پوشه‌هایشان جای می‌گیرند."
+
+#: templates/Operations/input.html:114
+msgid "This computer"
+msgstr "این رایانه"
+
+msgid "this computer"
+msgstr "این رایانه"
+
+#: templates/components/analyst_classify.html:52
+msgid ""
+"This file has no analyst-assigned category yet. Assign one here, or from the"
+" Advanced Search results."
+msgstr ""
+"این فایل هنوز دسته‌بندی‌ای از سوی تحلیلگر ندارد. یکی را اینجا یا از نتایج "
+"جستجوی پیشرفته تعیین کنید."
+
+#: templates/components/file_nav.html:34
+msgid "This is the first file in the current view"
+msgstr "این نخستین فایل در نمای کنونی است"
+
+#: templates/components/file_nav.html:64
+msgid "This is the last file in the current view"
+msgstr "این آخرین فایل در نمای کنونی است"
+
+#: templates/Operations/input.html:368
+msgid "This run"
+msgstr "این اجرا"
+
+msgid "Transfers"
+msgstr "انتقال‌ها"
+
+msgid "up to {v}"
+msgstr "تا {v}"
+
+#: templates/Operations/input.html:105
+msgid ""
+"Upload from this computer — files or whole folders — or point the engine at "
+"a folder already on the server."
+msgstr ""
+"از این رایانه بارگذاری کنید — فایل یا پوشه کامل — یا موتور را به پوشه‌ای روی"
+" سرور نشان دهید."
+
+#: templates/Operations/input.html:316
+msgid ""
+"used when an engine is available; a missing engine never fails the file"
+msgstr ""
+"هنگام دسترس بودن موتور استفاده می‌شود؛ نبود موتور هرگز فایل را ناموفق "
+"نمی‌کند"
+
+msgid "Volume"
+msgstr "حجم"
+
+#: templates/Operations/input.html:104
+msgid "What should be ingested?"
+msgstr "چه چیزی دریافت شود؟"
+
+#: templates/Operations/input.html:309
+msgid "What this pipeline always does"
+msgstr "این خط لوله همیشه چه می‌کند"
+
+#: templates/Operations/input.html:187
+msgid "Where does it belong?"
+msgstr "به کجا تعلق دارد؟"
+
+msgid "Working…"
+msgstr "در حال کار…"
+
+#: templates/Operations/input.html:314
+msgid "zip/tar/gz and more, with path-traversal protection"
+msgstr "zip/tar/gz و بیشتر، با محافظت در برابر عبور از مسیر"
+
+msgid "{name} could not be staged: {message}"
+msgstr "{name} آماده نشد: {message}"
+
+msgid "{n} already in the list — not added twice."
+msgstr "{n} از پیش در فهرست است — دوباره افزوده نشد."
+
+msgid "{n} configured root(s)"
+msgstr "{n} مسیر ریشه تنظیم‌شده"
+
+msgid "{n} file(s) could not be staged — see the list."
+msgstr "آماده‌سازی {n} فایل ممکن نشد — فهرست را ببینید."
+
+msgid "{n} file(s) failed to stage"
+msgstr "آماده‌سازی {n} فایل شکست خورد"
+
+msgid "{n} file(s) queued — {v} in total."
+msgstr "{n} فایل در صف — در کل {v}."
+
+msgid "{n} file(s) selected"
+msgstr "{n} فایل انتخاب‌شده"
+
+msgid "{n} file(s) · {v}"
+msgstr "{n} فایل · {v}"
+
+msgid "{n} MB chunks, up to {v}"
+msgstr "قطعه‌های {n} مگابایتی، تا {v}"
+
+msgid "{n} worker(s)"
+msgstr "{n} کارگر"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "hashing"
+msgstr "درهم‌سازی"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "ready"
+msgstr "آماده"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "chunked"
+msgstr "قطعه‌ای"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "staged"
+msgstr "آماده‌شده"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "failed"
+msgstr "ناموفق"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "file"
+msgstr "فایل"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "resume"
+msgstr "ادامه"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "monitored"
+msgstr "زیر نظر"
+
+#: static/js/pages/ingestion-studio-page.js
+msgid "unavailable"
+msgstr "در دسترس نیست"
+
+#: static/js/modules/charts/chart-customizer.js
+msgid "Applied"
+msgstr "اعمال شد"
