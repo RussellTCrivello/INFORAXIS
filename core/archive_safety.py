@@ -197,7 +197,9 @@ class ExtractionResult:
     #: Members the container declares, whether or not they could be read.
     members_total: Optional[int] = None
     #: Reason -> count for members that were declared but not materialised.
-    members_unreadable: Optional[dict] = None
+    #: Never None: "nothing was unreadable" is an empty map, not a missing one,
+    #: so callers can compare it without a guard.
+    members_unreadable: dict = field(default_factory=dict)
     #: True when members needed a decoder that this machine does not have, so
     #: part of the archive could not be read. Callers report this; they must
     #: not hide it, and it must never be confused with corruption.
@@ -530,11 +532,13 @@ _DECODER_PROBE_TIMEOUT = 15.0
 #: appear in a log without a phrase being defined for it.
 MEMBER_NEEDS_DECODER = "decoder_required"
 MEMBER_UNREADABLE = "unreadable"
+MEMBER_REJECTED = "rejected_by_policy"
 
 #: Human phrases for the reason vocabulary, used in status text.
 MEMBER_REASON_TEXT = {
     MEMBER_NEEDS_DECODER: "need an external decoder",
     MEMBER_UNREADABLE: "could not be read (damaged or unsupported)",
+    MEMBER_REJECTED: "rejected by the extraction safety policy",
 }
 
 
@@ -640,7 +644,8 @@ def configure_rar_decoder() -> Optional[str]:
     rarfile caches the first successful probe for the process lifetime, so a
     discovered path is assigned to the module global it uses and the probe is
     re-run with ``force=True``. A failure to configure is not fatal here: the
-    caller falls back to :func:`extract_rar_stored_members`.
+    caller still gets a usable result: members stored uncompressed are read
+    without it (see :func:`extract_rar`).
     """
     try:
         import rarfile
@@ -687,52 +692,52 @@ def extract_rar(
 ) -> ExtractionResult:
     """Safely extract a RAR archive, member by member.
 
-    ``rarfile`` is a front end for an external decoder, but it also parses RAR4
-    and RAR5 headers itself and reads members stored uncompressed ("direct
-    read"). This function builds on that so a missing decoder degrades to a
-    *partial, reported* read instead of a failed file:
+    ``rarfile`` reads RAR4 and RAR5 headers itself, without any external tool,
+    and reads members stored uncompressed the same way; only *compressed*
+    streams need unrar/unar/7-Zip/bsdtar. That is what makes a partial read
+    possible, and this function is where it happens:
 
-    * members that can be read without a decoder are extracted;
-    * members that need one are counted in ``members_unreadable`` with the
-      reason :data:`MEMBER_NEEDS_DECODER`, named in ``skipped``, and summarised
-      in ``decoder_hint``;
-    * a member that fails for any other reason is recorded as
-      :data:`MEMBER_UNREADABLE` and removed if it was partially written, so
-      damaged evidence is never published;
-    * one unreadable member never aborts the rest of the archive - the old
-      behaviour discarded an entire 66 MB archive because its first compressed
-      member could not be decoded.
+    * every member that can be read is extracted, CRC-verified by rarfile;
+    * a member whose stream needs a decoder that is not installed is recorded
+      under :data:`MEMBER_NEEDS_DECODER` and the loop continues to the next
+      member - the old implementation let the first such member abort the whole
+      archive, which is why a 66 MB container became a single failed row with
+      no children and no reason;
+    * a member that fails for any other reason is recorded under
+      :data:`MEMBER_UNREADABLE`, and any bytes already written for it are
+      removed rather than published as though they were the member;
+    * the result states the counts, so the caller can report "n of m members
+      could not be read" instead of a generic failure.
 
-    Encrypted archives raise :class:`ArchiveEncrypted` (the fix is a password)
-    and a container that cannot be parsed at all raises
-    :class:`ArchiveSafetyError` naming the parser's complaint. Neither is
-    reported as the other, and neither is reported as "no decoder".
+    Encrypted archives raise :class:`ArchiveEncrypted` - a password is a
+    different fix from a missing binary, and calling either one "extraction
+    failed" told the operator nothing. A container that is not RAR at all, or is
+    too damaged to parse, raises :class:`ArchiveSafetyError`.
     """
     configure_rar_decoder()
 
     try:
         import rarfile
-    except ImportError as exc:  # pragma: no cover - optional dependency
+    except ImportError as exc:  # pragma: no cover - declared dependency
         raise ArchiveDecoderUnavailable(
-            "the rarfile package is not installed (pip install rarfile)"
+            "RAR support requires the rarfile package, which is not installed"
+            " (pip install rarfile)"
         ) from exc
 
     deadline = time.monotonic() + policy.timeout_seconds if policy.timeout_seconds else None
     root = _prepare_output_dir(output_dir)
     root = root.resolve()
     result = ExtractionResult(output_dir=root)
-    result.members_unreadable = {}
 
-    rf = _open_rar(rarfile, archive_path)
-    with rf:
+    with _open_rar(rarfile, archive_path) as rf:
         infos = list(rf.infolist())
         result.members_total = len(infos)
 
         if not infos:
-            # Nothing is declared: either the headers are encrypted (checked
-            # above via needs_password), the archive is genuinely empty, or the
-            # parser stopped at a damaged header. rarfile records the last case
-            # in strerror(), which is the only honest thing to report.
+            # No member was declared. Either the headers are encrypted (rarfile
+            # says so), the archive is genuinely empty, or the parser stopped at
+            # a damaged header - rarfile records that in strerror(), which is
+            # the only honest thing to report about it.
             if rf.needs_password():
                 raise ArchiveEncrypted(
                     "Archive headers are encrypted and no password was supplied"
@@ -740,8 +745,11 @@ def extract_rar(
             parser_error = _safe_strerror(rf)
             result.notes.append(
                 "container declares no members"
-                + (f" (parser reported: {parser_error})" if parser_error else
-                   " (empty archive, or a header the parser could not follow)")
+                + (
+                    f" (parser reported: {parser_error})"
+                    if parser_error
+                    else " (empty archive, or a header the parser could not follow)"
+                )
             )
             return result
 
@@ -750,11 +758,9 @@ def extract_rar(
                 f"Archive contains {len(infos)} members (limit {policy.max_files})"
             )
         if _is_solid(rf):
-            result.notes.append(
-                "solid archive: members share a compression stream"
-            )
+            result.notes.append("solid archive: members share a compression stream")
         volumes = _volume_count(rf)
-        if volumes and volumes > 1:
+        if volumes > 1:
             result.notes.append(
                 f"multi-volume set of {volumes} parts: members continued in "
                 "other volumes are not present in this file"
@@ -768,18 +774,18 @@ def extract_rar(
         result.decoder_missing = True
         result.decoder_hint = RAR_DECODER_HINT
         result.notes.append(
-            f"{result.members_unreadable[MEMBER_NEEDS_DECODER]} member(s) need a "
-            f"RAR decoder; {rar_decoder_status()}"
+            f"{result.members_unreadable[MEMBER_NEEDS_DECODER]} member(s) need an "
+            f"external RAR decoder ({rar_decoder_status()})"
         )
     return result
 
 
 def _open_rar(rarfile, archive_path):
-    """Open a RAR file, translating rarfile's failures into ours.
+    """Open a RAR container, translating rarfile's failures into ours.
 
-    The order of the handlers matters: ``PasswordRequired``, ``RarCannotExec``
-    and ``RarWrongPassword`` are all more specific than the parse errors, and
-    each names a different fix.
+    Handler order matters: ``PasswordRequired``, ``RarCannotExec`` and
+    ``RarWrongPassword`` are all subclasses of the parse errors (or of
+    ``RarExecError``) and each one names a different fix.
     """
     try:
         return rarfile.RarFile(str(archive_path))
@@ -791,7 +797,7 @@ def _open_rar(rarfile, archive_path):
         raise ArchiveEncrypted(f"RAR password rejected: {exc}") from exc
     except rarfile.RarCannotExec as exc:
         # No decoder, or a decoder that cannot be executed. Not a property of
-        # this archive: the container may be perfectly intact.
+        # this container: it may be perfectly intact.
         raise ArchiveDecoderUnavailable(str(exc)) from exc
     except rarfile.NoCrypto as exc:
         raise ArchiveDecoderUnavailable(
@@ -800,11 +806,13 @@ def _open_rar(rarfile, archive_path):
     except rarfile.NotRarFile as exc:
         raise ArchiveSafetyError(f"not a RAR container: {exc}") from exc
     except rarfile.BadRarFile as exc:
-        raise ArchiveSafetyError(f"RAR container is damaged or unsupported: {exc}") from exc
+        raise ArchiveSafetyError(
+            f"RAR container is damaged or unsupported: {exc}"
+        ) from exc
 
 
 def _safe_strerror(rf) -> Optional[str]:
-    """rarfile's recorded parse error, when it has one."""
+    """rarfile's recorded header-parse error, when it has one."""
     try:
         error = rf.strerror()
     except Exception:  # pragma: no cover - defensive
@@ -815,21 +823,21 @@ def _safe_strerror(rf) -> Optional[str]:
 def _is_solid(rf) -> bool:
     try:
         return bool(rf.is_solid())
-    except Exception:  # pragma: no cover - defensive
+    except Exception:  # pragma: no cover - needs a decoder to answer
         return False
 
 
 def _volume_count(rf) -> int:
     try:
         return len(rf.volumelist())
-    except Exception:
+    except Exception:  # pragma: no cover - needs a decoder to answer
         return 0
 
 
 def _has_comment(rf) -> bool:
     try:
         return bool(rf.comment)
-    except Exception:
+    except Exception:  # pragma: no cover - needs a decoder to answer
         return False
 
 
@@ -837,9 +845,9 @@ def _record_unreadable(result: ExtractionResult, name: str, reason: str,
                        dest: Optional[Path] = None) -> None:
     """Count a member that was declared but not materialised.
 
-    A partially written destination is deleted: publishing half a member is
-    the same forensic error as publishing a corrupted one, and the pipeline
-    would ingest it as though it were complete.
+    A partially written destination is deleted first: publishing half a member
+    is the same forensic error as publishing a wrong one - downstream it is
+    indistinguishable from a complete file.
     """
     if dest is not None:
         try:
@@ -860,16 +868,28 @@ def _extract_rar_members(rarfile, rf, infos, root: Path, policy: ExtractionPolic
         if info.is_dir():
             continue
         if info.needs_password():
-            # An encrypted member cannot be read without the password; the
-            # caller reports the archive as password-protected.
+            # An encrypted member cannot be read without its password; there is
+            # nothing to be gained by continuing, and the operator's fix is to
+            # supply it.
             raise ArchiveEncrypted(
                 f"Member {info.filename!r} is encrypted and no password was supplied"
             )
 
-        safe_name = validate_member_path(info.filename)
-        dest = safe_destination(root, safe_name)
-        _destination_checks(policy, dest, info.file_size)
-        _policy_for_file(policy, safe_name)
+        try:
+            safe_name = validate_member_path(info.filename)
+            dest = safe_destination(root, safe_name)
+            _destination_checks(policy, dest, info.file_size)
+            _policy_for_file(policy, safe_name)
+        except ArchiveSafetyError as exc:
+            # A rejected member is a policy decision about that member, not a
+            # reason to discard the rest of the container: the unsafe member is
+            # refused before anything is written, and the readable members are
+            # still evidence. It is recorded under its own reason so the report
+            # does not call a refused member "damaged".
+            logger.warning("Refusing RAR member %r: %s", info.filename, exc)
+            _record_unreadable(result, info.filename, MEMBER_REJECTED)
+            continue
+
         total_bytes += max(0, int(info.file_size or 0))
         if total_bytes > policy.max_bytes:
             raise ArchiveSafetyError("RAR extraction exceeded the byte limit")
@@ -891,7 +911,9 @@ def _extract_rar_members(rarfile, rf, infos, root: Path, policy: ExtractionPolic
                     copied += len(chunk)
                     out.write(chunk)
         except rarfile.RarCannotExec as exc:
-            logger.debug("Member %s needs a RAR decoder: %s", info.filename, exc)
+            # This member's stream needs a decoder that is not installed. The
+            # container is intact and the other members are still readable.
+            logger.debug("RAR member needs a decoder (%s): %s", exc, info.filename)
             _record_unreadable(result, info.filename, MEMBER_NEEDS_DECODER, dest)
             continue
         except (rarfile.Error, OSError, EOFError, ValueError) as exc:

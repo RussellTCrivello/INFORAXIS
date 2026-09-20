@@ -3,8 +3,7 @@
 The RAR defects this suite guards against could only be reproduced on a machine
 that had *neither* a decoder *nor* an archiver, which is exactly the machine
 that reported them - so the fixtures are constructed from the published format
-description in ``core/rar_inspector``'s module docstring and the RARLAB
-technote, not from a tool.
+description in the RARLAB technote and rarfile's own parser, not from a tool.
 
 A hand-built container is not a substitute for a real WinRAR-produced file, and
 these helpers make no claim to cover every option RAR can emit. They cover the

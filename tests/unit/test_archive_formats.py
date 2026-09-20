@@ -11,7 +11,13 @@ unrar/7z binaries on PATH):
     .tar.gz    extracts     .tar.bz2  extracts
     .tar.xz    extracts     .gz       extracts
     .bz2       extracts     .7z       extracts (py7zr is a declared dependency)
-    .rar       NOT VERIFIED - see test_rar_cannot_be_verified_here
+    .rar       members stored uncompressed are read and CRC-verified with no
+               external tool; compressed members are named as needing a
+               decoder. Decoding a compressed member is NOT verified here -
+               no unrar/7z/bsdtar exists on this machine - which is exactly
+               the condition the reader now reports instead of failing the
+               file. See test_rar_without_a_decoder_states_what_it_could_not_read
+               and tests/unit/test_rar_without_decoder.py.
 
 Safety behaviour, all asserted below: traversal in zip and tar is rejected and
 nothing escapes the extraction root, an absolute member path is rejected, a

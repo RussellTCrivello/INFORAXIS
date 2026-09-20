@@ -171,6 +171,31 @@ class ArchiveFileReader(BaseReader):
                 error_msg = "Extraction failed"
                 return self.handle_read_error(Exception(error_msg), file_path, "read_file")
 
+        except archive_safety.ArchiveDecoderUnavailable as e:
+            # The container was identified, but nothing on this machine can
+            # decode it - the RAR front end reads stored members only, and
+            # without a decoder a compressed archive yields nothing. Report the
+            # environment gap and what to install; "Extraction failed" told the
+            # operator to re-read a file that is perfectly intact.
+            logger.warning(
+                "Archive needs an external decoder that is not installed: %s (%s)",
+                file_path, e,
+            )
+            result = self.handle_read_error(e, file_path, "read_file")
+            # A missing dependency, not a broken artifact: installing the
+            # decoder and re-running reads this file. Classified like the
+            # missing-OCR-engine case so the run's accounting says "worth
+            # another attempt" instead of "failed".
+            result["retryable"] = True
+            result["decoder_missing"] = True
+            result["extraction_info"] = {
+                "extracted": False,
+                "warning": "archive_needs_external_decoder",
+                "decoder_missing": True,
+                "decoder_hint": archive_safety.RAR_DECODER_HINT,
+                "detail": f"{e}. {archive_safety.RAR_DECODER_HINT}",
+            }
+            return result
         except ArchiveEncrypted as e:
             # A locked archive is actionable (supply a password) and must not be
             # recorded as though the file were corrupt.

@@ -46,6 +46,7 @@ import rarfile  # noqa: E402
 
 from core.archive_safety import (  # noqa: E402
     MEMBER_NEEDS_DECODER,
+    MEMBER_REJECTED,
     MEMBER_UNREADABLE,
     ArchiveDecoderUnavailable,
     ArchiveEncrypted,
@@ -249,26 +250,43 @@ class TestDecoderlessExtraction:
         assert result.members_total == 0
         assert any("declares no members" in note for note in result.notes)
 
-    def test_traversal_member_is_rejected(self, tmp_path, monkeypatch):
+    def test_traversal_member_is_refused_and_recorded(self, tmp_path, monkeypatch):
+        """An escaping member is refused, and the refusal is on the record.
+
+        Refusing the *member* rather than the whole container is deliberate:
+        nothing unsafe is written (the name is validated before any path is
+        computed), and discarding every readable member of a container because
+        one entry was hostile is the all-or-nothing behaviour this suite
+        exists to prevent.
+        """
         _no_decoder(monkeypatch)
+        out = tmp_path / "out"
         archive = _write(tmp_path, "evil.rar", rar5_archive([
             {"name": "../escaped.txt", "data": b"nope"},
+            {"name": "safe.txt", "data": b"readable member"},
         ]))
-        with pytest.raises(ArchiveSafetyError):
-            extract_rar(archive, tmp_path / "out")
+        result = extract_rar(archive, out)
         assert not (tmp_path / "escaped.txt").exists()
+        assert result.members_unreadable == {MEMBER_REJECTED: 1}
+        assert result.files_extracted == 1
+        assert (out / "safe.txt").read_bytes() == b"readable member"
+        assert any("escaped.txt" in name for name in result.skipped)
 
     def test_policy_limits_still_apply(self, tmp_path, monkeypatch):
+        """Limits are enforced per member; nothing over a limit is written."""
         _no_decoder(monkeypatch)
         archive = _write(tmp_path, "a.rar", rar5_archive([
             {"name": "big.txt", "data": b"y" * 4096},
         ]))
-        with pytest.raises(ArchiveSafetyError):
-            extract_rar(archive, tmp_path / "out",
-                        ExtractionPolicy(max_file_size=1024))
-        with pytest.raises(ArchiveSafetyError):
-            extract_rar(archive, tmp_path / "out",
-                        ExtractionPolicy(allowed_extensions={".pdf"}))
+        out = tmp_path / "out"
+        result = extract_rar(archive, out, ExtractionPolicy(max_file_size=1024))
+        assert result.files_extracted == 0
+        assert result.members_unreadable == {MEMBER_REJECTED: 1}
+        assert not (out / "big.txt").exists()
+        result = extract_rar(archive, out,
+                             ExtractionPolicy(allowed_extensions={".pdf"}))
+        assert result.files_extracted == 0
+        assert result.members_unreadable == {MEMBER_REJECTED: 1}
 
     def test_member_count_limit_applies(self, tmp_path, monkeypatch):
         _no_decoder(monkeypatch)
@@ -384,3 +402,39 @@ class TestArchiveReaderWithoutDecoder:
         assert payload["extraction_info"]["warning"] == (
             "archive_opened_but_no_members_extracted"
         )
+
+
+# ----------------------------------------------------------------------
+# The environment gap the reader cannot work around
+# ----------------------------------------------------------------------
+class TestMissingDecoderDependency:
+    def test_missing_decoder_is_reported_actionably_not_as_a_failure(
+        self, tmp_path, monkeypatch
+    ):
+        """rarfile absent: the file is intact, the *host* lacks a component.
+
+        This is the shape the old code collapsed into "Extraction failed" -
+        the operator was told to re-read a 66 MB archive that never had
+        anything wrong with it.
+        """
+        from core import archive_safety
+
+        def _unavailable(*args, **kwargs):
+            raise ArchiveDecoderUnavailable(
+                "RAR support requires the rarfile package, which is not "
+                "installed (pip install rarfile)"
+            )
+
+        monkeypatch.setattr(archive_safety, "extract_rar", _unavailable)
+        archive = _write(tmp_path, "a.rar", b"Rar!\x1a\x07\x01\x00...")
+        payload = _read(ArchiveFileReader(), archive)
+
+        assert "Extraction failed" not in str(payload.get("error", ""))
+        assert "pip install rarfile" in payload["error"]
+        # A missing dependency will work after installing it: the run's
+        # accounting must say "worth another attempt", not "failed".
+        assert payload["retryable"] is True
+        assert payload["decoder_missing"] is True
+        info = payload["extraction_info"]
+        assert info["warning"] == "archive_needs_external_decoder"
+        assert "7-Zip" in info["detail"] and "WinRAR" in info["detail"]
