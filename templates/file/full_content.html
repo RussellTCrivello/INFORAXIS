@@ -6,6 +6,7 @@
 <link href="{{ url_for('static', filename='css/full-content.css') }}" rel="stylesheet">
 <link href="{{ url_for('static', filename='css/formatted-content.css') }}" rel="stylesheet">
 <link href="{{ url_for('static', filename='css/analyst-classify.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='css/file-nav.css') }}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -13,6 +14,7 @@
     <!-- Page Tips -->
     {% from 'components/page_tips.html' import page_tips %}
     {% from 'components/analyst_classify.html' import analyst_classify %}
+    {% from 'components/file_nav.html' import file_nav %}
         {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
 
     <div class="tips-section">
@@ -61,9 +63,15 @@
                 <span><i class="bi bi-calendar me-1"></i>{{ file[7]|format_date('%Y-%m-%d') }}</span>
                 <span><i class="bi bi-hash me-1"></i>{{ _('ID') }} {{ file[0] }}</span>
             </div>
+            <!-- Same Previous/Next control as the detail page, same browsed
+                 set: switching between a file's two views must not reset
+                 where the operator is. -->
+            <div class="file-nav-strip">
+                {{ file_nav(nav, 'plain') }}
+            </div>
         </div>
         <div class="btn-toolbar gap-2" role="toolbar" aria-label="{{ _('Toolbar') }}">
-            <a href="/file/{{ file[0] }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>{{ _('Details') }}</a>
+            <a href="{{ nav.details_url }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>{{ _('Details') }}</a>
             <button class="btn btn-outline-secondary" id="btnCopy"><i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}</button>
             <button class="btn btn-outline-secondary" id="btnDownload"><i class="bi bi-download me-1"></i>{{ _('Download') }}</button>
             <button class="btn btn-outline-secondary" id="btnPrint"><i class="bi bi-printer me-1"></i>{{ _('Print') }}</button>

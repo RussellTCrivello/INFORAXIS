@@ -35,6 +35,10 @@ from Api.utils import (
     load_text_content, select_classification, compute_percentage, get_content_stats,
     get_word_frequencies, get_file, get_query
 )
+from Api.services.file_navigation import (
+    LIBRARY_JOINS, ORDER_BY, build_library_filters, context_params,
+    navigation_for,
+)
 
 
 def get_keyword_frequencies(file_id, limit=50):
@@ -617,7 +621,9 @@ def files_list():
     # Calculate offset
     offset = (page - 1) * limit
     
-    # Get filters
+    # Filters are validated and rendered by Api.services.file_navigation so
+    # that this list, its statistics counters and the Previous/Next controls
+    # on the detail pages can never disagree about what the current view is.
     search = request.args.get('search', '')
     source_filter = request.args.get('source', '')
     side_filter = request.args.get('side', '')
@@ -627,127 +633,20 @@ def files_list():
     date_to = request.args.get('date_to', '')
     size_min = request.args.get('size_min', '')
     size_max = request.args.get('size_max', '')
+
+    filters = build_library_filters(request.args)
+    where_clause = filters.where_clause()
+    where_params = list(filters.params)
+
+    # The same view, as query parameters the detail pages hand back to us.
+    # Every file link in this list carries them, which is what makes
+    # Previous/Next on a detail page walk *this* list and not the whole
+    # library.
+    nav_params = context_params(filters)
     
-    # Build filters for cursor pagination
-    filters = {}
-    joins = [
-        'LEFT JOIN hashs h ON p.hash_id = h.id',
-        'LEFT JOIN sources s ON h.source_id = s.id',
-        'LEFT JOIN sides si ON h.side_id = si.id'
-    ]
-    
-    if search:
-        # Use ILIKE for case-insensitive search
-        # Sanitize search to prevent SQL injection
-        search = search.strip()
-        if search:
-            filters['p.file_name'] = {'op': 'ILIKE', 'value': f'%{search}%'}
-        # Note: OR conditions need special handling - we'll use a combined filter
-        # For now, search on file_name only (can be extended)
-    
-    if source_filter:
-        try:
-            filters['h.source_id'] = int(source_filter)
-        except (ValueError, TypeError):
-            logger.warning(f"Invalid source_filter: {source_filter}")
-    
-    if side_filter:
-        try:
-            filters['h.side_id'] = int(side_filter)
-        except (ValueError, TypeError):
-            logger.warning(f"Invalid side_filter: {side_filter}")
-    
-    if status_filter:
-        # Validate status filter - handle both 'Read'/'Unread' and 'Analyzed'/'Pending'
-        if status_filter in ['Read', 'Unread', 'Analyzed', 'Pending']:
-            # Map 'Analyzed' to 'Read' and 'Pending' to 'Unread' for database
-            status_mapping = {'Analyzed': 'Read', 'Pending': 'Unread'}
-            db_status = status_mapping.get(status_filter, status_filter)
-            filters['p.file_status'] = db_status
-        else:
-            logger.warning(f"Invalid status_filter: {status_filter}")
-    
-    if file_type_filter:
-        # Sanitize file type filter
-        file_type_filter = file_type_filter.strip()
-        if file_type_filter:
-            filters['p.file_type'] = file_type_filter
-    
-    # Date range filters - use BETWEEN when both are provided, otherwise use >= or <=
-    if date_from or date_to:
-        try:
-            from datetime import datetime
-            if date_from and date_to:
-                # Both dates provided - use BETWEEN
-                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-                # Ensure date_from <= date_to
-                if date_from_obj <= date_to_obj:
-                    filters['p.file_date'] = {'op': 'BETWEEN', 'value': [date_from_obj, date_to_obj]}
-                else:
-                    # Invalid range - use date_from only
-                    logger.warning(f"Invalid date range: date_from ({date_from}) > date_to ({date_to})")
-                    filters['p.file_date'] = {'op': '>=', 'value': date_from_obj}
-            elif date_from:
-                # Only date_from provided
-                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-                filters['p.file_date'] = {'op': '>=', 'value': date_from_obj}
-            elif date_to:
-                # Only date_to provided
-                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-                filters['p.file_date'] = {'op': '<=', 'value': date_to_obj}
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Invalid date filter: date_from={date_from}, date_to={date_to}, error: {e}")
-    
-    # Size range filters - use BETWEEN when both are provided, otherwise use >= or <=
-    if size_min or size_max:
-        try:
-            if size_min and size_max:
-                # Both sizes provided - use BETWEEN
-                size_min_bytes = int(float(size_min) * 1024 * 1024)  # Convert MB to bytes
-                size_max_bytes = int(float(size_max) * 1024 * 1024)  # Convert MB to bytes
-                # Ensure size_min <= size_max
-                if size_min_bytes <= size_max_bytes:
-                    filters['p.file_size'] = {'op': 'BETWEEN', 'value': [size_min_bytes, size_max_bytes]}
-                else:
-                    # Invalid range - use size_min only
-                    logger.warning(f"Invalid size range: size_min ({size_min}MB) > size_max ({size_max}MB)")
-                    filters['p.file_size'] = {'op': '>=', 'value': size_min_bytes}
-            elif size_min:
-                # Only size_min provided
-                size_min_bytes = int(float(size_min) * 1024 * 1024)  # Convert MB to bytes
-                filters['p.file_size'] = {'op': '>=', 'value': size_min_bytes}
-            elif size_max:
-                # Only size_max provided
-                size_max_bytes = int(float(size_max) * 1024 * 1024)  # Convert MB to bytes
-                filters['p.file_size'] = {'op': '<=', 'value': size_max_bytes}
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Invalid size filter: size_min={size_min}, size_max={size_max}, error: {e}")
-    
-    # Build WHERE clause from filters
-    where_parts = []
-    where_params = []
-    
-    if filters:
-        for col, val in filters.items():
-            if isinstance(val, dict):
-                op = val.get('op', '=')
-                filter_value = val.get('value')
-                if op in ('=', '!=', '>', '<', '>=', '<=', 'LIKE', 'ILIKE'):
-                    where_parts.append(f"{col} {op} %s")
-                    where_params.append(filter_value)
-                elif op == 'BETWEEN':
-                    where_parts.append(f"{col} BETWEEN %s AND %s")
-                    where_params.extend([filter_value[0], filter_value[1]])
-            else:
-                where_parts.append(f"{col} = %s")
-                where_params.append(val)
-    
-    where_clause = ''
-    if where_parts:
-        where_clause = 'WHERE ' + ' AND '.join(where_parts)
-    
-    # Build base query
+    # Build base query. The ORDER BY is the one Previous/Next walks, so the
+    # sequence the detail pages step through is exactly this list's order.
+    joins = list(LIBRARY_JOINS)
     base_query = f"""
         SELECT 
             p.id, p.file_name, p.file_path, p.file_size, p.file_type,
@@ -757,7 +656,7 @@ def files_list():
         FROM paths p
         {' '.join(joins) if joins else ''}
         {where_clause}
-        ORDER BY p.date_creation DESC
+        ORDER BY {ORDER_BY}
     """
     
     try:
@@ -804,74 +703,12 @@ def files_list():
         total_pending = 0
         
         try:
-            # Build WHERE clause with same filters as main query (but exclude status filter)
-            stats_where = []
-            stats_params = []
-            
-            if search:
-                stats_where.append("p.file_name ILIKE %s")
-                stats_params.append(f'%{search}%')
-            
-            if source_filter:
-                try:
-                    stats_where.append("h.source_id = %s")
-                    stats_params.append(int(source_filter))
-                except (ValueError, TypeError):
-                    pass
-            
-            if side_filter:
-                try:
-                    stats_where.append("h.side_id = %s")
-                    stats_params.append(int(side_filter))
-                except (ValueError, TypeError):
-                    pass
-            
-            if file_type_filter:
-                stats_where.append("p.file_type = %s")
-                stats_params.append(file_type_filter)
-            
-            # Apply date filters
-            if date_from or date_to:
-                try:
-                    from datetime import datetime
-                    if date_from and date_to:
-                        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-                        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-                        if date_from_obj <= date_to_obj:
-                            stats_where.append("p.file_date BETWEEN %s AND %s")
-                            stats_params.extend([date_from_obj, date_to_obj])
-                    elif date_from:
-                        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
-                        stats_where.append("p.file_date >= %s")
-                        stats_params.append(date_from_obj)
-                    elif date_to:
-                        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
-                        stats_where.append("p.file_date <= %s")
-                        stats_params.append(date_to_obj)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Apply size filters
-            if size_min or size_max:
-                try:
-                    if size_min and size_max:
-                        size_min_bytes = int(float(size_min) * 1024 * 1024)
-                        size_max_bytes = int(float(size_max) * 1024 * 1024)
-                        if size_min_bytes <= size_max_bytes:
-                            stats_where.append("p.file_size BETWEEN %s AND %s")
-                            stats_params.extend([size_min_bytes, size_max_bytes])
-                    elif size_min:
-                        size_min_bytes = int(float(size_min) * 1024 * 1024)
-                        stats_where.append("p.file_size >= %s")
-                        stats_params.append(size_min_bytes)
-                    elif size_max:
-                        size_max_bytes = int(float(size_max) * 1024 * 1024)
-                        stats_where.append("p.file_size <= %s")
-                        stats_params.append(size_max_bytes)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Build queries with joins
+            # Same filters as the main query, minus status: each counter
+            # appends its own status condition below.
+            stats_filters = build_library_filters(request.args, include_status=False)
+            stats_where = list(stats_filters.where_parts)
+            stats_params = list(stats_filters.params)
+
             stats_query_base = """
                 SELECT COUNT(*) 
                 FROM paths p
@@ -880,23 +717,16 @@ def files_list():
                 LEFT JOIN sides si ON h.side_id = si.id
             """
             
-            # Get analyzed count (Read status)
-            analyzed_where = stats_where + ["p.file_status = 'Read'"]
-            analyzed_query = stats_query_base
-            if analyzed_where:
-                analyzed_query += " WHERE " + " AND ".join(analyzed_where)
-            
-            analyzed_result = execute_query(analyzed_query, tuple(stats_params) if stats_params else None, fetch="one")
-            total_analyzed = analyzed_result[0] if analyzed_result and isinstance(analyzed_result, tuple) else (analyzed_result if isinstance(analyzed_result, int) else 0)
-            
-            # Get pending count (Unread status)
-            pending_where = stats_where + ["p.file_status = 'Unread'"]
-            pending_query = stats_query_base
-            if pending_where:
-                pending_query += " WHERE " + " AND ".join(pending_where)
-            
-            pending_result = execute_query(pending_query, tuple(stats_params) if stats_params else None, fetch="one")
-            total_pending = pending_result[0] if pending_result and isinstance(pending_result, tuple) else (pending_result if isinstance(pending_result, int) else 0)
+            def _status_count(status):
+                query = stats_query_base + " WHERE " + " AND ".join(
+                    stats_where + ["p.file_status = %s"])
+                result = execute_query(query, tuple(stats_params + [status]), fetch="one")
+                if isinstance(result, tuple):
+                    return result[0]
+                return result if isinstance(result, int) else 0
+
+            total_analyzed = _status_count('Read')
+            total_pending = _status_count('Unread')
             
         except Exception as e:
             logger.error(f"Error calculating statistics: {e}", exc_info=True)
@@ -944,7 +774,8 @@ def files_list():
                              size_min=size_min or '',
                              size_max=size_max or '',
                              limit=limit,
-                             start_position=start_position)
+                             start_position=start_position,
+                             nav_params=nav_params)
     
     except Exception as e:
         logger.error(f"Error in files_list: {e}", exc_info=True)
@@ -978,6 +809,7 @@ def files_list():
                              status_filter=status_filter or '',
                              file_type_filter=request.args.get('file_type', '') or '',
                              cursor_pagination=True,
+                             nav_params={},
                              error=str(e))
 
 
@@ -1169,7 +1001,13 @@ def file_detail(file_id):
     logger.info(f"Rendering template for file_id={file_id}: content_length={len(content)}, total_chars={total_chars}, total_pages={total_pages}, content_type={type(content)}")
     logger.info(f"Content preview (first 100 chars): {repr(content[:100]) if content else 'EMPTY'}")
     
+    # Previous/Next for the file being displayed, resolved inside the
+    # browsing context the operator arrived from (the filtered library list,
+    # or the whole library when the page is opened directly).
+    nav = navigation_for(file_id, request.args, endpoint='files.file_detail')
+
     return render_template('file/file_detail.html',
+                         nav=nav,
                          file=file_info,
                          content=content,  # Already ensured to be string
                          content_stats=content_stats,
@@ -1598,7 +1436,12 @@ def file_full_content(file_id):
         except Exception as analyst_err:  # never break the reader page
             logger.warning(f"Could not load analyst categories for file {file_id}: {analyst_err}")
 
+        # Same Previous/Next control, same browsed set - the reader is a
+        # second view of the file, not a different browsing session.
+        nav = navigation_for(file_id, request.args, endpoint='files.file_full_content')
+
         return render_template('file/full_content.html', 
+                             nav=nav,
                              file=file_info, 
                              content=content,
                              content_stats=content_stats,
