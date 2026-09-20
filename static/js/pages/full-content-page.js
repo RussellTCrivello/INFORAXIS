@@ -414,66 +414,6 @@ async function restoreSearchState(query, caseSensitive, wholeWord) {
 }
 
 // Setup event listeners
-    setupEventListeners();
-}
-
-// --- Search ---
-let matchPositions = [];
-let currentMatch = -1;
-
-function buildRegex(q) {
-    if (!q) return null;
-    const w = optWhole && optWhole.checked ? `\\b${q}\\b` : q;
-    return new RegExp(w, optCase && optCase.checked ? 'g' : 'gi');
-}
-
-function computeMatches() {
-    if (!elContent || !elQ) return;
-    const text = elContent.textContent || '';
-    const rx = buildRegex(elQ.value.trim());
-    matchPositions = [];
-    if (!rx) return;
-    let m;
-    while ((m = rx.exec(text)) !== null) {
-        matchPositions.push({ start: m.index, end: m.index + m[0].length });
-        if (m[0].length === 0) rx.lastIndex++;
-    }
-}
-
-function applyHighlights() {
-    if (!elContent || !elQ) return;
-    const q = elQ.value.trim();
-    if (!q) {
-        return;
-    }
-    computeMatches();
-    if (matchPositions.length === 0) {
-        return;
-    }
-    const text = elContent.textContent;
-    let out = '';
-    let last = 0;
-    matchPositions.forEach((p, i) => {
-        out += escapeHtml(text.slice(last, p.start));
-        out += `<span class="hl${i === currentMatch ? ' current' : ''}">` + escapeHtml(text.slice(p.start, p.end)) + `</span>`;
-        last = p.end;
-    });
-    out += escapeHtml(text.slice(last));
-    elContent.innerHTML = out;
-}
-
-function gotoMatch(idx) {
-    if (matchPositions.length === 0) return;
-    currentMatch = (idx + matchPositions.length) % matchPositions.length;
-    applyHighlights();
-    const spans = elContent ? elContent.querySelectorAll('.hl') : [];
-    if (spans[currentMatch]) {
-        spans[currentMatch].scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    setStatus(`Match ${currentMatch + 1}/${matchPositions.length}`);
-}
-
-// Setup event listeners
 function setupEventListeners() {
     if (elQ) {
         elQ.addEventListener('keydown', e => {
