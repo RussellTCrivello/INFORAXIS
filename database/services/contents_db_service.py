@@ -12,6 +12,25 @@ from database.exceptions import QueryError, TransactionAbortedError
 from core.word_limits import MAX_WORD_BYTES, word_exceeds_db_limit
 
 logger = logging.getLogger(__name__)
+
+#: Processing states that are recorded findings rather than problems: the
+#: artifact was read (or deliberately not read) and the row says why. A document
+#: in one of these states with no word entries is an expected outcome.
+_RECORDED_OUTCOMES = ("processed", "skipped", "unsupported")
+
+
+def _empty_content_is_recorded(processing_status: Optional[str],
+                               status_detail: Optional[str]) -> bool:
+    """Whether "stored with no words" is an outcome the row already explains.
+
+    An icon below the reader's size floor and a vector-only SVG are stored with
+    no word entries by design, and both carry their reason in ``status_detail``.
+    Logging those as warnings put dozens of alarming lines in a normal run and
+    buried the documents that really had nothing to index and nothing recorded
+    explaining it.
+    """
+    return (processing_status in _RECORDED_OUTCOMES) and bool(status_detail)
+
 from database.database.repository.sources_repo import SourcesRepository
 from database.database.repository.contents_repo import ContentsRepository
 from database.database.repository.words_repo import WordsRepository
@@ -1337,10 +1356,19 @@ class ContentDBService:
                 if content_ids:
                     self.link_words_to_path(path_id, content_ids)
                 else:
-                    logger.warning(
-                        "No indexable content for %s (path_id=%s): the file "
-                        "is stored but has no word entries.", file_name, path_id,
-                    )
+                    reason = status_detail or processing_status
+                    if _empty_content_is_recorded(processing_status, status_detail):
+                        logger.info(
+                            "No indexable content for %s (path_id=%s): %s",
+                            file_name, path_id, reason,
+                        )
+                    else:
+                        logger.warning(
+                            "No indexable content for %s (path_id=%s): stored "
+                            "with no word entries and no recorded reason "
+                            "(status=%s).",
+                            file_name, path_id, reason,
+                        )
 
                 # 7. Keyword index (derived) ---------------------------------
                 if content_ids:

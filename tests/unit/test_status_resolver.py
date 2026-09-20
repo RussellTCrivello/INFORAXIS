@@ -267,3 +267,31 @@ def test_archive_and_html_diagnostics_are_persisted():
     })
     assert html["diagnostics"]["visible_text_chars"] == 539
     assert html["diagnostics"]["script_chars"] == 41200
+
+
+class TestNoContentLogSeverity:
+    """A stored-but-empty document is only a warning when nothing says why.
+
+    The production log carried one ``No indexable content ...`` warning per
+    small icon (dozens per run). Those rows are deliberate skips and carry
+    their reason in ``status_detail``; logging them at WARNING buried the
+    documents that genuinely had nothing to index and no explanation.
+    """
+
+    def test_recorded_outcomes_are_not_warnings(self):
+        from database.services.contents_db_service import _empty_content_is_recorded
+
+        assert _empty_content_is_recorded("skipped", "too_small") is True
+        assert _empty_content_is_recorded("processed", "no extractable text") is True
+        assert _empty_content_is_recorded(
+            "processed", "no extractable text: svg_has_no_text_elements"
+        ) is True
+        assert _empty_content_is_recorded("unsupported", "Unsupported file type") is True
+
+    def test_unexplained_and_failed_rows_stay_warnings(self):
+        from database.services.contents_db_service import _empty_content_is_recorded
+
+        assert _empty_content_is_recorded("failed", "boom") is False
+        assert _empty_content_is_recorded("partially_processed", "1 of 2 pages") is False
+        assert _empty_content_is_recorded("processed", None) is False
+        assert _empty_content_is_recorded("discovered", None) is False
