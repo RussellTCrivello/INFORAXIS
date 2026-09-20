@@ -721,6 +721,8 @@ def classify_result(result: Any) -> str:
 
     error = reason = None
     extracted = None
+    explicit_skip = False
+    content_present = False
     for layer in layers:
         if error is None and layer.get("error"):
             error = str(layer["error"])
@@ -728,6 +730,15 @@ def classify_result(result: Any) -> str:
             reason = str(layer["reason"])
         if extracted is None and "extracted" in layer:
             extracted = bool(layer["extracted"])
+        if layer.get("skipped") or layer.get("skip_reason"):
+            explicit_skip = True
+        if not content_present and (
+            layer.get("text")
+            or layer.get("pages")
+            or layer.get("extracted") is True
+            or layer.get("stored") is True
+        ):
+            content_present = True
 
     if error or reason:
         text = f"{error or ''} {reason or ''}".lower()
@@ -754,5 +765,26 @@ def classify_result(result: Any) -> str:
             # The artifact is fine; something else holds it. Reporting this as
             # "failed" hid a retryable condition behind a terminal one.
             return OUTCOME_LOCKED
+        if error:
+            return OUTCOME_FAILED
+
+        # Past this point the payload carries no error - only a diagnostic
+        # ``reason``, which readers attach to successful outcomes as well (an
+        # SVG states that it extracted its text, or that the document holds
+        # none; an image states why it found no text). Treating any reason as a
+        # failure made a *successfully read* SVG count as a failed file in the
+        # run's accounting while the database recorded it as processed.
+        if any(layer.get("empty_result") is True for layer in layers):
+            # The reader finished and its finding is "this object contains no
+            # extractable text" - a completed read of an empty document, not a
+            # failed one.
+            return OUTCOME_COMPLETED
+        if explicit_skip:
+            # Deliberately not attempted - an image below the OCR size floor,
+            # for instance. The row is stored as 'skipped'; the summary must
+            # not report a failure for the same object.
+            return OUTCOME_SKIPPED
+        if content_present:
+            return OUTCOME_COMPLETED
         return OUTCOME_FAILED
     return OUTCOME_COMPLETED

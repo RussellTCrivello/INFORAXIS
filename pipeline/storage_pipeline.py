@@ -1859,8 +1859,12 @@ class StoragePipeline:
                     # Store only OCR text (no metadata)
                     ordered_content.append((0, 'direct_text', 0, text_to_store, ocr_coords_data))
                 else:
-                    # Log why no text was stored
-                    reason = extraction_info.get('reason', 'unknown')
+                    # Log why no text was stored. Never print a placeholder:
+                    # if a reader states no reason, say that the reader stated
+                    # none - "unknown" reads like a property of the file.
+                    reason = extraction_info.get('reason') or (
+                        'no reason reported by the reader'
+                    )
                     error = extraction_info.get('error', '')
                     skipped = extraction_info.get('skipped', False)
                     

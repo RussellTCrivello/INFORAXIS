@@ -613,6 +613,13 @@ class ImageFileReader(BaseReader):
                 "extraction_info": {
                     "extracted": has_text,
                     "stored": has_text,
+                    # The document was read and the conclusion is that it holds
+                    # no extractable text (vector-only artwork, outlined paths).
+                    # Saying so explicitly keeps the run's accounting from
+                    # reporting a successfully read file as a broken one: the
+                    # database records this outcome as processed, with the
+                    # reason in status_detail.
+                    "empty_result": not has_text,
                     "reason": reason,
                     "text_length": len(extracted_text.strip()),
                     "word_count": len(extracted_text.split()),

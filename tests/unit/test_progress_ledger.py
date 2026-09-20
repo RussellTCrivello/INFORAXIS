@@ -435,3 +435,79 @@ class TestNotification:
         ledger.add_discovered(1, initial=True)
         ledger.begin(path="/f").settle(OUTCOME_COMPLETED)
         assert ledger.snapshot()["percent"] == 100
+
+
+class TestClassificationOfDiagnosticReasons:
+    """A ``reason`` explains an outcome; it is not itself the outcome.
+
+    Readers attach one to successful results too - ``read_svg_file`` states that
+    it extracted the document's text, or that the document holds none - and
+    every SVG therefore counted as a *failed* file in the run summary while the
+    database recorded the same object as processed. The two accounts of one run
+    must not disagree.
+    """
+
+    def test_successful_svg_with_a_reason_is_completed(self):
+        result = {
+            "Content": {
+                "text": "Chart label",
+                "extraction_info": {
+                    "extracted": True,
+                    "stored": True,
+                    "reason": "svg_text_extracted",
+                    "text_elements": 1,
+                },
+            }
+        }
+        assert classify_result(result) == OUTCOME_COMPLETED
+
+    def test_empty_document_that_was_read_is_completed(self):
+        """Vector-only artwork: read, and the finding is that it holds no text."""
+        result = {
+            "Content": {
+                "text": "",
+                "extraction_info": {
+                    "extracted": False,
+                    "stored": False,
+                    "empty_result": True,
+                    "reason": "svg_has_no_text_elements; 12 vector path element(s)",
+                },
+            }
+        }
+        assert classify_result(result) == OUTCOME_COMPLETED
+
+    def test_deliberate_skip_is_skipped_not_failed(self):
+        """The image below the OCR size floor is stored as 'skipped'."""
+        result = {
+            "text": "",
+            "extraction_info": {
+                "skipped": True,
+                "skip_reason": "too_small",
+                "reason": "too_small",
+                "extracted": False,
+                "stored": False,
+            },
+        }
+        assert classify_result(result) == OUTCOME_SKIPPED
+        assert classify_result({"Content": result}) == OUTCOME_SKIPPED
+
+    def test_reason_without_content_and_without_a_skip_still_fails(self):
+        """An unexplained empty result must stay visible as a problem."""
+        result = {
+            "text": "",
+            "extraction_info": {
+                "reason": "no_text_extracted",
+                "extracted": False,
+                "stored": False,
+            },
+        }
+        assert classify_result(result) == OUTCOME_FAILED
+
+    def test_error_outranks_content_and_reason(self):
+        result = {
+            "Content": {
+                "text": "partial",
+                "extraction_info": {"error": "boom", "reason": "svg_text_extracted"},
+            }
+        }
+        assert classify_result(result) == OUTCOME_FAILED
