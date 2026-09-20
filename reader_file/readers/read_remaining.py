@@ -746,8 +746,50 @@ class RemainingFileReader(BaseReader):
         except Exception as e:
             return {"error": str(e), "filepath": filepath}
     
+    #: Cap on inline <script>/<style> text carried out of one HTML document.
+    #: A minified bundle is megabytes of code; the cap keeps one page from
+    #: dominating the word index, and any truncation is recorded.
+    HTML_INLINE_CODE_LIMIT = 1_000_000
+
+    @classmethod
+    def _html_inline_code(cls, soup):
+        """Return ``(script_text, style_text, truncated)`` for a parsed page.
+
+        ``BeautifulSoup.get_text()`` silently omits ``<script>``, ``<style>``
+        and comments. A standalone ``.js`` or ``.css`` file *is* an indexed
+        text format in this pipeline, so ignoring the same bytes inside HTML
+        treated identical content differently depending on its container - and
+        for a script-heavy page (a 77 KB single-page app whose visible text is
+        a few hundred characters) it dropped almost the whole document without
+        recording that it had. The code text is collected here, bounded, and
+        reported; the storage layer indexes it under its own label.
+        """
+        parts = {}
+        truncated = []
+        for label, selector in (("script", "script"), ("style", "style")):
+            chunks = [
+                tag.get_text() or "" for tag in soup.find_all(selector)
+            ]
+            text = "\n".join(chunk for chunk in chunks if chunk.strip())
+            if len(text) > cls.HTML_INLINE_CODE_LIMIT:
+                text = text[:cls.HTML_INLINE_CODE_LIMIT]
+                truncated.append(label)
+            parts[label] = text
+        return parts["script"], parts["style"], truncated
+
     def read_html_file(self, filepath, encoding='utf-8'):
-        """Read HTML file"""
+        """Read an HTML file: visible text, structure, and inline code.
+
+        ``text_content`` stays the document's visible text (its semantics are
+        unchanged downstream). ``script_text``/``style_text`` carry the inline
+        code that BeautifulSoup's ``get_text()`` drops, and it is also placed in
+        ``forensic_text`` - the channel FORENSIC-01 built for evidence outside
+        the visible body - so the same bytes are indexed inside HTML as they
+        are when they arrive as a standalone ``.js``/``.css`` file.
+        ``extraction_info`` records the size of everything that was, or was
+        not, turned into content, so "N characters from a much larger file" is
+        answerable from the result instead of being a mystery in the log.
+        """
         try:
             from bs4 import BeautifulSoup
         except ImportError:
@@ -764,11 +806,30 @@ class RemainingFileReader(BaseReader):
                 content = file.read()
             
             soup = BeautifulSoup(content, 'html.parser')
+            script_text, style_text, truncated = self._html_inline_code(soup)
+
+            # Comments are excluded from the content (they are not document
+            # text) but their size is recorded so nothing disappears silently.
+            comment_chars = sum(
+                len(str(comment)) for comment in soup.find_all(
+                    string=lambda node: type(node).__name__ == 'Comment'
+                )
+            )
             
+            # FORENSIC-01: inline code is content of this artifact. Labelled so
+            # a word found in a script is attributable when read back.
+            forensic_parts = []
+            if script_text.strip():
+                forensic_parts.append("--- Inline script ---\n" + script_text)
+            if style_text.strip():
+                forensic_parts.append("--- Inline style ---\n" + style_text)
+
             result = {
                 "filepath": filepath,
                 "title": soup.title.string if soup.title else None,
                 "text_content": soup.get_text(),
+                "script_text": script_text,
+                "style_text": style_text,
                 "links": [{"href": a.get('href'), "text": a.get_text()} for a in soup.find_all('a', href=True)],
                 "images": [{"src": img.get('src'), "alt": img.get('alt')} for img in soup.find_all('img')],
                 "headings": {
@@ -777,13 +838,33 @@ class RemainingFileReader(BaseReader):
                     "h3": [h.get_text() for h in soup.find_all('h3')]
                 },
                 "link_count": len(soup.find_all('a', href=True)),
-                "image_count": len(soup.find_all('img'))
+                "image_count": len(soup.find_all('img')),
+                "forensic_text": "\n\n".join(forensic_parts),
+                "extraction_info": {
+                    "visible_text_chars": len(soup.get_text()),
+                    "script_chars": len(script_text),
+                    "style_chars": len(style_text),
+                    "comment_chars_excluded": comment_chars,
+                    "inline_code_truncated": truncated,
+                }
             }
-            
+
+            # The breakdown is logged because a page whose visible text is a
+            # few hundred characters out of a large file looks like a failed
+            # extraction until the parts are named (it was reported that way).
+            logger.info(
+                "[EXTRACTION] HTML: %d visible chars, %d script chars, %d style "
+                "chars, %d comment chars excluded (%s)",
+                result["extraction_info"]["visible_text_chars"],
+                result["extraction_info"]["script_chars"],
+                result["extraction_info"]["style_chars"],
+                result["extraction_info"]["comment_chars_excluded"],
+                os.path.basename(str(filepath)),
+            )
             return result
         except Exception as e:
             return {"error": str(e), "filepath": filepath}
-    
+
     def read_binary_file(self, filepath, max_bytes=1024):
         """Read binary file"""
         try:

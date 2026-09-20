@@ -6,6 +6,7 @@ Optimized for speed and reliability
 """
 
 import os
+import re
 import logging
 from typing import Dict, Any, Optional, Set
 import threading
@@ -440,8 +441,103 @@ class ImageFileReader(BaseReader):
                 }
             }
     
+    #: Elements whose text is part of an SVG document. SVG 1.1/2 defines
+    #: <text>/<tspan>/<textPath> and <title>/<desc>; editors add flow trees
+    #: (Inkscape), which are collected too.
+    SVG_TEXT_TAGS = frozenset({
+        "text", "tspan", "textPath", "tref", "title", "desc",
+        "flowRoot", "flowDiv", "flowPara", "flowSpan",
+    })
+
+    #: Cap on text taken from a single SVG (a chart exported with tens of
+    #: thousands of labels must not become an unbounded content blob).
+    SVG_TEXT_LIMIT = 2_000_000
+
+    @classmethod
+    def _collect_svg_text(cls, xml_bytes):
+        """Return ``(lines, element_count, parse_failure)`` for an SVG document.
+
+        Text is read with an XML parser instead of a regex, so nested
+        ``<tspan>`` runs, entity references and non-ASCII characters come out as
+        text and never as markup. Each top-level text element becomes one line,
+        which is how the document lays text out; whitespace runs inside an
+        element are layout, so they collapse to single spaces. ``parse_failure``
+        is None when the document parsed.
+        """
+        import xml.etree.ElementTree as ET
+
+        def local_name(tag):
+            if isinstance(tag, str) and tag.startswith("{"):
+                return tag.split("}", 1)[1]
+            return tag if isinstance(tag, str) else ""
+
+        def gather(node, pieces):
+            """Depth-first text of ``node`` in document order."""
+            if node.text:
+                pieces.append(node.text)
+            for child in list(node):
+                gather(child, pieces)
+                if child.tail:
+                    pieces.append(child.tail)
+
+        try:
+            root = ET.fromstring(xml_bytes)
+        except ET.ParseError as exc:
+            return [], 0, f"svg_malformed_xml: {exc}"
+
+        lines = []
+        element_count = 0
+
+        def visit(node):
+            """Collect one line per top-level text element, in document order."""
+            nonlocal element_count
+            if local_name(node.tag) in cls.SVG_TEXT_TAGS:
+                # A text element starts a line; text nested inside it (a
+                # <tspan>, or an <a> wrapper) belongs to that same line, so
+                # this branch does not descend further.
+                pieces = []
+                gather(node, pieces)
+                joined = re.sub(r"\s+", " ", "".join(pieces)).strip()
+                if joined:
+                    lines.append(joined)
+                    element_count += 1
+                return
+            for child in list(node):
+                visit(child)
+
+        visit(root)
+        return lines, element_count, None
+
+    @staticmethod
+    def _svg_text_by_stripping(content):
+        """Recover text from markup that the XML pass could not use.
+
+        Used for a malformed document, and for a well-formed one whose text is
+        not inside text elements. Comments, script and style blocks are removed
+        first so their code is not mistaken for document text.
+        """
+        body = re.sub(r"<!--.*?-->", " ", content, flags=re.DOTALL)
+        body = re.sub(
+            r"<(script|style)\b.*?</\1>", " ", body,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        body = re.sub(r"<[^>]*>", " ", body)
+        return re.sub(r"\s+", " ", body).strip()
+
     def read_svg_file(self, filepath):
-        """Read SVG file (text content only)"""
+        """Read an SVG (XML vector) file.
+
+        SVG stores its text in the markup, so no OCR is involved: the text is
+        parsed out of the document. The previous implementation regexed only
+        ``<text>`` (missing ``<title>``/``<desc>``, Inkscape flow text and
+        multi-line runs) and returned no ``reason`` field at all, which the
+        storage layer logged as "Reason: unknown" for a real ingest - a
+        condition with no explanation is indistinguishable from a defect.
+
+        Every outcome carries an explicit reason now, and content this reader
+        does not turn into text (embedded raster images, vector paths, embedded
+        script/style) is counted and named rather than left implicit.
+        """
         try:
             if not os.path.exists(filepath):
                 return {
@@ -450,59 +546,129 @@ class ImageFileReader(BaseReader):
                     "ocr_successful": False,
                     "extraction_info": {
                         "error": "File not found",
+                        "reason": "file_not_found",
                         "extracted": False,
-                        "stored": False
-                    }
+                        "stored": False,
+                    },
                 }
-            
-            with open(filepath, 'r', encoding='utf-8') as file:
-                content = file.read()
-            
-            # Extract text from SVG (simple extraction)
-            import re
-            # Extract text from <text> tags
-            text_matches = re.findall(r'<text[^>]*>(.*?)</text>', content, re.DOTALL | re.IGNORECASE)
-            extracted_text = '\n'.join(text_matches) if text_matches else ""
-            
+
+            with open(filepath, "rb") as handle:
+                raw = handle.read()
+            content = raw.decode("utf-8", "replace")
+
+            lines, text_elements, parse_failure = self._collect_svg_text(raw)
+            reason = None
+            recovered = False
+            if not lines:
+                stripped = self._svg_text_by_stripping(content)
+                if stripped:
+                    recovered = True
+                    lines = [stripped]
+                    text_elements = 1
+                    reason = (
+                        f"{parse_failure}; text recovered by stripping markup"
+                        if parse_failure else
+                        "svg_text_recovered_from_markup"
+                    )
+                else:
+                    reason = parse_failure
+
+            extracted_text = "\n".join(lines)[:self.SVG_TEXT_LIMIT]
+            has_text = bool(extracted_text.strip())
+
+            # Content that does not become text: counted, never silently
+            # dropped. An SVG is vector, so there is no raster to recognise;
+            # an embedded <image> would have to be rasterised first, which this
+            # reader does not do.
+            image_count = len(re.findall(r"<image\b", content, re.IGNORECASE))
+            path_count = len(re.findall(r"<path\b", content, re.IGNORECASE))
+            code_chars = sum(
+                len(match.group(0)) for match in re.finditer(
+                    r"<(?:script|style)\b.*?</(?:script|style)>", content,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+            )
+
+            if has_text:
+                reason = reason or "svg_text_extracted"
+            elif reason is None:
+                reason = "svg_has_no_text_elements"
+                if image_count:
+                    reason += (
+                        f"; {image_count} embedded raster image(s) are not OCR'd"
+                        " (an SVG is vector text, not a scanned image)"
+                    )
+                elif path_count:
+                    reason += (
+                        f"; {path_count} vector path element(s) found, which may"
+                        " be outlined (converted) text that no extractor can read"
+                    )
+            if has_text and code_chars:
+                reason += f"; {code_chars} chars of embedded script/style not indexed"
+
             result = {
                 "text": extracted_text,
                 "ocr_attempted": False,
-                "ocr_successful": bool(extracted_text and extracted_text.strip()),
+                "ocr_successful": has_text,
                 "extraction_info": {
-                    "extracted": bool(extracted_text and extracted_text.strip()),
-                    "stored": bool(extracted_text and extracted_text.strip()),
-                    "text_length": len(extracted_text.strip()) if extracted_text else 0,
-                    "word_count": len(extracted_text.strip().split()) if extracted_text else 0,
+                    "extracted": has_text,
+                    "stored": has_text,
+                    "reason": reason,
+                    "text_length": len(extracted_text.strip()),
+                    "word_count": len(extracted_text.split()),
                     "coordinate_count": 0,
-                    "file_type": "SVG"
-                }
+                    "file_type": "SVG",
+                    "text_elements": text_elements,
+                    "embedded_images": image_count,
+                    "vector_paths": path_count,
+                    "embedded_code_chars": code_chars,
+                    "recovered_from_markup": recovered,
+                },
             }
-            
-            # Extract basic SVG metadata
+
             width_match = re.search(r'width=["\'](\d+(?:\.\d+)?)["\']', content)
             height_match = re.search(r'height=["\'](\d+(?:\.\d+)?)["\']', content)
             viewbox_match = re.search(r'viewBox=["\']([^"\']+)["\']', content)
-            
+
             if width_match:
                 result["extraction_info"]["image_width"] = width_match.group(1)
             if height_match:
                 result["extraction_info"]["image_height"] = height_match.group(1)
             if viewbox_match:
                 result["extraction_info"]["viewBox"] = viewbox_match.group(1)
-            
+
+            if has_text:
+                logger.info(
+                    "[EXTRACTION] SVG text: %d chars, %d word(s) from %d text "
+                    "element(s) in %s",
+                    result["extraction_info"]["text_length"],
+                    result["extraction_info"]["word_count"],
+                    text_elements, os.path.basename(str(filepath)),
+                )
+            else:
+                logger.info(
+                    "[EXTRACTION] SVG has no extractable text (%s): %s",
+                    os.path.basename(str(filepath)), reason,
+                )
             return result
+
         except Exception as e:
+            logger.error(
+                "[EXTRACTION] Error reading SVG %s: %s",
+                os.path.basename(str(filepath)), e,
+            )
             return {
                 "text": "",
                 "ocr_attempted": False,
                 "ocr_successful": False,
                 "extraction_info": {
                     "error": str(e),
+                    "reason": "svg_read_error",
                     "extracted": False,
-                    "stored": False
-                }
+                    "stored": False,
+                },
             }
-    
+
     def _is_tesseract_available(self):
         """Check if tesseract is installed and available (cached)"""
         global _TESSERACT_AVAILABLE, _TESSERACT_CHECKED
