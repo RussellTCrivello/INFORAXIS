@@ -10,6 +10,8 @@
  * instead of being entangled with rendering.
  */
 
+import { displayNameFor, fileOf, relativePathFor } from './path-rules.js';
+
 export const KIB = 1024;
 export const MIB = 1024 * 1024;
 export const GIB = 1024 * 1024 * 1024;
@@ -74,22 +76,19 @@ export function kindOf(name) {
  * in one dialog, or a file added again by a second drag, must not queue twice.
  * Content identity is the engine's job — this only stops accidental repeats.
  */
-export function selectionKey(file) {
+export function selectionKey(item) {
+  const file = fileOf(item);
   return [
     file.name,
     file.size,
     file.lastModified || 0,
-    // Folder selections carry the browser's relative path (webkitdirectory);
-    // the same file name in two folders is two distinct entries.
-    file.webkitRelativePath || file.relativePath || '',
+    relativePathFor(item),
   ].join('::');
 }
 
-/** Display name for a selected entry: the path inside a folder selection, or
- *  the bare file name. */
-export function displayName(file) {
-  return file.webkitRelativePath || file.relativePath || file.name;
-}
+/** Display name for a selected entry: its path inside a folder selection, or
+ *  its bare name. The rule itself lives in path-rules.js. */
+export const displayName = displayNameFor;
 
 /**
  * Merge newly chosen files into the queue.
@@ -102,23 +101,26 @@ export function mergeSelection(existing, incoming) {
   const entries = existing.slice();
   let added = 0;
   const skipped = [];
-  for (const file of incoming) {
-    const key = selectionKey(file);
+  for (const item of incoming) {
+    const file = fileOf(item);
+    if (!file) continue;
+    const key = selectionKey(item);
     if (seen.has(key)) {
-      skipped.push(file.name);
+      skipped.push(displayName(item) || file.name);
       continue;
     }
     seen.add(key);
     entries.push({
       key,
       file,
-      name: displayName(file),
+      name: displayName(item),
       size: file.size || 0,
       kind: kindOf(file.name),
       status: 'ready',
       progress: 0,
       message: '',
       stagedPath: null,
+      storedName: null,
     });
     added += 1;
   }

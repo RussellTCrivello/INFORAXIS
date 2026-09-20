@@ -26,6 +26,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from core.path_safety import configured_ingestion_roots
 from core.security.flask_ext import admin_required, current_user
+from core.archive_safety import windows_safe_component
 from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 from services.importing.backup_import_service import (
     BackupImportService, BatchImportService,
@@ -121,26 +122,94 @@ def _new_staging_dir() -> Path:
 
 
 def _safe_relative_parts(name: str):
-    """Client-supplied name -> containment-safe relative path parts.
+    """Client-supplied name -> containment-safe, Windows-safe relative parts.
 
-    Browsers send ``sub/dir/file.txt`` for folder selections and a bare name
-    for file selections. ``..``, drive letters, absolute paths and empty
-    segments are dropped, so a staged file can never escape the batch
-    directory (``Path(fs.filename).name`` alone silently flattened folders and
-    let two same-named files overwrite each other).
+    Browsers send ``sub/dir/file.txt`` (forward slashes, on every OS) for a
+    folder selection and a bare name for a single file. Windows hosts can also
+    send a drive-qualified or UNC path for the same selection, so those shapes
+    are reduced to what lies below the root rather than refused.
+
+    Each component is then made *writable on Windows* by the same helper the
+    archive extractor uses (``core.archive_safety.windows_safe_component``):
+    reserved device names (CON, NUL, LPT1 ...), trailing dots/spaces and
+    over-long components are defused instead of losing the file, and the file
+    name is what the browser sent. ``..`` and empty segments are dropped, so a
+    staged file can never escape its batch directory - ``Path(fs.filename).name``
+    alone silently flattened folders and let two same-named files overwrite
+    each other.
     """
+    if "\x00" in (name or ""):
+        raise _StagingError("BAD_NAME", "File name contains a NUL byte", 400)
+
     raw = (name or "").replace("\\", "/")
+    # A drive-qualified path ("C:/docs/a.txt") and absolute/UNC shapes: keep the
+    # part below the root; a drive letter is never a directory of ours.
+    # Only "X:/" is a drive. "a:b.txt" is a legal file name on macOS and Linux
+    # and the colon must be *mapped*, not treated as a prefix to cut off -
+    # otherwise the stored name silently loses everything before the colon.
+    raw = re.sub(r"^[A-Za-z]:[\\/]", "", raw).lstrip("/")
+
     parts = []
     for part in raw.split("/"):
-        part = part.strip().strip(". ")
+        part = part.strip()
         if not part or part in {".", ".."}:
             continue
-        part = re.sub(r"[:*?\"<>|]", "_", part)
+        # Characters Windows refuses outright. Sources on POSIX/macOS can carry
+        # them (and a Windows client cannot create them), so map rather than
+        # drop - the response reports the stored name either way.
+        part = re.sub(r'[:*?"<>|]', "_", part)
+        part = windows_safe_component(part)
         if part:
-            parts.append(part[:200])
+            parts.append(part)
     if not parts:
         parts = ["upload.bin"]
     return parts
+
+
+class _StagingError(ValueError):
+    """A staging failure that maps to one API error (code, message, status)."""
+
+    def __init__(self, code: str, message: str, status: int):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status = status
+
+
+def _staged_path_limit() -> int:
+    """Longest staged *path* we will write, in characters.
+
+    Windows still enforces MAX_PATH (260) unless long paths are enabled for the
+    process, and the staging directory itself consumes part of that budget, so
+    the default is deliberately conservative there. Other platforms get the
+    kernel's typical PATH_MAX. Overridable for deployments that know their own
+    limit: ``OPERATIONS_MAX_STAGED_PATH_CHARS``.
+    """
+    default = 240 if os.name == "nt" else 4096
+    try:
+        value = int(os.environ.get("OPERATIONS_MAX_STAGED_PATH_CHARS", str(default)))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+def _checked_destination(directory: Path, parts):
+    """Destination for ``parts``, refused up front when it cannot be written.
+
+    The check happens before any directory is created, so a file that cannot be
+    staged leaves nothing behind for the next run to trip over.
+    """
+    limit = _staged_path_limit()
+    candidate = directory.joinpath(*parts)
+    if len(str(candidate)) > limit:
+        raise _StagingError(
+            "PATH_TOO_LONG",
+            f"Stored path would be {len(str(candidate))} characters; the limit "
+            f"is {limit} (OPERATIONS_MAX_STAGED_PATH_CHARS). Shorten the folder "
+            f"name and try again.",
+            400,
+        )
+    return _unique_destination(directory, parts)
 
 
 def _unique_destination(directory: Path, parts) -> Path:
@@ -202,6 +271,8 @@ def api_input_options_info():
         "max_direct_upload_mb": MAX_UPLOAD_BYTES // (1024 * 1024),
         "max_chunked_upload_mb": MAX_CHUNKED_UPLOAD_BYTES // (1024 * 1024),
         "chunk_size_mb": max(CHUNK_SIZE_BYTES // (1024 * 1024), 1),
+        "max_staged_path_chars": _staged_path_limit(),
+        "platform": os.name,
         "hashing": "sha256-streamed (always on)",
         "deduplication": "identity=(hash,source,side) (always on)",
         "archive_safety": "core.archive_safety (always on)",
@@ -281,30 +352,66 @@ def api_input_upload():
 
     staged_dir = _new_staging_dir()
     staged = []
+    failed = []
     total = 0
     for index, fs in enumerate(files):
         supplied = names[index] if index < len(names) else fs.filename
-        dest = _unique_destination(staged_dir, _safe_relative_parts(supplied))
+        try:
+            parts = _safe_relative_parts(supplied)
+            dest = _checked_destination(staged_dir, parts)
+        except _StagingError as exc:
+            # One impossible name must not cost the operator the other files in
+            # the same selection: record it and keep going.
+            failed.append({"name": str(supplied), "code": exc.code, "message": exc.message})
+            continue
         try:
             written = _stream_to(dest, fs.stream, declared_size=MAX_UPLOAD_BYTES)
         except ValueError:
             dest.unlink(missing_ok=True)
-            shutil.rmtree(staged_dir, ignore_errors=True)
-            return _error("UPLOAD_TOO_LARGE", "Upload exceeds the size limit", 413)
+            failed.append({
+                "name": str(supplied),
+                "code": "UPLOAD_TOO_LARGE",
+                "message": (
+                    f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB "
+                    "single-request limit; it is sent in chunks instead when "
+                    "the browser supports it."
+                ),
+            })
+            continue
+        except OSError as exc:
+            dest.unlink(missing_ok=True)
+            logger.warning("could not store upload %r: %s", supplied, exc)
+            failed.append({
+                "name": str(supplied),
+                "code": "STORAGE_FAILED",
+                "message": "The file could not be written to the staging area.",
+            })
+            continue
         except Exception:
             dest.unlink(missing_ok=True)
-            shutil.rmtree(staged_dir, ignore_errors=True)
             logger.exception("upload staging failed")
-            return _error("UPLOAD_FAILED", "Upload could not be stored", 500)
+            failed.append({
+                "name": str(supplied),
+                "code": "UPLOAD_FAILED",
+                "message": "Upload could not be stored.",
+            })
+            continue
         total += written
         staged.append({"path": str(dest), "name": str(dest.relative_to(staged_dir)), "bytes": written})
+
     if not staged:
         shutil.rmtree(staged_dir, ignore_errors=True)
-        return _error("NO_FILES", "No valid files provided", 400)
+        first = failed[0] if failed else {"code": "NO_FILES",
+                                          "message": "No valid files provided"}
+        status = {"UPLOAD_TOO_LARGE": 413, "PATH_TOO_LONG": 400, "BAD_NAME": 400}.get(
+            first["code"], 400
+        )
+        return _error(first["code"], first["message"], status, details={"failed": failed})
     return jsonify({
         "success": True,
         "staged_paths": [entry["path"] for entry in staged],
         "staged": staged,
+        "failed": failed,
         "bytes": total,
         "expires_note": "Staged files are plain files; ingest or delete them.",
     }), 201
@@ -492,7 +599,13 @@ def api_chunked_complete(upload_id: str):
 
     directory = _chunked_session_dir(upload_id)
     staged_dir = _new_staging_dir()
-    dest = _unique_destination(staged_dir, _safe_relative_parts(session["filename"]))
+    try:
+        dest = _checked_destination(
+            staged_dir, _safe_relative_parts(session["filename"])
+        )
+    except _StagingError as exc:
+        shutil.rmtree(staged_dir, ignore_errors=True)
+        return _error(exc.code, exc.message, exc.status)
     digest = hashlib.sha256()
     total = 0
     try:
@@ -506,6 +619,14 @@ def api_chunked_complete(upload_id: str):
                         digest.update(block)
                         total += len(block)
                         out.write(block)
+    except OSError as exc:
+        shutil.rmtree(staged_dir, ignore_errors=True)
+        logger.warning("chunk assembly could not write %r: %s", session["filename"], exc)
+        return _error(
+            "STORAGE_FAILED",
+            "The assembled file could not be written to the staging area.",
+            500,
+        )
     except Exception:
         shutil.rmtree(staged_dir, ignore_errors=True)
         logger.exception("chunk assembly failed")

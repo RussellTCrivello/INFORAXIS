@@ -81,6 +81,30 @@ def test_the_ingestion_page_ships_the_single_interface(app, admin_client):
     assert "What this pipeline always does" in html
 
 
+def test_all_three_input_modes_are_wired_in_the_markup(app, admin_client):
+    """Single file, whole folder and server path each have a real control.
+
+    The browser-side behaviour (a Windows file dialog, a folder dragged from
+    Explorer) cannot be exercised here; what can be proven headlessly is that
+    the page ships the controls and the attributes browsers key off, and that
+    the same selection reaches the API (tests/integration/
+    test_input_upload_pipeline.py feeds it exactly what a Windows browser
+    sends).
+    """
+    html = admin_client.get("/operations/input").get_data(as_text=True)
+
+    # single file: a multi-select file input, plus the modal-less picker button
+    assert 'id="fileInput"' in html and "multiple" in html
+    # whole folder: webkitdirectory is what makes a picker return a tree, and
+    # `directory` is the standards-name some engines look at
+    assert 'id="folderInput"' in html
+    assert "webkitdirectory" in html and "directory" in html
+    # server path: a free-text field, plus the recursive walk toggle
+    assert 'id="serverPath"' in html and 'id="recursive"' in html
+    # drag and drop is wired for both files and folders
+    assert 'id="dropZone"' in html
+
+
 def test_the_removed_interface_is_gone_and_the_task_api_is_not(app, admin_client):
     """The duplicated page went; the task-manager API it shared a prefix with did not.
 

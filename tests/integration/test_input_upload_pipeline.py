@@ -108,6 +108,131 @@ def test_folder_upload_keeps_structure_and_never_overwrites(
     assert pathlib.Path(deep["path"]).read_bytes() == b"deep"
 
 
+def test_a_single_file_needs_no_relative_path(app, admin_client, staged_cleanup):
+    """Choosing one file sends the file and nothing else."""
+    resp = admin_client.post(
+        "/api/input/uploads",
+        data={"files": [(io.BytesIO(b"just one"), "notes.txt")]},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    staged = resp.get_json()["staged"]
+    _tidy(staged[0]["path"], staged_cleanup)
+    assert [entry["name"] for entry in staged] == ["notes.txt"]
+    assert pathlib.Path(staged[0]["path"]).read_bytes() == b"just one"
+
+
+def test_folder_selection_from_windows_keeps_the_tree(
+    app, admin_client, staged_cleanup
+):
+    """A Windows folder pick sends either separator, or a drive-qualified path.
+
+    All three are the operator's own selection; the stored tree is the tree
+    they chose, minus the parts that are the filesystem's (the drive) rather
+    than theirs.
+    """
+    payload = {
+        "files": [
+            (io.BytesIO(b"a"), "report.txt"),
+            (io.BytesIO(b"b"), "page1.jpg"),
+            (io.BytesIO(b"c"), "deep.txt"),
+        ],
+        "relative_paths": json.dumps([
+            "Evidence\\2026\\Case 1\\report.txt",   # backslashes (Windows)
+            "Evidence/2026/Case 1/page1.jpg",         # forward slashes (all OSes)
+            r"C:\Evidence\2026\Case 1\sub\deep.txt",  # drive-qualified
+        ]),
+    }
+    resp = admin_client.post(
+        "/api/input/uploads", data=payload, content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    staged = resp.get_json()["staged"]
+    _tidy(staged[0]["path"], staged_cleanup)
+
+    names = sorted(entry["name"] for entry in staged)
+    assert names == [
+        "Evidence/2026/Case 1/page1.jpg",
+        "Evidence/2026/Case 1/report.txt",
+        "Evidence/2026/Case 1/sub/deep.txt",
+    ]
+    # Every file landed one batch directory below the staging root.
+    for entry in staged:
+        path = pathlib.Path(entry["path"])
+        assert _staging_root() in path.parents
+        assert path.is_file()
+
+
+def test_windows_awkward_names_are_staged_under_writable_names(
+    app, admin_client, staged_cleanup
+):
+    """Reserved device names and trailing dots are defused, never dropped.
+
+    A folder collected on macOS or Linux can contain names Windows refuses;
+    the files must still arrive, and the response must say what they were
+    stored as (the page shows it next to the file).
+    """
+    payload = {
+        "files": [
+            (io.BytesIO(b"1"), "CON.txt"),
+            (io.BytesIO(b"2"), "notes."),
+            (io.BytesIO(b"3"), ".env"),
+        ],
+        "relative_paths": json.dumps(["Case/NUL/CON.txt", "Case/notes.", "Case/.env"]),
+    }
+    resp = admin_client.post(
+        "/api/input/uploads", data=payload, content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    staged = resp.get_json()["staged"]
+    _tidy(staged[0]["path"], staged_cleanup)
+
+    names = sorted(entry["name"] for entry in staged)
+    assert names == ["Case/.env", "Case/_NUL/_CON.txt", "Case/notes"]
+    for entry in staged:
+        assert pathlib.Path(entry["path"]).is_file()
+
+
+def test_one_impossible_file_does_not_sink_the_selection(
+    app, admin_client, staged_cleanup
+):
+    """Per-file isolation: the good files stage, the bad one is reported."""
+    payload = {
+        "files": [
+            (io.BytesIO(b"good"), "good.txt"),
+            (io.BytesIO(b"bad"), "bad.txt"),
+        ],
+        # The second name is not a name a filesystem can hold (NUL byte).
+        "relative_paths": json.dumps(["good.txt", "bad\x00.txt"]),
+    }
+    resp = admin_client.post(
+        "/api/input/uploads", data=payload, content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    body = resp.get_json()
+    staged = body["staged"]
+    _tidy(staged[0]["path"], staged_cleanup)
+
+    assert [entry["name"] for entry in staged] == ["good.txt"]
+    assert pathlib.Path(staged[0]["path"]).read_bytes() == b"good"
+    assert len(body["failed"]) == 1
+    assert body["failed"][0]["code"] == "BAD_NAME"
+
+
+def test_a_batch_where_everything_fails_reports_the_reason(app, admin_client):
+    payload = {
+        "files": [(io.BytesIO(b"x"), "x.txt")],
+        "relative_paths": json.dumps(["bad\x00.txt"]),
+    }
+    resp = admin_client.post(
+        "/api/input/uploads", data=payload, content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    error = resp.get_json()["error"]
+    assert error["code"] == "BAD_NAME"
+    assert error["details"]["failed"][0]["name"] == "bad\x00.txt"
+
+
 def test_upload_without_files_is_refused(app, admin_client):
     resp = admin_client.post(
         "/api/input/uploads", data={}, content_type="multipart/form-data",
@@ -207,6 +332,27 @@ def test_chunked_upload_assembles_exactly_what_was_sent(
     assert admin_client.get(
         f"/api/input/uploads/chunked/{upload_id}"
     ).status_code == 404
+
+
+def test_chunked_upload_keeps_the_folder_path_from_a_windows_client(
+    app, admin_client, small_chunks, staged_cleanup
+):
+    """A large file selected inside a folder keeps its place in the tree."""
+    content = b"y" * 32
+    upload_id = _start(
+        admin_client, r"C:\Evidence\Case 1\large.bin", len(content),
+    ).get_json()["upload_id"]
+    staged_cleanup.append(pathlib.Path(_upload_dir(upload_id)))
+
+    assert _chunk(admin_client, upload_id, 0, content[:16]).status_code == 200
+    assert _chunk(admin_client, upload_id, 1, content[16:]).status_code == 200
+    done = admin_client.post(f"/api/input/uploads/chunked/{upload_id}/complete")
+    assert done.status_code == 201, done.get_data(as_text=True)
+    staged = done.get_json()
+    _tidy(staged["staged_path"], staged_cleanup)
+
+    assert staged["name"] == "Evidence/Case 1/large.bin"
+    assert pathlib.Path(staged["staged_path"]).read_bytes() == content
 
 
 def test_incomplete_upload_cannot_be_completed(
@@ -330,7 +476,8 @@ def test_cancelling_an_upload_removes_its_session(
 def test_options_info_reports_the_limits_the_page_renders(app, admin_client):
     body = admin_client.get("/api/input/options-info").get_json()
     for key in ("max_direct_upload_mb", "max_chunked_upload_mb", "chunk_size_mb",
-                "ingestion_roots", "server_path_import_available"):
+                "ingestion_roots", "server_path_import_available",
+                "max_staged_path_chars", "platform"):
         assert key in body, key
     assert body["max_direct_upload_mb"] > 0
     assert body["max_chunked_upload_mb"] >= body["max_direct_upload_mb"]

@@ -30,6 +30,12 @@ import {
   sampledFiles,
 } from '../modules/upload/upload-queue.js';
 import { stageLargeFile } from '../modules/upload/large-file-upload.js';
+import {
+  examplePathFor,
+  isInside,
+  joinRelative,
+  shortenPath,
+} from '../modules/upload/path-rules.js';
 
 const pageData = readPageData();
 
@@ -45,6 +51,7 @@ const state = {
   monitoring: true,
   limits: { direct: 0, chunked: 0, chunkSize: 8 * 1024 * 1024 },
   roots: [],
+  platform: 'posix',
   serverPathsAvailable: false,
   busy: false,
   abort: null,
@@ -145,6 +152,7 @@ async function loadCapabilities() {
       chunkSize: (info.chunk_size_mb || 8) * 1024 * 1024,
     };
     state.roots = info.ingestion_roots || [];
+    state.platform = info.platform === 'nt' ? 'nt' : 'posix';
     state.serverPathsAvailable = Boolean(info.server_path_import_available);
 
     const chips = [
@@ -164,6 +172,11 @@ async function loadCapabilities() {
         : capChip('off', 'bi-hdd-network', msg('server paths'), msg('disabled — no roots configured')),
     ];
     box.innerHTML = chips.join('');
+    // The field shows an example in the shape this host accepts (drive-letter
+    // on Windows, leading slash elsewhere) instead of a POSIX example on a
+    // Windows install, where it would be wrong for every path.
+    const field = el('serverPath');
+    if (field) field.placeholder = examplePathFor(state.roots[0], state.platform);
     renderRoots();
     if (!state.serverPathsAvailable && state.mode === 'server') setMode('upload', { silent: true });
     renderAll();
@@ -235,6 +248,8 @@ function bindPicker() {
     fileInput.value = '';
   });
   folderInput.addEventListener('change', () => {
+    // webkitdirectory: every file carries its path within the chosen folder,
+    // '/'-separated on all platforms, so the tree is reproduced server-side.
     addFiles(Array.from(folderInput.files || []));
     folderInput.value = '';
   });
@@ -248,17 +263,81 @@ function bindPicker() {
   ['dragleave', 'dragend'].forEach((type) => {
     drop.addEventListener(type, () => drop.classList.remove('is-over'));
   });
-  drop.addEventListener('drop', (event) => {
+  drop.addEventListener('drop', async (event) => {
     event.preventDefault();
     drop.classList.remove('is-over');
-    const dropped = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
-    if (dropped.length) addFiles(dropped);
+    const transfer = event.dataTransfer;
+    if (!transfer) return;
+
+    // Dropping a *folder* (the usual way on Windows: drag it from Explorer)
+    // is not a file list - the browser gives an entry tree instead. Reading it
+    // keeps the folder's structure, exactly like "Choose folder" does.
+    const items = Array.from(transfer.items || []);
+    const entries = items
+      .map((item) => (typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null))
+      .filter(Boolean);
+    if (entries.length) {
+      const collected = await collectEntries(entries);
+      if (collected.length) {
+        addFiles(collected);
+        return;
+      }
+    }
+
+    const dropped = Array.from(transfer.files || []);
+    if (dropped.length) {
+      addFiles(dropped);
+      return;
+    }
+    if (items.length) {
+      pushMessage(msg('This browser cannot read a dropped folder. Use “Choose folder” — it works on Windows, macOS and Linux.'), 'warn');
+    }
   });
 
   el('clearQueueBtn').addEventListener('click', () => {
     state.entries = [];
     renderAll();
   });
+}
+
+/**
+ * Walk dropped entries (files and directories) and return `{file, path}`
+ * items, so a dropped folder keeps its structure. `readEntries` hands back
+ * batches and must be called until it returns nothing.
+ */
+async function collectEntries(entries) {
+  const collected = [];
+
+  const readAll = (reader) => new Promise((resolve) => {
+    const batch = [];
+    const next = () => reader.readEntries((chunk) => {
+      if (!chunk.length) {
+        resolve(batch);
+        return;
+      }
+      batch.push(...chunk);
+      next();
+    }, () => resolve(batch));
+    next();
+  });
+
+  const walk = async (entry, prefix) => {
+    if (!entry) return;
+    if (entry.isFile) {
+      const file = await new Promise((resolve) => entry.file(resolve, () => resolve(null)));
+      if (file) collected.push({ file, path: joinRelative(prefix, file.name) });
+      return;
+    }
+    if (entry.isDirectory) {
+      const children = await readAll(entry.createReader());
+      for (const child of children) {
+        await walk(child, joinRelative(prefix, entry.name));
+      }
+    }
+  };
+
+  for (const entry of entries) await walk(entry, '');
+  return collected;
 }
 
 function addFiles(files) {
@@ -298,14 +377,15 @@ function renderQueue() {
         : entry.status === 'staging' ? `${entry.progress || 0}%`
           : msg('ready');
     const chunked = needsChunkedUpload(entry.size, state.limits.direct);
+    const renamed = entry.storedName && entry.storedName !== entry.name;
     return `
       <li class="ing-row" data-index="${index}">
         <span class="ing-row-icon"><i class="bi ${iconForName(entry.name)}"></i></span>
         <span class="ing-row-main">
-          <span class="ing-row-name" title="${esc(entry.name)}">${esc(entry.name)}</span>
+          <span class="ing-row-name" title="${esc(entry.name)}">${esc(shortenPath(entry.name, 72))}</span>
           <span class="ing-row-meta">${esc(extensionOf(entry.name).toUpperCase() || msg('file'))} · ${formatBytes(entry.size)}${
             chunked ? ` · <span class="ing-warn-text">${msg('chunked')}</span>` : ''
-          }</span>
+          }${renamed ? ` · <span class="ing-warn-text">${msg('stored as {name}', { name: esc(shortenPath(entry.storedName, 40)) })}</span>` : ''}</span>
         </span>
         <span class="ing-row-state ${stateClass}">${esc(stateText)}</span>
         <button type="button" class="ing-row-remove" data-remove="${index}"
@@ -345,7 +425,7 @@ function bindServerPath() {
       pushMessage(msg('Server-path input is disabled: no INGESTION_ROOTS are configured. Set them in Settings (or the INGESTION_ROOTS environment variable) to enable it.'), 'error');
       return;
     }
-    const root = state.roots.find((candidate) => isInside(path, candidate));
+    const root = state.roots.find((candidate) => isInside(path, candidate, state.platform));
     if (!root) {
       pushMessage(msg('That path is outside every configured root ({roots}). Ingestion is fail-closed by design.', {
         roots: state.roots.join(', '),
@@ -356,13 +436,6 @@ function bindServerPath() {
       root,
     }), 'ok');
   });
-}
-
-function isInside(path, root) {
-  const normalise = (value) => String(value || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-  const candidate = normalise(path);
-  const boundary = normalise(root);
-  return Boolean(boundary) && (candidate === boundary || candidate.startsWith(`${boundary}/`));
 }
 
 function renderRoots() {
@@ -807,15 +880,20 @@ async function stageQueue() {
         signal: state.abort ? state.abort.signal : undefined,
       });
       const rows = staged.staged || [];
+      const failures = new Map((staged.failed || []).map((item) => [item.name, item.message]));
       batch.forEach((entry, index) => {
         const row = rows[index];
+        const rejection = failures.get(entry.name);
         if (row && row.path) {
           entry.status = 'staged';
           entry.progress = 100;
           entry.stagedPath = row.path;
+          // The server may have had to adjust a name (reserved device name,
+          // trailing dot, illegal character): show what was stored.
+          entry.storedName = row.name && row.name !== entry.name ? row.name : null;
         } else {
           entry.status = 'failed';
-          entry.message = msg('not staged');
+          entry.message = rejection || msg('not staged');
         }
       });
     } catch (error) {
@@ -828,6 +906,10 @@ async function stageQueue() {
       throw new Error(msg('Staging failed: {message}', { message: error.message }));
     }
     renderQueue();
+    const rejected = batch.filter((entry) => entry.status === 'failed');
+    if (rejected.length && rejected.length < batch.length) {
+      pushMessage(msg('{n} file(s) could not be staged — see the list.', { n: rejected.length }), 'warn');
+    }
   }
 
   for (const entry of chunked) {
@@ -837,6 +919,9 @@ async function stageQueue() {
     try {
       const result = await stageLargeFile(entry.file, {
         endpoint: pageData.chunkedUrl || '/api/input/uploads/chunked',
+        // A large file selected inside a folder keeps its place in the tree;
+        // the server sanitises it for the host filesystem.
+        filename: entry.name,
         headers: csrfHeaders(),
         signal: state.abort ? state.abort.signal : undefined,
         onProgress: ({ sentBytes, totalBytes }) => {
@@ -847,6 +932,13 @@ async function stageQueue() {
       entry.status = 'staged';
       entry.progress = 100;
       entry.stagedPath = result.stagedPath;
+      entry.storedName = result.name && result.name !== entry.name ? result.name : null;
+      if (result.clientHashed === false && !state.hashNoticeShown) {
+        // Not a failure: the server still verifies size and reports the hash of
+        // what it stored. Said once, with the way to get per-chunk hashes back.
+        state.hashNoticeShown = true;
+        pushMessage(msg('This browser context has no hashing API (serve the app over https, or open it on localhost): chunks are verified by the server at the end instead.'), 'warn');
+      }
     } catch (error) {
       if (error.name === 'AbortError') throw error;
       entry.status = 'failed';

@@ -20,6 +20,9 @@ did before). The CLI (`run_cli.py`) is a compatibility adapter over the same
   Staged paths are plain files the engine then processes like any other input —
   path safety, archive safety, hashing and duplicate detection all apply;
   uploading bypasses nothing.
+  The response carries `staged[]` (path, name, bytes) and `failed[]`
+  (name, code, message): a file the host cannot store is reported on its own
+  row, and the rest of the selection still stages.
 * **Server path** — a file/folder on the server. Restricted to
   `INGESTION_ROOTS` (semicolon-separated). With no roots configured,
   server-path input is **disabled** (fail-closed) and the page says so; the
@@ -50,6 +53,45 @@ chunks carry their own hash, so corruption is caught at the chunk that suffered
 it. The page retries a failed chunk a few times and reports real progress in
 bytes; while a transfer runs, the primary button becomes *Stop staging* and
 abandoning it leaves already-staged files in place, reusable by the next run.
+
+## On Windows (and on every other platform)
+
+Windows is the primary production platform, so the three ways of choosing input
+are specified for it explicitly:
+
+| Input | Windows | macOS / Linux |
+| --- | --- | --- |
+| **A single file** | *Choose files* (or drag one file) | same |
+| **A whole folder** | *Choose folder*, or drag the folder from Explorer | *Choose folder*, or drag the folder from Finder/Explorer |
+| **A path on the server** | `C:\\data\\evidence` or `\\\\server\\share\\cases`, inside `INGESTION_ROOTS` | `/data/evidence`, inside `INGESTION_ROOTS` |
+
+* **Roots syntax.** `INGESTION_ROOTS` is semicolon-separated on every platform
+  (a semicolon is not a legal path character on Windows, a colon is) and
+  entries may be quoted:
+  `set INGESTION_ROOTS=C:\data\evidence;D:\inbox` and
+  `set INGESTION_ROOTS="\\server\share\cases"` both work.
+* **Separators and case.** Windows accepts `\` and `/` in the field and its
+  paths are compared case-insensitively; on macOS/Linux `/` separates and the
+  comparison is case-sensitive. The page states the containment rule the way
+  the host will apply it — it never promises a path the server would refuse.
+* **Folder selections** keep their tree on all three platforms: the browser
+  reports each file's path inside the chosen folder (always with `/`), the
+  server stores it below the staged batch directory, and the file's place in
+  the tree is what the engine sees. Dragging a folder works in Chrome, Edge
+  and Safari; in a browser without the directory-drop API the page says so and
+  points at *Choose folder* rather than queueing something that is not a file.
+* **Names Windows refuses** (reserved device names such as `CON`, `NUL`,
+  `LPT1`, trailing dots or spaces, `: * ? " < > |`, over-long components) are
+  defused, never dropped — a folder collected on macOS or Linux still arrives,
+  and the queue shows the name it was stored under. The rule is the same one
+  the archive extractor uses for member names, so an upload and an archive
+  member behave identically.
+* **Path length.** Windows still enforces `MAX_PATH` (260) unless long paths
+  are enabled for the process, so a stored path longer than
+  `OPERATIONS_MAX_STAGED_PATH_CHARS` (240 on Windows, 4096 elsewhere) is
+  refused *for that file only*, with the actual length and the limit in the
+  message. The other files in the same selection still stage — one impossible
+  name never costs the operator the batch.
 
 ## Classification
 
@@ -100,6 +142,8 @@ what finished recently, polled from `/api/jobs` and `/api/jobs/summary`.
 * `static/js/modules/upload/chunked-upload.js`, `static/css/chunked-upload.css`
   — an upload widget that posted to endpoints which no longer existed
   (`/upload/chunked/complete`); replaced by real chunked staging (above).
+* `static/css/upload.css` — the old page's CLI chrome (`.cli-container` and
+  friends), unreferenced by any template once that page was gone.
 * `POST /upload/process-path` — the deleted page's path-ingestion entry point,
   a second, differently-shaped way to start the ingestion that
   `POST /api/input/jobs` owns. Path containment (SEC-06) is unchanged: it is

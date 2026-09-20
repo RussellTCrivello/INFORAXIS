@@ -51,6 +51,15 @@ const twice = q.mergeSelection(once.entries, [file('a.txt', 10)]);
 const folders = q.mergeSelection([], [
   file('a.txt', 10, 'one/a.txt'), file('a.txt', 10, 'two/a.txt'),
 ]);
+// A folder *dropped* onto the page arrives as {{file, path}} items, because the
+// browser hands over an entry tree rather than Files with a relative path.
+const dropped = q.mergeSelection([], [
+  {{ file: file('scan.jpg', 10), path: 'Case 1/scan.jpg' }},
+  {{ file: file('scan.jpg', 10), path: 'Case 2/scan.jpg' }},
+]);
+const droppedAgain = q.mergeSelection(dropped.entries, [
+  {{ file: file('scan.jpg', 10), path: 'Case 1/scan.jpg' }},
+]);
 out.merge = {{
   firstAdded: once.added,
   secondAdded: twice.added,
@@ -58,6 +67,13 @@ out.merge = {{
   entries: once.entries.length + (twice.entries.length - once.entries.length),
   folderCount: folders.entries.length,
   folderNames: folders.entries.map((entry) => entry.name),
+}};
+
+out.dropped = {{
+  names: dropped.entries.map((entry) => entry.name),
+  added: dropped.added,
+  duplicateSkipped: droppedAgain.skipped,
+  addedAgain: droppedAgain.added,
 }};
 
 out.totals = q.queueTotals([
@@ -170,6 +186,14 @@ def test_the_same_selection_is_not_queued_twice(helpers):
 def test_same_name_in_two_folders_stays_two_entries(helpers):
     assert helpers["merge"]["folderCount"] == 2
     assert helpers["merge"]["folderNames"] == ["one/a.txt", "two/a.txt"]
+
+
+def test_a_dropped_folder_arrives_with_its_paths(helpers):
+    dropped = helpers["dropped"]
+    assert dropped["names"] == ["Case 1/scan.jpg", "Case 2/scan.jpg"]
+    assert dropped["added"] == 2
+    assert dropped["addedAgain"] == 0
+    assert dropped["duplicateSkipped"] == ["Case 1/scan.jpg"]
 
 
 def test_queue_totals_count_states_and_volume(helpers):
