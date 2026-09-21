@@ -33,6 +33,29 @@ function handleGlobalClick(e) {
     // Debug: log all clicks to help troubleshoot
     // console.log('Global click:', e.target, e.target.className, e.target.tagName);
     
+    // Copy-coordinates buttons.
+    //
+    // These used to call copyGeolocationCoordinates('${coords}', this) from an
+    // inline handler - the same shape that killed the file cards: the value is
+    // escaped with escapeHtml, which leaves quotes alone, so a coordinate
+    // string containing a quote produced an uncompilable handler. The value is
+    // carried in attributes (escaped with escapeAttribute) and read back here.
+    const copyCoordsBtn = e.target.closest('[data-copy-coordinates]');
+    if (copyCoordsBtn) {
+        const coordinates = copyCoordsBtn.getAttribute('data-copy-coordinates');
+        const longitude = copyCoordsBtn.getAttribute('data-copy-longitude');
+        const copy = (window.fms && window.fms.fileOperations
+            && window.fms.fileOperations.fileExport
+            && window.fms.fileOperations.fileExport.copyGeolocationCoordinates)
+            || window.copyGeolocationCoordinates;
+        if (typeof copy === 'function') {
+            e.preventDefault();
+            e.stopPropagation();
+            copy(coordinates, copyCoordsBtn, longitude === null ? undefined : longitude);
+            return;
+        }
+    }
+    
     // Handle sidebar-item clicks (navigation to sections)
     const sidebarItem = e.target.closest('.sidebar-item[data-section]');
     if (sidebarItem) {

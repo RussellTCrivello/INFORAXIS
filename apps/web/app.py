@@ -288,9 +288,15 @@ def add_performance_headers(response):
         response.cache_control.must_revalidate = True
     
     # Performance headers
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
+    #
+    # setdefault, not assignment: DENY is the default for every page, but a
+    # response that is MEANT to be framed same-origin (the original file viewer
+    # shows a PDF in an iframe served by this same app) opts out by setting
+    # SAMEORIGIN before this hook runs. Overwriting here would silently break
+    # that viewer - the file would refuse to connect.
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('X-XSS-Protection', '1; mode=block')
     
     return response
 
@@ -316,7 +322,12 @@ def after_request(response):
 # ---------------------------------------------------------------------------
 @app.after_request
 def add_security_headers(response):
-    """Content-Security-Policy and related browser protections."""
+    """Content-Security-Policy and related browser protections.
+
+    Every header here is a setdefault so a view can relax one deliberately -
+    ``frame-ancestors 'none'`` would otherwise stop the original-file viewer
+    from framing a PDF this app serves.
+    """
     response.headers.setdefault(
         'Content-Security-Policy',
         "default-src 'self'; "

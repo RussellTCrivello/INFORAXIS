@@ -1339,6 +1339,60 @@ def serve_file_by_id(file_id):
         return client_error(e, subsystem='Api.blueprints.files', status=500)
 
 
+@limiter.limit(INTERACTIVE_READ_LIMIT)
+@files_bp.route('/api/file/<int:file_id>/original', methods=['GET'])
+def original_file_info(file_id):
+    """Describe the ORIGINAL file a stored object was extracted from.
+
+    Everything the comparison viewer needs: is the source still on disk, what
+    kind of viewer fits it, and the URLs to show or download it. Always 200 for
+    an existing row - a source file that has disappeared is a state to report,
+    not an error, because the extracted text it produced is still there.
+    """
+    from Api.services.original_file import OriginalFileService
+
+    try:
+        info = OriginalFileService.describe(file_id)
+    except Exception as e:
+        logger.error(f"Error describing original file {file_id}: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+    if not info.get('available') and info.get('reason') == 'not-found':
+        return jsonify({'success': False, 'error': 'File not found'}), 404
+    return jsonify({'success': True, 'original': info})
+
+
+@limiter.limit(INTERACTIVE_READ_LIMIT)
+@files_bp.route('/api/file/<int:file_id>/original/content', methods=['GET'])
+def original_file_content(file_id):
+    """Serve the original file's bytes for display or download.
+
+    The path comes from the database row, never from the request. Disposition
+    and content type are decided by the service: only formats the browser
+    renders without script go inline (see Api/services/original_file.py).
+    """
+    from Api.services.original_file import OriginalFileService
+
+    download = request.args.get('download') in ('1', 'true', 'yes', 'on')
+    try:
+        return OriginalFileService.content_response(file_id, download=download)
+    except FileNotFoundError as missing:
+        reason = str(missing)
+        status = 404
+        message = {
+            'not-found': 'No stored object with that id.',
+            'missing-on-disk': 'The source file is no longer at the recorded location.',
+            'no-path': 'This object has no source path recorded.',
+            'relative-path': 'The recorded source path is not usable.',
+            'not-a-file': 'The recorded path is not a file.',
+            'unreadable': 'The source file exists but cannot be read by the application.',
+        }.get(reason, 'The original file is not available.')
+        return jsonify({'success': False, 'error': message, 'reason': reason}), status
+    except Exception as e:
+        logger.error(f"Error serving original file {file_id}: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', status=500)
+
+
 @files_bp.route('/file/<int:file_id>/delete', methods=['POST', 'DELETE'])
 def delete_file(file_id):
     """Delete a single file and all its related data"""

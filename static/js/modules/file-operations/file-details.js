@@ -5,10 +5,11 @@
 
 import { fileNavigationState, modalState } from '../core/state.js';
 import { MODAL_ENABLED, translations } from '../core/config.js';
-import { escapeHtml, formatFileSize } from '../core/utils.js';
+import { escapeAttribute, escapeHtml, formatFileSize } from '../core/utils.js';
 import { updateFileNavigationButtons } from './file-navigation.js';
 import { clearModalSearch } from '../search/modal-search.js';
 import { bindAnalystClassify } from '../analyst-classify.js';
+import { showOriginalFile } from './original-file.js';
 
 /**
  * Show file details modal
@@ -105,38 +106,26 @@ export function showFileDetails(fileId, fileName, fileList = null, fileIndex = -
 
     // Load file details content
     loadFileDetailsContent(fileId, fileName);
+
+    // The original-file pane follows the same object as the details, so it is
+    // re-pointed here rather than only on first open.
+    const originalPane = document.getElementById('originalFileSection');
+    if (originalPane && modalContentTab === 'original') {
+        showOriginalFile(fileId, originalPane).catch(err =>
+            console.error('Could not render the original file:', err));
+    }
     
     modalState.isOpen = true;
     modalState.currentFileId = fileId;
     modalState.currentFileName = fileName;
 }
 
-/**
- * Escape a value for use inside a double-quoted HTML attribute.
- *
- * escapeHtml() from core/utils.js escapes via textContent -> innerHTML, which
- * handles & < > but NOT quotes, because a text node never contains them. That
- * is correct for element content and unsafe for attribute values: a lineage
- * name of `x" onmouseover="alert(1)` survives escapeHtml unchanged and breaks
- * out of the attribute, giving stored XSS from an attacker-chosen filename
- * inside an uploaded archive.
- *
- * Attribute context therefore needs its own escaper. Verified by
- * tests/unit/test_frontend_lineage_escaping.py.
- *
- * @param {*} value - raw value, typically an untrusted filename
- * @returns {string} value safe to place inside a double-quoted attribute
- */
-export function escapeAttribute(value) {
-    if (value == null) return '';
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
+/* Attribute-context escaping lives in core/utils.js next to escapeHtml: the
+   two escapers are easy to confuse, both are used from several renderers, and
+   the lineage block below (plus the file list) must use the attribute one.
+   Re-exported here because this module was its original home. Verified by
+   tests/unit/test_frontend_lineage_escaping.py. */
+export { escapeAttribute };
 /**
  * Render the parent/child lineage block for File Details.
  *
@@ -487,6 +476,67 @@ export async function loadFileDetailsContent(fileId, fileName) {
             window.showError(userFriendlyMsg);
         }
     }
+}
+
+//: Which pane the modal's left side is showing: 'extracted' | 'original'.
+let modalContentTab = 'extracted';
+
+/**
+ * Which pane the File Content area is showing.
+ * @returns {string} 'extracted' or 'original'
+ */
+export function getModalContentTab() {
+    return modalContentTab;
+}
+
+/**
+ * Switch between the extracted text and the original file.
+ *
+ * Both panes describe the same stored object, so switching never re-fetches
+ * the details - it shows the pane already loaded, or loads the original file
+ * on first use. The search controls belong to the extracted text and are
+ * hidden with it.
+ *
+ * @param {string} tab - 'extracted' or 'original'
+ */
+export function switchModalContentTab(tab) {
+    const wanted = tab === 'original' ? 'original' : 'extracted';
+    modalContentTab = wanted;
+
+    const extracted = document.getElementById('fileContentSection');
+    const original = document.getElementById('originalFileSection');
+    const search = document.getElementById('extractedContentSearch');
+    const extractedTab = document.getElementById('extractedContentTab');
+    const originalTab = document.getElementById('originalFileTab');
+
+    if (extracted) extracted.style.display = wanted === 'extracted' ? '' : 'none';
+    if (original) original.style.display = wanted === 'original' ? '' : 'none';
+    if (search) search.style.display = wanted === 'extracted' ? '' : 'none';
+
+    [[extractedTab, 'extracted'], [originalTab, 'original']].forEach(([el, name]) => {
+        if (!el) return;
+        el.classList.toggle('active', name === wanted);
+        el.setAttribute('aria-selected', name === wanted ? 'true' : 'false');
+    });
+
+    if (wanted === 'original' && original) {
+        loadOriginalFileInto(original);
+    }
+    return wanted;
+}
+
+/**
+ * Load (or reload) the original file for the object currently on screen.
+ * Previous/Next in the modal moves between files, so the pane is re-pointed
+ * at every display - staying on whatever file the details show.
+ *
+ * @param {HTMLElement} container - the original-file pane
+ */
+function loadOriginalFileInto(container) {
+    const fileId = modalState.currentFileId;
+    if (!fileId || !container) return;
+    showOriginalFile(fileId, container).catch(err =>
+        console.error('Could not render the original file:', err));
 }
 
 /**

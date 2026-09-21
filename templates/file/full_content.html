@@ -72,6 +72,16 @@
         </div>
         <div class="btn-toolbar gap-2" role="toolbar" aria-label="{{ _('Toolbar') }}">
             <a href="{{ nav.details_url }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>{{ _('Details') }}</a>
+            <!-- The page shows the extracted text; these open the file it came
+                 from, so the two can be compared while reading. -->
+            <a href="{{ url_for('files.original_file_content', file_id=file[0]) }}" target="_blank" rel="noopener"
+               class="btn btn-outline-secondary" title="{{ _('Open the original file') }}">
+                <i class="bi bi-file-earmark-image me-1"></i>{{ _('Original File') }}
+            </a>
+            <a href="{{ url_for('files.original_file_content', file_id=file[0], download=1) }}"
+               class="btn btn-outline-secondary" title="{{ _('Download the original file') }}">
+                <i class="bi bi-download me-1"></i>{{ _('Original') }}
+            </a>
             <button class="btn btn-outline-secondary" id="btnCopy"><i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}</button>
             <button class="btn btn-outline-secondary" id="btnDownload"><i class="bi bi-download me-1"></i>{{ _('Download') }}</button>
             <button class="btn btn-outline-secondary" id="btnPrint"><i class="bi bi-printer me-1"></i>{{ _('Print') }}</button>

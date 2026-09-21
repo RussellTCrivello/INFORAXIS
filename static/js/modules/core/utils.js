@@ -16,6 +16,32 @@ export function escapeHtml(text) {
 }
 
 /**
+ * Escape a value for use inside a double-quoted HTML attribute.
+ *
+ * escapeHtml() escapes via textContent -> innerHTML, which handles & < > but
+ * NOT quotes, because a text node never contains them. That is correct for
+ * element content and unsafe for attribute values: a filename of
+ *
+ *     x" onmouseover="alert(1)
+ *
+ * survives escapeHtml unchanged, closes the attribute and injects a new one.
+ * Filenames inside an uploaded archive are attacker-chosen, so every
+ * attribute built from one needs this escaper instead.
+ *
+ * @param {*} value - raw value, typically an untrusted filename
+ * @returns {string} value safe to place inside a double-quoted attribute
+ */
+export function escapeAttribute(value) {
+    if (value == null) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
  * Format file size in human-readable format
  * @param {number} bytes - File size in bytes
  * @returns {string} Formatted file size

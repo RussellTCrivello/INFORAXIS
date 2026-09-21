@@ -130,6 +130,9 @@ const FunctionManager = {
     // File operations
     fileOperations: {
         details: fileDetails,
+        // Export helpers (copy/download/coordinates) live here so the global
+        // click delegate can reach them without relying on window globals.
+        fileExport: fileExport,
         export: fileExport,
         navigation: fileNavigation,
         selection: fileSelection,
@@ -197,6 +200,8 @@ if (typeof window !== 'undefined') {
     window.showFileDetails = fileDetails.showFileDetails;
     window.closeFileModal = fileDetails.closeFileModal;
     window.exportFile = fileExport.exportFile;
+    window.switchModalContentTab = fileDetails.switchModalContentTab;
+    window.getModalContentTab = fileDetails.getModalContentTab;
     window.previewFile = globalSearch.previewFile; // Also expose previewFile directly for backward compatibility
     window.copyModalContent = fileExport.copyModalContent;
     window.downloadModalContent = fileExport.downloadModalContent;
