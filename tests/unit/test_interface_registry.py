@@ -404,3 +404,101 @@ class TestLegacyIdsStayOutOfCode:
 
         for interface in REGISTRY:
             assert f"'{interface.interface_id}'" not in text, interface.interface_id
+
+class TestDeliberateAbsences:
+    """What an interface does *not* declare has to be a decision.
+
+    `help_topic` and `keyboard_shortcut` are optional, and an omitted value is
+    indistinguishable from a forgotten one by inspection - which is how a
+    product surface ends up unreachable by keyboard and unexplained in help
+    without anybody deciding that. These two sets enumerate the interfaces
+    that legitimately have no help topic and no shortcut; adding a third means
+    editing this test, which means somebody had to decide.
+    """
+
+    #: Internal or product-internal surfaces: no help page, no shortcut.
+    WITHOUT_HELP = {"concurrency_monitor", "import_export_console"}
+
+    #: Interfaces whose shortcut is not yet declared (§24: the data contract
+    #: comes first; the command palette that consumes it is not built).
+    WITHOUT_SHORTCUT = {
+        "sources", "sides", "keywords", "words", "categories", "email_words",
+        "analyst_categorization", "classification", "import_center",
+        "comprehensive_dashboard", "charts_dashboard", "import_export_console",
+        "interface_manager", "concurrency_monitor",
+    }
+
+    def test_only_the_named_interfaces_lack_a_help_topic(self):
+        from core.interfaces import REGISTRY
+
+        without = {i.interface_id for i in REGISTRY if not i.help_topic}
+        assert without == self.WITHOUT_HELP, (
+            "the set of interfaces with no help topic changed; if that is "
+            "deliberate, update WITHOUT_HELP: " + repr(sorted(without)))
+
+    def test_only_the_named_interfaces_lack_a_shortcut(self):
+        from core.interfaces import REGISTRY
+
+        without = {i.interface_id for i in REGISTRY if not i.keyboard_shortcut}
+        assert without == self.WITHOUT_SHORTCUT, (
+            "the set of interfaces with no keyboard shortcut changed; if that "
+            "is deliberate, update WITHOUT_SHORTCUT: " + repr(sorted(without)))
+
+    def test_the_named_absences_are_still_real_interfaces(self):
+        """A typo in the lists above must not silently pass."""
+        from core.interfaces import is_registered
+
+        for interface_id in self.WITHOUT_HELP | self.WITHOUT_SHORTCUT:
+            assert is_registered(interface_id), interface_id
+
+    def test_every_navigable_interface_has_a_help_topic(self):
+        """Anything an operator can reach from the sidebar is documented."""
+        from core.interfaces import REGISTRY
+
+        missing = [i.interface_id for i in REGISTRY
+                   if i.route and i.interface_id not in self.WITHOUT_HELP and not i.help_topic]
+        assert missing == [], missing
+
+
+class TestEndpointExceptionsAreDeliberate:
+    """The coverage rule tolerates exceptions - a fixed, named list of them.
+
+    §27: "Do not permit silent omissions." A page may be exempted from the
+    one-owner rule, but only by appearing here, so the exemption is visible in
+    a diff instead of an absence nobody notices.
+    """
+
+    def test_the_system_endpoints_are_the_declared_set(self):
+        from core.interfaces.inventory import SYSTEM_ENDPOINTS
+
+        assert set(SYSTEM_ENDPOINTS) == {
+            "static", "favicon", "get_csrf_token", "set_language",
+            "auth.login", "auth.login_page", "auth.logout", "auth.me",
+            "auth.change_password", "auth.first_admin_page", "auth.first_admin_create",
+            "setup.setup_page", "setup.system_check", "setup.test_database",
+            "setup.run_installation", "setup.check_setup_status",
+            "health.health",
+        }
+
+    def test_the_internal_page_is_the_concurrency_dashboard(self):
+        from core.interfaces.inventory import INTERNAL_PAGE_ENDPOINTS
+
+        # The one page that is part of the application but not of the product
+        # surface, and it is owned by an INTERNAL interface.
+        assert set(INTERNAL_PAGE_ENDPOINTS) == {"concurrency.dashboard"}
+
+    def test_the_redirects_are_the_compatibility_aliases(self):
+        from core.interfaces.inventory import REDIRECT_ENDPOINTS
+
+        assert set(REDIRECT_ENDPOINTS) == {"files.upload_page"}
+
+    def test_the_test_scaffolding_prefix_is_isolated(self):
+        from core.interfaces.inventory import TEST_ENDPOINT_PREFIXES
+
+        assert tuple(TEST_ENDPOINT_PREFIXES) == ("/_test/",)
+
+    def test_a_test_endpoint_is_not_counted_as_a_product_page(self):
+        from core.interfaces.inventory import EndpointClass, classify_endpoint
+
+        assert classify_endpoint(
+            "_sec08_boom", "/_test/sec08/boom", ("GET",)) == EndpointClass.TEST_ENDPOINT
