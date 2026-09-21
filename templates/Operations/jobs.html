@@ -67,12 +67,11 @@
     const m = Math.floor(s / 60), sec = Math.round(s % 60);
     return m ? `${m}m ${sec}s` : `${sec}s`;
   };
-  const statusBadge = (s) => {
-    const cls = {RUNNING:'primary', QUEUED:'secondary', PAUSED:'warning',
-      CANCELLING:'warning', CANCELLED:'dark', COMPLETED:'success',
-      COMPLETED_WITH_WARNINGS:'info', FAILED:'danger'}[s] || 'light';
-    return `<span class="badge bg-${cls}">${(s||'').replace(/_/g,' ')}</span>`;
-  };
+  // The status words and their colours come from the shared vocabulary
+  // (core/frontend/status_vocabulary.py, injected as JSON by base.html):
+  // the job pages used to disagree with each other about a status such as
+  // COMPLETED_WITH_WARNINGS.
+  const statusBadge = (s) => window.InforaxisStatus.badge(s);
 
   async function loadJobs() {
     const p = new URLSearchParams();

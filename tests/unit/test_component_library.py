@@ -78,6 +78,19 @@ class TestEveryComponentDeclaresItself:
             for state in component.states:
                 assert state in STATES, f"{name} declares an unknown state: {state}"
 
+    def test_declared_presentation_states_are_from_that_vocabulary(self):
+        """A presentation state is not a component state, and vice versa."""
+        from core.frontend.status_vocabulary import PRESENTATION_STATES
+
+        for name, component in components().items():
+            for state in component.presentation_states:
+                assert state in PRESENTATION_STATES, (
+                    f"{name} declares an unknown presentation state: {state}")
+            for state in component.presentation_states:
+                assert state not in STATES or state in {"success", "warning"}, (
+                    f"{name}: {state} is being used as both a component state "
+                    "and a presentation state")
+
     def test_every_component_says_what_it_is_for(self):
         for name, component in components().items():
             assert component.purpose, f"{name} does not say what it is for"
@@ -282,6 +295,16 @@ class TestAdoption:
         assert 'class="filter-group' not in text
         assert 'class="search-input-wrapper"' not in text
 
+    def test_the_status_badge_migration_is_pinned(self):
+        for relative in ("templates/Keyword/keywords_list.html",
+                         "templates/Word/Word_list.html",
+                         "templates/Word/Word_detail.html",
+                         "templates/Settings/settings.html",
+                         "templates/email_words/email_words.html",
+                         "templates/Sources/sources_list.html"):
+            text = (PROJECT_ROOT / relative).read_text()
+            assert "status_badge" in text, relative
+
     def test_the_table_component_covers_the_states_a_list_has(self):
         table = components()["table"]
         assert {"normal", "empty", "filtered", "selected", "loading",
@@ -304,6 +327,13 @@ class TestAdoption:
         assert counts()["pattern_table"] == 13
         assert counts()["pattern_filter"] == 14
         assert counts()["pattern_toolbar"] == 6
+        # Status badges are counted by what a badge *shows*: a status word or
+        # a status variable is a status badge, a count or an id is a chip, and
+        # conflating them said "22 status badges" when most were numbers.
+        assert counts()["badges_status"] == 0, (
+            "a hand-written status badge is back; every one of them now "
+            "renders through the component and the vocabulary")
+        assert counts()["badges_chip"] == 68
 
 
 class TestTheComponentsRenderWhatTheyPromised:

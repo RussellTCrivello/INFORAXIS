@@ -111,10 +111,32 @@ PATTERNS: List[Pattern] = [
     Pattern("filter", "Hand-written filter control",
             r'(filter-bar|filter-group|filters-panel|filter-control)', "filter_bar"),
     Pattern("confirm", "Browser confirm() dialog", r"\bconfirm\(", "confirm_dialog"),
-    Pattern("badge", "Hand-written status badge", r'class="badge bg-[a-z]+', "status_badge"),
+    # A status badge and a count chip are both `<span class="badge bg-…">`, so
+    # counting them together would have said "22 status badges to migrate" when
+    # most of them are numbers, ids and HTTP methods. They are counted apart,
+    # by what the badge actually shows - see `badge_usage`.
+    Pattern("status_badge", "Hand-written status badge", r'class="badge bg-[a-z]+', "status_badge"),
+    Pattern("badge_chip", "Hand-written badge chip (count, id, method)",
+            r'class="badge bg-[a-z]+', None),
     Pattern("toolbar", "Hand-written action bar",
             r'class="action-bar|action-toolbar|btn-toolbar', "action_toolbar"),
 ]
+
+
+#: Areas that legitimately do not use a shared component, with the reason and
+#: who owns the decision. Without this list the two failure modes are a
+#: duplicate component grown in secret, or a generic one overloaded until it
+#: stops being usable - so an exception is written down, and the audit prints
+#: it rather than counting it as debt.
+EXCEPTIONS: Dict[str, Dict[str, str]] = {
+    "analysis relationship matrix": {
+        "reason": "A matrix of relationships between records is not a list of "
+                  "records: its rows and columns are both entities, and its "
+                  "cells are computed pairs. Forcing it into the table "
+                  "component would give the component a second meaning.",
+        "owner": "analysis workspace",
+    },
+}
 
 
 class Component(NamedTuple):
@@ -125,6 +147,10 @@ class Component(NamedTuple):
     classes: List[str]
     notes: str
     macros: List[str]
+    #: The presentation states a component accepts, where that differs from
+    #: the component-state vocabulary (§63) it is described by. Keeping them
+    #: as two fields is what stops "danger" being read as a §63 state.
+    presentation_states: List[str] = []
 
 
 def _parse_field(body: str, key: str) -> str:
@@ -161,8 +187,107 @@ def components() -> Dict[str, Component]:
             classes=_split(_parse_field(body, "classes")),
             notes=_parse_field(body, "notes"),
             macros=macros,
+            presentation_states=_split(_parse_field(body, "presentation_states")),
         )
     return found
+
+
+#: The words a hand-written badge shows when it is showing a status. Taken from
+#: the vocabulary rather than typed here, so a status added to the application
+#: is counted without this file changing.
+def _status_words() -> set:
+    from core.frontend.status_vocabulary import VOCABULARY
+
+    words = {label.lower() for _state, label in VOCABULARY.values()}
+    words |= {state.lower().replace("_", " ") for state in VOCABULARY}
+    return words
+
+
+BADGE_ELEMENT = re.compile(r'class="badge[^"]*"[^>]*>(.*?)</span>', re.DOTALL)
+
+
+def badge_usage(template_text: str) -> tuple:
+    """(status badges, other chips) written by hand in one template.
+
+    A badge showing a status word or a `…status…` variable is a status badge;
+    a badge showing a number, an id or an HTTP method is not, and migrating it
+    would be busy-work dressed up as progress.
+    """
+    words = _status_words()
+    status = chips = 0
+    for inner in BADGE_ELEMENT.findall(template_text):
+        text = re.sub(r"<[^>]+>", " ", inner)
+        # Only the words: `{{ _('Active') }}` is the same badge as `Active`.
+        words_in_badge = re.sub(r"[^a-z ]+", " ", text.lower()).split()
+        if not words_in_badge:
+            continue
+        phrase = " ".join(words_in_badge)
+        if "status" in words_in_badge or phrase in words:
+            status += 1
+        else:
+            chips += 1
+    return status, chips
+
+
+def component_file(component_name: str) -> str:
+    """The file a component lives in - the name and the file differ for some."""
+    entry = components().get(component_name)
+    return entry.path if entry else ""
+
+
+def standardized(pattern: Pattern) -> int:
+    """How many templates read through this pattern's component.
+
+    The other half of the adoption figure: the audit counts what is still
+    written by hand, this counts what has moved, and together they give the
+    completion criterion this phase is measured against.
+    """
+    if not pattern.component:
+        return 0
+    path = component_file(pattern.component)
+    if not path:
+        return 0
+    # The component's *file* is the unambiguous reference. Counting templates
+    # that merely contain the word "table" is how a metric stops meaning
+    # anything: twenty templates "use" the table component because twenty
+    # templates have a table in them.
+    reference = f"components/{path.split('components/')[-1]}"
+    return sum(1 for template in sorted(TEMPLATES.rglob("*.html"))
+               if COMPONENTS not in template.parents
+               and reference in template.read_text(errors="ignore"))
+
+
+def adoption() -> List[Dict[str, object]]:
+    """Standardized versus hand-written, per pattern - the phase's measure."""
+    rows = []
+    for pattern in PATTERNS:
+        if pattern.key in ("badge_chip",):
+            continue
+        hand = len(users(pattern)) if pattern.key != "badge_chip" else 0
+        done = standardized(pattern)
+        total = hand + done
+        rows.append({
+            "key": pattern.key,
+            "description": pattern.description,
+            "component": pattern.component,
+            "standardized": done,
+            "hand_written": hand,
+            "total": total,
+            "rate": round(100 * done / total) if total else None,
+        })
+    return rows
+
+
+def badge_totals() -> Dict[str, int]:
+    """Status badges and chips across every template, counted by what they show."""
+    status = chips = 0
+    for path in sorted(TEMPLATES.rglob("*.html")):
+        if COMPONENTS in path.parents:
+            continue
+        found = badge_usage(path.read_text(errors="ignore"))
+        status += found[0]
+        chips += found[1]
+    return {"status": status, "chip": chips}
 
 
 def users(pattern: Pattern) -> List[str]:
@@ -172,8 +297,19 @@ def users(pattern: Pattern) -> List[str]:
     for path in sorted(TEMPLATES.rglob("*.html")):
         if COMPONENTS in path.parents:
             continue
-        if expression.search(path.read_text(errors="ignore")):
-            hits.append(str(path.relative_to(PROJECT_ROOT)))
+        text = path.read_text(errors="ignore")
+        if pattern.key == "status_badge":
+            # Counted by what the badge shows, not by its markup: see
+            # `badge_usage`. A template full of count chips is not a template
+            # that has a status badge left to migrate.
+            if badge_usage(text)[0] == 0:
+                continue
+        elif pattern.key == "badge_chip":
+            if badge_usage(text)[1] == 0:
+                continue
+        elif not expression.search(text):
+            continue
+        hits.append(str(path.relative_to(PROJECT_ROOT)))
     return hits
 
 
@@ -197,6 +333,8 @@ def counts() -> Dict[str, int]:
         "states_covered": sum(1 for v in state_coverage(library).values() if v),
         "states_not_yet": len(PLANNED_STATES),
         **{f"pattern_{p.key}": len(users(p)) for p in PATTERNS},
+        "badges_status": badge_totals()["status"],
+        "badges_chip": badge_totals()["chip"],
     }
 
 
@@ -360,10 +498,45 @@ def audit_block() -> str:
     parts.append("| Markup | Component that replaces it | Templates |")
     parts.append("| --- | --- | --- |")
     for pattern in PATTERNS:
-        hits = users(pattern)
+        if pattern.key == "badge_chip":
+            hit_count = str(badge_totals()["chip"]) + " badges"
+        elif pattern.key == "status_badge":
+            hit_count = str(badge_totals()["status"]) + " badges, in " + \
+                str(len(users(pattern))) + " templates"
+        else:
+            hit_count = str(len(users(pattern))) + " templates"
         owner = f"`{pattern.component}`" if pattern.component in library else "—"
-        parts.append(f"| {pattern.description} | {owner} | {len(hits)} |")
+        parts.append(f"| {pattern.description} | {owner} | {hit_count} |")
     parts.append("")
+
+    # ---- adoption ------------------------------------------------------
+    parts.append("### Adoption\n")
+    parts.append("How much of the repeated markup has moved onto its "
+                 "component. Standardized counts the templates that read "
+                 "through the component; hand-written counts what is still "
+                 "done by hand; the rate is the completion criterion for this "
+                 "phase, not an impression of it.\n")
+    parts.append("| Markup | Standardized | Hand-written | Adoption |")
+    parts.append("| --- | --- | --- | --- |")
+    for row in adoption():
+        if row["total"] == 0:
+            rate = "—"
+        else:
+            rate = f"{row['rate']}%"
+        parts.append(f"| {row['description']} | {row['standardized']} | "
+                     f"{row['hand_written']} | {rate} |")
+    parts.append("")
+
+    if EXCEPTIONS:
+        parts.append("**Declared exceptions.** Not everything that looks "
+                     "similar is the same thing, and overloaded components "
+                     "stop being usable. An exception is a decision with an "
+                     "owner:\n")
+        parts.append("| Area | Reason | Owner |")
+        parts.append("| --- | --- | --- |")
+        for area, entry in EXCEPTIONS.items():
+            parts.append(f"| {area} | {entry['reason']} | {entry['owner']} |")
+        parts.append("")
 
     # ---- CSS ownership -------------------------------------------------
     ownership = class_ownership()

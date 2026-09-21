@@ -28,6 +28,7 @@
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
 {% from 'components/states.html' import empty_state %}
+{% from 'components/status_badge.html' import status_badge %}
 {% from 'components/filter_bar.html' import filter_section, filter_grid, filter_group, search_group %}
 {% from 'components/action_toolbar.html' import action_toolbar, action_group, action_button %}
     {% call page_tips() %}
@@ -256,18 +257,14 @@
                         <td>
                             <strong>{{ keyword.text }}</strong>
                             {% if keyword.is_duplicate %}
-                                <span class="badge bg-warning ms-2" title="{{ _('Duplicate keyword') }}">{{ _('Duplicate') }}</span>
+                                {{ status_badge(status='duplicate', title=_('Duplicate keyword'), extra_class='ms-2') }}
                             {% endif %}
                         </td>
                         <td>
                             <span class="badge bg-info">{{ keyword.usage_count }}</span>
                         </td>
                         <td>
-                            {% if keyword.usage_count > 0 %}
-                                <span class="badge bg-success">{{ _('Active') }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ _('Unused') }}</span>
-                            {% endif %}
+                            {{ status_badge(status='active' if keyword.usage_count > 0 else 'unused') }}
                         </td>
                         <td>
                             <span class="text-muted">{{ keyword.category_name|default(_('Uncategorized')) }}</span>

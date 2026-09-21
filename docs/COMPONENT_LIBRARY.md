@@ -77,7 +77,7 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 | `pagination_cursor` | `templates/components/cursor_pagination.html` | `normal`, `filtered` | — | The same job for cursor-paged lists, where "page 7" does not exist and only forward/backward is meaningful. |
 | `sidebar_nav` | `templates/components/sidebar_nav.html` | `normal`, `empty` | — | The product navigation, grouped by domain, rendered from the navigation model the application prepares. |
 | `states` | `templates/components/states.html` | `loading`, `empty`, `filtered`, `success`, `warning`, `error`, `unauthorized`, `unavailable`, `archived` | `state_panel`, `empty_state`, `filtered_state`, `loading_state`, `success_state`, `warning_state`, `error_state`, `unauthorized_state`, `unavailable_state`, `archived_state` | The states a region can be in, in one place, so a page never invents its own wording for "nothing here yet" or its own markup for "this failed". |
-| `status_badge` | `templates/components/status_badge.html` | `success`, `warning`, `error`, `unavailable`, `archived` | `status_badge`, `status_badge_with_icon` | One way to show a status word, so the same state is not green on one page and grey on the next. |
+| `status_badge` | `templates/components/status_badge.html` | `success`, `warning`, `error`, `unavailable`, `archived` | `status_badge`, `_chip`, `status_badge_with_icon` | One way to show a status word, so the same state is not green on one page and grey on the next. An application status is looked up in the vocabulary - `core/frontend/status_vocabulary.py` - which maps it to one of a few presentation states; the component only turns that state into classes. |
 | `table` | `templates/components/table.html` | `normal`, `empty`, `filtered`, `selected`, `loading`, `error` | `data_table`, `table_empty_row`, `table_loading_row`, `table_error_row`, `select_all_checkbox`, `sort_header` | The frame a list of records is read in, and the rows that stand in for a list that is empty, still loading or failed. Ten tables in this application were written with ten different class combinations; this is the one they become. |
 
 ### States (§63)
@@ -106,16 +106,40 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 
 | Markup | Component that replaces it | Templates |
 | --- | --- | --- |
-| Hand-written empty state | `states` | 4 |
-| Hand-written loading indicator | `states` | 8 |
-| Hand-written inline error | `states` | 7 |
-| Hand-written table | `table` | 13 |
-| Hand-written pagination | `pagination` | 6 |
-| Hand-written search input | — | 13 |
-| Hand-written filter control | `filter_bar` | 14 |
-| Browser confirm() dialog | — | 2 |
-| Hand-written status badge | `status_badge` | 22 |
-| Hand-written action bar | `action_toolbar` | 6 |
+| Hand-written empty state | `states` | 4 templates |
+| Hand-written loading indicator | `states` | 8 templates |
+| Hand-written inline error | `states` | 7 templates |
+| Hand-written table | `table` | 13 templates |
+| Hand-written pagination | `pagination` | 6 templates |
+| Hand-written search input | — | 13 templates |
+| Hand-written filter control | `filter_bar` | 14 templates |
+| Browser confirm() dialog | — | 2 templates |
+| Hand-written status badge | `status_badge` | 0 badges, in 0 templates |
+| Hand-written badge chip (count, id, method) | — | 68 badges |
+| Hand-written action bar | `action_toolbar` | 6 templates |
+
+### Adoption
+
+How much of the repeated markup has moved onto its component. Standardized counts the templates that read through the component; hand-written counts what is still done by hand; the rate is the completion criterion for this phase, not an impression of it.
+
+| Markup | Standardized | Hand-written | Adoption |
+| --- | --- | --- | --- |
+| Hand-written empty state | 2 | 4 | 33% |
+| Hand-written loading indicator | 2 | 8 | 20% |
+| Hand-written inline error | 2 | 7 | 22% |
+| Hand-written table | 1 | 13 | 7% |
+| Hand-written pagination | 7 | 6 | 54% |
+| Hand-written search input | 0 | 13 | 0% |
+| Hand-written filter control | 1 | 14 | 7% |
+| Browser confirm() dialog | 0 | 2 | 0% |
+| Hand-written status badge | 6 | 0 | 100% |
+| Hand-written action bar | 1 | 6 | 14% |
+
+**Declared exceptions.** Not everything that looks similar is the same thing, and overloaded components stop being usable. An exception is a decision with an owner:
+
+| Area | Reason | Owner |
+| --- | --- | --- |
+| analysis relationship matrix | A matrix of relationships between records is not a list of records: its rows and columns are both entities, and its cells are computed pairs. Forcing it into the table component would give the component a second meaning. | analysis workspace |
 
 ### CSS ownership of the classes components render
 
@@ -124,7 +148,7 @@ Every class a component renders has exactly one owner. **OWNED** means an INFORA
 | Ownership | Classes |
 | --- | --- |
 | OWNED (INFORAXIS) | 53 |
-| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 138 |
+| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 137 |
 | UNKNOWN | 0 |
 
 Third-party stylesheets bundled with the application: `static/css/bootstrap.min.css`, `static/icons/bootstrap-icons.css`.
@@ -136,6 +160,32 @@ Owned by declaration rather than by a stylesheet - the component states these ar
 * `sidebar-nav-badge` (sidebar_nav.html)
 
 <!-- END GENERATED COMPONENT AUDIT -->
+
+## How this is measured
+
+Two numbers, both generated, because "introduce shared components" is not
+verifiable on its own:
+
+* **hand-written** — the templates still building this markup themselves, and
+  for badges, the badges still built by hand;
+* **adoption** — the templates reading through the component, and the rate
+  between the two, which is the completion criterion for this phase.
+
+Two things the audit is careful about, because a metric that counts the wrong
+thing is worse than no metric:
+
+* a status badge is counted by **what it shows**. A badge showing `Active` is a
+  status badge; a badge showing `#41` or `GET` is a count or a method. The
+  earlier count said "22 status badges" when most of them were numbers;
+* a component's CSS ownership is classified as **OWNED**, **THIRD_PARTY** or
+  **UNKNOWN**. Bootstrap and Bootstrap Icons are expected dependencies, so
+  using them is not a finding; only UNKNOWN fails the guardrail.
+
+**Declared exceptions** are part of the contract, not a loophole. Where
+something looks like a repeated pattern but is a different thing, it is written
+down with a reason and an owner, so the alternative — a second component grown
+quietly, or the generic one overloaded until nobody can use it — does not
+happen.
 
 ## Where this goes next
 

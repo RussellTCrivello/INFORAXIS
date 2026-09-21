@@ -1,5 +1,6 @@
 <!-- templates/settings.html - Comprehensive Settings Interface -->
 {% extends "base.html" %}
+{% from 'components/status_badge.html' import status_badge %}
 
 {% block title %}{{ _('Settings') }}{% endblock %}
 
@@ -230,9 +231,9 @@
                                 {% endif %}
                             </span>
                             {% if lang_code == system_language %}
-                            <span class="badge bg-primary-subtle text-primary-emphasis">{{ _('Active') }}</span>
+                            {{ status_badge(status='active', variant='quiet') }}
                             {% else %}
-                            <span class="badge bg-light text-dark border">{{ _('Inactive') }}</span>
+                            {{ status_badge(status='inactive', variant='quiet') }}
                             {% endif %}
                         </button>
                         {% endfor %}

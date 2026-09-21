@@ -7,6 +7,7 @@ from flask_babel import Babel, gettext as _
 from datetime import datetime, date
 import time
 import logging
+from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,46 @@ def feature_enabled(feature_id: str) -> bool:
     """Is a cross-cutting feature switched on? (Safe when state is unreadable.)"""
     state = _interface_state()
     return bool(state.is_enabled(feature_id)) if state is not None else False
+
+
+def status_presentation(status):
+    """How to present an application status (see core/frontend/status_vocabulary).
+
+    A global rather than a context value because the badge component is a
+    macro, and a macro cannot see the render context.
+    """
+    try:
+        from core.frontend.status_vocabulary import present
+
+        return present(status)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("status vocabulary unavailable for %r: %s", status, exc)
+
+        class _Unknown(NamedTuple):
+            status: str
+            state: str = "neutral"
+            label: str = ""
+            known: bool = False
+
+        return _Unknown(str(status or ""), label=str(status or ""))
+
+
+def status_state(status):
+    """Just the presentation state, for a caller that needs the word."""
+    return status_presentation(status).state
+
+
+def status_label(status):
+    """Just the label, translated."""
+    return _(status_presentation(status).label)
+
+
+def status_vocabulary():
+    """The vocabulary as a plain dict, for the JSON the page injects."""
+    from core.frontend.status_vocabulary import VOCABULARY
+
+    return {status: {"state": state, "label": label}
+            for status, (state, label) in VOCABULARY.items()}
 
 
 def interface_for(endpoint):
@@ -154,6 +195,9 @@ def register_common_routes(app, babel_instance):
     # shell through the context processor below.
     app.jinja_env.globals.setdefault("feature_enabled", feature_enabled)
     app.jinja_env.globals.setdefault("interface_for", interface_for)
+    app.jinja_env.globals.setdefault("status_presentation", status_presentation)
+    app.jinja_env.globals.setdefault("status_state", status_state)
+    app.jinja_env.globals.setdefault("status_label", status_label)
 
     @app.context_processor
     def inject_now():
@@ -223,6 +267,11 @@ def register_common_routes(app, babel_instance):
             # way round) would fail quietly.
             context['page_identity'] = present_page(
                 request.endpoint, interface_state, current_user_obj, url_for)
+            # The status vocabulary, for the JavaScript that renders a status
+            # chip when a page updates without reloading. Injected as data, so
+            # the mapping has one owner (core/frontend/status_vocabulary.py)
+            # and both renderers read it.
+            context['status_vocabulary'] = status_vocabulary()
 
             # `interface_for` is an environment global (see above): components
             # need it, and macros cannot see this context.

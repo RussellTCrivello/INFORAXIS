@@ -2,6 +2,7 @@
 
 <!-- templates/sources_list.html -->
 {% extends "base.html" %}
+{% from 'components/status_badge.html' import status_badge %}
 
 {% block title %}{{ _('Sources Management') }}{% endblock %}
 
@@ -293,7 +294,10 @@
                         <div class="id-card-field">
                             <i class="bi bi-lock me-2 text-muted"></i>
                             <span class="id-card-label">{{ _('Access Status') }}:</span>
-                            <span class="badge bg-info">{{ source.access_status }}</span>
+                            {#- `access_status` is free text an operator typed, not a status this
+    application defines, so it is shown as a chip in its own words rather
+    than being given a meaning the vocabulary does not have. -#}
+                            {{ status_badge(source.access_status, tone='info') }}
                         </div>
                         {% endif %}
                         

@@ -190,6 +190,13 @@
     <script src="{{ url_for('static', filename='js/i18n/locales/he.js') }}?v=20260912b" defer></script>
     <script src="{{ url_for('static', filename='js/i18n/locales/fa.js') }}?v=20260912b" defer></script>
     <script src="{{ url_for('static', filename='js/modules/core/app-i18n.js') }}?v=20260912b" defer></script>
+    {#- The status vocabulary, defined once in core/frontend/status_vocabulary.py.
+        Server-rendered badges and JavaScript that draws a status chip both read
+        this, so there is one answer to "what colour is a paused job". -#}
+    {% if status_vocabulary %}
+    <script type="application/json" id="status-vocabulary">{{ status_vocabulary|tojson }}</script>
+    {% endif %}
+    <script src="{{ url_for('static', filename='js/modules/core/status.js') }}?v=20260921a" defer></script>
 </head>
 
 <body data-page-type="{% block page_type %}default{% endblock %}"

@@ -1,5 +1,6 @@
 <!-- templates/email_words.html -->
 {% extends "base.html" %}
+{% from 'components/status_badge.html' import status_badge %}
 
 {% block title %}{{ _('Email-like Words') }}{% endblock %}
 
@@ -289,10 +290,7 @@
                                 </span>
                             </td>
                             <td>
-                                <span class="badge bg-success">
-                                    <i class="bi bi-check-circle me-1"></i>
-                                    {{ _('Valid') }}
-                                </span>
+                                {{ status_badge(status='valid', icon='bi-check-circle') }}
                             </td>
                             <td>
                                 {% set d = word.split('@')[1] if '@' in word else '' %}

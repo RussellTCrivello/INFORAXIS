@@ -20,6 +20,7 @@
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
 {% from 'components/table.html' import data_table, table_empty_row %}
+{% from 'components/status_badge.html' import status_badge %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -264,11 +265,7 @@
                             <span class="badge bg-info">{{ word.usage_count }}</span>
                         </td>
                         <td>
-                            {% if word.usage_count > 0 %}
-                                <span class="badge bg-success">{{ _('Active') }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ _('Unused') }}</span>
-                            {% endif %}
+                            {{ status_badge(status='active' if word.usage_count > 0 else 'unused') }}
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm">
