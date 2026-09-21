@@ -117,20 +117,23 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Hand-written status badge | `status_badge` | 22 |
 | Hand-written action bar | `action_toolbar` | 6 |
 
-### Classes rendered by components
+### CSS ownership of the classes components render
 
-These class names are rendered by a component but no stylesheet defines them:
+Every class a component renders has exactly one owner. **OWNED** means an INFORAXIS stylesheet defines it, or the component declares it in its own `classes:` header. **THIRD_PARTY** means a bundled dependency defines it - Bootstrap and Bootstrap Icons are expected dependencies, and using them is not a finding. **UNKNOWN** means nobody does, and an unknown class is how a component invents a style: it fails the guardrail test rather than being reported and forgotten.
 
-* `templates/components/analyst_classify.html`: `bi-person-fill`, `bi-person-tags`, `bi-tag`, `bi-tag-fill`
-* `templates/components/breadcrumbs.html`: `bi-house-door`
-* `templates/components/cursor_pagination.html`: `bi-info-circle`, `cursor-pagination-container`
-* `templates/components/file_nav.html`: `file-nav__text`
-* `templates/components/filter_bar.html`: `bi-x`
-* `templates/components/operations_widget.html`: `bi-box-arrow-in-down`, `bi-clock-history`, `bi-list-check`, `bi-plus-lg`, `bi-search`
-* `templates/components/page_tips.html`: `bi-chevron-up`, `bi-lightbulb-fill`
-* `templates/components/sidebar_nav.html`: `sidebar-nav-badge`
-* `templates/components/table.html`: `bi-arrow-down-up`
-* `templates/components/unified_pagination.html`: `bi-info-circle`
+| Ownership | Classes |
+| --- | --- |
+| OWNED (INFORAXIS) | 53 |
+| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 138 |
+| UNKNOWN | 0 |
+
+Third-party stylesheets bundled with the application: `static/css/bootstrap.min.css`, `static/icons/bootstrap-icons.css`.
+
+Owned by declaration rather than by a stylesheet - the component states these are its own hooks, and no rule styles them (which is a decision, not an accident):
+
+* `cursor-pagination-container` (cursor_pagination.html)
+* `file-nav__text` (file_nav.html)
+* `sidebar-nav-badge` (sidebar_nav.html)
 
 <!-- END GENERATED COMPONENT AUDIT -->
 

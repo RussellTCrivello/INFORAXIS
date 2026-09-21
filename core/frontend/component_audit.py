@@ -24,6 +24,7 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+from functools import lru_cache
 from typing import Dict, Iterable, List, NamedTuple
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -33,6 +34,23 @@ STYLESHEETS = PROJECT_ROOT / "static/css"
 
 BEGIN = "<!-- BEGIN GENERATED COMPONENT AUDIT -->"
 END = "<!-- END GENERATED COMPONENT AUDIT -->"
+
+#: Stylesheets INFORAXIS owns. Anything defined here is the product's own
+#: vocabulary, whatever file it lands in.
+PROJECT_STYLESHEETS = ("static/css",)
+
+#: Stylesheets somebody else owns, bundled with the application. A class found
+#: here is a dependency, not a decision: it is expected to be defined outside
+#: this repository and it is not a violation to use it.
+THIRD_PARTY_STYLESHEETS = (
+    "static/css/bootstrap.min.css",
+    "static/icons/bootstrap-icons.css",
+)
+
+#: The three answers a rendered class can have.
+OWNED = "OWNED"
+THIRD_PARTY = "THIRD_PARTY"
+UNKNOWN = "UNKNOWN"
 
 #: The states a component has to have an answer for (spec §63). A component
 #: implements the states that apply to it; every state must be implemented by
@@ -182,8 +200,16 @@ def counts() -> Dict[str, int]:
     }
 
 
-def _classes_in_files(library: Dict[str, Component]) -> Dict[str, List[str]]:
-    """The class names the component files actually render.
+class RenderedClass(NamedTuple):
+    """A class a component renders, and who owns it."""
+
+    name: str
+    ownership: str
+    source: str
+
+
+def _classes_in_files(library: Dict[str, Component] | None = None) -> Dict[str, List[str]]:
+    """The class names each component file actually renders.
 
     Jinja expressions are removed first: `class="badge {{ tone }}"` renders a
     class the component does not name, and the identifiers inside the
@@ -191,8 +217,8 @@ def _classes_in_files(library: Dict[str, Component]) -> Dict[str, List[str]]:
     """
     rendered: Dict[str, List[str]] = {}
     for path in sorted(COMPONENTS.glob("*.html")):
-        text = re.sub(r"\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}", " ", path.read_text(errors="ignore"),
-                      flags=re.DOTALL)
+        text = re.sub(r"\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}", " ",
+                      path.read_text(errors="ignore"), flags=re.DOTALL)
         names: set = set()
         for value in re.findall(r"""class=["']([^"']*)["']""", text):
             for token in re.split(r"\s+", value):
@@ -203,27 +229,86 @@ def _classes_in_files(library: Dict[str, Component]) -> Dict[str, List[str]]:
     return rendered
 
 
-def stylesheet_classes() -> set:
-    """Every class name any stylesheet defines (the design system's vocabulary)."""
+def stylesheet_classes(relative: str) -> set:
+    """The class names one stylesheet defines."""
+    path = PROJECT_ROOT / relative
+    if path.is_dir():
+        names: set = set()
+        for child in path.glob("*.css"):
+            names |= stylesheet_classes(str(child.relative_to(PROJECT_ROOT)))
+        return names
+    return set(re.findall(r"\.(-?[a-zA-Z_][\w-]*)", path.read_text(errors="ignore")))
+
+
+@lru_cache(maxsize=None)
+def owned_classes() -> frozenset:
+    """Every class INFORAXIS's own stylesheets define."""
     names: set = set()
-    for path in STYLESHEETS.glob("*.css"):
-        text = path.read_text(errors="ignore")
-        names.update(re.findall(r"\.([a-zA-Z][\w-]*)", text))
-    return names
+    for relative in PROJECT_STYLESHEETS:
+        names |= stylesheet_classes(relative)
+    # The third-party bundles also ship classes the project uses incidentally;
+    # those are still third-party, so they are removed from the owned set.
+    return frozenset(names - third_party_classes())
+
+
+@lru_cache(maxsize=None)
+def third_party_classes() -> frozenset:
+    """Every class the bundled third-party stylesheets define."""
+    names: set = set()
+    for relative in THIRD_PARTY_STYLESHEETS:
+        names |= stylesheet_classes(relative)
+    return frozenset(names)
+
+
+def classify_class(name: str, declared: set | None = None) -> RenderedClass:
+    """Owned, third-party, or unknown - and what says so.
+
+    A class is OWNED when a stylesheet INFORAXIS ships defines it, or when the
+    component that renders it declares it in its own `classes:` header: a
+    component saying "this class is mine" is a decision, and it is visible in
+    the component's declaration rather than inferred. THIRD_PARTY is an
+    expected dependency (Bootstrap, Bootstrap Icons). Anything else is
+    UNKNOWN, and an unknown class is how a component invents a style nobody
+    defined - which is what the guardrail exists to catch.
+    """
+    declared = declared or set()
+    if name.endswith(("-", "_")):
+        # A fragment built from a variable: `file-nav--{{ variant }}`.
+        prefix = name
+        return RenderedClass(
+            name,
+            OWNED if any(c.startswith(prefix) for c in owned_classes())
+            or declared and any(c.startswith(prefix) for c in declared)
+            else UNKNOWN,
+            "project stylesheet (built from a variable)")
+    if name in owned_classes():
+        return RenderedClass(name, OWNED, "project stylesheet")
+    if name in third_party_classes():
+        return RenderedClass(name, THIRD_PARTY,
+                             "Bootstrap" if name.startswith(("bi", "col", "row"))
+                             else "third-party bundle")
+    if name in declared:
+        return RenderedClass(name, OWNED, "component declaration")
+    return RenderedClass(name, UNKNOWN, "nothing defines it")
+
+
+def class_ownership() -> Dict[str, List[RenderedClass]]:
+    """Every class every component renders, classified."""
+    library = components()
+    declared_by_file = {component.path: set(component.classes)
+                        for component in library.values()}
+    report: Dict[str, List[RenderedClass]] = {}
+    for relative, names in _classes_in_files(library).items():
+        declared = declared_by_file.get(relative, set())
+        report[relative] = [classify_class(name, declared) for name in names]
+    return report
 
 
 def unknown_classes() -> Dict[str, List[str]]:
-    """Component classes that no stylesheet defines - a typo, or a new style.
-
-    Bootstrap utilities are part of the vocabulary; they are loaded from the
-    bundled stylesheet, so they resolve like everything else.
-    """
-    known = stylesheet_classes()
+    """Rendered classes with no owner: the violations."""
     problems: Dict[str, List[str]] = {}
-    for relative, names in _classes_in_files(components()).items():
-        missing = [n for n in names
-                   if n not in known
-                   and not any(k.startswith(n) for k in known)]
+    for relative, entries in class_ownership().items():
+        missing = [entry.name for entry in entries if entry.ownership == UNKNOWN]
         if missing:
             problems[relative] = missing
     return problems
@@ -280,18 +365,49 @@ def audit_block() -> str:
         parts.append(f"| {pattern.description} | {owner} | {len(hits)} |")
     parts.append("")
 
-    problems = unknown_classes()
-    parts.append("### Classes rendered by components\n")
-    if problems:
-        parts.append("These class names are rendered by a component but no "
-                     "stylesheet defines them:\n")
-        for path, names in sorted(problems.items()):
-            parts.append(f"* `{path}`: " + ", ".join(f"`{n}`" for n in names))
-    else:
-        parts.append("Every class name a component renders is defined by a "
-                     "stylesheet in `static/css/`; no component invents a "
-                     "style of its own.")
+    # ---- CSS ownership -------------------------------------------------
+    ownership = class_ownership()
+    totals = {OWNED: 0, THIRD_PARTY: 0, UNKNOWN: 0}
+    declared_hooks: List[str] = []
+    for relative, entries in sorted(ownership.items()):
+        for entry in entries:
+            totals[entry.ownership] += 1
+            if entry.ownership == OWNED and entry.source == "component declaration":
+                declared_hooks.append(f"`{entry.name}` ({relative.split('/')[-1]})")
+
+    parts.append("### CSS ownership of the classes components render\n")
+    parts.append("Every class a component renders has exactly one owner. "
+                 "**OWNED** means an INFORAXIS stylesheet defines it, or the "
+                 "component declares it in its own `classes:` header. "
+                 "**THIRD_PARTY** means a bundled dependency defines it - "
+                 "Bootstrap and Bootstrap Icons are expected dependencies, and "
+                 "using them is not a finding. **UNKNOWN** means nobody does, "
+                 "and an unknown class is how a component invents a style: it "
+                 "fails the guardrail test rather than being reported and "
+                 "forgotten.\n")
+    parts.append("| Ownership | Classes |")
+    parts.append("| --- | --- |")
+    parts.append(f"| OWNED (INFORAXIS) | {totals[OWNED]} |")
+    parts.append(f"| THIRD_PARTY (Bootstrap, Bootstrap Icons) | {totals[THIRD_PARTY]} |")
+    parts.append(f"| UNKNOWN | {totals[UNKNOWN]} |")
     parts.append("")
+    parts.append("Third-party stylesheets bundled with the application: " +
+                 ", ".join(f"`{path}`" for path in THIRD_PARTY_STYLESHEETS) + ".")
+    parts.append("")
+    if declared_hooks:
+        parts.append("Owned by declaration rather than by a stylesheet - the "
+                     "component states these are its own hooks, and no rule "
+                     "styles them (which is a decision, not an accident):\n")
+        parts.append("* " + "\n* ".join(declared_hooks))
+    else:
+        parts.append("No component currently declares a class that no "
+                     "stylesheet styles.")
+    parts.append("")
+    if totals[UNKNOWN]:
+        parts.append("**Unknown classes (this fails the guardrail):**\n")
+        for relative, names in sorted(unknown_classes().items()):
+            parts.append(f"* `{relative}`: " + ", ".join(f"`{n}`" for n in names))
+        parts.append("")
     return "\n".join(parts).rstrip() + "\n"
 
 

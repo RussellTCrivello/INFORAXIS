@@ -21,7 +21,7 @@
     <!-- Distinct banner (FR-4.3) -->
     <div class="analyst-banner">
         <div class="analyst-banner-icon">
-            <i class="bi bi-person-tags"></i>
+            <i class="bi bi-person-badge"></i>
         </div>
         <div class="analyst-banner-text">
             <h1 class="analyst-banner-title">{{ _('Analyst Categorization') }}</h1>
@@ -42,7 +42,7 @@
     <!-- Stats -->
     <div class="analyst-stats-grid">
         <div class="analyst-stat-card">
-            <div class="analyst-stat-icon"><i class="bi bi-person-tags"></i></div>
+            <div class="analyst-stat-icon"><i class="bi bi-person-badge"></i></div>
             <div>
                 <div class="analyst-stat-value" id="statCategoryCount">{{ stats.category_count }}</div>
                 <div class="analyst-stat-label">{{ _('Analyst Categories') }}</div>
@@ -193,7 +193,7 @@
                         <li class="analyst-category-item" data-category-id="{{ cat.id }}" data-category-name="{{ cat.name }}">
                             <div class="d-flex justify-content-between align-items-center w-100">
                                 <div class="analyst-category-name">
-                                    <i class="bi bi-person-tags me-2"></i>
+                                    <i class="bi bi-person-badge me-2"></i>
                                     <span class="analyst-category-label">{{ cat.name }}</span>
                                     <span class="analyst-badge-soft">{{ cat.file_count }}</span>
                                 </div>

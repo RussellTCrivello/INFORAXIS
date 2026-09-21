@@ -25,27 +25,23 @@ import pytest
 
 from core.frontend.component_audit import (
     COMPONENTS,
+    OWNED,
     PLANNED_STATES,
     PROJECT_ROOT,
     STATES,
+    THIRD_PARTY,
+    UNKNOWN,
     audit_block,
+    class_ownership,
+    classify_class,
     components,
     state_coverage,
+    third_party_classes,
     undeclared_files,
     unknown_classes,
 )
 
 LIBRARY_DOC = PROJECT_ROOT / "docs/COMPONENT_LIBRARY.md"
-
-#: Class names a component renders that no stylesheet defines, on purpose:
-#: structural hooks used by scripts, and the Bootstrap Icons vocabulary the
-#: bundled icon font supplies. The list is a ratchet - a new unstyleable class
-#: has to be added here, which means somebody decided it was meant to be there.
-UNSTYLED_HOOKS = {
-    "sidebar-nav-badge",
-    "file-nav__text",
-    "cursor-pagination-container",
-}
 
 #: Things a component must never do: read the database, take a decision the
 #: server should take, or reach past its inputs.
@@ -150,28 +146,93 @@ class TestComponentsArePresentationOnly:
         assert re.search(r"state_panel\('loading'.*role='status'", text, re.DOTALL)
 
 
-class TestClassesStayInTheDesignSystem:
-    def test_no_component_invents_a_style(self):
-        problems = unknown_classes()
-        cleaned = {
-            path: [name for name in names
-                   if not name.startswith("bi") and name not in UNSTYLED_HOOKS]
-            for path, names in problems.items()
-        }
-        cleaned = {path: names for path, names in cleaned.items() if names}
-        assert cleaned == {}, (
-            "these classes are rendered by a component but no stylesheet "
-            "defines them:\n  " + repr(cleaned))
+class TestClassesHaveExactlyOneOwner:
+    """OWNED, THIRD_PARTY or UNKNOWN - and UNKNOWN is a failure.
 
-    def test_the_unstyled_hooks_are_still_real(self):
-        """A hook that has been renamed or removed must leave this list."""
-        rendered = set()
-        for _, text in _component_texts():
-            rendered.update(re.findall(r'class="([^"]*)"', text))
-        rendered = " ".join(rendered)
-        for hook in UNSTYLED_HOOKS:
-            assert hook in rendered, (
-                f"{hook} is in the ratchet list but no longer rendered")
+    The distinction matters: a class from Bootstrap or Bootstrap Icons is an
+    expected dependency, not a finding, while a class nothing defines is how a
+    component invents a style. Reporting both as "not defined by us" would
+    make the guardrail noise, and a guardrail nobody trusts is worse than none.
+    """
+
+    def test_no_component_renders_a_class_nobody_owns(self):
+        problems = unknown_classes()
+        assert problems == {}, (
+            "these classes are rendered by a component but nothing owns them - "
+            "no INFORAXIS stylesheet defines them, no bundled dependency does, "
+            "and the component does not declare them:\n  " + repr(problems))
+
+    def test_a_third_party_class_is_not_a_finding(self):
+        assert "bi-search" in third_party_classes()
+        assert "btn" in third_party_classes()
+        assert "bi" in third_party_classes()
+        assert classify_class("bi-search").ownership == THIRD_PARTY
+        assert classify_class("table-hover").ownership == THIRD_PARTY
+
+    def test_an_owned_class_is_recognised(self):
+        assert classify_class("empty-state").ownership == OWNED
+        assert classify_class("file-nav__button").ownership == OWNED
+
+    def test_a_component_can_own_a_class_by_declaring_it(self):
+        """Declaring a hook is a decision; the audit shows it, the test allows it."""
+        declared = components()["file_nav"].classes
+        assert "file-nav__text" in declared
+        entry = classify_class("file-nav__text", {"file-nav__text"})
+        assert entry.ownership == OWNED
+        assert entry.source == "component declaration"
+
+    def test_an_invented_class_is_unknown(self):
+        """The guardrail has to be able to fail, or it is decoration."""
+        assert classify_class("some-class-nobody-defined").ownership == UNKNOWN
+        assert classify_class("someOtherHook", {"someOtherHook"}).ownership == OWNED
+        assert unknown_classes() == {}
+
+    def test_a_class_built_from_a_variable_is_owned_by_its_prefix(self):
+        """`file-nav--{{ variant }}` is a real class family, not a typo."""
+        assert classify_class("file-nav--").ownership == OWNED
+
+    def test_the_ownership_report_covers_every_rendered_class(self):
+        report = class_ownership()
+        assert report, "the ownership report is empty"
+        for relative, entries in report.items():
+            assert relative.startswith("templates/components/")
+            for entry in entries:
+                assert entry.ownership in {OWNED, THIRD_PARTY, UNKNOWN}
+                assert entry.source
+
+    def test_every_icon_a_component_names_exists(self):
+        """An icon the bundle does not have renders as nothing, silently.
+
+        `bi-person-tags` was named in a component and on a page; Bootstrap
+        Icons has no such icon, so the icon simply was not there and nothing
+        said so. The bundle is the vocabulary, because it is what ships.
+        """
+        import re
+
+        available = third_party_classes()
+        offenders = []
+        for path in sorted((PROJECT_ROOT / "templates").rglob("*.html")):
+            text = path.read_text(errors="ignore")
+            for icon in set(re.findall(r"\bbi-[a-z0-9-]+", text)):
+                if icon.endswith("-"):
+                    # Built from a variable: `bi-arrow-{{ up or down }}`.
+                    if not any(name.startswith(icon) for name in available):
+                        offenders.append(f"{path.relative_to(PROJECT_ROOT)}: {icon}*")
+                elif icon not in available:
+                    offenders.append(f"{path.relative_to(PROJECT_ROOT)}: {icon}")
+        assert offenders == [], (
+            "these icons are named but the bundled Bootstrap Icons has no such "
+            "icon, so they render as nothing:\n  " + "\n  ".join(sorted(offenders)))
+
+    def test_every_declared_class_is_real(self):
+        """A component may not declare a class it never renders."""
+        for name, component in components().items():
+            text = (PROJECT_ROOT / component.path).read_text()
+            for declared in component.classes:
+                if declared.startswith("("):
+                    continue
+                assert declared in text, (
+                    f"{name} declares {declared} but its file never renders it")
 
 
 class TestTheDocumentCannotDrift:
