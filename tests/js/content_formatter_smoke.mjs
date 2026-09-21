@@ -14,7 +14,13 @@ globalThis.document = {
 };
 globalThis.window = globalThis;
 
-const { formatContentByType } = await import('/home/user/file_analysis/static/js/modules/content-formatter.js');
+// Resolve the module next to this file so the harness runs from any checkout.
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const _formatterPath = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../static/js/modules/content-formatter.js');
+const { formatContentByType } = await import(_formatterPath);
 
 const checks = [];
 const check = (name, cond) => { checks.push([name, !!cond]); };
@@ -66,6 +72,11 @@ check('ppt: 3 chips', (out.match(/class="slide-chip[ "]/g) || []).length === 3);
 check('ppt: chip titles', out.includes('title="Quarterly Overview"'));
 check('ppt: 3 slide blocks with chips', (out.match(/slide-number-chip/g) || []).length === 3);
 check('ppt: table rendered in slide', out.includes('EMEA') && out.includes('60%'));
+// ... and as a real table, not as tab-separated slide text (the same defect
+// the Word path had: the "Table N" marker was eaten as explanatory text).
+check('ppt: table markup inside the slide',
+    /class="formatted-table-container"[\s\S]{0,200}<td>Region<\/td><td>Share<\/td>/.test(out)
+    && !out.includes('Table 1'));
 check('ppt: first slide active', out.includes('formatted-slide slide-active'));
 check('ppt: prev/next wired', out.includes('goToSlide(this, -1)') && out.includes('goToSlide(this, 1)'));
 check('ppt: default aria-labels (en)', out.includes('aria-label="Slides"')
@@ -107,6 +118,39 @@ out = formatContentByType(docx, 'docx');
 check('word: h1 styled', out.includes('formatted-h1') && out.includes('Annual Report'));
 check('word: h2 styled', out.includes('formatted-h2'));
 check('word: table rendered', out.includes('Uptime') && out.includes('99.9%'));
+// The checks above pass even when the table is flattened to a paragraph,
+// so they never guarded the reported defect. These do: the stored rows must
+// come back out as real table markup with one <td> per cell.
+check('word: table markup emitted', out.includes('formatted-content-table')
+    && (out.match(/<table/g) || []).length === 1);
+check('word: every cell is its own cell', (out.match(/<td[^>]*>/g) || []).length === 4
+    && /<td>Metric<\/td><td>Value<\/td>/.test(out));
+check('word: rows stay rows', (out.match(/<tr[^>]*>/g) || []).length === 2);
+check('word: marker line is not displayed', !out.includes('Table 1'));
+// --- Word: one-column table + empty row + caption on the marker --------
+// The extractor writes an all-empty row with an explicit tab so it cannot be
+// mistaken for the blank line that separates document elements.
+const docx2 = `Table 2 | Caption: Status legend\nApproved\n\t\nPending\n\nEnd of report.`;
+out = formatContentByType(docx2, 'docx');
+check('word: single-column table kept as table', (out.match(/<table/g) || []).length === 1);
+check('word: empty row kept in position (Approved / empty / Pending)',
+    (out.match(/<tr[^>]*>/g) || []).length === 3
+    && /<td>Approved<\/td><\/tr><tr><td><\/td><\/tr><tr><td>Pending<\/td>/.test(out));
+check('word: marker with caption is not displayed as prose',
+    !out.includes('Table 2') && !out.includes('Caption:'));
+check('word: paragraph after table is a paragraph',
+    out.includes('End of report.') && !out.includes('Pending<\/p>'));
+// --- Word: each "Table N" marker opens a new table ---------------------
+const docx3 = `Table 3\nName\tRole\nAda\tAnalyst\n\nTable 4\nName\tRole\nGrace\tAdmiral`;
+out = formatContentByType(docx3, 'docx');
+check('word: two tables from two blocks', (out.match(/<table/g) || []).length === 2
+    && out.includes('Ada') && out.includes('Grace'));
+// --- Word: order is document order (heading then paragraph then table) --
+const docx4 = `[Style: Heading 1] Title\nBody text follows.\n\nTable 5\nA\tB`;
+out = formatContentByType(docx4, 'docx');
+check('word: document order preserved',
+    out.indexOf('Title') < out.indexOf('Body text follows.')
+    && out.indexOf('Body text follows.') < out.indexOf('<table'));
 
 // --- nav global ---
 check('nav global exposed', typeof globalThis.contentViewerNav === 'object'
@@ -114,7 +158,7 @@ check('nav global exposed', typeof globalThis.contentViewerNav === 'object'
     && typeof globalThis.contentViewerNav.goToSlide === 'function');
 
 // --- accessibility-label i18n injection ---
-const { setContentFormatterTranslations } = await import('/home/user/file_analysis/static/js/modules/content-formatter.js');
+const { setContentFormatterTranslations } = await import(_formatterPath);
 setContentFormatterTranslations({
     slidesNavLabel: 'שקופיות',
     previousSlideLabel: 'שקופית קודמת',

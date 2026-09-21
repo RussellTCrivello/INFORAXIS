@@ -328,8 +328,25 @@ class OfficeFileReader(BaseReader):
                             "rows": []
                         }
                         
+                        # A merged cell is the SAME tc element at several
+                        # grid positions: horizontally (one row) or vertically
+                        # (one column, several rows). python-docx hands back
+                        # that same text for every position the merge covers,
+                        # so a merged heading was stored - and displayed - as
+                        # many times as it had columns or rows. The text is
+                        # kept once, at the first position it covers; the
+                        # remaining positions stay empty, which keeps the grid
+                        # the same shape and leaves the reading order alone.
+                        emitted_cells = []
                         for row in table.rows:
-                            table_data["rows"].append([cell.text for cell in row.cells])
+                            row_cells = []
+                            for cell in row.cells:
+                                if any(cell._tc is seen for seen in emitted_cells):
+                                    row_cells.append("")
+                                    continue
+                                emitted_cells.append(cell._tc)
+                                row_cells.append(cell.text)
+                            table_data["rows"].append(row_cells)
                         
                         result["elements"].append(table_data)
                         result["tables"].append({
