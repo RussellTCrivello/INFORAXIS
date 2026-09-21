@@ -55,6 +55,23 @@ from .registry import (
     resolve_interface_id,
     summary,
 )
+from .lifecycle import (
+    StatusPolicy,
+    all_policies,
+    policy as status_policy,
+)
+from .navigation import (
+    Crumb,
+    InterfaceConditions,
+    NavigationEntry,
+    NavigationGroup,
+    PagePresentation,
+    breadcrumbs_for,
+    build_navigation,
+    interface_conditions,
+    navigation_model,
+    present_page,
+)
 from .validation import Issue, errors_only, format_issues, validate_registry
 
 __all__ = [
@@ -74,6 +91,12 @@ __all__ = [
     "EndpointClass", "EndpointRecord", "build_inventory", "classify_endpoint",
     "counts", "registry_coverage", "unowned_user_interfaces", "inventory_json",
     "SYSTEM_ENDPOINTS", "is_infrastructure_endpoint",
+    # lifecycle
+    "StatusPolicy", "all_policies", "status_policy",
+    # navigation and page identity
+    "NavigationEntry", "NavigationGroup", "Crumb", "PagePresentation",
+    "InterfaceConditions", "build_navigation", "present_page",
+    "breadcrumbs_for", "interface_conditions", "navigation_model",
     # validation
     "Issue", "validate_registry", "errors_only", "format_issues",
 ]

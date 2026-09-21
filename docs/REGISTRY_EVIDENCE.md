@@ -40,22 +40,26 @@ domains is `docs/DOMAIN_MODEL.md`.
 - Endpoints owned (canonical routes + aliases): **63**
 - With a keyboard shortcut: **11**
 - With a help topic: **23**
-- Declared domains in use: **10**
+- Declared domain vocabulary: **12**
+- Domains currently containing interfaces: **10**
+- Declared domains holding no interface yet: **2**
 
-| Domain | Interfaces |
-| --- | --- |
-| WORK | 1 |
-| DISCOVER | 9 |
-| INGEST | 2 |
-| ANALYZE | 3 |
-| CLASSIFY | 2 |
-| REPORT | 2 |
-| OPERATE | 2 |
-| ADMINISTRATION | 1 |
-| SETTINGS | 2 |
-| INTERNAL | 1 |
+Domains are **declared** in `core/interfaces/domains.py`; a declared domain may hold no interface yet. The two numbers are different, and both are reported:
 
-### 2. Aliases
+| Domain | Interfaces | Status |
+| --- | --- | --- |
+| WORK | 1 | in use |
+| DISCOVER | 9 | in use |
+| INGEST | 2 | in use |
+| PROCESS | 0 | declared, empty |
+| ANALYZE | 3 | in use |
+| CLASSIFY | 2 | in use |
+| REPORT | 2 | in use |
+| OPERATE | 2 | in use |
+| ADMINISTRATION | 1 | in use |
+| SETTINGS | 2 | in use |
+| SECURITY | 0 | declared, empty |
+| INTERNAL | 1 | in use |
 
 Declared aliases: **39**, across **11** interfaces. An alias is an endpoint the interface owns but does not navigate to; aliases never become navigation entries.
 
@@ -115,9 +119,23 @@ Renames and merges the registry understands (a stored value under an old key rea
 
 ### 6. Feature declarations
 
-| Feature | Default | Description |
-| --- | --- | --- |
-| `page_tips` | on | Explanatory tips at the top of each page, describing the elements on it, how to use them and how to add data. |
+A feature is a cross-cutting capability with no page of its own. Everything the application gates this way is declared here; `tests/unit/test_interface_lifecycle.py` fails if a declared feature is not actually gated in code, or if a cross-cutting gate exists without a declaration.
+
+| Feature | Default | Gated in | Description |
+| --- | --- | --- | --- |
+| `page_tips` | on | `templates/components/page_tips.html` | Explanatory tips at the top of each page, describing the elements on it, how to use them and how to add data. |
+
+Cross-cutting settings that are **not** features (they belong to an existing interface, so they are values in the settings engine and nothing to do with the registry):
+
+| Setting | Owner |
+| --- | --- |
+| `system.animations_enabled` | Display preferences (no product surface) |
+| `system.show_breadcrumbs` | Display preferences (no product surface) |
+| `system.notifications_enabled` | the `notifications` interface |
+| `search.enable_history` | the `search` interface |
+| `search.enable_saved_searches` | the `search` interface |
+| `display.show_file_preview` | the `file_library` interface |
+| `display.show_metadata` | the `file_library` interface |
 <!-- END GENERATED REGISTRY EVIDENCE -->
 
 ---
@@ -190,15 +208,15 @@ Endpoints the interface switch does not gate (API, system and infrastructure; au
 
 - Work
 - Discover
-- Classify
 - Ingest
 - Analyze
+- Classify
 - Report
 - Operate
 - Administration
 - Settings
 
-Entries, in render order: `index`, `files.files_list`, `search_page`, `sources_list`, `sides_list`, `keywords_list`, `words_list`, `categories_list`, `email_words`, `notifications_page`, `analyst_categorization_page`, `file_classification_page`, `operations_input_page`, `operations_import_page`, `archives_page`, `path_analysis_page`, `analysis_batch`, `comprehensive_dashboard`, `charts_dashboard`, `operations_jobs_page`, `import_export_page`, `users_page`, `settings_page_direct`
+Entries, in render order: `index`, `files.files_list`, `search_page`, `sources_list`, `sides_list`, `keywords_list`, `words_list`, `categories_list`, `email_words`, `notifications_page`, `operations_input_page`, `operations_import_page`, `archives_page`, `path_analysis_page`, `analysis_batch`, `analyst_categorization_page`, `file_classification_page`, `comprehensive_dashboard`, `charts_dashboard`, `operations_jobs_page`, `import_export_page`, `users_page`, `settings_page_direct`
 
 Marked active on this page: `index`
 <!-- END GENERATED APPLICATION EVIDENCE -->

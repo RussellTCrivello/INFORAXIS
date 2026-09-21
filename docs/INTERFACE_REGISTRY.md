@@ -238,6 +238,50 @@ the navigation entry vanished the first time this rename happened.
 | `page_tips` | Page Tips & Documentation | Explanatory tips at the top of each page, describing the elements on it, how to use them and how to add data. | on |
 <!-- END GENERATED REGISTRY TABLE -->
 
+
+---
+
+## 8. The contract is frozen
+
+From this point the registry is a lock, not a description:
+
+| To add… | You must |
+| --- | --- |
+| a page | register an interface with a route, a domain, a description and the endpoints it owns; the coverage test fails until you do |
+| a navigation entry | declare the interface — the sidebar renders the registry and nothing else |
+| a keyboard shortcut | declare `keyboard_shortcut` (two interfaces may not share one) |
+| a help topic | declare `help_topic`, or set it to `None` deliberately |
+| a visibility rule | declare `required_role` — and remember it hides, it does not authorise |
+| a dependency | declare it; disabling a dependency of a live interface is refused, and an inconsistent stored state is reported |
+
+The guardrails that enforce this, and where they live:
+
+| Guardrail | Test |
+| --- | --- |
+| A page nobody registered fails the build | `tests/integration/test_interface_coverage.py` |
+| The registry is internally consistent | `tests/unit/test_interface_registry.py` |
+| The documentation cannot drift from the registry | `tests/unit/test_interface_docs.py` |
+| No template names a product id or keeps a label map | `tests/unit/test_registry_purity.py` |
+| A lifecycle status means one thing everywhere | `tests/unit/test_interface_lifecycle.py` |
+| Visibility never becomes authorisation | `tests/security/test_interface_visibility.py` |
+
+### What each lifecycle status means
+
+| Status | Navigable | Switchable | Marked | Meaning |
+| --- | --- | --- | --- | --- |
+| ACTIVE | yes | yes | — | Part of the product. |
+| EXPERIMENTAL | only while its feature flag is on | yes | "Experimental" | Not finished; hidden until the flag is enabled. |
+| DEPRECATED | yes | yes | "Deprecated" | Still works and is still supported, but scheduled to be replaced. |
+| RETIRED | no | no | "Retired" | No longer part of the product; a stored setting for it is kept and ignored. |
+
+### The four questions stay four questions
+
+`exists` (the product declares it), `enabled` (this installation has it on),
+`visible` (this operator may see it), `accessible` (its own conditions are met).
+They are never collapsed: an interface can exist and be enabled while a viewer
+may not see it. None of them is authorisation — `core/security` decides whether
+a request executes, and the API payloads say so in an `authorization` field.
+
 ---
 
 ## 6. The service API

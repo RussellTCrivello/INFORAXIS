@@ -304,40 +304,22 @@
                     <nav aria-label="breadcrumb" class="flex-grow-1">
                         <ol class="breadcrumb mb-0">
                             {% block breadcrumb %}
-                            <li class="breadcrumb-item">
-                                <a href="{{ url_for('index') }}">
-                                    <i class="bi bi-house-door me-1"></i>{{ _('Home') }}
-                                </a>
+                            {# Labels come from the registry, via the `page`
+                               the application prepared. `base.html` used to
+                               carry two hand-written endpoint dictionaries,
+                               which disagreed with each other and with the
+                               registry. #}
+                            {% set _crumbs = page_identity.breadcrumbs if page_identity and page_identity.breadcrumbs else () %}
+                            {% for crumb in _crumbs %}
+                            <li class="breadcrumb-item {% if crumb.current %}active{% endif %}"
+                                {% if crumb.current %}aria-current="page"{% endif %}>
+                                {% if crumb.url and not crumb.current %}
+                                    <a href="{{ crumb.url }}">{% if crumb.icon %}<i class="bi {{ crumb.icon }} me-1" aria-hidden="true"></i>{% endif %}{{ _(crumb.label) }}</a>
+                                {% else %}
+                                    {{ _(crumb.label) }}
+                                {% endif %}
                             </li>
-                            {% if request.endpoint and request.endpoint != 'index' %}
-                            <li class="breadcrumb-item active" aria-current="page">
-                                {% set endpoint_labels = {
-                                    'index': _('Dashboard'),
-                                    'comprehensive_dashboard': _('Dashboard'),
-                                    'charts_dashboard': _('Dashboard'),
-                                    'archives_page': _('Analysis'),
-                                    'path_analysis_page': _('Analysis'),
-                                    'analysis_batch': _('Analysis'),
-                                    'file_classification_page': _('Analysis'),
-                                    'saved_searches_page': _('Search'),
-                                    'sources_list': _('Sources'),
-                                    'sides_list': _('Sides'),
-                                    'email_words': _('Email Words'),
-                                    'search_page': _('Search'),
-                                    'search_advanced': _('Search'),
-                                    'search_enhanced_page': _('Search'),
-                                    'operations_input_page': _('Input / Ingestion'),
-                                    'files.files_list': _('File Library'),
-                                    'keywords_list': _('Keywords'),
-                                    'words_list': _('Words'),
-                                    'word_detail': _('Word Details'),
-                                    'settings_page': _('Settings'),
-                                    'notifications_page': _('Notifications')
-                                } %}
-                                {% set endpoint_name = endpoint_labels.get(request.endpoint, request.endpoint.replace('_', ' ').title()) %}
-                                {{ endpoint_name }}
-                            </li>
-                            {% endif %}
+                            {% endfor %}
                             {% endblock %}
                         </ol>
                     </nav>
@@ -358,33 +340,11 @@
                         </a>
                         
                         {% block page_title %}
-                        {% if request.endpoint %}
-                        <span class="text-muted small">
-                            <i class="bi bi-file-earmark-text me-1"></i>
-                            {% set endpoint_labels = {
-                                    'index': _('Dashboard'),
-                                    'comprehensive_dashboard': _('Dashboard'),
-                                    'charts_dashboard': _('Dashboard'),
-                                    'archives_page': _('Analysis'),
-                                    'path_analysis_page': _('Analysis'),
-                                    'analysis_batch': _('Analysis'),
-                                    'file_classification_page': _('Analysis'),
-                                    'saved_searches_page': _('Search'),
-                                    'sources_list': _('Sources'),
-                                    'sides_list': _('Sides'),
-                                    'email_words': _('Email Words'),
-                                    'search_page': _('Search'),
-                                    'search_advanced': _('Search'),
-                                    'search_enhanced_page': _('Search'),
-                                    'operations_input_page': _('Input / Ingestion'),
-                                    'files.files_list': _('File Library'),
-                                    'keywords_list': _('Keywords'),
-                                    'words_list': _('Words'),
-                                    'word_detail': _('Word Details'),
-                                    'settings_page': _('Settings'),
-                                    'notifications_page': _('Notifications')
-                                } %}
-                            {{ endpoint_labels.get(request.endpoint, request.endpoint.replace('_', ' ').title()) }}
+                        {% if page_identity and page_identity.interface_id %}
+                        <span class="text-muted small topbar-page-identity">
+                            <i class="bi {{ page_identity.icon or 'bi-file-earmark-text' }} me-1" aria-hidden="true"></i>
+                            {{ _(page_identity.label) }}
+                            {% if page_identity.badge %}<span class="badge text-bg-secondary ms-1">{{ _(page_identity.badge) }}</span>{% endif %}
                         </span>
                         {% endif %}
                         {% endblock %}

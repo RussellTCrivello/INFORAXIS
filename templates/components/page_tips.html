@@ -1,17 +1,17 @@
 <!-- Page Tips/Documentation Component -->
 {% macro page_tips(enabled=None) %}
-{# Check if page_tips interface is enabled #}
-{# Try multiple approaches: parameter first, then global function, then user_settings #}
-{% set page_tips_enabled = false %}
+{# Is this feature on?
+
+   The component asks for its own feature. Call sites are `{% call page_tips() %}`
+   and name nothing: a template that says `is_interface_enabled('page_tips')`
+   is making a product decision in markup, which is the defect this replaced.
+   `feature_enabled` is an application global (see Api/routes/common.py); a
+   macro cannot see the render context, which is also why this is a global
+   rather than a context value. The `enabled` parameter remains for a page
+   that needs to force the state in a test. #}
+{% set page_tips_enabled = feature_enabled('page_tips') %}
 {% if enabled is not none %}
-    {# Use passed parameter #}
     {% set page_tips_enabled = enabled %}
-{% elif is_interface_enabled is defined %}
-    {# Use global function (same pattern as base.html) #}
-    {% set page_tips_enabled = is_interface_enabled('page_tips') %}
-{% elif user_settings is defined and user_settings %}
-    {# Fallback to user_settings method #}
-    {% set page_tips_enabled = user_settings.is_interface_enabled('page_tips') %}
 {% endif %}
 
 {% if page_tips_enabled %}
@@ -36,6 +36,6 @@
     </div>
 </div>
 {% else %}
-<!-- Page Tips: DISABLED - is_interface_enabled('page_tips') returned False -->
+<!-- Page Tips: this installation has the page_tips feature switched off -->
 {% endif %}
 {% endmacro %}

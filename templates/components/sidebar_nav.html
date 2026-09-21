@@ -1,38 +1,39 @@
 {# ==========================================================================
-   Sidebar navigation, rendered from the interface registry.
+   Sidebar navigation.
 
-   This file used to be a hand-written list of <li> entries, each gated by a
-   hard-coded interface id. That is why the product map existed in three places
-   - the settings adapter, this template and the request gate - and why
-   renaming one interface left a dead sidebar entry behind: the markup still
-   named the old id, and nothing failed.
+   This template knows four things: label, icon, url, active. It does not know
+   an interface ID, whether anything is enabled, who owns an endpoint, what
+   role it needs or what it depends on - all of that is decided by
+   `core.interfaces.build_navigation()` and handed over in `navigation`
+   (see `Api/routes/common.py`).
 
-   Now the template renders what the registry says is both part of the product
-   and visible to this operator:
-        registry + domain + role + enabled state + dependencies
-   The view supplies `nav_interfaces` (domain -> interfaces) and
-   `domain_labels`; nothing here decides what exists or who may see it.
+   That split is the point of the registry work: this file used to be a
+   hand-written list of <li> entries gated by hard-coded ids, which is how a
+   rename left a dead sidebar entry behind with nothing failing.
 
    Markup, classes, icons and the data-endpoint attributes are unchanged, so
    the stylesheet and the navigation scripts keep working.
    ========================================================================== #}
-{% set _nav = nav_interfaces|default({}) %}
 <ul class="sidebar-nav">
-    {% for domain, interfaces in _nav.items() %}
-        {% if interfaces %}
+    {% for group in navigation|default((), true) %}
+        {% if group.entries %}
             <li class="sidebar-nav-item">
-                <span class="sidebar-section-label">{{ _(domain_labels.get(domain, domain)) }}</span>
+                <span class="sidebar-section-label">{{ _(group.label) }}</span>
             </li>
-            {% for interface in interfaces %}
-                {% set is_active = request.endpoint == interface.route
-                                   or request.endpoint in interface.aliases %}
+            {% for entry in group.entries %}
                 <li class="sidebar-nav-item">
-                    <a href="{{ url_for(interface.route) }}"
-                       class="sidebar-nav-link {% if is_active %}active{% endif %}"
-                       data-endpoint="{{ interface.route }}"
-                       {% if interface.description %}title="{{ interface.description }}"{% endif %}>
-                        <i class="bi {{ interface.icon }}"></i>
-                        <span>{{ _(interface.name) }}</span>
+                    <a href="{{ entry.url }}"
+                       class="sidebar-nav-link {% if entry.active %}active{% endif %}"
+                       data-endpoint="{{ entry.route }}"
+                       data-interface="{{ entry.interface_id }}"
+                       {% if entry.description %}title="{{ entry.description }}{% if entry.note %} — {{ entry.note }}{% endif %}"{% endif %}
+                       {% if entry.shortcut %}data-shortcut="{{ entry.shortcut }}"{% endif %}
+                       {% if entry.active %}aria-current="page"{% endif %}>
+                        <i class="bi {{ entry.icon }}" aria-hidden="true"></i>
+                        <span>{{ _(entry.label) }}</span>
+                        {% if entry.badge %}
+                            <span class="sidebar-nav-badge" data-status="{{ entry.status if entry.status is defined else '' }}">{{ entry.badge }}</span>
+                        {% endif %}
                     </a>
                 </li>
             {% endfor %}

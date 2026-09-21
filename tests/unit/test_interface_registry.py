@@ -393,13 +393,16 @@ class TestLegacyIdsStayOutOfCode:
         assert self._references(unrelated, "analytics") == []
 
     def test_the_navigation_names_no_interface_id_at_all(self):
-        """The sidebar is rendered from the registry, not from a hard-coded map."""
+        """The sidebar renders a prepared model; it does not look anything up."""
         nav = self.PROJECT_ROOT / "templates/components/sidebar_nav.html"
         assert nav.exists(), "the registry-driven navigation component is missing"
         text = nav.read_text()
-        assert "nav_interfaces" in text
-        assert "url_for(interface.route)" in text
-        # No interface may be named by hand in the navigation any more.
+        assert "navigation" in text
+        assert "entry.url" in text and "entry.label" in text
+        for call in ("is_interface_enabled", "get_interface(", "interface_registry("):
+            assert call not in text, call
+        # No interface may be named by hand in the navigation any more. The
+        # stronger version of this rule is tests/unit/test_registry_purity.py.
         from core.interfaces import REGISTRY
 
         for interface in REGISTRY:

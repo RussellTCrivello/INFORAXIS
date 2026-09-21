@@ -2,21 +2,8 @@
 
 {% block title %}{{ _('Source Details') }}{% endblock %}
 
-{% block breadcrumb %}
-<li class="breadcrumb-item">
-    <a href="{{ url_for('index') }}">
-        <i class="bi bi-house-door me-1"></i>{{ _('Home') }}
-    </a>
-</li>
-<li class="breadcrumb-item">
-    <a href="{{ url_for('sources_list') }}">
-        <i class="bi bi-building me-1"></i>{{ _('Sources') }}
-    </a>
-</li>
-<li class="breadcrumb-item active" aria-current="page">
-    {{ source.name if source else _('Source Details') }}
-</li>
-{% endblock %}
+{% from 'components/breadcrumbs.html' import breadcrumbs %}
+{% block breadcrumb %}{{ breadcrumbs(parent='sources_list', current=source.name if source else none) }}{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -28,7 +15,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
-    {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+    {% call page_tips() %}
 
 <div class="tips-section">
     <div class="tips-section-title">

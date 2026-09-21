@@ -159,8 +159,18 @@ class Interface:
 
     @property
     def navigable(self) -> bool:
-        """Could appear in navigation at all."""
-        return self.kind in NAVIGABLE_KINDS and self.route is not None and self.live
+        """Could appear in navigation at all.
+
+        Whether a status is navigable is the lifecycle policy's answer
+        (``core/interfaces/lifecycle.py``), not this model's own opinion: the
+        policy is what navigation, settings, the API and the documentation all
+        read, so there is one meaning of DEPRECATED rather than four.
+        """
+        from .lifecycle import policy
+
+        return (self.kind in NAVIGABLE_KINDS
+                and self.route is not None
+                and policy(self.status).navigable)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

@@ -15,7 +15,7 @@
     {% from 'components/page_tips.html' import page_tips %}
     {% from 'components/analyst_classify.html' import analyst_classify %}
     {% from 'components/file_nav.html' import file_nav %}
-        {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+        {% call page_tips() %}
 
     <div class="tips-section">
         <div class="tips-section-title">

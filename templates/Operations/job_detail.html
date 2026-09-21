@@ -2,7 +2,8 @@
 
 {% block title %}Job {{ job_id }}{% endblock %}
 {% block page_type %}default{% endblock %}
-{% block page_title %}Job {{ job_id }}{% endblock %}
+{# The interface supplies the name; the page adds its own subject. #}
+{% block page_title %}{{ page_identity.label }} · {{ job_id }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">

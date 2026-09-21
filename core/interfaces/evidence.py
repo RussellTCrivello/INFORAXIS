@@ -124,6 +124,31 @@ def dependency_report() -> Dict[str, object]:
     }
 
 
+#: Cross-cutting switches that are settings of an existing interface rather
+#: than features of their own: they change how a surface behaves, they do not
+#: add a surface. Recorded here so that "is this a feature?" is answered once
+#: and visibly, instead of by whichever file happens to read the setting.
+NON_FEATURE_TOGGLES = {
+    "system.animations_enabled": "Display preferences (no product surface)",
+    "system.show_breadcrumbs": "Display preferences (no product surface)",
+    "system.notifications_enabled": "the `notifications` interface",
+    "search.enable_history": "the `search` interface",
+    "search.enable_saved_searches": "the `search` interface",
+    "display.show_file_preview": "the `file_library` interface",
+    "display.show_metadata": "the `file_library` interface",
+}
+
+#: Where each feature's gate lives, so a declaration cannot be decorative.
+FEATURE_GATES = {
+    "page_tips": ("templates/components/page_tips.html",),
+}
+
+
+def feature_gate(feature_id: str):
+    """The files that actually gate a declared feature."""
+    return FEATURE_GATES.get(feature_id, ())
+
+
 def registry_block() -> str:
     """The declared product: counts, aliases, dependencies, migration."""
     data = summary()
@@ -139,19 +164,23 @@ def registry_block() -> str:
         ("Endpoints owned (canonical routes + aliases)", data["endpoints_owned"]),
         ("With a keyboard shortcut", data["with_shortcut"]),
         ("With a help topic", data["with_help"]),
-        ("Declared domains in use", len([d for d in DOMAIN_ORDER
-                                         if str(d) in data["by_domain"]])),
+        ("Declared domain vocabulary", len(DOMAIN_ORDER)),
+        ("Domains currently containing interfaces",
+         len([d for d in DOMAIN_ORDER if str(d) in data["by_domain"]])),
+        ("Declared domains holding no interface yet",
+         len([d for d in DOMAIN_ORDER if str(d) not in data["by_domain"]])),
     ]))
     parts.append("")
-    parts.append("| Domain | Interfaces |")
-    parts.append("| --- | --- |")
+    parts.append("Domains are **declared** in `core/interfaces/domains.py`; a "
+                 "declared domain may hold no interface yet. The two numbers are "
+                 "different, and both are reported:\n")
+    parts.append("| Domain | Interfaces | Status |")
+    parts.append("| --- | --- | --- |")
     for domain in DOMAIN_ORDER:
         count = data["by_domain"].get(str(domain), 0)
-        if count:
-            parts.append(f"| {domain} | {count} |")
+        parts.append(
+            f"| {domain} | {count} | {'in use' if count else 'declared, empty'} |")
     parts.append("")
-
-    parts.append("### 2. Aliases\n")
     parts.append(f"Declared aliases: **{aliases['count']}**, across "
                  f"**{len(aliases['by_interface'])}** interfaces. "
                  "An alias is an endpoint the interface owns but does not "
@@ -213,12 +242,27 @@ def registry_block() -> str:
     parts.append("")
 
     parts.append("### 6. Feature declarations\n")
-    parts.append("| Feature | Default | Description |")
-    parts.append("| --- | --- | --- |")
+    parts.append("A feature is a cross-cutting capability with no page of its "
+                 "own. Everything the application gates this way is declared "
+                 "here; `tests/unit/test_interface_lifecycle.py` fails if a "
+                 "declared feature is not actually gated in code, or if a "
+                 "cross-cutting gate exists without a declaration.\n")
+    parts.append("| Feature | Default | Gated in | Description |")
+    parts.append("| --- | --- | --- | --- |")
     for feature in FEATURES:
+        gate = feature_gate(feature.feature_id)
         parts.append(f"| `{feature.feature_id}` | "
                      f"{'on' if feature.default_enabled else 'off'} | "
+                     f"{('`' + ', '.join(gate) + '`') if gate else '— not gated —'} | "
                      f"{feature.description} |")
+    parts.append("")
+    parts.append("Cross-cutting settings that are **not** features (they belong "
+                 "to an existing interface, so they are values in the settings "
+                 "engine and nothing to do with the registry):\n")
+    parts.append("| Setting | Owner |")
+    parts.append("| --- | --- |")
+    for key, owner in NON_FEATURE_TOGGLES.items():
+        parts.append(f"| `{key}` | {owner} |")
     return "\n".join(parts).rstrip() + "\n"
 
 

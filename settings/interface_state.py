@@ -134,7 +134,16 @@ class InterfaceState:
     def _flag_on(self, interface: Interface) -> bool:
         if not interface.feature_flag:
             return True
-        return bool(self._feature_flags.get(interface.feature_flag, False))
+        return self.feature_on(interface.feature_flag)
+
+    def feature_on(self, feature_flag: str) -> bool:
+        """Is a named feature flag on?
+
+        Public because callers that need to *explain* a state ("waiting on the
+        feature flag x") must not re-implement the mapping lookup and drift
+        from the answer this service gives.
+        """
+        return bool(self._feature_flags.get(feature_flag, False))
 
     # -- the core questions ----------------------------------------------
     def is_enabled(self, interface_id: str) -> bool:
@@ -226,9 +235,27 @@ class InterfaceState:
         rows: List[Dict[str, Any]] = []
         for interface in get_all_interfaces():
             row = interface.to_dict()
+            from core.interfaces import interface_conditions, status_policy
+
+            # Four separate answers, never collapsed into one boolean: the
+            # product declares it (exists), this installation has it on
+            # (enabled), this operator may see it (visible), and its own
+            # conditions for use are met (accessible). Authorization is not
+            # decided here - see `to_dict()`, which says so.
+            conditions = interface_conditions(interface.interface_id, self, user)
+            lifecycle = status_policy(interface.status)
             row.update({
-                "enabled": self.is_enabled(interface.interface_id),
-                "visible": self.is_visible(interface.interface_id, user),
+                "exists": conditions.exists,
+                "enabled": conditions.enabled,
+                "visible": conditions.visible,
+                "accessible": conditions.accessible,
+                "state_reason": conditions.reason,
+                "status_policy": {
+                    "navigable": lifecycle.navigable,
+                    "switchable": lifecycle.switchable,
+                    "badge": lifecycle.badge,
+                    "note": lifecycle.note,
+                },
                 "stored": self.stored(interface.interface_id),
                 "missing_dependencies": list(self.missing_dependencies(interface.interface_id)),
                 "dependent_interfaces": [d.interface_id for d in get_dependents(interface.interface_id)],
@@ -236,11 +263,24 @@ class InterfaceState:
             })
             rows.append(row)
         for feature in get_features():
+            # A feature is listed in the same shape as an interface, because a
+            # consumer reading this list should not have to special-case it.
+            # It has no page, so it is never "visible"; it is accessible where
+            # it is switched on, and its subject is the interface it sits in.
+            enabled = self.is_enabled(feature.feature_id)
             row = feature.to_dict()
-            row.update({"enabled": self.is_enabled(feature.feature_id),
-                        "visible": False, "stored": self.stored(feature.feature_id),
-                        "missing_dependencies": [], "dependent_interfaces": [],
-                        "can_disable": True})
+            row.update({
+                "kind": "feature",
+                "exists": True,
+                "enabled": enabled,
+                "visible": False,
+                "accessible": enabled,
+                "state_reason": ("Switched on." if enabled else "Switched off."),
+                "status_policy": None,
+                "stored": self.stored(feature.feature_id),
+                "missing_dependencies": [], "dependent_interfaces": [],
+                "can_disable": True,
+            })
             rows.append(row)
         return rows
 

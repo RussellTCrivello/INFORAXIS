@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 
-from flask import current_app, jsonify, request
+from flask import current_app, g, jsonify, request
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +37,36 @@ def register_interfaces_routes(app) -> None:
         """The product model, with the state of this installation applied."""
         state = _state()
         domain = request.args.get("domain")
-        rows = state.interfaces_with_state()
+        # The states are reported *for the caller*: an administrator asking
+        # what they may see must not be told "nothing" because the request had
+        # no user attached.
+        rows = state.interfaces_with_state(getattr(g, "user", None))
         if domain:
             wanted = domain.upper()
             rows = [r for r in rows if r["domain"] == wanted]
+
+        from core.interfaces import all_policies
 
         return jsonify({
             "success": True,
             "summary": state.summary(),
             "state": {
                 "report": state.state_report().__dict__,
+                # exists / enabled / visible / accessible are four answers, not
+                # one: an interface may exist and be enabled while a viewer may
+                # not see it. Authorization is decided by core/security, which
+                # this field names so no caller mistakes the registry for it.
+                "authorization": "core/security",
+            },
+            # What each lifecycle status means, once, for every consumer.
+            "lifecycle": {
+                status: {
+                    "navigable": p.navigable,
+                    "switchable": p.switchable,
+                    "badge": p.badge,
+                    "note": p.note,
+                }
+                for status, p in all_policies().items()
             },
             "interfaces": rows,
         })
@@ -78,7 +98,7 @@ def register_interfaces_routes(app) -> None:
         from core.interfaces import get_dependents
 
         state = _state()
-        row = next((r for r in state.interfaces_with_state()
+        row = next((r for r in state.interfaces_with_state(getattr(g, "user", None))
                     if r["interface_id"] == interface_id), None)
         if row is None:
             return jsonify({
@@ -90,4 +110,5 @@ def register_interfaces_routes(app) -> None:
         row["dependents"] = [d.interface_id for d in get_dependents(interface_id)]
         row["can_disable"] = state.can_disable(interface_id)[0]
         row["can_enable"] = state.can_enable(interface_id)[0]
+        row["authorization"] = "core/security"
         return jsonify({"success": True, "interface": row})

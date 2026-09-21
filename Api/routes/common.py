@@ -11,6 +11,61 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _interface_state():
+    """The stored interface state, or None when it cannot be read.
+
+    Used by the Jinja globals below. They are globals rather than context
+    values because a Jinja *macro* cannot see the render context: a component
+    imported with `{% from %}` gets its arguments and the environment globals,
+    and nothing else. Passing the whole shell into every component call would
+    put the wiring back into the pages.
+    """
+    try:
+        from settings import get_interface_manager
+
+        return get_interface_manager().get_state()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("interface state unavailable for template globals: %s", exc)
+        return None
+
+
+def feature_enabled(feature_id: str) -> bool:
+    """Is a cross-cutting feature switched on? (Safe when state is unreadable.)"""
+    state = _interface_state()
+    return bool(state.is_enabled(feature_id)) if state is not None else False
+
+
+def interface_for(endpoint):
+    """Read-only presentation lookup: what is this page called, and its icon?
+
+    Answers identity questions only - never whether an interface is enabled,
+    who may see it, or what it depends on. Those belong to the state service
+    and arrive through `navigation` and `page_identity`.
+    """
+    try:
+        from core.interfaces import get_interface_for_endpoint, status_policy
+
+        interface = get_interface_for_endpoint(endpoint) if endpoint else None
+        if interface is None:
+            return None
+        policy = status_policy(interface.status)
+        return {
+            "interface_id": interface.interface_id,
+            "label": interface.name,
+            "icon": interface.icon,
+            "description": interface.description,
+            "domain": str(interface.domain),
+            "help_topic": interface.help_topic,
+            "shortcut": interface.keyboard_shortcut,
+            "status": str(interface.status),
+            "badge": policy.badge,
+            "note": policy.note,
+        }
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("interface_for(%r) failed: %s", endpoint, exc)
+        return None
+
+
 def register_common_routes(app, babel_instance):
     """Register common routes and context processors with the Flask app"""
     
@@ -94,6 +149,12 @@ def register_common_routes(app, babel_instance):
         
         return redirect(request.referrer or url_for('index'))
     
+    # Components (macros) cannot read the render context, so the two lookups
+    # they need are environment globals. A page still receives the prepared
+    # shell through the context processor below.
+    app.jinja_env.globals.setdefault("feature_enabled", feature_enabled)
+    app.jinja_env.globals.setdefault("interface_for", interface_for)
+
     @app.context_processor
     def inject_now():
         """Inject datetime functions and translation helper into templates"""
@@ -128,32 +189,43 @@ def register_common_routes(app, babel_instance):
             # Also inject as user_settings for template compatibility
             context['user_settings'] = interface_manager
 
-            # The registry itself, so a template asks the product model rather
-            # than a copied list: what exists, what it is called, where it
-            # lives and who should see it.
-            from core.interfaces import get_interface, get_interfaces_by_domain
+            # The shell is prepared here, not in markup.
+            #
+            # `navigation` is a list of domains with ready-to-render entries
+            # (label, url, icon, active state, badge, shortcut) and `page` is
+            # the current page's identity (label, domain, icon, help topic,
+            # breadcrumbs). The template renders them and decides nothing: it
+            # must not ask whether an interface is enabled, who owns it, or
+            # what role it needs.
+            from core.interfaces import (
+                get_interface, get_interfaces_by_domain, present_page,
+                build_navigation, get_features,
+            )
             interface_state = interface_manager.get_state()
             context['interface_state'] = interface_state
             context['interface_registry'] = get_interface
             context['interfaces_by_domain'] = get_interfaces_by_domain()
-            # Navigation data: the interfaces this user may actually see,
-            # grouped by domain - the shell renders from this instead of
-            # repeating the product map in markup.
-            try:
-                from core.interfaces import DOMAIN_LABELS
-                context['domain_labels'] = {str(d): label for d, label in DOMAIN_LABELS.items()}
 
-                current_user_obj = getattr(g, 'user', None)
-                # No session means no navigation: the sidebar is a list of what
-                # this operator may open, and an anonymous visitor may open
-                # nothing that requires a session.
-                if current_user_obj is None or not getattr(current_user_obj, 'is_authenticated', False):
-                    context['nav_interfaces'] = {}
-                else:
-                    context['nav_interfaces'] = interface_state.get_visible_by_domain(current_user_obj)
-            except Exception as e:
-                logger.debug("Navigation could not be built from the registry: %s", e)
-                context['nav_interfaces'] = {}
+            # Cross-cutting features (page tips and the like) are state, so a
+            # component asks for its own feature and no template names a
+            # product id to gate markup.
+            context['features'] = {
+                feature.feature_id: interface_state.is_enabled(feature.feature_id)
+                for feature in get_features()
+            }
+
+            current_user_obj = getattr(g, 'user', None)
+            context['navigation'] = build_navigation(
+                interface_state, current_user_obj, request.endpoint, url_for)
+            # Named `page_identity`, not `page`: several routes already pass
+            # `page` as the current pagination cursor, and a template that
+            # received a number where it expected the page model (or the other
+            # way round) would fail quietly.
+            context['page_identity'] = present_page(
+                request.endpoint, interface_state, current_user_obj, url_for)
+
+            # `interface_for` is an environment global (see above): components
+            # need it, and macros cannot see this context.
         except Exception as e:
             logger.warning(f"Failed to load interface manager in context processor: {e}")
             # The registry is what decides whether an interface exists, so a
@@ -166,8 +238,9 @@ def register_common_routes(app, babel_instance):
             context['interface_state'] = None
             context['interface_registry'] = lambda interface_id: None
             context['interfaces_by_domain'] = {}
-            context['domain_labels'] = {}
-            context['nav_interfaces'] = {}
+            context['navigation'] = ()
+            context['features'] = {}
+            context['page_identity'] = None
             context['is_interface_enabled'] = lambda interface_id: False
             context['is_interface_enabled_by_endpoint'] = lambda endpoint: False
         
