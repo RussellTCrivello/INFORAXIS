@@ -278,8 +278,13 @@ def application_block(app, navigation_observation: Optional[str] = None) -> str:
         parts.append(f"**{name}** ({len(values)}): "
                      + (", ".join(f"`{v}`" for v in values) if values else "—"))
         parts.append("")
-    parts.append(f"Infrastructure endpoints (served regardless of interface "
-                 f"state): **{sum(1 for r in records if r.internal)}**")
+    # "Servable" is about the interface switch, not about security: API and
+    # system endpoints are not pages an operator switches on and off, and they
+    # remain behind authentication and authorization as they always were.
+    parts.append(
+        f"Endpoints the interface switch does not gate (API, system and "
+        f"infrastructure; authentication and authorization are unchanged): "
+        f"**{sum(1 for r in records if r.internal)}**")
     parts.append("")
 
     parts.append("### 10. Rendered navigation\n")

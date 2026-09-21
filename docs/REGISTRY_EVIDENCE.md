@@ -182,7 +182,7 @@ The coverage rule tolerates exactly these, by name — a new page cannot be adde
 
 **TEST_ENDPOINT_PREFIXES** (1): `/_test/`
 
-Infrastructure endpoints (served regardless of interface state): **242**
+Endpoints the interface switch does not gate (API, system and infrastructure; authentication and authorization are unchanged): **242**
 
 ### 10. Rendered navigation
 
