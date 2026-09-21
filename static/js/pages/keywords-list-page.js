@@ -76,8 +76,6 @@ if (typeof window.translations === 'undefined') {
     const sortOrderSelect = document.getElementById('sortOrder');
     const perPageSelect = document.getElementById('perPage');
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-    const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
     
     let currentPage = 1;
     let currentPerPage = 10;
@@ -765,44 +763,36 @@ if (typeof window.translations === 'undefined') {
     }
 
     // Selection management
+    //
+    // The page owns the selection: which rows are checked, and the set the
+    // bulk operations will send. The toolbar owns how that scope is drawn and
+    // announced, so this reports the numbers and nothing else - no button is
+    // enabled or disabled here, and no action is named.
     function updateSelection() {
         const checkboxes = document.querySelectorAll('.keyword-checkbox:checked');
         selectedKeywords.clear();
         checkboxes.forEach(cb => selectedKeywords.add(parseInt(cb.value)));
-        
-        const hasSelection = selectedKeywords.size > 0;
-        if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
-        if (bulkUpdateBtn) bulkUpdateBtn.disabled = !hasSelection;
-        
+
         // Update select all checkbox
         const allCheckboxes = document.querySelectorAll('.keyword-checkbox');
         if (selectAllCheckbox) {
             selectAllCheckbox.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
             selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
         }
-    }
-    
-    // ✅ FIXED: Add missing updateBulkButtons function
-    function updateBulkButtons() {
-        const checkboxes = document.querySelectorAll('.keyword-checkbox:checked');
-        const hasSelection = checkboxes.length > 0;
-        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-        const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
-        
-        if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
-        if (bulkUpdateBtn) bulkUpdateBtn.disabled = !hasSelection;
-        
-        // Update select-all checkbox state
-        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-        const allCheckboxes = document.querySelectorAll('.keyword-checkbox');
-        if (selectAllCheckbox && allCheckboxes.length > 0) {
-            selectAllCheckbox.checked = checkboxes.length === allCheckboxes.length;
-            selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
+
+        if (window.ActionToolbar) {
+            window.ActionToolbar.sync('keywordsActionBar', {
+                selected: checkboxes.length,
+                total: allCheckboxes.length
+            });
         }
-        
-        // Also update the selection set
-        selectedKeywords.clear();
-        checkboxes.forEach(cb => selectedKeywords.add(parseInt(cb.value)));
+    }
+
+    // The rows call this name and the Select All/None controls call the other;
+    // there is one implementation behind both, so a row change and a Select All
+    // cannot drift apart.
+    function updateBulkButtons() {
+        updateSelection();
     }
 
     function toggleSelectAll() {

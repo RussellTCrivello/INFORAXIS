@@ -1,5 +1,6 @@
 <!-- templates/email_words.html -->
 {% extends "base.html" %}
+{% from 'components/action_toolbar.html' import action_toolbar, action_group, action_button %}
 {% from 'components/status_badge.html' import status_badge %}
 
 {% block title %}{{ _('Email-like Words') }}{% endblock %}
@@ -119,34 +120,29 @@
         </div>
 
         <!-- Action Bar - Using unified action-bar -->
-        <div class="action-bar">
-            <div class="action-group">
-                <span class="action-label">{{ _('Actions') }}:</span>
-                <button class="btn-action btn-primary" type="submit">
-                    <i class="bi bi-funnel"></i>
-                    {{ _('Apply Filters') }}
-                </button>
-                <a class="btn-action btn-outline-secondary" href="{{ url_for('email_words') }}">
-                    <i class="bi bi-arrow-counterclockwise"></i>
-                    {{ _('Reset') }}
-                </a>
-            </div>
-            <div class="action-group">
-                <span class="action-label">{{ _('Export/Copy') }}:</span>
-                <button class="btn-action btn-outline-primary" type="button" onclick="exportData()">
-                    <i class="bi bi-download"></i>
-                    {{ _('Export') }}
-                </button>
-                <button class="btn-action btn-outline-secondary" type="button" onclick="copyToClipboard()">
-                    <i class="bi bi-clipboard"></i>
-                    {{ _('Copy') }}
-                </button>
-                <button class="btn-action btn-outline-success" type="button" onclick="refreshPage()">
-                    <i class="bi bi-arrow-clockwise"></i>
-                    {{ _('Refresh') }}
-                </button>
-            </div>
-        </div>
+        {#-
+           The second contract test for the frozen toolbar: every action on this
+           page is page-scoped. Nothing here is selected, so there is no scope
+           element and no runtime call at all - the page module owns what these
+           buttons do, and the component only renders them. If that had needed a
+           new toolbar capability, the honest outcome would have been to write
+           the missing semantic down rather than grow the component.
+        -#}
+        {% call action_toolbar(id='emailWordsActionBar', label=_('Actions')) %}
+            {% call action_group(_('Actions') ~ ':') %}
+                {{ action_button(_('Apply Filters'), icon='bi-funnel', submit=True, tone='primary') }}
+                {{ action_button(_('Reset'), icon='bi-arrow-counterclockwise',
+                     href=url_for('email_words'), tone='outline-secondary') }}
+            {% endcall %}
+            {% call action_group(_('Export/Copy') ~ ':') %}
+                {{ action_button(_('Export'), icon='bi-download', onclick='exportData()',
+                     tone='outline-primary') }}
+                {{ action_button(_('Copy'), icon='bi-clipboard', onclick='copyToClipboard()',
+                     tone='outline-secondary') }}
+                {{ action_button(_('Refresh'), icon='bi-arrow-clockwise', onclick='refreshPage()',
+                     tone='outline-success') }}
+            {% endcall %}
+        {% endcall %}
     </form>
 </div>
 <div class="row g-4">

@@ -30,7 +30,7 @@
 {% from 'components/states.html' import empty_state %}
 {% from 'components/status_badge.html' import status_badge %}
 {% from 'components/filter_bar.html' import filter_section, filter_grid, filter_group, search_group %}
-{% from 'components/action_toolbar.html' import action_toolbar, action_group, action_button %}
+{% from 'components/action_toolbar.html' import action_toolbar, action_group, action_button, bulk_action_button, selection_summary %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -149,32 +149,22 @@
     {% endcall %}
 
     <!-- Action Bar -->
-    {% call action_toolbar() %}
+    {% call action_toolbar(id='keywordsActionBar', label=_('Actions')) %}
         {% call action_group(_('Selection:')) %}
-            <button class="btn-action" onclick="selectAll()">
-                <i class="bi bi-check-square"></i>
-                {{ _('Select All') }}
-            </button>
-            <button class="btn-action" onclick="selectNone()">
-                <i class="bi bi-square"></i>
-                {{ _('Select None') }}
-            </button>
+            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()') }}
+            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()') }}
         {% endcall %}
         {% call action_group(_('Bulk Actions:')) %}
-            <button class="btn-action btn-outline-warning" onclick="bulkUpdate()" id="bulkUpdateBtn" disabled>
-                <i class="bi bi-pencil"></i>
-                {{ _('Edit Selected') }}
-            </button>
-            <button class="btn-action btn-outline-danger" onclick="bulkDelete()" id="bulkDeleteBtn" disabled>
-                <i class="bi bi-trash"></i>
-                {{ _('Delete Selected') }}
-            </button>
+            {{ selection_summary(total_keywords|default(0), _('keywords'), _('keyword')) }}
+            {{ bulk_action_button(_('Edit Selected'), icon='bi-pencil', onclick='bulkUpdate()',
+                 tone='outline-warning', id='bulkUpdateBtn', noun=_('keywords')) }}
+            {{ bulk_action_button(_('Delete Selected'), icon='bi-trash', onclick='bulkDelete()',
+                 tone='outline-danger', id='bulkDeleteBtn', noun=_('keywords')) }}
         {% endcall %}
         {% call action_group(_('Actions:')) %}
-            <button class="btn-action btn-warning" onclick="mergeAllDuplicates()" title="{{ _('Merge all duplicate keywords') }}">
-                <i class="bi bi-arrow-down-up"></i>
-                {{ _('Merge Duplicates') }}
-            </button>
+            {{ action_button(_('Merge Duplicates'), icon='bi-arrow-down-up',
+                 onclick='mergeAllDuplicates()', tone='warning',
+                 title=_('Merge all duplicate keywords')) }}
         {% endcall %}
     {% endcall %}
 {% endcall %}

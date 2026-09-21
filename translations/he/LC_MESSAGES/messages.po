@@ -9182,3 +9182,10 @@ msgstr "מקור"
 msgid "side"
 msgstr "צד"
 
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "keyword"
+msgstr "מילת מפתח"
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "word"
+msgstr "מילה"

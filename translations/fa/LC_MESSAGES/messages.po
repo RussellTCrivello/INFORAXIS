@@ -9478,3 +9478,10 @@ msgstr "منبع"
 msgid "side"
 msgstr "طرف"
 
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "keyword"
+msgstr "کلیدواژه"
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "word"
+msgstr "واژه"

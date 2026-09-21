@@ -101,10 +101,29 @@ DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
         "actions": (
             ("update", "Update Keywords", "action.keywords.update.label",
              {"scope": "page"}),
+            # Selection controls: available whatever is selected, because their
+            # job is to create the selection the other two need.
+            ("select_all", "Select All", "action.keywords.select_all.label",
+             {"scope": "page"}),
+            ("select_none", "Select None", "action.keywords.select_none.label",
+             {"scope": "page"}),
+            # Acts on the selection but not on every record in it: it edits
+            # one keyword - the first selected - after asking when more than
+            # one is selected. Declared as selection scope, because that is
+            # what it needs and what it is offered beside; the "first of N"
+            # rule is recorded in the audit as a semantic the current model
+            # cannot yet say, rather than smuggled into requires_selection.
+            ("edit_selected", "Edit Selected",
+             "action.keywords.edit_selected.label",
+             {"scope": "selection", "requires_selection": True}),
             ("bulk_delete", "Delete Selected",
              "action.keywords.bulk_delete.label",
              {"scope": "bulk", "requires_selection": True, "destructive": True,
               "confirmation": "action.keywords.bulk_delete.confirm"}),
+            ("merge_duplicates", "Merge Duplicates",
+             "action.keywords.merge_duplicates.label",
+             {"scope": "page", "destructive": True,
+              "confirmation": "action.keywords.merge_duplicates.confirm"}),
         ),
         "states": (
             ("empty", "No keywords found.", "state.keywords.empty.title"),
@@ -172,12 +191,30 @@ DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
              {"render": "status"}),
         ),
         "actions": (
-            ("bulk_edit", "Edit Selected", "action.words.bulk_edit.label",
-             {"scope": "bulk", "requires_selection": True}),
+            ("select_all", "Select All", "action.words.select_all.label",
+             {"scope": "page"}),
+            ("select_none", "Select None", "action.words.select_none.label",
+             {"scope": "page"}),
+            # Not a bulk operation, whatever it sits beside: it opens the
+            # editor for one word - the first selected - and asks first when
+            # more than one is selected. Same shape as keywords; the missing
+            # semantic ("one member of the selection") is an audit finding,
+            # not something requires_single_selection can honestly claim.
+            ("edit_selected", "Edit Selected", "action.words.edit_selected.label",
+             {"scope": "selection", "requires_selection": True}),
             ("bulk_delete", "Delete Selected",
              "action.words.bulk_delete.label",
              {"scope": "bulk", "requires_selection": True, "destructive": True,
               "confirmation": "action.words.bulk_delete.confirm"}),
+            # Per-record actions live in the row, not the toolbar; declaring
+            # them here is what makes the audit able to say so.
+            ("open", "View Details", "action.words.open.label",
+             {"scope": "record"}),
+            ("edit", "Edit", "action.words.edit.label",
+             {"scope": "record"}),
+            ("delete", "Delete", "action.words.delete.label",
+             {"scope": "record", "destructive": True,
+              "confirmation": "action.words.delete.confirm"}),
         ),
         "states": (
             ("empty", "No words found.", "state.words.empty.title"),

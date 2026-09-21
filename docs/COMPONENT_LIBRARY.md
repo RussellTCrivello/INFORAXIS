@@ -156,7 +156,7 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Browser confirm() dialog | — | 2 templates |
 | Hand-written status badge | `status_badge` | 0 badges, in 0 templates |
 | Hand-written badge chip (count, id, method) | — | 68 badges |
-| Hand-written action bar | `action_toolbar` | 4 templates |
+| Hand-written action bar | `action_toolbar` | 2 templates |
 
 ### Adoption
 
@@ -171,7 +171,7 @@ How much of the repeated markup has moved onto its component. Standardized count
 | Hand-written filter control | 1 | 14 | 7% |
 | Browser confirm() dialog | 0 | 2 | 0% |
 | Hand-written status badge | 6 | 0 | 100% |
-| Hand-written action bar | 3 | 4 | 43% |
+| Hand-written action bar | 5 | 2 | 71% |
 
 **Declared exceptions.** Not everything that looks similar is the same thing, and overloaded components stop being usable. An exception is a decision with an owner:
 

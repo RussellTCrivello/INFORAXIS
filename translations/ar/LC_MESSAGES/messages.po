@@ -9345,3 +9345,10 @@ msgstr "مصدر"
 msgid "side"
 msgstr "جانب"
 
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "keyword"
+msgstr "كلمة مفتاحية"
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "word"
+msgstr "كلمة"

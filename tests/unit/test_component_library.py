@@ -483,11 +483,13 @@ class TestAdoption:
             "admired")
         assert counts()["pattern_table"] == 13
         assert counts()["pattern_filter"] == 14
-        # Four bars are still hand-written (the Word list, email words, the
-        # file list and the full-content reader). The pattern is anchored to a
-        # class attribute: before it was, `base.html` counted as a fifth
-        # because a script src happens to read `action-toolbar.js`.
-        assert counts()["pattern_toolbar"] == 4
+        # Two bars are still hand-written, and both are waiting for the layer
+        # that owns them: the file list (record actions on a richer model) and
+        # the full-content reader (document/viewer controls). Keywords, Words,
+        # Sources, Sides and email words now render through the component. The
+        # pattern is anchored to a class attribute: before it was, `base.html`
+        # counted as an extra because a script src reads `action-toolbar.js`.
+        assert counts()["pattern_toolbar"] == 2
         # The search box had thirteen owners and no component. Seven places
         # now render it through `search_group` / `search_input`; the six that
         # remain are the analysis dashboards, notifications, the operations

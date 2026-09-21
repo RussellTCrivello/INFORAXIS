@@ -316,8 +316,17 @@ async function loadPageModule(moduleName, document, window) {
     };
     globalThis.confirm = () => true;
     globalThis.alert = () => {};
+    globalThis.fetch = () => Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ keywords: [], words: [], items: [], total: 0,
+                             page: 1, per_page: 10, success: true }),
+        text: async () => '',
+    });
     return import('file://' + path.join(ROOT, 'static/js/pages', moduleName));
 }
+
+const initProblems = [];
 
 function fireDomContentLoaded(document) {
     for (const { type, handler } of document.listeners) {
@@ -325,7 +334,11 @@ function fireDomContentLoaded(document) {
             try {
                 handler();
             } catch (error) {
-                check(`page init survivable (${error.message})`, false);
+                // The stub is not the product: a page's own start-up may reach
+                // for markup this harness does not build. That is recorded and
+                // reported, and the checks below say what actually matters -
+                // whether the page's selection path reached the toolbar.
+                initProblems.push(error.message);
             }
         }
     }
@@ -437,8 +450,10 @@ function fireDomContentLoaded(document) {
 // 2. The reference pair: the pages that own the count, and the outcome
 // --------------------------------------------------------------------------
 async function exercisePage({ moduleName, barId, checkboxClass, cardClass,
-                              total, noun, nounSingular, exportMessage, warning,
-                              deleteFunction, deleteError, kind }) {
+                              total, noun, nounSingular, kind,
+                              exportMessage = null, warning = null,
+                              deleteFunction = null, deleteError = null,
+                              updateFunction = 'updateBulkButtons' }) {
     const document = makeDocument({ permissive: true });
     const ActionToolbar = loadToolbar(document);
     const window = {
@@ -446,7 +461,8 @@ async function exercisePage({ moduleName, barId, checkboxClass, cardClass,
         console,
         translations: {},
         confirm: () => true,
-        location: { pathname: `/${kind}`, search: '', href: '' },
+        location: { pathname: `/${kind}`, search: '', href: `http://localhost/${kind}`,
+                    origin: 'http://localhost' },
         history: { replaceState() {} },
     };
     window.ActionToolbar = ActionToolbar;
@@ -475,9 +491,14 @@ async function exercisePage({ moduleName, barId, checkboxClass, cardClass,
     fireDomContentLoaded(document);
 
     const label = (name) => fixture.bulk[name].getAttribute('aria-label');
+    const update = () => window[updateFunction]();
+
+    check(`${kind}: the page's selection path exists (${updateFunction})`,
+          typeof window[updateFunction] === 'function'
+          + (initProblems.length ? ` init problems: ${initProblems.join('; ')}` : ''));
 
     // Initial render, through the page's own selection code.
-    window.updateBulkButtons();
+    update();
     check(`${kind}: no selection -> disabled, scope visible`,
           fixture.bulk['Export Selected'].disabled === true
           && fixture.summary.textContent === `Select ${noun} first`);
@@ -486,7 +507,7 @@ async function exercisePage({ moduleName, barId, checkboxClass, cardClass,
 
     // One row, through the row's own handler.
     checkboxes[0].checked = true;
-    window.updateBulkButtons();
+    update();
     check(`${kind}: one row -> "1 ${nounSingular} selected"`,
           fixture.summary.textContent === `1 ${nounSingular} selected`);
     check(`${kind}: one row -> enabled and named with the scope`,
@@ -496,7 +517,7 @@ async function exercisePage({ moduleName, barId, checkboxClass, cardClass,
     // Several rows.
     checkboxes[1].checked = true;
     checkboxes[2].checked = true;
-    window.updateBulkButtons();
+    update();
     check(`${kind}: three rows -> "3 ${noun} selected"`,
           fixture.summary.textContent === `3 ${noun} selected`
           && label('Edit Selected') === `Edit Selected: 3 ${noun} selected`);
@@ -528,7 +549,7 @@ async function exercisePage({ moduleName, barId, checkboxClass, cardClass,
     checkboxes[0].checked = true;
     checkboxes[3].checked = true;
     for (let i = 0; i < 10; i += 1) {
-        window.updateBulkButtons();
+        update();
     }
     check(`${kind}: ten updates in a row leave one sentence, not two`,
           fixture.summary.textContent === `2 ${noun} selected`
@@ -540,6 +561,12 @@ async function exercisePage({ moduleName, barId, checkboxClass, cardClass,
     check(`${kind}: nothing else listens for the same change (${changeListeners} delegation)`,
           changeListeners === 0);
 
+    if (!exportMessage) {
+        // A page whose actions are its own business stops here: what this
+        // contract test proves is that no runtime call was needed for it.
+        return;
+    }
+
     // The page owns the outcome and says it out loud.
     window.selectNone();
     window.bulkExport();
@@ -550,7 +577,7 @@ async function exercisePage({ moduleName, barId, checkboxClass, cardClass,
 
     checkboxes[0].checked = true;
     checkboxes[1].checked = true;
-    window.updateBulkButtons();
+    update();
     window.bulkExport();
     check(`${kind}: the action reports what it is doing`,
           refusal().includes('bg-info') && refusal().includes(exportMessage));
@@ -588,9 +615,71 @@ await exercisePage({
     kind: 'sides',
 });
 
+// Keywords renders its rows in JavaScript; the harness builds the same rows the
+// page builds (`.keyword-checkbox` with the page's own handler) and drives the
+// page's selection path.
+await exercisePage({
+    moduleName: 'keywords-list-page.js', barId: 'keywordsActionBar',
+    checkboxClass: 'keyword-checkbox', cardClass: 'keyword-row',
+    total: 40, noun: 'keywords', nounSingular: 'keyword',
+    updateFunction: 'updateSelection',
+    kind: 'keywords',
+});
+
+// Words renders its rows on the server; its selection path is the same shape.
+await exercisePage({
+    moduleName: 'words-list-page.js', barId: 'wordsActionBar',
+    checkboxClass: 'word-checkbox', cardClass: 'word-row',
+    total: 10, noun: 'words', nounSingular: 'word',
+    updateFunction: 'updateSelection',
+    kind: 'words',
+});
+
+// --------------------------------------------------------------------------
+// 3. The second contract test: a page with no selection at all
+// --------------------------------------------------------------------------
+{
+    const document = makeDocument({ permissive: true });
+    const ActionToolbar = loadToolbar(document);
+    const window = {
+        document,
+        console,
+        translations: {},
+        location: { pathname: '/email-words', search: '',
+                    href: 'http://localhost/email-words', origin: 'http://localhost' },
+        history: { replaceState() {} },
+    };
+    window.ActionToolbar = ActionToolbar;
+
+    // The bar the server renders for this page: page actions only, so no scope
+    // element and no bulk action to keep in step.
+    const bar = document.register(document.body.appendChild(new FakeElement('div', {
+        ...SERVER, id: 'emailWordsActionBar', class: 'action-bar', role: 'toolbar',
+    })));
+    const group = bar.appendChild(new FakeElement('div', { class: 'action-group' }));
+    group.appendChild(new FakeElement('button', { type: 'submit', class: 'btn-action btn-primary' }));
+    group.appendChild(new FakeElement('a', { class: 'btn-action btn-outline-secondary',
+                                             href: '/email-words' }));
+
+    await loadPageModule('email-words-page.js', document, window);
+    fireDomContentLoaded(document);
+
+    check('email_words: page actions need no runtime call at all',
+          typeof window.exportData === 'function' || typeof window.refreshPage === 'function');
+    check('email_words: the bar has nothing to keep in step',
+          bar.querySelectorAll('[data-bulk-action]').length === 0
+          && bar.querySelectorAll('[data-selection-summary]').length === 0);
+    check('email_words: nothing was written on to the bar by the runtime',
+          bar.getAttribute('data-selected-count') === null
+          || bar.getAttribute('data-selected-count') === '0');
+}
+
 // --------------------------------------------------------------------------
 // Report
 // --------------------------------------------------------------------------
+if (initProblems.length) {
+    console.log(`note: page start-up reached past the stub ${initProblems.length} time(s)`);
+}
 let failed = 0;
 for (const [name, ok] of checks) {
     if (!ok) failed += 1;

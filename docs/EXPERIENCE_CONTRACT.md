@@ -109,8 +109,8 @@ claimed about strings that have not been moved.
 ### What this build declares
 
 - Contracts: **25** (described: **5**, derived from the registry only: **20**)
-- Definitions: **15** actions, **14** columns, **6** filters, **0** fields, **5** states
-- Translation keys the screens need: **169**
+- Definitions: **24** actions, **14** columns, **6** filters, **0** fields, **5** states
+- Translation keys the screens need: **180**
 - With help: **23**; with a shortcut: **11**; with a navigation entry: **25**
 
 ### Every screen
@@ -122,8 +122,8 @@ claimed about strings that have not been moved.
 | `search` | DISCOVER | derived | `screen.search.title` | — | — | — | — | yes |
 | `sources` | DISCOVER | yes | `screen.sources.title` | — | — | 4 | 1 | yes |
 | `sides` | DISCOVER | yes | `screen.sides.title` | — | — | 4 | 1 | yes |
-| `keywords` | DISCOVER | yes | `screen.keywords.title` | 4 | 2 | 2 | 1 | yes |
-| `words` | DISCOVER | yes | `screen.words.title` | 3 | — | 2 | 1 | yes |
+| `keywords` | DISCOVER | yes | `screen.keywords.title` | 4 | 2 | 6 | 1 | yes |
+| `words` | DISCOVER | yes | `screen.words.title` | 3 | — | 7 | 1 | yes |
 | `categories` | DISCOVER | derived | `screen.categories.title` | — | — | — | — | yes |
 | `email_words` | DISCOVER | derived | `screen.email_words.title` | — | — | — | — | yes |
 | `analyst_categorization` | CLASSIFY | derived | `screen.analyst_categorization.title` | — | — | — | — | yes |
@@ -149,10 +149,10 @@ Counted from the catalogs the build ships - the Babel catalogs under `translatio
 
 | Language | Catalog entries | Source strings | Translated | Fallback | Missing | Coverage | Of which translated |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `ar` | 2877 | 2510 | 2503 | 7 | 0 | 100.0% | 99.7% |
-| `fa` | 2877 | 2510 | 2505 | 5 | 0 | 100.0% | 99.8% |
-| `he` | 2877 | 2510 | 2499 | 11 | 0 | 100.0% | 99.6% |
-| `hr` | 2625 | 2510 | 2427 | 21 | 62 | 97.5% | 96.7% |
+| `ar` | 2879 | 2512 | 2505 | 7 | 0 | 100.0% | 99.7% |
+| `fa` | 2879 | 2512 | 2507 | 5 | 0 | 100.0% | 99.8% |
+| `he` | 2879 | 2512 | 2501 | 11 | 0 | 100.0% | 99.6% |
+| `hr` | 2627 | 2512 | 2429 | 21 | 62 | 97.5% | 96.7% |
 
 ### Coverage per screen
 
@@ -165,8 +165,8 @@ The strings a screen's contract asks for, and how many of them a language actual
 | `search` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
 | `sources` | 11 | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) |
 | `sides` | 11 | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) |
-| `keywords` | 16 | 68.8% (0 by key) | 68.8% (0 by key) | 68.8% (0 by key) | 56.2% (0 by key) |
-| `words` | 13 | 76.9% (0 by key) | 69.2% (0 by key) | 69.2% (0 by key) | 61.5% (0 by key) |
+| `keywords` | 21 | 71.4% (0 by key) | 71.4% (0 by key) | 71.4% (0 by key) | 61.9% (0 by key) |
+| `words` | 19 | 78.9% (0 by key) | 73.7% (0 by key) | 73.7% (0 by key) | 68.4% (0 by key) |
 | `categories` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
 | `email_words` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
 | `analyst_categorization` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
@@ -196,5 +196,5 @@ These have a contract derived from the registry, so they work: they have an iden
 
 Every contract passes the declarative checks: no SQL, no imports, no calls, no authorisation decisions, destructive actions carry a confirmation, bulk actions require a selection, and no key holds two different source strings.
 
-_Generated from 25 contracts, 2510 source strings and 5 catalogs._
+_Generated from 25 contracts, 2512 source strings and 5 catalogs._
 <!-- END GENERATED EXPERIENCE CONTRACT -->

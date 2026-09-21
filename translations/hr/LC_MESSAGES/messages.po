@@ -9585,3 +9585,10 @@ msgstr "izvor"
 msgid "side"
 msgstr "strana"
 
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "keyword"
+msgstr "ključna riječ"
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "word"
+msgstr "riječ"

@@ -10100,6 +10100,14 @@ msgstr ""
 msgid "side"
 msgstr ""
 
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "keyword"
+msgstr ""
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "word"
+msgstr ""
+
 #~ msgid "File Analysis Overview"
 #~ msgstr ""
 

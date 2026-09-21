@@ -44,14 +44,30 @@ def _seed(admin_client):
                       json={"name": "toolbar-reference-source", "job": "analyst",
                             "country": "NL"})
     admin_client.post("/api/input/sides", json={"name": "toolbar-reference-side"})
+    admin_client.post("/api/words", json={"word": "toolbarreferenceword"})
 
 
-#: The reference pair: page, bar id, the words, and the bulk buttons.
-REFERENCE_PAGES = (
+#: Every page the toolbar has been migrated onto. Keywords and Words are here
+#: because a contract that only fits the two pages it was written against is
+#: not a contract: the same primitives have to express a second and third
+#: screen with different data, different actions and different business
+#: behaviour.
+#:
+#: url, bar id, plural noun, singular noun, selection-scoped buttons, page
+#: module, checkbox class, and how that page renders its rows.
+SELECTION_PAGES = (
     ("/sources", "sourcesActionBar", "sources", "source",
-     ("bulkExportBtn", "bulkUpdateBtn"), "sources-list-page.js", "source-checkbox"),
+     ("bulkExportBtn", "bulkUpdateBtn"), "sources-list-page.js",
+     "source-checkbox", "server"),
     ("/sides", "sidesActionBar", "sides", "side",
-     ("bulkExportBtn", "bulkUpdateBtn"), "sides-list-page.js", "side-checkbox"),
+     ("bulkExportBtn", "bulkUpdateBtn"), "sides-list-page.js",
+     "side-checkbox", "server"),
+    ("/keywords", "keywordsActionBar", "keywords", "keyword",
+     ("bulkUpdateBtn", "bulkDeleteBtn"), "keywords-list-page.js",
+     "keyword-checkbox", "script"),
+    ("/words", "wordsActionBar", "words", "word",
+     ("bulkUpdateBtn", "bulkDeleteBtn"), "words-list-page.js",
+     "word-checkbox", "server"),
 )
 
 #: Phrases the runtime composes. They must exist, translated, in every
@@ -59,6 +75,7 @@ REFERENCE_PAGES = (
 #: bulk action ends up saying something the reader cannot read.
 PHRASES = ("Select {noun} first", "{count} {noun} selected",
            "{count} of {total} {noun} selected")
+NOUNS = ("source", "side", "keyword", "word")
 MAINTAINED = ("ar", "he", "fa", "hr")
 
 
@@ -155,7 +172,7 @@ class TestThePhrasesAreTheCatalogs:
         for language in MAINTAINED:
             text = (PROJECT_ROOT / "translations" / language
                     / "LC_MESSAGES" / "messages.po").read_text(encoding="utf-8")
-            for phrase in PHRASES + ("source", "side"):
+            for phrase in PHRASES + NOUNS:
                 block = _re.search(
                     r'^msgid "' + _re.escape(phrase) + r'"\nmsgstr "(.*)"$',
                     text, _re.M)
@@ -190,16 +207,37 @@ class TestTheRuntimeStaysSmallAndInert:
                 f"the toolbar runtime reached for {forbidden!r}: the boundary "
                 "between presentation and business behaviour has moved")
 
-    @pytest.mark.parametrize("module,bar_id", (("sources-list-page.js", "sourcesActionBar"),
-                                               ("sides-list-page.js", "sidesActionBar")))
-    def test_the_page_no_longer_decides_how_the_scope_looks(self, module, bar_id):
+    @pytest.mark.parametrize("url,bar_id,noun,singular,bulk_ids,module,checkbox,rows",
+                             SELECTION_PAGES)
+    def test_the_page_no_longer_decides_how_the_scope_looks(
+            self, url, bar_id, noun, singular, bulk_ids, module, checkbox, rows):
+        """The page reports the numbers; the toolbar decides what that looks like."""
         source = (PROJECT_ROOT / "static/js/pages" / module).read_text(encoding="utf-8")
-        assert f"ActionToolbar.sync('{bar_id}'" in source
-        assert "bulkExportBtn.disabled" not in source
-        assert "bulkUpdateBtn.disabled" not in source
+        assert f"ActionToolbar.sync('{bar_id}'" in source, (
+            f"{module} renders a scope but does not keep it in step")
+        assert ".disabled = !" not in source, (
+            f"{module} still enables or disables an action from the selection: "
+            "that is the toolbar's decision, and doing it in two places is how "
+            "the two drift apart")
         assert "document.addEventListener('change'" not in source, (
             "a second listener for the same change would update the toolbar "
             "twice per click")
+
+    def test_a_page_without_a_selection_needs_no_runtime_at_all(self):
+        """The second contract test: email_words is page actions only.
+
+        Every control there acts on the page (apply the filters, reset them,
+        export or copy what is on screen, refresh). It can therefore be
+        expressed with the frozen primitives without a scope element, without a
+        runtime call and without one line of page-specific behaviour inside the
+        component - which is the answer this page was migrated to get.
+        """
+        source = (PROJECT_ROOT / "static/js/pages/email-words-page.js")
+        text = source.read_text(encoding="utf-8")
+        assert "ActionToolbar.sync" not in text, (
+            "email_words has no selection to keep in step; if it needed the "
+            "runtime, the missing capability belongs in the audit, not in a "
+            "new toolbar option")
 
     def test_the_shell_loads_the_runtime_the_way_it_loads_the_others(self):
         shell = (TEMPLATES / "base.html").read_text(encoding="utf-8")
@@ -240,11 +278,12 @@ class TestTheRuntimeObeysTheRenderedBar:
 # ---------------------------------------------------------------------------
 # The reference pair, as served
 # ---------------------------------------------------------------------------
-class TestSourcesAndSidesAreTheReferenceImplementation:
-    @pytest.mark.parametrize("url,bar_id,noun,singular,bulk_ids,module,checkbox",
-                             REFERENCE_PAGES)
+class TestTheMigratedPagesRenderTheContract:
+    @pytest.mark.parametrize("url,bar_id,noun,singular,bulk_ids,module,checkbox,rows",
+                             SELECTION_PAGES)
     def test_the_served_page_renders_the_no_selection_state(
-            self, app, admin_client, url, bar_id, noun, singular, bulk_ids, module, checkbox):
+            self, app, admin_client, url, bar_id, noun, singular, bulk_ids,
+            module, checkbox, rows):
         resp = admin_client.get(url)
         assert resp.status_code == 200, url
         html = resp.get_data(as_text=True)
@@ -256,34 +295,66 @@ class TestSourcesAndSidesAreTheReferenceImplementation:
         assert f'data-noun="{noun}"' in summary.group(0)
         assert f'data-noun-singular="{singular}"' in summary.group(0)
         assert 'role="status"' in summary.group(0)
+        assert f"Select {noun} first" in summary.group(0), (
+            f"{url}: the scope does not say what has to happen first")
 
         for button_id in bulk_ids:
             button = re.search(rf'<button[^>]*id="{button_id}"[^>]*>', html, re.S)
             assert button, f"{url} has no {button_id}"
             markup = button.group(0)
-            assert " disabled" in markup, f"{url}: {button_id} was startable with nothing selected"
+            assert " disabled" in markup, (
+                f"{url}: {button_id} was startable with nothing selected")
             assert "aria-disabled=\"true\"" in markup
             assert "onclick" not in markup, f"{url}: {button_id} ran without a scope"
             assert f"Select {noun} first" in markup, (
                 f"{url}: {button_id} does not say why it cannot be used")
 
-    @pytest.mark.parametrize("url,bar_id,noun,singular,bulk_ids,module,checkbox",
-                             REFERENCE_PAGES)
-    def test_one_binding_per_row_and_none_beside_it(
-            self, app, admin_client, url, bar_id, noun, singular, bulk_ids, module, checkbox):
-        """The row's own handler is the only path that updates the toolbar."""
-        _seed(admin_client)
-        html = admin_client.get(url).get_data(as_text=True)
-        changes = html.count('onchange="updateBulkButtons()"')
-        rows = len(re.findall(rf'class="[^"]*{re.escape(checkbox)}', html))
-        assert rows > 0, f"{url} renders no rows to select"
-        assert changes == rows, (
-            f"{url}: {rows} rows but {changes} change handlers - a row would not "
-            "reach the toolbar, or would reach it twice")
+    @pytest.mark.parametrize("url,bar_id,noun,singular,bulk_ids,module,checkbox,rows",
+                             SELECTION_PAGES)
+    def test_every_row_reaches_the_toolbar_exactly_once(
+            self, app, admin_client, url, bar_id, noun, singular, bulk_ids,
+            module, checkbox, rows):
+        """One binding per row, and no second, document-wide listener beside it."""
+        path = PROJECT_ROOT / "static/js/pages" / module
+        source = path.read_text(encoding="utf-8")
 
-        page = (PROJECT_ROOT / "static/js/pages" / module).read_text(encoding="utf-8")
-        assert "document.addEventListener('change'" not in page
+        if rows == "server":
+            _seed(admin_client)
+            html = admin_client.get(url).get_data(as_text=True)
+            changes = html.count('onchange="updateBulkButtons()"')
+            rendered = len(re.findall(rf'class="[^"]*{re.escape(checkbox)}', html))
+            assert rendered > 0, f"{url} renders no rows to select"
+            assert changes == rendered, (
+                f"{url}: {rendered} rows but {changes} change handlers - a row "
+                "would not reach the toolbar, or would reach it twice")
+        else:
+            # This page builds its rows in JavaScript, so the row template is
+            # what has to carry the binding - exactly one per row, and once.
+            handlers = source.count('onchange="updateBulkButtons()"')
+            assert handlers == 1, (
+                f"{module} renders {handlers} change bindings; a row template "
+                "needs exactly one")
+            lines = source.splitlines()
+            at = next(i for i, line in enumerate(lines)
+                      if 'onchange="updateBulkButtons()"' in line)
+            window = "\n".join(lines[max(0, at - 8):at + 1])
+            assert checkbox in window, (
+                f"{module}: the handler is not on the row's checkbox - a change "
+                "would reach the toolbar from something else")
 
-        shell = admin_client.get(url).get_data(as_text=True)
-        assert "js/modules/core/action-toolbar.js" in shell, (
-            "the page renders a bar but the shell does not load its runtime")
+        assert "document.addEventListener('change'" not in source, (
+            f"{module} both binds each row and listens document-wide: one "
+            "change would update the toolbar twice")
+
+    def test_a_page_with_no_selection_renders_a_bar_without_a_scope(self, app, admin_client):
+        resp = admin_client.get("/email-words")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'id="emailWordsActionBar"' in html
+        assert "data-selection-summary" not in html, (
+            "a page with nothing to select must not render a scope element")
+        assert "data-bulk-action" not in html
+        assert 'type="submit"' in html, "Apply Filters submits the filter form"
+        assert 'href="/email-words"' in html, "Reset is a link, not a handler"
+        for handler in ("exportData()", "copyToClipboard()", "refreshPage()"):
+            assert handler in html, f"email_words lost its {handler} control"

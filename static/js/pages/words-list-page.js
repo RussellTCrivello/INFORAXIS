@@ -31,8 +31,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const sortOrderSelect = document.getElementById('sortOrder');
     const perPageSelect = document.getElementById('perPage');
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-    const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
     
     let currentPage = 1;
     let currentPerPage = 10;
@@ -477,18 +475,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // The page owns the selection (which rows, and the set the operations
+    // send); the toolbar owns how that scope is drawn and announced. So this
+    // reports the numbers and nothing else: it never enables or disables a
+    // button, and it never names an action.
     function updateSelection() {
         const checkboxes = document.querySelectorAll('.word-checkbox:checked');
         selectedWords.clear();
         checkboxes.forEach(cb => selectedWords.add(parseInt(cb.value)));
-        
-        const hasSelection = selectedWords.size > 0;
-        bulkDeleteBtn.disabled = !hasSelection;
-        bulkUpdateBtn.disabled = !hasSelection;
-        
+
         const allCheckboxes = document.querySelectorAll('.word-checkbox');
-        selectAllCheckbox.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
-        selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+            selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
+        }
+
+        if (window.ActionToolbar) {
+            window.ActionToolbar.sync('wordsActionBar', {
+                selected: checkboxes.length,
+                total: allCheckboxes.length
+            });
+        }
     }
     
     function toggleSelectAll() {
