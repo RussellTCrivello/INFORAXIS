@@ -428,3 +428,73 @@ class TestTheRegistryView:
     def test_coverage_is_served(self, admin_client):
         coverage = admin_client.get("/api/interfaces/coverage").get_json()["coverage"]
         assert coverage["unowned_user_interface"] == []
+
+class TestTheEvidenceReport:
+    """The evidence document is regenerated, not maintained.
+
+    Step 1-2 of the directive ends with evidence, and evidence that is typed by
+    hand is how the same application came to be described as having 57, 40 and
+    41 endpoints in one document. These tests hold the committed report to the
+    application the suite is running against.
+
+    To regenerate after a deliberate change::
+
+        INFORAXIS_WRITE_EVIDENCE=1 python3 -m pytest \
+            tests/integration/test_interface_coverage.py -k evidence
+    """
+
+    PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+    REPORT = PROJECT_ROOT / "docs/REGISTRY_EVIDENCE.md"
+    INVENTORY = PROJECT_ROOT / "docs/endpoint_inventory.json"
+
+    @staticmethod
+    def _writing():
+        import os
+
+        return os.environ.get("INFORAXIS_WRITE_EVIDENCE") == "1"
+
+    def test_the_evidence_report_matches_the_application(self, app, admin_client):
+        from core.interfaces.evidence import (
+            BEGIN_APPLICATION,
+            END_APPLICATION,
+            application_block,
+            navigation_observation,
+        )
+
+        document = self.REPORT.read_text()
+        assert BEGIN_APPLICATION in document and END_APPLICATION in document
+        # Rendered navigation is part of the evidence: the report records what
+        # the application actually served, not what the registry intended.
+        generated = application_block(
+            app, navigation_observation=navigation_observation(admin_client)).strip()
+        embedded = document.split(BEGIN_APPLICATION, 1)[1].split(END_APPLICATION, 1)[0].strip()
+
+        if self._writing():
+            self.REPORT.write_text(document.replace(embedded, generated))
+            pytest.skip("evidence report regenerated")
+
+        assert embedded == generated, (
+            "docs/REGISTRY_EVIDENCE.md is out of date with the application; "
+            "regenerate with INFORAXIS_WRITE_EVIDENCE=1")
+
+    def test_the_endpoint_inventory_matches_the_application(self, app):
+        from core.interfaces.evidence import endpoint_inventory
+
+        generated = endpoint_inventory(app)
+
+        if self._writing():
+            self.INVENTORY.write_text(generated)
+            pytest.skip("endpoint inventory regenerated")
+
+        assert self.INVENTORY.exists(), (
+            "docs/endpoint_inventory.json is missing; regenerate with "
+            "INFORAXIS_WRITE_EVIDENCE=1")
+        assert self.INVENTORY.read_text() == generated, (
+            "docs/endpoint_inventory.json is out of date with the application; "
+            "regenerate with INFORAXIS_WRITE_EVIDENCE=1")
+
+    def test_the_inventory_is_deterministic(self, app):
+        """Two runs produce the same file, so a diff means a real change."""
+        from core.interfaces.evidence import endpoint_inventory
+
+        assert endpoint_inventory(app) == endpoint_inventory(app)

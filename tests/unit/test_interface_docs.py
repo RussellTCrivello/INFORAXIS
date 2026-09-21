@@ -99,3 +99,116 @@ class TestOtherDocuments:
 
     def test_the_domain_model_exists(self):
         assert (PROJECT_ROOT / "docs/DOMAIN_MODEL.md").exists()
+
+class TestRegistryEvidence:
+    """`docs/REGISTRY_EVIDENCE.md`, part A, describes the registry as it is.
+
+    The evidence the directive requires before the shell work begins has two
+    halves: the declared product (this test) and the application it describes
+    (asserted in the integration suite, which can build the application). Both
+    are generated, so neither can drift.
+    """
+
+    DOC = PROJECT_ROOT / "docs/REGISTRY_EVIDENCE.md"
+
+    @pytest.fixture(scope="class")
+    def evidence(self):
+        assert self.DOC.exists(), "the registry evidence document is missing"
+        return self.DOC.read_text()
+
+    def test_the_document_embeds_both_generated_blocks(self, evidence):
+        from core.interfaces.evidence import (
+            BEGIN_APPLICATION,
+            BEGIN_REGISTRY,
+            END_APPLICATION,
+            END_REGISTRY,
+        )
+
+        for marker in (BEGIN_REGISTRY, END_REGISTRY, BEGIN_APPLICATION, END_APPLICATION):
+            assert marker in evidence, marker
+
+    def test_the_registry_half_matches_the_registry(self, evidence):
+        from core.interfaces.evidence import (
+            BEGIN_REGISTRY,
+            END_REGISTRY,
+            registry_block,
+        )
+
+        embedded = evidence.split(BEGIN_REGISTRY, 1)[1].split(END_REGISTRY, 1)[0].strip()
+        assert embedded == registry_block().strip(), (
+            "docs/REGISTRY_EVIDENCE.md is out of date; regenerate it with "
+            "python3 -m core.interfaces.evidence --write docs/REGISTRY_EVIDENCE.md")
+
+    def test_regeneration_is_idempotent(self, evidence):
+        from core.interfaces.evidence import splice
+
+        once = splice(evidence, self._block(), None)
+        assert splice(once, self._block(), None) == once
+
+    @staticmethod
+    def _block():
+        from core.interfaces.evidence import registry_block
+
+        return registry_block()
+
+    def test_every_required_evidence_item_is_present(self, evidence):
+        """The ten items the directive names, each stated in the document."""
+        for item in ("Registry inventory", "Endpoint coverage", "Aliases",
+                     "Dependency validation", "Registry integrity",
+                     "Rendered navigation"):
+            assert item.lower() in evidence.lower(), item
+
+    def test_the_coverage_claim_is_stated_as_zero_unmanaged(self, evidence):
+        assert "Unmanaged user-facing endpoints**: **0**" in evidence
+
+    def test_the_document_reports_what_remains_legacy(self, evidence):
+        assert "INTERFACE_METADATA" in evidence
+        assert "LEGACY_INTERFACE_IDS" in evidence
+
+
+class TestEndpointInventory:
+    """The committed inventory is the directive's deterministic snapshot."""
+
+    INVENTORY = PROJECT_ROOT / "docs/endpoint_inventory.json"
+
+    def test_the_inventory_is_committed_and_parses(self):
+        import json
+
+        assert self.INVENTORY.exists(), (
+            "docs/endpoint_inventory.json is missing; it is regenerated from the "
+            "application by the integration suite")
+        records = json.loads(self.INVENTORY.read_text())
+        assert records, "the inventory is empty"
+
+    def test_every_record_names_an_owner_or_an_exception(self):
+        import json
+
+        from core.interfaces.inventory import EndpointClass
+
+        records = json.loads(self.INVENTORY.read_text())
+        interface_classes = {
+            str(EndpointClass.USER_INTERFACE),
+            str(EndpointClass.INTERNAL_PAGE),
+            str(EndpointClass.REDIRECT),
+        }
+        unnamed = [
+            r["endpoint"] for r in records
+            if r["classification"] in interface_classes and not r["owned_by"]
+        ]
+        assert unnamed == [], f"user-facing endpoints with no owner: {unnamed}"
+
+    def test_the_inventory_is_sorted_so_a_new_page_shows_up_as_a_diff(self):
+        import json
+
+        records = json.loads(self.INVENTORY.read_text())
+        names = [r["endpoint"] for r in records]
+        assert names == sorted(names)
+
+    def test_every_record_carries_the_fields_the_directive_asks_for(self):
+        import json
+
+        records = json.loads(self.INVENTORY.read_text())
+        for record in records:
+            for field in ("endpoint", "rule", "methods", "blueprint",
+                          "classification", "internal", "owned_by"):
+                assert field in record, (record.get("endpoint"), field)
