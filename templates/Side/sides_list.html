@@ -399,111 +399,18 @@
 </div>
 
 <!-- Pagination -->
-{% if cursor_pagination and total_pages >= 1 %}
-    {% from "components/unified_pagination.html" import unified_pagination %}
-    {{ unified_pagination(page, total_pages, url_for, 'sides_list', {'search': search}, show_info=true, show_jump=true) }}
-    
-    <script>
-    // Override pagination navigation for cursor-based pagination
-    (function() {
-        const paginationContainer = document.querySelector('.unified-pagination-container');
-        if (!paginationContainer) return;
-        
-        // Store cursor data
-        const cursorData = {
-            next_cursor: {{ next_cursor|default('null') }},
-            prev_cursor: {{ prev_cursor|default('null') }},
-            has_next: {{ has_next|default(false)|tojson }},
-            has_prev: {{ has_prev|default(false)|tojson }},
-            current_cursor: {{ request.args.get('cursor', 'null')|tojson }},
-            limit: {{ request.args.get('limit', 50)|tojson }}
-        };
-        
-        // Override link clicks to use cursor navigation
-        paginationContainer.addEventListener('click', function(e) {
-            const link = e.target.closest('.unified-pagination-link');
-            if (!link || link.classList.contains('disabled') || link.classList.contains('active')) {
-                return;
-            }
-            
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const href = link.getAttribute('href');
-            if (!href || href === '#') return;
-            
-            // Parse page number from URL
-            const url = new URL(href, window.location.origin);
-            const targetPage = parseInt(url.searchParams.get('page')) || 1;
-            const currentPage = {{ page }};
-            
-            // Calculate cursor based on page difference
-            let targetCursor = null;
-            if (targetPage === 1) {
-                targetCursor = null; // First page
-            } else if (targetPage === {{ total_pages }}) {
-                // Last page - use next_cursor chain
-                targetCursor = cursorData.next_cursor;
-            } else {
-                // Estimate cursor based on page difference
-                const pageDiff = targetPage - currentPage;
-                if (pageDiff > 0 && cursorData.has_next) {
-                    // Moving forward - use next_cursor
-                    targetCursor = cursorData.next_cursor;
-                } else if (pageDiff < 0 && cursorData.has_prev) {
-                    // Moving backward - use prev_cursor
-                    targetCursor = cursorData.prev_cursor;
-                }
-            }
-            
-            // Navigate with cursor
-            const navUrl = new URL(window.location.href);
-            if (targetCursor !== null) {
-                navUrl.searchParams.set('cursor', targetCursor);
-            } else {
-                navUrl.searchParams.delete('cursor');
-            }
-            navUrl.searchParams.delete('page');
-            window.location.href = navUrl.toString();
-        });
-        
-        // Handle jump to page input
-        const jumpInput = document.getElementById('jumpToPageInput-sides_list');
-        const jumpBtn = document.querySelector('.unified-pagination-jump-btn[data-endpoint="sides_list"]');
-        
-        if (jumpInput && jumpBtn) {
-            const handleJump = function() {
-                let targetPage = parseInt(jumpInput.value);
-                const totalPages = parseInt(jumpInput.getAttribute('data-total-pages')) || 1;
-                
-                if (isNaN(targetPage) || targetPage < 1) {
-                    targetPage = 1;
-                } else if (targetPage > totalPages) {
-                    targetPage = totalPages;
-                }
-                
-                // For cursor pagination, estimate cursor based on page
-                const navUrl = new URL(window.location.href);
-                if (targetPage === 1) {
-                    navUrl.searchParams.delete('cursor');
-                } else {
-                    // Estimate cursor (rough approximation)
-                    const estimatedCursor = (targetPage - 1) * cursorData.limit;
-                    navUrl.searchParams.set('cursor', estimatedCursor);
-                }
-                navUrl.searchParams.delete('page');
-                window.location.href = navUrl.toString();
-            };
-            
-            jumpBtn.addEventListener('click', handleJump);
-            jumpInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    handleJump();
-                }
-            });
-        }
-    })();
-    </script>
+{#- This list is cursor-paged: the route hands the page a next and previous
+    cursor, not a page number. It used to render the numbered pager and then
+    a script that guessed a cursor from the page number the reader clicked
+    ("rough approximation"), which is a cursor pretending to be a page number.
+    Cursor-paged lists use the cursor component: forward and backward, an
+    estimate labelled as an estimate, and no jump box that cannot work. -#}
+{% if cursor_pagination %}
+    {% from "components/cursor_pagination.html" import cursor_pagination as cursor_pager %}
+    {{ cursor_pager(next_cursor, prev_cursor, has_next, has_prev,
+                    query_time_ms=query_time_ms,
+                    total_estimated=total_estimated,
+                    limit=request.args.get('limit', 50)|int) }}
 {% endif %}
 
 

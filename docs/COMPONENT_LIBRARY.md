@@ -39,6 +39,23 @@ style.
 5. **Moving is visible.** A component is adopted one page at a time; the count
    of templates still writing the markup by hand is the measure of progress.
 
+### Two paginations, deliberately
+
+There are two components here and they are not a mistake. A numbered list knows
+how many records there are and can be asked for page 7; a cursor-paged list
+knows its next and previous cursor and nothing else, because asking a
+billion-row table for an offset is not a thing it can answer. `pagination` and
+`pagination_cursor` share their visual conventions — the same classes, the same
+placed controls — and share none of their data semantics.
+
+That separation was violated twice: `sides_list.html` and `sources_list.html`
+are cursor-paged, and both rendered the numbered pager and then patched it with
+script that converted a clicked page number into an estimated cursor. The
+estimate was labelled "rough approximation" in the code and was not labelled at
+all on screen. Both now render the cursor component: links that carry a real
+cursor, forward and backward only, an estimated total that says it is estimated,
+and no jump-to-page box, because a cursor cannot jump.
+
 ### The states every component has an answer for
 
 | State | What it looks like to the reader |
@@ -74,7 +91,7 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 | `page_data` | `templates/components/analyst_classify_page_data.html` | `normal` | `analyst_classify_page_data` | The translated strings and the write permission the analyst classification module needs, so nothing is hard-coded in JavaScript and a language switch reaches it. |
 | `page_tips` | `templates/components/page_tips.html` | `normal`, `empty` | `page_tips` | The explanatory tips at the top of a page: what this page is for, what the elements on it do, how to add data here. |
 | `pagination` | `templates/components/unified_pagination.html` | `normal`, `filtered` | — | Moving through a long list: where you are, how much there is, and how to get to a page you know the number of. |
-| `pagination_cursor` | `templates/components/cursor_pagination.html` | `normal`, `filtered` | — | The same job for cursor-paged lists, where "page 7" does not exist and only forward/backward is meaningful. |
+| `pagination_cursor` | `templates/components/cursor_pagination.html` | `normal`, `filtered` | — | Moving through a list that has no page numbers - only "next" and "back" - and saying honestly what is known about how much is left. |
 | `sidebar_nav` | `templates/components/sidebar_nav.html` | `normal`, `empty` | — | The product navigation, grouped by domain, rendered from the navigation model the application prepares. |
 | `states` | `templates/components/states.html` | `loading`, `empty`, `filtered`, `success`, `warning`, `error`, `unauthorized`, `unavailable`, `archived` | `state_panel`, `empty_state`, `filtered_state`, `loading_state`, `success_state`, `warning_state`, `error_state`, `unauthorized_state`, `unavailable_state`, `archived_state` | The states a region can be in, in one place, so a page never invents its own wording for "nothing here yet" or its own markup for "this failed". |
 | `status_badge` | `templates/components/status_badge.html` | `success`, `warning`, `error`, `unavailable`, `archived` | `status_badge`, `_chip`, `status_badge_with_icon` | One way to show a status word, so the same state is not green on one page and grey on the next. An application status is looked up in the vocabulary - `core/frontend/status_vocabulary.py` - which maps it to one of a few presentation states; the component only turns that state into classes. |
@@ -110,7 +127,8 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Hand-written loading indicator | `states` | 8 templates |
 | Hand-written inline error | `states` | 7 templates |
 | Hand-written table | `table` | 13 templates |
-| Hand-written pagination | `pagination` | 6 templates |
+| Hand-written pagination markup | `pagination` | 0 templates |
+| Pagination mount (filled by the shared renderer) | `pagination` | 4 templates |
 | Hand-written search input | — | 13 templates |
 | Hand-written filter control | `filter_bar` | 14 templates |
 | Browser confirm() dialog | — | 2 templates |
@@ -125,10 +143,8 @@ How much of the repeated markup has moved onto its component. Standardized count
 | Markup | Standardized | Hand-written | Adoption |
 | --- | --- | --- | --- |
 | Hand-written empty state | 2 | 4 | 33% |
-| Hand-written loading indicator | 2 | 8 | 20% |
-| Hand-written inline error | 2 | 7 | 22% |
 | Hand-written table | 1 | 13 | 7% |
-| Hand-written pagination | 7 | 6 | 54% |
+| Hand-written pagination markup | 12 | 0 | 100% |
 | Hand-written search input | 0 | 13 | 0% |
 | Hand-written filter control | 1 | 14 | 7% |
 | Browser confirm() dialog | 0 | 2 | 0% |
@@ -148,7 +164,7 @@ Every class a component renders has exactly one owner. **OWNED** means an INFORA
 | Ownership | Classes |
 | --- | --- |
 | OWNED (INFORAXIS) | 53 |
-| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 137 |
+| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 141 |
 | UNKNOWN | 0 |
 
 Third-party stylesheets bundled with the application: `static/css/bootstrap.min.css`, `static/icons/bootstrap-icons.css`.

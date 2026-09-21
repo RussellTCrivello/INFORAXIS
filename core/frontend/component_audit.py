@@ -93,6 +93,14 @@ class Pattern(NamedTuple):
     description: str
     regex: str
     component: str
+    #: Two patterns can belong to one family when a component has more than
+    #: one legitimate shape - pagination has a numbered and a cursor pager -
+    #: and the family is what adoption is measured on.
+    family: str = ""
+    #: A mount is an empty box the shared renderer fills, not markup written
+    #: by hand. It belongs to the family so it counts as adopted; it is not a
+    #: thing to be migrated.
+    mount: bool = False
 
 
 #: Markup that a shared component exists (or should exist) for. The regular
@@ -104,8 +112,24 @@ PATTERNS: List[Pattern] = [
             r'(spinner-border|skeleton-loader)', "states"),
     Pattern("error", "Hand-written inline error", r'(alert-danger|error-state)', "states"),
     Pattern("table", "Hand-written table", r"<table\b", "table"),
-    Pattern("pagination", "Hand-written pagination",
-            r'class="[^"]*(pagination|page-navigation-bar)', "pagination"),
+    # Pagination-specific classes only. `page-navigation-bar`, the browser
+    # back/forward bar in the shell, has "navigation" in its name and nothing
+    # to do with paging: matching it is how a metric starts lying.
+    Pattern("pagination", "Hand-written pagination markup",
+            # The parts that render a page. Wrappers (`pagination-controls`,
+            # `analyst-pagination`) are page chrome around the component, not
+            # the component's markup, and counting them would report work that
+            # is already done as outstanding.
+            r'class="[^"]*(unified-pagination-list|unified-pagination-item'
+            r'|unified-pagination-link|pagination-list|pagination-item'
+            r'|pagination-link|pagination-page-numbers|page-item|page-link)',
+            "pagination", family="pagination"),
+    # A mount is not hand-written markup: it is an empty box the shared
+    # renderer fills, and it is counted separately so the two numbers mean
+    # something.
+    Pattern("pagination_mount", "Pagination mount (filled by the shared renderer)",
+            r'id="pagination"|id="assignmentsPagination"|PaginationContainer', "pagination",
+            family="pagination", mount=True),
     Pattern("search", "Hand-written search input",
             r'(type="search"|role="search"|search-input|search-input-group)', "search_bar"),
     Pattern("filter", "Hand-written filter control",
@@ -203,6 +227,10 @@ def _status_words() -> set:
     return words
 
 
+#: An empty container the shared renderer fills.
+PAGINATION_MOUNT = re.compile(
+    r'<div[^>]*id="(?:pagination|assignmentsPagination|paginationContainer)"[^>]*>\s*</div>')
+
 BADGE_ELEMENT = re.compile(r'class="badge[^"]*"[^>]*>(.*?)</span>', re.DOTALL)
 
 
@@ -229,6 +257,16 @@ def badge_usage(template_text: str) -> tuple:
     return status, chips
 
 
+#: Components that share a family with another component, because they do the
+#: same job under different data semantics.
+COMPONENT_FAMILY = {"pagination_cursor": "pagination"}
+
+
+def family_of(pattern: Pattern) -> str:
+    """The family a pattern belongs to - its component, unless it shares one."""
+    return pattern.family or pattern.component or pattern.key
+
+
 def component_file(component_name: str) -> str:
     """The file a component lives in - the name and the file differ for some."""
     entry = components().get(component_name)
@@ -244,32 +282,59 @@ def standardized(pattern: Pattern) -> int:
     """
     if not pattern.component:
         return 0
-    path = component_file(pattern.component)
-    if not path:
+    # Every component in the family counts: the numbered pager and the cursor
+    # pager are one family, and a page that uses either has moved off
+    # hand-written pagination.
+    family = family_of(pattern)
+    references = set()
+    for name, component in components().items():
+        if (COMPONENT_FAMILY.get(name, name)) != family:
+            continue
+        path = component_file(name)
+        if path:
+            references.add("components/" + path.split("components/")[-1])
+    if not references:
         return 0
-    # The component's *file* is the unambiguous reference. Counting templates
+    # A component's *file* is the unambiguous reference. Counting templates
     # that merely contain the word "table" is how a metric stops meaning
     # anything: twenty templates "use" the table component because twenty
     # templates have a table in them.
-    reference = f"components/{path.split('components/')[-1]}"
-    return sum(1 for template in sorted(TEMPLATES.rglob("*.html"))
-               if COMPONENTS not in template.parents
-               and reference in template.read_text(errors="ignore"))
+    found = set()
+    for template in sorted(TEMPLATES.rglob("*.html")):
+        if COMPONENTS in template.parents:
+            continue
+        text = template.read_text(errors="ignore")
+        if any(reference in text for reference in references):
+            found.add(str(template.relative_to(PROJECT_ROOT)))
+        elif any(p.mount for p in PATTERNS
+                 if family_of(p) == family and re.search(p.regex, text)):
+            found.add(str(template.relative_to(PROJECT_ROOT)))
+    return len(found)
 
 
 def adoption() -> List[Dict[str, object]]:
     """Standardized versus hand-written, per pattern - the phase's measure."""
     rows = []
+    seen = set()
     for pattern in PATTERNS:
         if pattern.key in ("badge_chip",):
             continue
-        hand = len(users(pattern)) if pattern.key != "badge_chip" else 0
-        done = standardized(pattern)
+        family = family_of(pattern)
+        if family in seen:
+            continue
+        # The markup pattern of the family is the one that says what is still
+        # written by hand; a mount is not.
+        markup = next(p for p in PATTERNS
+                      if family_of(p) == family and not p.mount
+                      and p.key != "badge_chip")
+        seen.add(family)
+        hand = len(users(markup))
+        done = standardized(markup)
         total = hand + done
         rows.append({
-            "key": pattern.key,
-            "description": pattern.description,
-            "component": pattern.component,
+            "key": family,
+            "description": markup.description,
+            "component": markup.component,
             "standardized": done,
             "hand_written": hand,
             "total": total,
@@ -298,6 +363,10 @@ def users(pattern: Pattern) -> List[str]:
         if COMPONENTS in path.parents:
             continue
         text = path.read_text(errors="ignore")
+        if pattern.key == "pagination":
+            # An empty mount is not markup: remove the mounts and see what
+            # pagination markup is left.
+            text = PAGINATION_MOUNT.sub("", text)
         if pattern.key == "status_badge":
             # Counted by what the badge shows, not by its markup: see
             # `badge_usage`. A template full of count chips is not a template

@@ -248,6 +248,91 @@ class TestClassesHaveExactlyOneOwner:
                     f"{name} declares {declared} but its file never renders it")
 
 
+class TestPagination:
+    """Two models, one bar each, and no third renderer anywhere."""
+
+    def test_no_template_writes_pagination_markup_by_hand(self):
+        from core.frontend.component_audit import PATTERNS, users
+
+        pattern = next(p for p in PATTERNS if p.key == "pagination")
+        assert users(pattern) == [], (
+            "pagination markup is written by hand again: " + repr(users(pattern)))
+
+    def test_the_mounts_are_declared_and_not_confused_with_markup(self):
+        from core.frontend.component_audit import PATTERNS, users
+
+        mount = next(p for p in PATTERNS if p.key == "pagination_mount")
+        assert users(mount), "the mount pattern matches nothing; it has drifted"
+        for path in users(mount):
+            text = (PROJECT_ROOT / path).read_text()
+            assert "unified-pagination-item" not in text, path
+
+    def test_the_two_models_stay_separate(self):
+        """A cursor cannot jump to page 7, and numbered pages cannot be forced
+        into a forward/backward API."""
+        numbered = (PROJECT_ROOT / "templates/components/unified_pagination.html").read_text()
+        cursor = (PROJECT_ROOT / "templates/components/cursor_pagination.html").read_text()
+        assert "macro unified_pagination(page, total_pages" in numbered
+        assert "macro cursor_pagination(next_cursor, prev_cursor" in cursor
+        assert "next_cursor" not in numbered
+        assert "total_pages" not in cursor, (
+            "the cursor pagination is being given a page count it cannot have")
+
+    def test_they_share_their_visual_conventions(self):
+        """Different data semantics, one look."""
+        for relative in ("templates/components/unified_pagination.html",
+                         "templates/components/cursor_pagination.html"):
+            text = (PROJECT_ROOT / relative).read_text()
+            assert "pagination" in text, relative
+            assert "aria-label" in text, relative
+            assert "bi-chevron-left" in text and "bi-chevron-right" in text, relative
+
+    def test_the_cursor_pager_needs_no_javascript(self):
+        """Moving through a cursor-paged list is a URL, so it is a link. The
+        component used to emit an onclick handler and a global function."""
+        text = (PROJECT_ROOT / "templates/components/cursor_pagination.html").read_text()
+        assert "<script" not in text
+        assert "onclick" not in text
+
+    def test_cursor_pages_get_the_cursor_component(self):
+        """sides and sources are cursor-paged; they used to render the
+        numbered pager and then guess a cursor from the page number."""
+        for relative in ("templates/Side/sides_list.html",
+                         "templates/Sources/sources_list.html"):
+            text = (PROJECT_ROOT / relative).read_text()
+            assert "components/cursor_pagination.html" in text, relative
+            assert "unified-pagination-item" not in text, relative
+            assert "estimatedCursor" not in text, relative
+
+    def test_only_one_javascript_pager_exists(self):
+        """The pages used to carry their own fallback renderers."""
+        renderers = []
+        for path in sorted((PROJECT_ROOT / "static/js").rglob("*.js")):
+            text = path.read_text(errors="ignore")
+            if "pagination-item" in text or "pagination-link" in text:
+                renderers.append(str(path.relative_to(PROJECT_ROOT)))
+        assert renderers == ["static/js/modules/rendering/unified-pagination.js"], (
+            "more than one JavaScript module draws pagination markup: "
+            + repr(renderers))
+
+    def test_the_two_pagers_are_measured_as_one_family(self):
+        """Adoption is per family: a cursor-paged list is not behind a
+        numbered one, and a mount is how a page adopts the component, not a
+        thing left to migrate."""
+        from core.frontend.component_audit import adoption
+
+        rows = {row["key"]: row for row in adoption()}
+        assert "pagination" in rows
+        assert "pagination_mount" not in rows
+        assert rows["pagination"]["hand_written"] == 0
+        assert rows["pagination"]["rate"] == 100
+
+    def test_the_file_reader_uses_the_component(self):
+        text = (PROJECT_ROOT / "templates/file/file_detail.html").read_text()
+        assert "components/unified_pagination.html" in text
+        assert "unified-pagination-item" not in text
+
+
 class TestTheDocumentCannotDrift:
     def test_the_generated_section_matches_the_components(self):
         text = LIBRARY_DOC.read_text()

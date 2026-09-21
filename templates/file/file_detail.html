@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/unified_pagination.html" import unified_pagination %}
 
 {% block title %}{{ file[1] }} - {{ _('File Details') }}{% endblock %}
 
@@ -236,24 +237,24 @@
                             <!-- Pagination -->
                             {% if total_pages > 1 %}
                             <div class="pagination-controls mt-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="d-flex align-items-center gap-3">
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="goToPage({{ current_page - 1 }})" 
-                                                {% if current_page <= 1 %}disabled{% endif %}>
-                                            <i class="bi bi-chevron-left"></i> {{ _('Previous') }}
-                                        </button>
-                                        
-                                        <span class="text-muted">
-                                            {{ _('Page') }} <strong>{{ current_page }}</strong> {{ _('of') }} <strong>{{ total_pages }}</strong>
-                                        </span>
-                                        
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="goToPage({{ current_page + 1 }})" 
-                                                {% if current_page >= total_pages %}disabled{% endif %}>
-                                            {{ _('Next') }} <i class="bi bi-chevron-right"></i>
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="d-flex align-items-center gap-2">
+                                {#- The pager is the shared component: same bar, same
+                                    classes, same behaviour as every other list. The
+                                    links carry the query state this page keeps across
+                                    a page change, so paging while searching continues
+                                    to locate the term. The page-size selector and the
+                                    go-to box below are this page's own chrome. -#}
+                                {% set _pagination_params = {
+                                    'file_id': file_id,
+                                    'per_page': per_page,
+                                    'search': search_query or none,
+                                    'case_sensitive': case_sensitive,
+                                    'whole_word': whole_word,
+                                } %}
+                                {{ unified_pagination(current_page, total_pages, url_for,
+                                                       'files.file_detail', _pagination_params,
+                                                       show_info=false, show_jump=false) }}
+
+                                <div class="d-flex justify-content-end align-items-center gap-2 mt-3">
                                         <label class="form-label mb-0">{{ _('Page size:') }}</label>
                                         <select class="form-select form-select-sm" style="width: auto;" onchange="changePageSize(this.value)">
                                             <option value="2000" {% if per_page == 2000 %}selected{% endif %}>2,000</option>
