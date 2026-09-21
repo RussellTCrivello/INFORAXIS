@@ -197,6 +197,9 @@
     <script type="application/json" id="status-vocabulary">{{ status_vocabulary|tojson }}</script>
     {% endif %}
     <script src="{{ url_for('static', filename='js/modules/core/status.js') }}?v=20260921a" defer></script>
+    {#- Keyboard and loading behaviour for the search box component. The
+        component renders it; this is what makes Escape clear it. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/search-input.js') }}?v=20260921a" defer></script>
 </head>
 
 <body data-page-type="{% block page_type %}default{% endblock %}"

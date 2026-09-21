@@ -39,6 +39,27 @@ style.
 5. **Moving is visible.** A component is adopted one page at a time; the count
    of templates still writing the markup by hand is the measure of progress.
 
+### One search box, and the page still owns the search
+
+Thirteen pages built their own search box: a label, an input, a clear button,
+an icon, and each one slightly different - some with an accessible name, some
+without, some clearing on a button that could submit the form it sat in. The
+component is now the only place that markup exists, and the page passes what
+the component cannot know: the id its JavaScript already binds to, the
+translated label and placeholder, the value to show back after a reload, and
+the handler its own clear action calls.
+
+What the page does *not* pass is what searching means. The component renders
+the box; the page owns the query, the endpoint and the results. Keyboard
+behaviour is the one thing that is neither - Escape clearing the box is the
+same everywhere - so it lives in `static/js/modules/core/search-input.js`,
+which clicks the page's own clear control rather than reimplementing it, so
+the page's handler runs exactly once.
+
+Adoption is counted by macro, not by file: a page that places its search box
+through the filter bar has adopted the search box and has *not* adopted the
+filter bar. Counting file references made both numbers wrong at once.
+
 ### Two paginations, deliberately
 
 There are two components here and they are not a mistake. A numbered list knows
@@ -90,8 +111,9 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 | `operations_widget` | `templates/components/operations_widget.html` | `normal`, `loading`, `empty`, `error` | — | What the ingestion and processing system is doing right now: active jobs, throughput, and the shortcuts into Operations. |
 | `page_data` | `templates/components/analyst_classify_page_data.html` | `normal` | `analyst_classify_page_data` | The translated strings and the write permission the analyst classification module needs, so nothing is hard-coded in JavaScript and a language switch reaches it. |
 | `page_tips` | `templates/components/page_tips.html` | `normal`, `empty` | `page_tips` | The explanatory tips at the top of a page: what this page is for, what the elements on it do, how to add data here. |
-| `pagination` | `templates/components/unified_pagination.html` | `normal`, `filtered` | — | Moving through a long list: where you are, how much there is, and how to get to a page you know the number of. |
-| `pagination_cursor` | `templates/components/cursor_pagination.html` | `normal`, `filtered` | — | Moving through a list that has no page numbers - only "next" and "back" - and saying honestly what is known about how much is left. |
+| `pagination` | `templates/components/unified_pagination.html` | `normal`, `filtered` | `unified_pagination` | Moving through a long list: where you are, how much there is, and how to get to a page you know the number of. |
+| `pagination_cursor` | `templates/components/cursor_pagination.html` | `normal`, `filtered` | `cursor_pagination` | Moving through a list that has no page numbers - only "next" and "back" - and saying honestly what is known about how much is left. |
+| `search_input` | `templates/components/search_input.html` | `normal`, `loading`, `filtered`, `unavailable` | `search_input` | The one search box: label, icon, placeholder, value, clear action, a place for the loading state, and the ARIA that makes it a search box rather than an empty text field. |
 | `sidebar_nav` | `templates/components/sidebar_nav.html` | `normal`, `empty` | — | The product navigation, grouped by domain, rendered from the navigation model the application prepares. |
 | `states` | `templates/components/states.html` | `loading`, `empty`, `filtered`, `success`, `warning`, `error`, `unauthorized`, `unavailable`, `archived` | `state_panel`, `empty_state`, `filtered_state`, `loading_state`, `success_state`, `warning_state`, `error_state`, `unauthorized_state`, `unavailable_state`, `archived_state` | The states a region can be in, in one place, so a page never invents its own wording for "nothing here yet" or its own markup for "this failed". |
 | `status_badge` | `templates/components/status_badge.html` | `success`, `warning`, `error`, `unavailable`, `archived` | `status_badge`, `_chip`, `status_badge_with_icon` | One way to show a status word, so the same state is not green on one page and grey on the next. An application status is looked up in the vocabulary - `core/frontend/status_vocabulary.py` - which maps it to one of a few presentation states; the component only turns that state into classes. |
@@ -103,10 +125,10 @@ Every state in the vocabulary is answered by at least one component; a state nob
 
 | State | Meaning | Implemented by |
 | --- | --- | --- |
-| `loading` | Work is in progress; the reader is told what is being waited for. | `operations_widget`, `states`, `table` |
+| `loading` | Work is in progress; the reader is told what is being waited for. | `operations_widget`, `search_input`, `states`, `table` |
 | `empty` | Nothing exists here yet, and the reader is told how to start. | `action_toolbar`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `sidebar_nav`, `states`, `table` |
-| `normal` | The ordinary case: content is present and usable. | `action_toolbar`, `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `sidebar_nav`, `table`, `pagination` |
-| `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `filter_bar`, `states`, `table`, `pagination` |
+| `normal` | The ordinary case: content is present and usable. | `action_toolbar`, `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `search_input`, `sidebar_nav`, `table`, `pagination` |
+| `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `filter_bar`, `search_input`, `states`, `table`, `pagination` |
 | `selected` | A row or record is chosen; actions that need a choice appear. | `action_toolbar`, `table` |
 | `editing` | A value is being changed, and the change is not saved yet. | `analyst_classify` |
 | `saving` | A change is on its way to the server. | `analyst_classify` |
@@ -114,7 +136,7 @@ Every state in the vocabulary is answered by at least one component; a state nob
 | `warning` | Something needs attention but is not broken. | `states`, `status_badge` |
 | `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `operations_widget`, `states`, `status_badge`, `table` |
 | `unauthorized` | The server refused this for this account. | `action_toolbar`, `analyst_classify`, `states` |
-| `unavailable` | It needs something this installation does not have. | `states`, `status_badge` |
+| `unavailable` | It needs something this installation does not have. | `search_input`, `states`, `status_badge` |
 | `archived` | Kept and readable, but out of the working set. | `states`, `status_badge` |
 
 ### Markup pages still write by hand
@@ -129,7 +151,7 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Hand-written table | `table` | 13 templates |
 | Hand-written pagination markup | `pagination` | 0 templates |
 | Pagination mount (filled by the shared renderer) | `pagination` | 4 templates |
-| Hand-written search input | — | 13 templates |
+| Hand-written search input | `search_input` | 6 templates |
 | Hand-written filter control | `filter_bar` | 14 templates |
 | Browser confirm() dialog | — | 2 templates |
 | Hand-written status badge | `status_badge` | 0 badges, in 0 templates |
@@ -144,8 +166,8 @@ How much of the repeated markup has moved onto its component. Standardized count
 | --- | --- | --- | --- |
 | Hand-written empty state | 2 | 4 | 33% |
 | Hand-written table | 1 | 13 | 7% |
-| Hand-written pagination markup | 12 | 0 | 100% |
-| Hand-written search input | 0 | 13 | 0% |
+| Hand-written pagination markup | 10 | 0 | 100% |
+| Hand-written search input | 8 | 6 | 57% |
 | Hand-written filter control | 1 | 14 | 7% |
 | Browser confirm() dialog | 0 | 2 | 0% |
 | Hand-written status badge | 6 | 0 | 100% |
@@ -163,8 +185,8 @@ Every class a component renders has exactly one owner. **OWNED** means an INFORA
 
 | Ownership | Classes |
 | --- | --- |
-| OWNED (INFORAXIS) | 53 |
-| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 141 |
+| OWNED (INFORAXIS) | 55 |
+| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 145 |
 | UNKNOWN | 0 |
 
 Third-party stylesheets bundled with the application: `static/css/bootstrap.min.css`, `static/icons/bootstrap-icons.css`.
@@ -173,6 +195,7 @@ Owned by declaration rather than by a stylesheet - the component states these ar
 
 * `cursor-pagination-container` (cursor_pagination.html)
 * `file-nav__text` (file_nav.html)
+* `search-input-spinner` (search_input.html)
 * `sidebar-nav-badge` (sidebar_nav.html)
 
 <!-- END GENERATED COMPONENT AUDIT -->

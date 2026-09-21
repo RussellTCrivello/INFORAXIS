@@ -333,6 +333,78 @@ class TestPagination:
         assert "unified-pagination-item" not in text
 
 
+class TestTheSearchBox:
+    """One search box: same parts, same ARIA, same keyboard, everywhere."""
+
+    @pytest.fixture()
+    def render(self):
+        environment = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(str(PROJECT_ROOT / "templates")),
+            autoescape=True)
+        environment.globals["_"] = lambda text: text
+
+        def render_source(source: str) -> str:
+            return environment.from_string(source).render()
+
+        return render_source
+
+    def test_it_renders_the_parts_a_search_box_is_made_of(self, render):
+        html = render("{% from 'components/search_input.html' import search_input %}"
+                      "{{ search_input('findIt', label='Search Words',"
+                      " placeholder='Search words...', on_clear='clearSearch()') }}")
+        assert 'for="findIt"' in html                      # a real label
+        assert 'id="findIt"' in html
+        assert 'class="form-control search-input"' in html
+        assert 'placeholder="Search words..."' in html
+        assert 'class="btn-clear-search"' in html
+        assert 'onclick="clearSearch()"' in html           # the page's handler
+        assert 'aria-label="Clear search"' in html
+
+    def test_it_can_be_labelled_without_a_visible_label(self, render):
+        html = render("{% from 'components/search_input.html' import search_input %}"
+                      "{{ search_input('findIt', aria_label='Find a file') }}")
+        assert 'aria-label="Find a file"' in html
+        assert "<label" not in html
+
+    def test_it_can_be_disabled_and_busy(self, render):
+        html = render("{% from 'components/search_input.html' import search_input %}"
+                      "{{ search_input('findIt', label='S', disabled=true, loading=true) }}")
+        assert " disabled" in html
+        assert 'aria-disabled="true"' in html
+        assert 'aria-busy="true"' in html
+        assert "spinner-border" in html
+
+    def test_it_can_be_typed_into_and_named(self, render):
+        html = render("{% from 'components/search_input.html' import search_input %}"
+                      "{{ search_input('findIt', label='S', value='already here', name='q') }}")
+        assert 'value="already here"' in html
+        assert 'name="q"' in html
+
+    def test_the_escape_key_is_owned_by_one_module(self):
+        """Keyboard behaviour is not scattered through the pages."""
+        module = (PROJECT_ROOT / "static/js/modules/core/search-input.js").read_text()
+        assert "Escape" in module
+        assert "btn-clear-search" in module
+        base = (PROJECT_ROOT / "templates/base.html").read_text()
+        assert "modules/core/search-input.js" in base
+
+    def test_the_pages_render_their_box_through_the_component(self):
+        for relative, input_id in (
+            ("templates/Word/Word_list.html", "searchWords"),
+            ("templates/Side/sides_list.html", "sideSearch"),
+            ("templates/Sources/sources_list.html", "sourceSearch"),
+            ("templates/file/files_list.html", "smartSearch"),
+            ("templates/Category/categories_list.html", "categorySearch"),
+            ("templates/Category/category_words.html", "wordSearch"),
+            ("templates/email_words/email_words.html", "searchInput"),
+        ):
+            text = (PROJECT_ROOT / relative).read_text()
+            assert "search_group" in text or "search_input" in text, relative
+            assert 'class="search-input-wrapper"' not in text, (
+                relative + " still writes the box itself")
+            assert input_id in text, relative
+
+
 class TestTheDocumentCannotDrift:
     def test_the_generated_section_matches_the_components(self):
         text = LIBRARY_DOC.read_text()
@@ -412,6 +484,11 @@ class TestAdoption:
         assert counts()["pattern_table"] == 13
         assert counts()["pattern_filter"] == 14
         assert counts()["pattern_toolbar"] == 6
+        # The search box had thirteen owners and no component. Seven places
+        # now render it through `search_group` / `search_input`; the six that
+        # remain are the analysis dashboards, notifications, the operations
+        # input page and the advanced search form.
+        assert counts()["pattern_search"] == 6
         # Status badges are counted by what a badge *shows*: a status word or
         # a status variable is a status badge, a count or an id is a chip, and
         # conflating them said "22 status badges" when most were numbers.

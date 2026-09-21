@@ -31,6 +31,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
+{% from 'components/filter_bar.html' import search_group %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -125,22 +126,7 @@
 <!-- Filters Section -->
 <div class="file-filters-section mb-3">
     <div class="filter-controls-grid">
-        <div class="filter-group filter-group-search">
-            <label for="sourceSearch" class="filter-label">
-                <i class="bi bi-search"></i>
-                {{ _('Search Sources') }}
-            </label>
-            <div class="search-input-wrapper">
-                <input type="text" 
-                       id="sourceSearch" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search sources...') }}" 
-                       autocomplete="off">
-                <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
-                    <i class="bi bi-x"></i>
-                </button>
-            </div>
-        </div>
+        {{ search_group('sourceSearch', _("Search Sources"), _("Search sources..."), onclear='clearSearch()') }}
 
         <div class="filter-group">
             <label for="sortBy" class="filter-label">

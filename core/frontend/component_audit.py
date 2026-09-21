@@ -130,8 +130,12 @@ PATTERNS: List[Pattern] = [
     Pattern("pagination_mount", "Pagination mount (filled by the shared renderer)",
             r'id="pagination"|id="assignmentsPagination"|PaginationContainer', "pagination",
             family="pagination", mount=True),
+    # Markup signals only: `search-input` inside a script src is a file name,
+    # not a search box written by hand.
     Pattern("search", "Hand-written search input",
-            r'(type="search"|role="search"|search-input|search-input-group)', "search_bar"),
+            r'(type="search"|role="search"|class="[^"]*search-input'
+            r'|class="[^"]*search-input-wrapper|search-input-group)',
+            "search_input"),
     Pattern("filter", "Hand-written filter control",
             r'(filter-bar|filter-group|filters-panel|filter-control)', "filter_bar"),
     Pattern("confirm", "Browser confirm() dialog", r"\bconfirm\(", "confirm_dialog"),
@@ -202,7 +206,10 @@ def components() -> Dict[str, Component]:
                                          "", [], [], "no declaration", [])
             continue
         body = match.group("body")
-        macros = re.findall(r"{%\s*macro\s+(\w+)\s*\(", path.read_text(errors="ignore"))
+        # `{%- macro` is as much a macro as `{% macro`: requiring the space
+        # after `{%` made half the library look macro-less.
+        macros = re.findall(r"\{%-?\s*macro\s+(\w+)\s*\(",
+                            path.read_text(errors="ignore"))
         found[match.group("name")] = Component(
             name=match.group("name"),
             path=str(path.relative_to(PROJECT_ROOT)),
@@ -261,6 +268,33 @@ def badge_usage(template_text: str) -> tuple:
 #: same job under different data semantics.
 COMPONENT_FAMILY = {"pagination_cursor": "pagination"}
 
+#: A macro that lives in one component's file but renders another component's
+#: markup. Adoption is measured on who renders the markup, not on which file
+#: the macro is defined in: a page that places a search box through the filter
+#: bar has not migrated its filter controls.
+MACRO_FAMILY = {"search_group": "search_input"}
+
+
+def component_uses(component_name: str) -> set:
+    """The other components a component renders.
+
+    A component that delegates - the filter bar places the search box - has
+    adopted the component it delegates to, and the page that uses the filter
+    bar has therefore stopped writing a search box by hand. The import is the
+    evidence, and it is read from the file rather than assumed.
+    """
+    path = component_file(component_name)
+    if not path:
+        return set()
+    text = (PROJECT_ROOT / path).read_text(errors="ignore")
+    used = set()
+    for name in components():
+        if name == component_name:
+            continue
+        if f"components/{component_file(name).split('components/')[-1]}" in text:
+            used.add(name)
+    return used
+
 
 def family_of(pattern: Pattern) -> str:
     """The family a pattern belongs to - its component, unless it shares one."""
@@ -273,8 +307,29 @@ def component_file(component_name: str) -> str:
     return entry.path if entry else ""
 
 
+def family_macros(family: str) -> set:
+    """The macros that render a family's markup, wherever they are defined.
+
+    A macro defined in one component's file can render another component's
+    markup - the filter bar's `search_group` places the search box - and who
+    renders the markup is what adoption is about, not which file it lives in.
+    """
+    macros = set()
+    for name, component in components().items():
+        if COMPONENT_FAMILY.get(name, name) != family:
+            continue
+        macros |= {macro for macro in component.macros if not macro.startswith("_")}
+    # A macro that renders another family's markup leaves this set, and one
+    # that belongs here arrives, whether or not it is defined in this file.
+    macros = {macro for macro in macros if MACRO_FAMILY.get(macro, family) == family}
+    for macro, owner in MACRO_FAMILY.items():
+        if owner == family:
+            macros.add(macro)
+    return macros
+
+
 def standardized(pattern: Pattern) -> int:
-    """How many templates read through this pattern's component.
+    """How many templates render this family through the shared component.
 
     The other half of the adoption figure: the audit counts what is still
     written by hand, this counts what has moved, and together they give the
@@ -282,32 +337,21 @@ def standardized(pattern: Pattern) -> int:
     """
     if not pattern.component:
         return 0
-    # Every component in the family counts: the numbered pager and the cursor
-    # pager are one family, and a page that uses either has moved off
-    # hand-written pagination.
     family = family_of(pattern)
-    references = set()
-    for name, component in components().items():
-        if (COMPONENT_FAMILY.get(name, name)) != family:
-            continue
-        path = component_file(name)
-        if path:
-            references.add("components/" + path.split("components/")[-1])
-    if not references:
-        return 0
-    # A component's *file* is the unambiguous reference. Counting templates
-    # that merely contain the word "table" is how a metric stops meaning
-    # anything: twenty templates "use" the table component because twenty
-    # templates have a table in them.
+    macros = family_macros(family)
+    calls = (re.compile(r"\b(?:" + "|".join(sorted(re.escape(m) for m in macros))
+                        + r")\s*\(") if macros else None)
+    mount = [p for p in PATTERNS if p.mount and family_of(p) == family]
     found = set()
     for template in sorted(TEMPLATES.rglob("*.html")):
         if COMPONENTS in template.parents:
             continue
         text = template.read_text(errors="ignore")
-        if any(reference in text for reference in references):
+        # A macro call is a page reading through the component; a mount is an
+        # empty container the component's renderer fills. Both are adoption.
+        if calls and calls.search(text):
             found.add(str(template.relative_to(PROJECT_ROOT)))
-        elif any(p.mount for p in PATTERNS
-                 if family_of(p) == family and re.search(p.regex, text)):
+        elif any(re.search(p.regex, text) for p in mount):
             found.add(str(template.relative_to(PROJECT_ROOT)))
     return len(found)
 

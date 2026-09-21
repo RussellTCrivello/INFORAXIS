@@ -26,6 +26,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
+{% from 'components/filter_bar.html' import search_group %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -72,24 +73,10 @@
         <input type="hidden" name="page" value="1">
         
         <div class="filter-controls-grid">
-            <div class="filter-group filter-group-search">
-                <label for="searchInput" class="filter-label">
-                    <i class="bi bi-search"></i>
-                    {{ _('Search') }}
-                </label>
-                <div class="search-input-wrapper">
-                    <input type="text" 
-                           id="searchInput" 
-                           name="q" 
-                           class="form-control search-input"
-                           value="{{ search_term|default('') }}"
-                           placeholder="{{ _('Search email-like words...') }}">
-                    <button class="btn-clear-search" type="button" onclick="clearSearch()" title="{{ _('Clear') }}">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-                <small class="text-muted">{{ _('Server-side filter (affects pagination/export/copy).') }}</small>
-            </div>
+            {{ search_group('searchInput', _('Search'), _('Search email-like words...'),
+                            value=search_term|default(''), name='q',
+                            onclear='clearSearch()', clear_label=_('Clear'),
+                            hint=_('Server-side filter (affects pagination/export/copy).')) }}
 
             <div class="filter-group">
                 <label for="domainInput" class="filter-label">

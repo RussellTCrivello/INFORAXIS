@@ -21,6 +21,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
+{% from 'components/filter_bar.html' import search_group %}
 {% from 'components/states.html' import empty_state %}
     {% call page_tips() %}
 
@@ -108,23 +109,7 @@
     <div class="file-filters-section">
         <!-- Search and Main Filters -->
         <div class="filter-controls-grid">
-            <div class="filter-group filter-group-search">
-                <label for="smartSearch" class="filter-label">
-                    <i class="bi bi-search"></i>
-                    {{ _('Search Files') }}
-                </label>
-                <div class="search-input-wrapper">
-                    <input type="text" 
-                           id="smartSearch" 
-                           class="form-control search-input" 
-                           placeholder="{{ _('Search by name, content...') }}" 
-                           value="{{ search }}"
-                           autocomplete="off">
-                    <button class="btn-clear-search" onclick="clearFileSearch()" title="{{ _('Clear search') }}">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            </div>
+        {{ search_group('smartSearch', _("Search Files"), _("Search by name, content..."), value=search, onclear='clearFileSearch()') }}
 
             <div class="filter-group">
                 <label for="sourceFilter" class="filter-label">

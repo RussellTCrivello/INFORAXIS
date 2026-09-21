@@ -19,6 +19,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
+{% from 'components/filter_bar.html' import search_group %}
 {% from 'components/table.html' import data_table, table_empty_row %}
 {% from 'components/status_badge.html' import status_badge %}
     {% call page_tips() %}
@@ -104,22 +105,7 @@
 <div class="file-filters-section">
     <!-- Search and Main Filters -->
     <div class="filter-controls-grid">
-        <div class="filter-group filter-group-search">
-            <label for="searchWords" class="filter-label">
-                <i class="bi bi-search"></i>
-                {{ _('Search Words') }}
-            </label>
-            <div class="search-input-wrapper">
-                <input type="text" 
-                       id="searchWords" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search words...') }}" 
-                       autocomplete="off">
-                <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
-                    <i class="bi bi-x"></i>
-                </button>
-            </div>
-        </div>
+        {{ search_group('searchWords', _("Search Words"), _("Search words..."), onclear='clearSearch()') }}
 
         <div class="filter-group">
             <label for="statusFilter" class="filter-label">

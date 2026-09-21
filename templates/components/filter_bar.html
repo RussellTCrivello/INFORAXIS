@@ -72,27 +72,15 @@
 
 {% macro search_group(input_id, label, placeholder=None, value=None,
                       icon='bi-search', onclear=None, clear_label=None,
-                      autocomplete='off', hint=None) %}
-{#- The search box, with the clear control the pages that have one already
-    render. `label`, `placeholder` and the clear button's name are all given,
-    because they are translated strings the page owns. -#}
+                      autocomplete='off', hint=None, name=None) %}
+{#- The search box is not this component's markup: it is the search_input
+    component, placed in the filter grid. One owner for the box, one for
+    where it sits. -#}
+{% from 'components/search_input.html' import search_input %}
 <div class="filter-group filter-group-search">
-    <label for="{{ input_id }}" class="filter-label">
-        <i class="bi {{ icon }}" aria-hidden="true"></i> {{ label }}
-    </label>
-    <div class="search-input-wrapper">
-        <input type="text" id="{{ input_id }}" class="form-control search-input"
-               placeholder="{{ placeholder or label }}"
-               {% if value %}value="{{ value }}"{% endif %}
-               autocomplete="{{ autocomplete }}"
-               {% if hint %}aria-describedby="{{ input_id }}-hint"{% endif %}>
-        <button type="button" class="btn-clear-search"
-                {% if onclear %}onclick="{{ onclear }}"{% endif %}
-                title="{{ clear_label or _('Clear search') }}">
-            <i class="bi bi-x" aria-hidden="true"></i>
-        </button>
-    </div>
-    {% if hint %}<div id="{{ input_id }}-hint" class="form-text">{{ hint }}</div>{% endif %}
+    {{ search_input(input_id, label=label, placeholder=placeholder, value=value,
+                    icon=icon, on_clear=onclear, clear_label=clear_label,
+                    autocomplete=autocomplete, hint=hint, name=name) }}
 </div>
 {% endmacro %}
 
