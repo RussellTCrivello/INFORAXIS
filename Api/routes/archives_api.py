@@ -4,11 +4,18 @@ API Routes for Archives sections with cursor-based pagination
 
 from flask import Blueprint, request, jsonify
 from Api.cursor_pagination import get_cursor_paginator, SortDirection
-from Api.utils import execute_query, load_text_title
+from Api.utils import (
+    execute_query,
+    load_text_title,
+    count_relation_duplicates,
+    relation_duplicates_sql,
+)
 from Api.utils.title_similarity import group_similar_titles, find_similar_titles
 from core.sql_safety import validate_identifier, IdentifierError
 import json
 import logging
+import re
+from urllib.parse import quote, unquote
 
 from Api.utils.title import display_titles_sorted, filter_titles_by_search
 from core.serialization import pack_int_list, unpack_int_list
@@ -1306,12 +1313,116 @@ def api_archives_sides():
         return client_error(e, subsystem='Api.routes.archives_api', success_key='success', status=500)
 
 
+# ---------------------------------------------------------------------------
+# Relations (duplicate content hashes)
+# ---------------------------------------------------------------------------
+#
+# A relation is a content hash that ties more than one artifact together; see
+# ``relation_duplicates_sql`` for the exact definition. The duplicate filter is
+# part of the SQL that pages AND counts, so the list can no longer come back
+# empty while the count says there are relations - which is exactly what the
+# old shape did: it walked ``hashs`` in id order, dropped every non-duplicate
+# after the fetch, and reported a total from a separate COUNT over the
+# duplicate set. A page of ordinary (non-duplicate) hashes therefore answered
+# ``data: []`` with ``total_estimated`` > 0.
+#
+# Paging is keyset ("start after the sort key of the last row shown"), never
+# OFFSET. A cursor carries the sort key it was built from, so a request that
+# presents one is ordered by that key: a page is always a coherent
+# continuation of the page the client came from, whatever sort it names.
+_RE_ORDERED_INT = re.compile(r'^-?\d+$')
+
+_RELATION_SORT_COLUMNS = {
+    'id': 'r.id',
+    'name': 'r.name',
+    'file_count': 'r.file_count',
+}
+_RELATION_SORT_PREFIXES = {'id': 'i', 'name': 'n', 'file_count': 'f'}
+_RELATION_PREFIX_SORTS = {v: k for k, v in _RELATION_SORT_PREFIXES.items()}
+
+
+def _relation_sort_value(sort_by, row):
+    """The sort key value of a result row (columns: id, name, ..., file_count)."""
+    if sort_by == 'id':
+        return row[0]
+    if sort_by == 'name':
+        return row[1]
+    return row[4]
+
+
+def _encode_relation_cursor(sort_by, value, row_id):
+    """Opaque cursor for the next page: sort key value + tie-breaking id.
+
+    Id-ordered pages keep the historical shape (a bare integer) so cursors
+    from an older build - and any link holding one - still work.
+    """
+    if sort_by == 'id':
+        return str(row_id)
+    return f"{_RELATION_SORT_PREFIXES[sort_by]}:{quote(str(value), safe='')}:{row_id}"
+
+
+def _decode_relation_cursor(raw):
+    """Parse a cursor into ``(sort_by, value, row_id)``, or None.
+
+    ``'12'`` (legacy) and ``'i:12'`` both mean "continue after id 12";
+    ``'f:3:17'`` means "continue after file_count 3, id 17";
+    ``'n:<hash>:17'`` is the same for name ordering. Anything unparsable is
+    treated as no cursor rather than raising, so a stale link shows page 1
+    instead of an error page.
+    """
+    if raw is None:
+        return None
+    raw = str(raw).strip()
+    if not raw:
+        return None
+    parts = raw.split(':')
+    if len(parts) == 1:
+        if not _RE_ORDERED_INT.match(parts[0]):
+            return None
+        return ('id', None, int(parts[0]))
+    sort_by = _RELATION_PREFIX_SORTS.get(parts[0])
+    if sort_by is None:
+        return None
+    if sort_by == 'id':
+        if len(parts) != 2 or not _RE_ORDERED_INT.match(parts[1]):
+            return None
+        return ('id', None, int(parts[1]))
+    if len(parts) != 3:
+        return None
+    value, row_id = unquote(parts[1]), parts[2]
+    if not _RE_ORDERED_INT.match(row_id):
+        return None
+    if sort_by == 'file_count':
+        if not _RE_ORDERED_INT.match(value):
+            return None
+        value = int(value)
+    return (sort_by, value, int(row_id))
+
+
+def _relation_keyset(cursor, direction):
+    """WHERE fragment + params resuming after ``cursor`` (``('', [])`` if none)."""
+    if cursor is None:
+        return '', []
+    sort_by, value, row_id = cursor
+    column = _RELATION_SORT_COLUMNS[sort_by]
+    if sort_by == 'id':
+        # Plain id continuation (also what the legacy integer cursor meant).
+        operator = '<' if direction == 'DESC' else '>'
+        return f"WHERE {column} {operator} %s", [row_id]
+    # Ties on the sort key are broken by id ascending, so the resumed page
+    # continues with a larger id at the same key value.
+    operator = '>' if direction == 'ASC' else '<'
+    return (
+        f"WHERE ({column} {operator} %s OR ({column} = %s AND r.id > %s))",
+        [value, value, row_id],
+    )
+
+
 @limiter.limit(INTERACTIVE_READ_LIMIT)
 @archives_api_bp.route('/api/archives/hashs', methods=['GET'])
 def api_archives_hashs():
-    """Get hashs with cursor-based pagination"""
+    """Content relations: hashes shared by more than one artifact."""
     try:
-        cursor = request.args.get('cursor', type=int)
         limit = request.args.get('limit', 50, type=int)
         # SECURITY FIX: Cap limit to prevent DoS attacks
         if limit > 200:
@@ -1319,120 +1430,84 @@ def api_archives_hashs():
         if limit < 1:
             limit = 1
         search = request.args.get('search', '').strip()
-        sort_by = request.args.get('sort_by', 'id')
-        sort_dir = request.args.get('sort_dir', 'asc')
-        
-        joins = [
-            "LEFT JOIN paths p ON h.id = p.hash_id",
-            "LEFT JOIN hashs h2 ON h.hash = h2.hash AND (h.source_id != h2.source_id OR h.side_id != h2.side_id)"
-        ]
-        
-        select_columns = [
-            "h.id",
-            "h.hash",
-            "h.side_id",
-            "h.source_id",
-            "COUNT(DISTINCT p.id) as file_count",
-            "COUNT(DISTINCT h2.id) as hash_variants"
-        ]
-        
-        filters = {}
-        if search:
-            filters['h.hash'] = {'ILIKE': f'%{search}%'}
-        
-        # Determine sort column and direction
-        sort_column_map = {
-            'id': 'h.id',
-            'name': 'h.hash',
-            'file_count': 'h.id'  # Will sort client-side
-        }
-        sql_sort_column = sort_column_map.get(sort_by, 'h.id')
-        sort_direction = SortDirection.DESC if sort_dir.lower() == 'desc' else SortDirection.ASC
-        
-        paginator = get_cursor_paginator('hashs')
-        # Fetch more items to account for filtering out non-duplicates
-        fetch_limit = max(limit * 3, 50)  # Fetch 3x or minimum 50, whichever is larger
-        
-        result = paginator.get_page(
-            cursor=cursor,
-            limit=fetch_limit,
-            sort_column=sql_sort_column,
-            sort_direction=sort_direction,
-            filters=filters,
-            joins=joins,
-            select_columns=select_columns,
-            table_alias='h'
-        )
-        
+        sort_by = request.args.get('sort_by', 'file_count')
+        sort_dir = str(request.args.get('sort_dir', 'desc')).lower()
+        direction = 'ASC' if sort_dir == 'asc' else 'DESC'
 
-        hashs = []
-        for idx, row in enumerate(result['data']):
-            # Stop if we have enough hashs
-            if len(hashs) >= limit:
-                break
-                
-            file_count = row.get('file_count') or 0
-            hash_variants = row.get('hash_variants') or 0
-            # Only include if duplicate (multiple files or variants)
-            if file_count > 1 or hash_variants > 0:
-                hashs.append({
-                    'id': row.get('id') or row.get('h.id'),
-                    'name': row.get('hash') or row.get('h.hash') or 'Unknown Hash',
-                    'side_id': row.get('side_id') or row.get('h.side_id'),
-                    'source_id': row.get('source_id') or row.get('h.source_id'),
-                    'file_count': file_count
-                })
-        
-        # Sort hashs if needed (client-side for file_count and name)
-        if sort_by == 'file_count':
-            hashs.sort(key=lambda x: x.get('file_count', 0), reverse=(sort_dir.lower() == 'desc'))
-        elif sort_by == 'name':
-            hashs.sort(key=lambda x: (x.get('name') or '').lower(), reverse=(sort_dir.lower() == 'desc'))
-        
-        # Limit to exactly the requested number after filtering and sorting
-        hashs = hashs[:limit]
-        
-        # Always calculate accurate total count of hashs with duplicates (file_count > 1 or variants > 0)
-        # Use a subquery with HAVING clause to count only duplicates
-        count_query = """
-            SELECT COUNT(*)
-            FROM (
-                SELECT h.id
-                FROM hashs h
-                LEFT JOIN paths p ON h.id = p.hash_id
-                LEFT JOIN hashs h2 ON h.hash = h2.hash AND (h.source_id != h2.source_id OR h.side_id != h2.side_id)
+        cursor = _decode_relation_cursor(request.args.get('cursor'))
+        if cursor is not None:
+            # The cursor dictates its own ordering (it carries one sort key).
+            sort_by = cursor[0]
+        if sort_by not in _RELATION_SORT_COLUMNS:
+            sort_by = 'file_count'
+
+        sort_column = _RELATION_SORT_COLUMNS[sort_by]
+        tie_breaker = '' if sort_by == 'id' else ', r.id ASC'
+        order_clause = f"ORDER BY {sort_column} {direction}{tie_breaker}"
+
+        where_clause, keyset_params = _relation_keyset(cursor, direction)
+
+        inner, filter_params = relation_duplicates_sql(search or None)
+        # ``totals`` counts the whole filtered relation set, not just the page
+        # that follows the cursor: the sidebar/nav count must describe the
+        # section, not the remainder of it.
+        query = f"""
+            WITH relations AS (
+                {inner}
+            ),
+            totals AS (
+                SELECT COUNT(*) AS total_count FROM relations
+            )
+            SELECT r.id, r.name, r.side_id, r.source_id, r.file_count,
+                   r.hash_variants, t.total_count
+            FROM relations r
+            CROSS JOIN totals t
+            {where_clause}
+            {order_clause}
+            LIMIT %s
         """
-        count_params = []
-        
-        if search:
-            count_query += " WHERE h.hash ILIKE %s"
-            count_params.append(f'%{search}%')
-        
-        count_query += """
-                GROUP BY h.id
-                HAVING COUNT(DISTINCT p.id) > 1 OR COUNT(DISTINCT h2.id) > 0
-            ) as hash_duplicates
-        """
-        
-        count_result = execute_query(count_query, tuple(count_params) if count_params else None, fetch="one")
-        total_estimated = count_result[0] if count_result and isinstance(count_result, (tuple, list)) else (count_result if count_result else 0)
-        
-        # Determine if there are more pages
-        has_next = (len(hashs) == limit and total_estimated > len(hashs)) or result.get('has_next', False)
-        
-        # Update next_cursor to point to the last item we're returning
-        if has_next and hashs:
-            next_cursor = hashs[-1].get('id')
+        params = list(filter_params) + list(keyset_params) + [limit + 1]
+        rows = execute_query(query, tuple(params), fetch="all") or []
+
+        has_next = len(rows) > limit
+        page_rows = rows[:limit]
+        if page_rows:
+            total_estimated = page_rows[0][6] or 0
         else:
-            next_cursor = None
-        
+            # Empty page (cursor walked off the end): the count still has to
+            # describe the section rather than an empty remainder.
+            total_estimated = count_relation_duplicates(search or None)
+
+        relations = []
+        for row in page_rows:
+            relations.append({
+                'id': row[0],
+                'name': row[1] or 'Unknown Hash',
+                'side_id': row[2],
+                'source_id': row[3],
+                'file_count': row[4] or 0,
+                'hash_variants': row[5] or 0,
+            })
+
+        next_cursor = None
+        if has_next and page_rows:
+            last = page_rows[-1]
+            next_cursor = _encode_relation_cursor(
+                sort_by, _relation_sort_value(sort_by, last), last[0]
+            )
+
         return jsonify({
             'success': True,
-            'data': hashs,
-            'next_cursor': next_cursor if has_next else None,
-            'prev_cursor': result['prev_cursor'],
+            'data': relations,
+            # ``prev_cursor`` stays None on purpose: a forward keyset cursor
+            # cannot name the row *before* the page, and the section view
+            # already remembers the cursor it used for each page. Returning a
+            # value here would overwrite that map with a cursor that re-shows
+            # the current page.
+            'prev_cursor': None,
+            'next_cursor': next_cursor,
             'has_next': has_next,
-            'has_prev': result['has_prev'],
+            'has_prev': cursor is not None,
             'total_estimated': total_estimated
         })
     except Exception as e:

@@ -1840,6 +1840,77 @@ def db_delete_keyword(keyword_id: int) -> bool:
 
 # ==================== ARCHIVE FUNCTIONS ====================
 
+#: HAVING clause that decides what a "relation" IS: a content hash that ties
+#: more than one artifact together. Two shapes qualify - several stored paths
+#: share the hash (duplicates), or the same hash is stored under another
+#: source/side pair (a variant of the same content in another collection).
+#:
+#: This definition is shared by the sidebar count, the initial page render and
+#: the paginated API on purpose. When they disagree, the UI shows a count and
+#: an empty list (the "Relations" bug): the count came from a COUNT with this
+#: HAVING while the list fetched a page of ``hashs`` in id order and dropped
+#: every non-duplicate afterwards, so a page could be empty while the total
+#: said there were relations.
+RELATION_DUPLICATE_HAVING = "COUNT(DISTINCT p.id) > 1 OR COUNT(DISTINCT h2.id) > 0"
+
+#: Join predicate that finds the same hash under a different source/side.
+#: ``IS DISTINCT FROM`` (not ``!=``) keeps NULL-valued columns comparable
+#: instead of silently dropping every row they take part in.
+RELATION_VARIANT_JOIN = (
+    "LEFT JOIN hashs h2 ON h2.hash = h.hash"
+    " AND (h2.source_id IS DISTINCT FROM h.source_id"
+    "      OR h2.side_id IS DISTINCT FROM h.side_id)"
+)
+
+
+def relation_duplicates_sql(search: str = None):
+    """SQL for the duplicate-content relations, one row per stored hash.
+
+    Returns ``(sql, params)``. The statement is a plain SELECT (no ORDER BY /
+    LIMIT) so callers wrap it in a derived table to sort, limit, or count it -
+    the duplicate filter stays identical everywhere.
+
+    Args:
+        search: optional case-insensitive substring of the hash value.
+    """
+    where = ""
+    params = []
+    if search:
+        where = "WHERE h.hash ILIKE %s"
+        params.append(f"%{search}%")
+
+    sql = f"""
+        SELECT h.id AS id,
+               h.hash AS name,
+               h.side_id AS side_id,
+               h.source_id AS source_id,
+               COUNT(DISTINCT p.id) AS file_count,
+               COUNT(DISTINCT h2.id) AS hash_variants
+        FROM hashs h
+        LEFT JOIN paths p ON p.hash_id = h.id
+        {RELATION_VARIANT_JOIN}
+        {where}
+        GROUP BY h.id, h.hash, h.side_id, h.source_id
+        HAVING {RELATION_DUPLICATE_HAVING}
+    """
+    return sql, params
+
+
+def count_relation_duplicates(search: str = None) -> int:
+    """Number of content relations (duplicate hashes) - the sidebar count."""
+    inner, params = relation_duplicates_sql(search)
+    row = execute_query(
+        f"SELECT COUNT(*) FROM ({inner}) AS relations",
+        tuple(params) if params else None,
+        fetch="one",
+    )
+    if row is None:
+        return 0
+    if isinstance(row, (tuple, list)):
+        return int(row[0] or 0)
+    return int(row or 0)
+
+
 def get_archive_statistics() -> dict:
     """
     Get archive statistics - only counts records that actually have files associated
@@ -1907,19 +1978,9 @@ def get_archive_statistics() -> dict:
         stats['total_sides'] = result[0] if result else 0
         
         # Total hashs/relations (only duplicates: file_count > 1 or hash variants)
-        # This matches the API endpoint logic which only shows duplicates
-        result = execute_query("""
-            SELECT COUNT(*)
-            FROM (
-                SELECT h.id
-                FROM hashs h
-                LEFT JOIN paths p ON h.id = p.hash_id
-                LEFT JOIN hashs h2 ON h.hash = h2.hash AND (h.source_id != h2.source_id OR h.side_id != h2.side_id)
-                GROUP BY h.id
-                HAVING COUNT(DISTINCT p.id) > 1 OR COUNT(DISTINCT h2.id) > 0
-            ) as hash_duplicates
-        """, fetch="one")
-        stats['total_hashes'] = result[0] if result else 0
+        # Shares ``relation_duplicates_sql`` with the API endpoint so the
+        # sidebar count and the list the user opens can never disagree.
+        stats['total_hashes'] = count_relation_duplicates()
         
         # Total geolocation (files with valid GPS coordinates)
         # Geolocation data is stored in paths.coordinates column, not a separate table
