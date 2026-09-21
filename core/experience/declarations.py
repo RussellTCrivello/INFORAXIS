@@ -113,6 +113,53 @@ DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
                  "help.keywords.title", "help.keywords.summary"),
     },
 
+    # -------------------------------------------------------------- sources
+    # The reference pair for the action toolbar. These are the actions the bar
+    # offers, described and not performed: `select_all`/`select_none` act on the
+    # page, the other two act on the selection and therefore may not be usable
+    # until a scope exists. No permission is claimed here - INFORAXIS decides
+    # authorisation server-side from the account's role, and a permission
+    # vocabulary that does not exist yet would be an invention. The execution
+    # reference (handler, endpoint) is the page's, not the definition's.
+    "sources": {
+        "title": "Sources",
+        "actions": (
+            ("select_all", "Select All", "action.sources.select_all.label",
+             {"scope": "page"}),
+            ("select_none", "Select None", "action.sources.select_none.label",
+             {"scope": "page"}),
+            ("export_selected", "Export Selected",
+             "action.sources.export_selected.label",
+             {"scope": "bulk", "requires_selection": True}),
+            ("edit_selected", "Edit Selected", "action.sources.edit_selected.label",
+             {"scope": "bulk", "requires_selection": True}),
+        ),
+        "states": (
+            ("empty", "No sources yet.", "state.sources.empty.title"),
+        ),
+        "help": ("sources", "Sources", "help.sources.title", "help.sources.summary"),
+    },
+
+    # ---------------------------------------------------------------- sides
+    "sides": {
+        "title": "Sides",
+        "actions": (
+            ("select_all", "Select All", "action.sides.select_all.label",
+             {"scope": "page"}),
+            ("select_none", "Select None", "action.sides.select_none.label",
+             {"scope": "page"}),
+            ("export_selected", "Export Selected",
+             "action.sides.export_selected.label",
+             {"scope": "bulk", "requires_selection": True}),
+            ("edit_selected", "Edit Selected", "action.sides.edit_selected.label",
+             {"scope": "bulk", "requires_selection": True}),
+        ),
+        "states": (
+            ("empty", "No sides yet.", "state.sides.empty.title"),
+        ),
+        "help": ("sides", "Sides", "help.sides.title", "help.sides.summary"),
+    },
+
     # ---------------------------------------------------------------- words
     "words": {
         "title": "Word Index",

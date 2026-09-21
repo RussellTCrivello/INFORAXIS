@@ -147,7 +147,7 @@ PATTERNS: List[Pattern] = [
     Pattern("badge_chip", "Hand-written badge chip (count, id, method)",
             r'class="badge bg-[a-z]+', None),
     Pattern("toolbar", "Hand-written action bar",
-            r'class="action-bar|action-toolbar|btn-toolbar', "action_toolbar"),
+            r'class="[^"]*(action-bar|action-toolbar|btn-toolbar)', "action_toolbar"),
 ]
 
 

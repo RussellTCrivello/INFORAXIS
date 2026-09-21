@@ -53,6 +53,8 @@ TEMPLATES = {
     "file_library": "templates/file/files_list.html",
     "keywords": "templates/Keyword/keywords_list.html",
     "words": "templates/Word/Word_list.html",
+    "sources": "templates/Sources/sources_list.html",
+    "sides": "templates/Side/sides_list.html",
 }
 
 

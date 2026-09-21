@@ -9156,3 +9156,29 @@ msgstr "לא זמין"
 #: static/js/modules/charts/chart-customizer.js
 msgid "Applied"
 msgstr "הוחל"
+
+# The action toolbar's own sentences. The component renders them as phrase
+# templates and its runtime fills in {count}, {total} and {noun}, so the scope
+# of a bulk action can be said in the reader's language rather than only in
+# English. Written by hand rather than extracted: this catalog is maintained
+# against the product, not regenerated wholesale.
+#: templates/components/action_toolbar.html
+msgid "Select {noun} first"
+msgstr "יש לבחור {noun} תחילה"
+
+#: templates/components/action_toolbar.html
+msgid "{count} {noun} selected"
+msgstr "נבחרו {count} {noun}"
+
+#: templates/components/action_toolbar.html
+msgid "{count} of {total} {noun} selected"
+msgstr "נבחרו {count} מתוך {total} {noun}"
+
+#: templates/components/action_toolbar.html
+msgid "source"
+msgstr "מקור"
+
+#: templates/components/action_toolbar.html
+msgid "side"
+msgstr "צד"
+

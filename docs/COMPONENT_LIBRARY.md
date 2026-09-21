@@ -103,7 +103,7 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 
 | Component | File | States | Macros | Purpose |
 | --- | --- | --- | --- | --- |
-| `action_toolbar` | `templates/components/action_toolbar.html` | `normal`, `selected`, `empty`, `unauthorized` | `action_toolbar`, `action_group`, `action_button`, `bulk_action_button`, `selection_summary` | The bar of actions above a list: what can be done to the records, grouped by what it applies to - the selection, the bulk set, the whole list. |
+| `action_toolbar` | `templates/components/action_toolbar.html` | `selected`, `loading` | `action_toolbar`, `action_group`, `action_button`, `bulk_action_button`, `selection_summary` | The bar of actions on a list: the groups, the buttons, and the one state the server can know for certain - nothing is selected yet. |
 | `analyst_classify` | `templates/components/analyst_classify.html` | `normal`, `editing`, `saving`, `success`, `error`, `unauthorized` | `analyst_classify` | The analyst-category control for the record being read, usable from wherever that record is displayed. |
 | `breadcrumbs` | `templates/components/breadcrumbs.html` | `normal` | `breadcrumbs` | Where the reader is, rendered from the interface registry: a page says what it is about, the registry supplies the words and icons. |
 | `file_nav` | `templates/components/file_nav.html` | `normal`, `empty` | `file_nav` | Previous/next through the records the reader is working through, and where this one sits in that set. |
@@ -125,9 +125,9 @@ Every state in the vocabulary is answered by at least one component; a state nob
 
 | State | Meaning | Implemented by |
 | --- | --- | --- |
-| `loading` | Work is in progress; the reader is told what is being waited for. | `operations_widget`, `search_input`, `states`, `table` |
-| `empty` | Nothing exists here yet, and the reader is told how to start. | `action_toolbar`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `sidebar_nav`, `states`, `table` |
-| `normal` | The ordinary case: content is present and usable. | `action_toolbar`, `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `search_input`, `sidebar_nav`, `table`, `pagination` |
+| `loading` | Work is in progress; the reader is told what is being waited for. | `action_toolbar`, `operations_widget`, `search_input`, `states`, `table` |
+| `empty` | Nothing exists here yet, and the reader is told how to start. | `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `sidebar_nav`, `states`, `table` |
+| `normal` | The ordinary case: content is present and usable. | `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `search_input`, `sidebar_nav`, `table`, `pagination` |
 | `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `filter_bar`, `search_input`, `states`, `table`, `pagination` |
 | `selected` | A row or record is chosen; actions that need a choice appear. | `action_toolbar`, `table` |
 | `editing` | A value is being changed, and the change is not saved yet. | `analyst_classify` |
@@ -135,7 +135,7 @@ Every state in the vocabulary is answered by at least one component; a state nob
 | `success` | The last action worked. | `analyst_classify`, `states`, `status_badge` |
 | `warning` | Something needs attention but is not broken. | `states`, `status_badge` |
 | `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `operations_widget`, `states`, `status_badge`, `table` |
-| `unauthorized` | The server refused this for this account. | `action_toolbar`, `analyst_classify`, `states` |
+| `unauthorized` | The server refused this for this account. | `analyst_classify`, `states` |
 | `unavailable` | It needs something this installation does not have. | `search_input`, `states`, `status_badge` |
 | `archived` | Kept and readable, but out of the working set. | `states`, `status_badge` |
 
@@ -156,7 +156,7 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Browser confirm() dialog | — | 2 templates |
 | Hand-written status badge | `status_badge` | 0 badges, in 0 templates |
 | Hand-written badge chip (count, id, method) | — | 68 badges |
-| Hand-written action bar | `action_toolbar` | 6 templates |
+| Hand-written action bar | `action_toolbar` | 4 templates |
 
 ### Adoption
 
@@ -171,7 +171,7 @@ How much of the repeated markup has moved onto its component. Standardized count
 | Hand-written filter control | 1 | 14 | 7% |
 | Browser confirm() dialog | 0 | 2 | 0% |
 | Hand-written status badge | 6 | 0 | 100% |
-| Hand-written action bar | 1 | 6 | 14% |
+| Hand-written action bar | 3 | 4 | 43% |
 
 **Declared exceptions.** Not everything that looks similar is the same thing, and overloaded components stop being usable. An exception is a decision with an owner:
 
@@ -186,7 +186,7 @@ Every class a component renders has exactly one owner. **OWNED** means an INFORA
 | Ownership | Classes |
 | --- | --- |
 | OWNED (INFORAXIS) | 55 |
-| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 145 |
+| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 146 |
 | UNKNOWN | 0 |
 
 Third-party stylesheets bundled with the application: `static/css/bootstrap.min.css`, `static/icons/bootstrap-icons.css`.

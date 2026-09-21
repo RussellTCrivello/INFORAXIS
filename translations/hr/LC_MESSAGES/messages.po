@@ -9559,3 +9559,29 @@ msgstr "Učitavanje aktivnih poslova…"
 
 msgid "No operations yet - start an ingestion."
 msgstr "Još nema operacija — pokrenite prihvat."
+
+# The action toolbar's own sentences. The component renders them as phrase
+# templates and its runtime fills in {count}, {total} and {noun}, so the scope
+# of a bulk action can be said in the reader's language rather than only in
+# English. Written by hand rather than extracted: this catalog is maintained
+# against the product, not regenerated wholesale.
+#: templates/components/action_toolbar.html
+msgid "Select {noun} first"
+msgstr "Najprije odaberite {noun}"
+
+#: templates/components/action_toolbar.html
+msgid "{count} {noun} selected"
+msgstr "Odabrano: {count} {noun}"
+
+#: templates/components/action_toolbar.html
+msgid "{count} of {total} {noun} selected"
+msgstr "Odabrano: {count} od {total} {noun}"
+
+#: templates/components/action_toolbar.html
+msgid "source"
+msgstr "izvor"
+
+#: templates/components/action_toolbar.html
+msgid "side"
+msgstr "strana"
+

@@ -200,6 +200,11 @@
     {#- Keyboard and loading behaviour for the search box component. The
         component renders it; this is what makes Escape clear it. -#}
     <script src="{{ url_for('static', filename='js/modules/core/search-input.js') }}?v=20260921a" defer></script>
+    {#- The selection a bulk action applies to. The component renders the bar
+        and the disabled state; this keeps the scope in step as rows are
+        selected, so a bulk action is never enabled without saying what it
+        would affect. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/action-toolbar.js') }}?v=20260921a" defer></script>
 </head>
 
 <body data-page-type="{% block page_type %}default{% endblock %}"

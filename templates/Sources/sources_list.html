@@ -32,6 +32,7 @@
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
 {% from 'components/filter_bar.html' import search_group %}
+{% from 'components/action_toolbar.html' import action_toolbar, action_group, action_button, bulk_action_button, selection_summary %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -174,30 +175,21 @@
     </div>
 
     <!-- Action Bar -->
-    <div class="action-bar">
-        <div class="action-group">
-            <span class="action-label">{{ _('Selection:') }}</span>
-            <button class="btn-action" onclick="selectAll()">
-                <i class="bi bi-check-square"></i>
-                {{ _('Select All') }}
-            </button>
-            <button class="btn-action" onclick="selectNone()">
-                <i class="bi bi-square"></i>
-                {{ _('Select None') }}
-            </button>
-        </div>
-        <div class="action-group">
-            <span class="action-label">{{ _('Bulk Actions:') }}</span>
-            <button class="btn-action btn-outline-primary" onclick="bulkExport()" id="bulkExportBtn" disabled>
-                <i class="bi bi-download"></i>
-                {{ _('Export Selected') }}
-            </button>
-            <button class="btn-action btn-outline-warning" onclick="bulkUpdate()" id="bulkUpdateBtn" disabled>
-                <i class="bi bi-pencil"></i>
-                {{ _('Edit Selected') }}
-            </button>
-        </div>
-    </div>
+    {% call action_toolbar(id='sourcesActionBar', label=_('Actions')) %}
+        {% call action_group(_('Selection:')) %}
+            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()') }}
+            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()') }}
+        {% endcall %}
+        {% call action_group(_('Bulk Actions:')) %}
+            {{ selection_summary(total_sources|default(0), _('sources'), _('source')) }}
+            {{ bulk_action_button(_('Export Selected'), icon='bi-download',
+                 onclick='bulkExport()', tone='outline-primary', id='bulkExportBtn',
+                 noun=_('sources')) }}
+            {{ bulk_action_button(_('Edit Selected'), icon='bi-pencil',
+                 onclick='bulkUpdate()', tone='outline-warning', id='bulkUpdateBtn',
+                 noun=_('sources')) }}
+        {% endcall %}
+    {% endcall %}
 </div>
 
 <div class="stat-card">

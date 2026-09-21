@@ -483,7 +483,11 @@ class TestAdoption:
             "admired")
         assert counts()["pattern_table"] == 13
         assert counts()["pattern_filter"] == 14
-        assert counts()["pattern_toolbar"] == 6
+        # Four bars are still hand-written (the Word list, email words, the
+        # file list and the full-content reader). The pattern is anchored to a
+        # class attribute: before it was, `base.html` counted as a fifth
+        # because a script src happens to read `action-toolbar.js`.
+        assert counts()["pattern_toolbar"] == 4
         # The search box had thirteen owners and no component. Seven places
         # now render it through `search_group` / `search_input`; the six that
         # remain are the analysis dashboards, notifications, the operations
@@ -513,19 +517,24 @@ class TestTheComponentsRenderWhatTheyPromised:
 
         return render_source
 
-    def test_a_bulk_action_without_a_scope_cannot_be_started(self, render):
+    def test_a_bulk_action_without_a_selection_cannot_be_started(self, render):
         out = render("""{% from 'components/action_toolbar.html' import bulk_action_button %}
-{{ bulk_action_button(_('Delete Selected'), scope=None, onclick='bulkDelete()') }}""")
+{{ bulk_action_button(_('Delete Selected'), onclick='bulkDelete()', noun=_('records')) }}""")
         assert "disabled" in out
         assert "onclick" not in out, "a bulk action ran without saying what it covers"
         assert "Select records first" in out
+        assert 'aria-label="Delete Selected: Select records first"' in out
 
-    def test_a_bulk_action_says_what_it_covers(self, render):
-        out = render("""{% from 'components/action_toolbar.html' import bulk_action_button %}
-{{ bulk_action_button(_('Delete Selected'), scope='3 selected', onclick='bulkDelete()') }}""")
-        assert "onclick=\"bulkDelete()\"" in out
-        assert "3 selected" in out
-        assert "disabled" not in out
+    def test_the_scope_element_carries_the_words_the_runtime_needs(self, render):
+        """The server states the no-selection case; the runtime states the rest."""
+        out = render("""{% from 'components/action_toolbar.html' import selection_summary %}
+{{ selection_summary(27, _('records'), _('record')) }}""")
+        assert "Select records first" in out
+        assert 'role="status"' in out
+        assert 'data-selected-count="0"' in out
+        assert 'data-total="27"' in out
+        assert 'data-noun="records"' in out
+        assert 'data-noun-singular="record"' in out
 
     def test_the_empty_state_is_announced_politely_and_a_failure_is_not(self, render):
         empty = render("""{% from 'components/states.html' import empty_state %}
