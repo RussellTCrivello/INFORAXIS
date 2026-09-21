@@ -1,3 +1,11 @@
+{# component: operations_widget
+   purpose: What the ingestion and processing system is doing right now:
+            active jobs, throughput, and the shortcuts into Operations.
+   states: normal, loading, empty, error
+   classes: card, card-header, card-body, ops-widget
+   notes: Reads real job numbers from the jobs API. When a number is not
+          measured it is reported as unavailable, never invented (§8).
+#}
 <!-- Dashboard operations widget: active jobs, throughput, quick actions.
      Real data from /api/jobs/summary + /api/jobs - no fake increments. -->
 <div class="card shadow-sm mb-3" id="opsWidget">

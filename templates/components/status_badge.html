@@ -1,0 +1,48 @@
+{# component: status_badge
+   purpose: One way to show a status word, so the same state is not green on
+            one page and grey on the next.
+   states: success, warning, error, unavailable, archived
+   classes: badge, bg-secondary, bg-success, bg-warning, bg-danger, bg-info,
+            bg-primary, text-dark, ms-2
+   notes: The tone is passed in, never guessed: the caller knows what its own
+          status means. Where a status comes from the interface registry, the
+          label and tone come from `status_policy` (see prefix_the_badge), so
+          there is still one definition of "Deprecated".
+#}
+{#
+   Usage:
+
+       {% from 'components/status_badge.html' import status_badge %}
+
+       {{ status_badge(job.state, tone='success') }}
+
+   Tones: neutral, info, primary, success, warning, danger, muted.
+#}
+
+{% set _TONES = {
+    'neutral': 'bg-secondary',
+    'info': 'bg-info text-dark',
+    'primary': 'bg-primary',
+    'success': 'bg-success',
+    'warning': 'bg-warning text-dark',
+    'danger': 'bg-danger',
+    'muted': 'bg-secondary'
+} %}
+
+
+{% macro status_badge(label, tone='neutral', title=None, extra_class=None) %}
+{%- if label -%}
+<span class="badge {{ _TONES.get(tone, _TONES['neutral']) }}{{ ' ' ~ extra_class if extra_class }}"
+      {% if title %}title="{{ title }}"{% endif %}>{{ label }}</span>
+{%- endif -%}
+{% endmacro %}
+
+
+{% macro status_badge_with_icon(label, icon, tone='neutral', title=None) %}
+{%- if label -%}
+<span class="badge {{ _TONES.get(tone, _TONES['neutral']) }}"
+      {% if title %}title="{{ title }}"{% endif %}>
+    <i class="bi {{ icon }} me-1" aria-hidden="true"></i>{{ label }}
+</span>
+{%- endif -%}
+{% endmacro %}

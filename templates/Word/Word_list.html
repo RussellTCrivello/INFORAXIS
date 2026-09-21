@@ -19,6 +19,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
+{% from 'components/states.html' import empty_state %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -293,13 +294,11 @@
                 {% else %}
                     <tr>
                         <td colspan="6" class="text-center py-4">
-                            <div class="empty-state">
-                                <i class="bi bi-inbox"></i>
-                                <p>{{ _('No words found.') }}</p>
-                                <button class="btn btn-primary" onclick="openAddWordModal()">
-                                    {{ _('Add your first word') }}
-                                </button>
-                            </div>
+                            {{ empty_state(
+                                message=_('No words found.'),
+                                action_label=_('Add your first word'),
+                                action_onclick='openAddWordModal()',
+                                action_icon=None) }}
                         </td>
                     </tr>
                 {% endif %}

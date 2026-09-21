@@ -1,3 +1,13 @@
+{# component: page_tips
+   purpose: The explanatory tips at the top of a page: what this page is for,
+            what the elements on it do, how to add data here.
+   states: normal, empty
+   classes: page-tips, page-tips-container, page-tips-toggle,
+            page-tips-content, page-tips-list
+   notes: Gated by the `page_tips` feature through the `feature_enabled`
+          global, so the switch is asked for in one place. Tips come from the
+          page/tips data; the component renders them.
+#}
 <!-- Page Tips/Documentation Component -->
 {% macro page_tips(enabled=None) %}
 {# Is this feature on?

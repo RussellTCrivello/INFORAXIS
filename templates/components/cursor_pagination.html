@@ -1,3 +1,10 @@
+{# component: pagination_cursor
+   purpose: The same job for cursor-paged lists, where "page 7" does not
+            exist and only forward/backward is meaningful.
+   states: normal, filtered
+   classes: cursor-pagination-container, pagination-info, page-link
+   notes: Forward/backward only, by construction: a cursor cannot jump.
+#}
 {%- macro cursor_pagination(next_cursor, prev_cursor, has_next, has_prev, query_time_ms=0, total_estimated=0, table='', limit=50) -%}
 <!-- Cursor-based pagination component -->
 <div class="cursor-pagination-container mt-4">

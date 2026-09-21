@@ -21,6 +21,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
+{% from 'components/states.html' import empty_state %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -361,14 +362,12 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="10" class="empty-state">
-                                <div class="empty-state-content">
-                                    <i class="bi bi-inbox"></i>
-                                    <p>{{ _('No files found.') }}</p>
-                                    <a href="{{ url_for('operations_input_page') }}" class="btn btn-primary">
-                                        {{ _('Upload your first file') }}
-                                    </a>
-                                </div>
+                            <td colspan="10">
+                                {{ empty_state(
+                                    message=_('No files found.'),
+                                    action_label=_('Upload your first file'),
+                                    action_href=url_for('operations_input_page'),
+                                    action_icon=None) }}
                             </td>
                         </tr>
                         {% endfor %}

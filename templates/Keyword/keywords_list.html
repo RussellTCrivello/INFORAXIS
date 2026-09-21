@@ -27,6 +27,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
+{% from 'components/states.html' import empty_state %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -326,13 +327,11 @@
                 {% else %}
                     <tr>
                         <td colspan="7" class="text-center py-4">
-                            <div class="empty-state">
-                                <i class="bi bi-inbox"></i>
-                                <p>{{ _('No keywords found.') }}</p>
-                                <button class="btn btn-primary" onclick="openAddKeywordModal()">
-                                    {{ _('Add your first keyword') }}
-                                </button>
-                            </div>
+                            {{ empty_state(
+                                message=_('No keywords found.'),
+                                action_label=_('Add your first keyword'),
+                                action_onclick='openAddKeywordModal()',
+                                action_icon=None) }}
                         </td>
                     </tr>
                 {% endif %}

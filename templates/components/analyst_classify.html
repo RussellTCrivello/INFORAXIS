@@ -1,3 +1,11 @@
+{# component: analyst_classify
+   purpose: The analyst-category control for the record being read, usable
+            from wherever that record is displayed.
+   states: normal, editing, saving, success, error, unauthorized
+   classes: analyst-badges, analyst-category-badge, dropdown-menu
+   notes: Renders what the analyst may do and posts the change; the server
+          decides what the account is allowed to change.
+#}
 {#
     Analyst classification control — shared by EVERY content display
     interface (File Detail, Full Content Reader). Lets an analyst/admin
