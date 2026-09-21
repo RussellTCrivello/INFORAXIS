@@ -65,9 +65,11 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 
 | Component | File | States | Macros | Purpose |
 | --- | --- | --- | --- | --- |
+| `action_toolbar` | `templates/components/action_toolbar.html` | `normal`, `selected`, `empty`, `unauthorized` | `action_toolbar`, `action_group`, `action_button`, `bulk_action_button`, `selection_summary` | The bar of actions above a list: what can be done to the records, grouped by what it applies to - the selection, the bulk set, the whole list. |
 | `analyst_classify` | `templates/components/analyst_classify.html` | `normal`, `editing`, `saving`, `success`, `error`, `unauthorized` | `analyst_classify` | The analyst-category control for the record being read, usable from wherever that record is displayed. |
 | `breadcrumbs` | `templates/components/breadcrumbs.html` | `normal` | `breadcrumbs` | Where the reader is, rendered from the interface registry: a page says what it is about, the registry supplies the words and icons. |
 | `file_nav` | `templates/components/file_nav.html` | `normal`, `empty` | `file_nav` | Previous/next through the records the reader is working through, and where this one sits in that set. |
+| `filter_bar` | `templates/components/filter_bar.html` | `normal`, `filtered`, `empty` | `filter_section`, `filter_grid`, `filter_bar`, `filter_group`, `search_group`, `hidden_filter` | The controls above a list that decide which records it shows: a search box and the filters that narrow it, in the arrangement fifteen pages currently rebuild by hand. |
 | `operations_widget` | `templates/components/operations_widget.html` | `normal`, `loading`, `empty`, `error` | — | What the ingestion and processing system is doing right now: active jobs, throughput, and the shortcuts into Operations. |
 | `page_data` | `templates/components/analyst_classify_page_data.html` | `normal` | `analyst_classify_page_data` | The translated strings and the write permission the analyst classification module needs, so nothing is hard-coded in JavaScript and a language switch reaches it. |
 | `page_tips` | `templates/components/page_tips.html` | `normal`, `empty` | `page_tips` | The explanatory tips at the top of a page: what this page is for, what the elements on it do, how to add data here. |
@@ -85,16 +87,16 @@ Every state in the vocabulary is answered by at least one component; a state nob
 | State | Meaning | Implemented by |
 | --- | --- | --- |
 | `loading` | Work is in progress; the reader is told what is being waited for. | `operations_widget`, `states`, `table` |
-| `empty` | Nothing exists here yet, and the reader is told how to start. | `file_nav`, `operations_widget`, `page_tips`, `sidebar_nav`, `states`, `table` |
-| `normal` | The ordinary case: content is present and usable. | `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `operations_widget`, `page_tips`, `sidebar_nav`, `table`, `pagination` |
-| `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `states`, `table`, `pagination` |
-| `selected` | A row or record is chosen; actions that need a choice appear. | `table` |
+| `empty` | Nothing exists here yet, and the reader is told how to start. | `action_toolbar`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `sidebar_nav`, `states`, `table` |
+| `normal` | The ordinary case: content is present and usable. | `action_toolbar`, `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `sidebar_nav`, `table`, `pagination` |
+| `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `filter_bar`, `states`, `table`, `pagination` |
+| `selected` | A row or record is chosen; actions that need a choice appear. | `action_toolbar`, `table` |
 | `editing` | A value is being changed, and the change is not saved yet. | `analyst_classify` |
 | `saving` | A change is on its way to the server. | `analyst_classify` |
 | `success` | The last action worked. | `analyst_classify`, `states`, `status_badge` |
 | `warning` | Something needs attention but is not broken. | `states`, `status_badge` |
 | `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `operations_widget`, `states`, `status_badge`, `table` |
-| `unauthorized` | The server refused this for this account. | `analyst_classify`, `states` |
+| `unauthorized` | The server refused this for this account. | `action_toolbar`, `analyst_classify`, `states` |
 | `unavailable` | It needs something this installation does not have. | `states`, `status_badge` |
 | `archived` | Kept and readable, but out of the working set. | `states`, `status_badge` |
 
@@ -109,11 +111,11 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Hand-written inline error | `states` | 7 |
 | Hand-written table | `table` | 13 |
 | Hand-written pagination | `pagination` | 6 |
-| Hand-written search input | — | 14 |
-| Hand-written filter control | — | 15 |
+| Hand-written search input | — | 13 |
+| Hand-written filter control | `filter_bar` | 14 |
 | Browser confirm() dialog | — | 2 |
 | Hand-written status badge | `status_badge` | 22 |
-| Hand-written action toolbar | — | 1 |
+| Hand-written action bar | `action_toolbar` | 6 |
 
 ### Classes rendered by components
 
@@ -123,6 +125,7 @@ These class names are rendered by a component but no stylesheet defines them:
 * `templates/components/breadcrumbs.html`: `bi-house-door`
 * `templates/components/cursor_pagination.html`: `bi-info-circle`, `cursor-pagination-container`
 * `templates/components/file_nav.html`: `file-nav__text`
+* `templates/components/filter_bar.html`: `bi-x`
 * `templates/components/operations_widget.html`: `bi-box-arrow-in-down`, `bi-clock-history`, `bi-list-check`, `bi-plus-lg`, `bi-search`
 * `templates/components/page_tips.html`: `bi-chevron-up`, `bi-lightbulb-fill`
 * `templates/components/sidebar_nav.html`: `sidebar-nav-badge`

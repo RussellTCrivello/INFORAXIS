@@ -94,8 +94,8 @@ PATTERNS: List[Pattern] = [
             r'(filter-bar|filter-group|filters-panel|filter-control)', "filter_bar"),
     Pattern("confirm", "Browser confirm() dialog", r"\bconfirm\(", "confirm_dialog"),
     Pattern("badge", "Hand-written status badge", r'class="badge bg-[a-z]+', "status_badge"),
-    Pattern("toolbar", "Hand-written action toolbar",
-            r'(action-toolbar|class="toolbar|btn-toolbar)', "action_toolbar"),
+    Pattern("toolbar", "Hand-written action bar",
+            r'class="action-bar|action-toolbar|btn-toolbar', "action_toolbar"),
 ]
 
 

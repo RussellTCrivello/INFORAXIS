@@ -1,0 +1,96 @@
+{# component: action_toolbar
+   purpose: The bar of actions above a list: what can be done to the records,
+            grouped by what it applies to - the selection, the bulk set, the
+            whole list.
+   states: normal, selected, empty, unauthorized
+   classes: action-bar, action-group, action-label, btn-action,
+            btn-outline-primary, btn-outline-warning, btn-outline-danger,
+            btn-outline-secondary, btn-primary, btn-warning, disabled
+   notes: A bulk action has to say what it applies to. `bulk_action_button`
+          takes the scope as a required argument and renders it as the
+          button's accessible name; with no scope the button renders disabled
+          with "Select records first", so a bulk operation cannot be started
+          without its extent being on screen (§29: no hidden scope). The
+          component does not perform the action and does not authorize it -
+          the server decides whether the account may do it.
+#}
+{#
+   Usage:
+
+       {% from 'components/action_toolbar.html' import action_toolbar,
+            action_group, action_button, bulk_action_button %}
+
+       {% call action_toolbar() %}
+           {% call action_group(_('Bulk Actions:')) %}
+               {{ bulk_action_button(_('Delete Selected'), icon='bi-trash',
+                    scope=(selected_count ~ ' ' ~ _('selected')) if selected_count else None,
+                    onclick='bulkDelete()', tone='danger') }}
+           {% endcall %}
+       {% endcall %}
+#}
+
+{% macro action_toolbar(extra_class=None) %}
+<div class="action-bar{{ ' ' ~ extra_class if extra_class }}" role="toolbar">
+    {{ caller() }}
+</div>
+{% endmacro %}
+
+
+{% macro action_group(label=None, icon=None) %}
+<div class="action-group">
+    {% if label %}<span class="action-label">
+        {%- if icon %}<i class="bi {{ icon }} me-1" aria-hidden="true"></i>{% endif -%}
+        {{ label }}</span>{% endif %}
+    {{ caller() }}
+</div>
+{% endmacro %}
+
+
+{% macro action_button(label, icon=None, onclick=None, href=None, tone=None,
+                       id=None, disabled=False, title=None, extra_class=None) %}
+{%- set class_name = 'btn-action' ~ (' btn-' ~ tone if tone) ~ (' ' ~ extra_class if extra_class) -%}
+{%- if href and not disabled -%}
+<a class="{{ class_name }}" href="{{ href }}"
+   {% if id %}id="{{ id }}"{% endif %}
+   {% if title or label %}title="{{ title or label }}"{% endif %}>
+    {% if icon %}<i class="bi {{ icon }}" aria-hidden="true"></i>{% endif %} {{ label }}
+</a>
+{%- else -%}
+<button type="button" class="{{ class_name }}"
+        {% if id %}id="{{ id }}"{% endif %}
+        {% if onclick and not disabled %}onclick="{{ onclick }}"{% endif %}
+        {% if disabled %}disabled aria-disabled="true"{% endif %}
+        {% if title or label %}title="{{ title or label }}"{% endif %}>
+    {% if icon %}<i class="bi {{ icon }}" aria-hidden="true"></i>{% endif %} {{ label }}
+</button>
+{%- endif -%}
+{% endmacro %}
+
+
+{% macro bulk_action_button(label, scope, icon=None, onclick=None, tone=None,
+                            id=None, extra_class=None) %}
+{#- An action that affects several records at once. `scope` is not optional:
+    it is what the reader is told the button will affect. Nothing selected
+    means nothing to act on, and the button says so instead of running. -#}
+{% if scope %}
+{{ action_button(label, icon=icon, onclick=onclick, tone=tone, id=id,
+                 title=label ~ ' — ' ~ scope, extra_class=extra_class) }}
+{% else %}
+{{ action_button(label, icon=icon, tone=tone, id=id, disabled=True,
+                 title=label ~ ' — ' ~ _('Select records first'),
+                 extra_class=extra_class) }}
+<span class="action-label ms-1">{{ _('Select records first') }}</span>
+{% endif %}
+{% endmacro %}
+
+
+{% macro selection_summary(selected_count, total, noun) %}
+{#- What is selected, in words, next to the actions that use it. -#}
+<span class="action-label" data-selected-count="{{ selected_count }}">
+    {%- if selected_count -%}
+        {{ selected_count }} {{ _('of') }} {{ total }} {{ noun }} {{ _('selected') }}
+    {%- else -%}
+        {{ _('Nothing selected') }}
+    {%- endif -%}
+</span>
+{% endmacro %}

@@ -28,6 +28,8 @@
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
 {% from 'components/states.html' import empty_state %}
+{% from 'components/filter_bar.html' import filter_section, filter_grid, filter_group, search_group %}
+{% from 'components/action_toolbar.html' import action_toolbar, action_group, action_button %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -108,77 +110,46 @@
 </div>
 
 <!-- Filters Section -->
-<div class="file-filters-section">
+{% call filter_section() %}
     <!-- Search and Main Filters -->
-    <div class="filter-controls-grid">
-        <div class="filter-group filter-group-search">
-            <label for="searchKeywords" class="filter-label">
-                <i class="bi bi-search"></i>
-                {{ _('Search Keywords') }}
-            </label>
-            <div class="search-input-wrapper">
-                <input type="text" 
-                       id="searchKeywords" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search keywords...') }}" 
-                       autocomplete="off">
-                <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
-                    <i class="bi bi-x"></i>
-                </button>
-            </div>
-        </div>
+    {% call filter_grid() %}
+        {{ search_group('searchKeywords', _('Search Keywords'),
+                        _('Search keywords...'), onclear='clearSearch()') }}
 
-        <div class="filter-group">
-            <label for="statusFilter" class="filter-label">
-                <i class="bi bi-check-circle"></i>
-                {{ _('Status') }}
-            </label>
+        {% call filter_group('statusFilter', _('Status'), 'bi-check-circle') %}
             <select class="form-select" id="statusFilter" onchange="applyFilters()">
                 <option value="">{{ _('All Status') }}</option>
                 <option value="active">{{ _('Active') }}</option>
                 <option value="unused">{{ _('Unused') }}</option>
             </select>
-        </div>
+        {% endcall %}
 
-        <div class="filter-group">
-            <label for="categoryFilter" class="filter-label">
-                <i class="bi bi-tags"></i>
-                {{ _('Category') }}
-            </label>
+        {% call filter_group('categoryFilter', _('Category'), 'bi-tags') %}
             <select class="form-select" id="categoryFilter" onchange="applyFilters()">
                 <option value="">{{ _('All Categories') }}</option>
             </select>
-        </div>
+        {% endcall %}
 
-        <div class="filter-group">
-            <label for="sortBy" class="filter-label">
-                <i class="bi bi-sort-alpha-down"></i>
-                {{ _('Sort By') }}
-            </label>
+        {% call filter_group('sortBy', _('Sort By'), 'bi-sort-alpha-down') %}
             <select class="form-select" id="sortBy" onchange="applySorting()">
                 <option value="usage_count">{{ _('Usage Count') }}</option>
                 <option value="text">{{ _('Text') }}</option>
                 <option value="id">{{ _('ID') }}</option>
                 <option value="date_creation">{{ _('Date Created') }}</option>
             </select>
-        </div>
+        {% endcall %}
 
-        <div class="filter-group">
-            <label for="sortOrder" class="filter-label">
-                <i class="bi bi-arrow-down-up"></i>
-                {{ _('Order') }}
-            </label>
+        {% call filter_group('sortOrder', _('Order'), 'bi-arrow-down-up') %}
             <select class="form-select" id="sortOrder" onchange="applySorting()">
                 <option value="desc">{{ _('Descending') }}</option>
                 <option value="asc">{{ _('Ascending') }}</option>
             </select>
-        </div>
-    </div>
+        {% endcall %}
+    {% endcall %}
 
     <!-- Action Bar -->
-    <div class="action-bar">
-        <div class="action-group">
-            <span class="action-label">{{ _('Selection:') }}</span>
+    {% call action_toolbar() %}
+        {% call action_group(_('Selection:')) %}
             <button class="btn-action" onclick="selectAll()">
                 <i class="bi bi-check-square"></i>
                 {{ _('Select All') }}
@@ -187,9 +158,8 @@
                 <i class="bi bi-square"></i>
                 {{ _('Select None') }}
             </button>
-        </div>
-        <div class="action-group">
-            <span class="action-label">{{ _('Bulk Actions:') }}</span>
+        {% endcall %}
+        {% call action_group(_('Bulk Actions:')) %}
             <button class="btn-action btn-outline-warning" onclick="bulkUpdate()" id="bulkUpdateBtn" disabled>
                 <i class="bi bi-pencil"></i>
                 {{ _('Edit Selected') }}
@@ -198,16 +168,15 @@
                 <i class="bi bi-trash"></i>
                 {{ _('Delete Selected') }}
             </button>
-        </div>
-        <div class="action-group">
-            <span class="action-label">{{ _('Actions:') }}</span>
+        {% endcall %}
+        {% call action_group(_('Actions:')) %}
             <button class="btn-action btn-warning" onclick="mergeAllDuplicates()" title="{{ _('Merge all duplicate keywords') }}">
                 <i class="bi bi-arrow-down-up"></i>
                 {{ _('Merge Duplicates') }}
             </button>
-        </div>
-    </div>
-</div>
+        {% endcall %}
+    {% endcall %}
+{% endcall %}
 
 <!-- Pagination info above table -->
 <div class="d-flex justify-content-between align-items-center mb-3">

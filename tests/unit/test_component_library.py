@@ -20,6 +20,7 @@ from __future__ import annotations
 import pathlib
 import re
 
+import jinja2
 import pytest
 
 from core.frontend.component_audit import (
@@ -211,6 +212,15 @@ class TestAdoption:
         assert "<table" not in text, "the page writes its own table frame again"
         assert "table_empty_row(" in text
 
+    def test_the_filter_and_action_bar_page_uses_the_components(self):
+        text = (PROJECT_ROOT / "templates/Keyword/keywords_list.html").read_text()
+        assert "components/filter_bar.html" in text
+        assert "components/action_toolbar.html" in text
+        assert 'class="file-filters-section"' not in text
+        assert 'class="action-bar"' not in text
+        assert 'class="filter-group' not in text
+        assert 'class="search-input-wrapper"' not in text
+
     def test_the_table_component_covers_the_states_a_list_has(self):
         table = components()["table"]
         assert {"normal", "empty", "filtered", "selected", "loading",
@@ -230,3 +240,84 @@ class TestAdoption:
             "three of the seven empty states moved onto the component; this "
             "number is the measure of the phase, so it is pinned rather than "
             "admired")
+        assert counts()["pattern_table"] == 13
+        assert counts()["pattern_filter"] == 14
+        assert counts()["pattern_toolbar"] == 6
+
+
+class TestTheComponentsRenderWhatTheyPromised:
+    """Rendered, not read: the rules above are only real if the output obeys."""
+
+    @pytest.fixture()
+    def render(self):
+        environment = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(str(PROJECT_ROOT / "templates")),
+            autoescape=True)
+        environment.globals["_"] = lambda text: text
+
+        def render_source(source: str) -> str:
+            return environment.from_string(source).render()
+
+        return render_source
+
+    def test_a_bulk_action_without_a_scope_cannot_be_started(self, render):
+        out = render("""{% from 'components/action_toolbar.html' import bulk_action_button %}
+{{ bulk_action_button(_('Delete Selected'), scope=None, onclick='bulkDelete()') }}""")
+        assert "disabled" in out
+        assert "onclick" not in out, "a bulk action ran without saying what it covers"
+        assert "Select records first" in out
+
+    def test_a_bulk_action_says_what_it_covers(self, render):
+        out = render("""{% from 'components/action_toolbar.html' import bulk_action_button %}
+{{ bulk_action_button(_('Delete Selected'), scope='3 selected', onclick='bulkDelete()') }}""")
+        assert "onclick=\"bulkDelete()\"" in out
+        assert "3 selected" in out
+        assert "disabled" not in out
+
+    def test_the_empty_state_is_announced_politely_and_a_failure_is_not(self, render):
+        empty = render("""{% from 'components/states.html' import empty_state %}
+{{ empty_state(message='Nothing yet.') }}""")
+        failure = render("""{% from 'components/states.html' import error_state %}
+{{ error_state(message='We could not read that file.') }}""")
+        assert 'role="status"' in empty and 'role="alert"' not in empty
+        assert 'role="alert"' in failure
+        assert "could not read that file" in failure
+
+    def test_the_state_panel_marks_which_state_it_is(self, render):
+        for state, macro in (("empty", "empty_state"), ("filtered", "filtered_state"),
+                             ("loading", "loading_state"), ("error", "error_state"),
+                             ("unauthorized", "unauthorized_state"),
+                             ("unavailable", "unavailable_state"),
+                             ("archived", "archived_state")):
+            out = render("{% from 'components/states.html' import " + macro + " %}"
+                         "{{ " + macro + "(message='x') }}")
+            assert f'data-state="{state}"' in out, state
+
+    def test_a_status_badge_takes_its_tone_rather_than_guessing_one(self, render):
+        out = render("""{% from 'components/status_badge.html' import status_badge %}
+{{ status_badge('Deprecated', tone='warning') }}{{ status_badge('') }}""")
+        assert 'class="badge bg-warning text-dark"' in out
+        assert out.count("<span") == 1, "an empty label renders no badge"
+
+    def test_the_table_span_is_the_callers_not_a_guess(self, render):
+        out = render("""{% from 'components/table.html' import table_empty_row %}
+{{ table_empty_row(9, message='Nothing here.') }}""")
+        assert 'colspan="9"' in out
+
+    def test_a_filter_group_labels_its_control(self, render):
+        out = render("""{% from 'components/filter_bar.html' import filter_group %}
+{% call filter_group('statusFilter', _('Status'), 'bi-check-circle') %}
+<select class="form-select" id="statusFilter"></select>
+{% endcall %}""")
+        assert 'class="filter-group"' in out
+        assert 'for="statusFilter"' in out
+        assert 'id="statusFilter"' in out
+
+    def test_the_search_group_renders_the_clear_control(self, render):
+        out = render("""{% from 'components/filter_bar.html' import search_group %}
+{{ search_group('searchKeywords', _('Search Keywords'), _('Search keywords...'),
+                onclear='clearSearch()') }}""")
+        assert 'class="filter-group filter-group-search"' in out
+        assert 'class="search-input-wrapper"' in out
+        assert 'class="btn-clear-search"' in out
+        assert 'onclick="clearSearch()"' in out
