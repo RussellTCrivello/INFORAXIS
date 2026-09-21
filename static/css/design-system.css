@@ -886,3 +886,40 @@ a {
     border: 1px solid #c4b5fd;
     font-weight: 600;
 }
+
+/* ----------------------------------------------------------------
+   Measurements (core/measurements.py)
+   A figure is one of three things and the page has to say which:
+   measured (no qualifier), estimated (labelled), or unavailable
+   (stated as such, never replaced by a plausible-looking number).
+   ---------------------------------------------------------------- */
+.stat-card-value .measurement-label,
+.measurement-label {
+    display: inline-block;
+    font-size: 0.625em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary, #6b7280);
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: var(--radius-sm, 4px);
+    padding: 0.1em 0.4em;
+    margin-inline-end: 0.35em;
+    vertical-align: middle;
+}
+
+/* "No measurement available" is a state, not a value: it must not
+   read as a figure at all, so it is smaller and not weighted like one. */
+.stat-card-value.measurement-unavailable {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary, #6b7280);
+    font-style: italic;
+}
+
+.measurement-detail {
+    font-size: 0.6875rem;
+    color: var(--text-secondary, #6b7280);
+    margin-top: 0.15rem;
+    line-height: 1.3;
+}

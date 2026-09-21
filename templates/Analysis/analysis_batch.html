@@ -96,7 +96,19 @@
                 </div>
                 <div>
                     <div class="stat-card-title">{{ _('Avg Speed') }}</div>
-                    <h3 class="stat-card-value mb-0">{{ "%.1f"|format(avg_processing_time) }}s</h3>
+                    {% if avg_processing_time.available %}
+                    <h3 class="stat-card-value mb-0">
+                        {% if avg_processing_time.label %}<span class="measurement-label">{{ avg_processing_time.label }}</span>{% endif %}
+                        {{ avg_processing_time.display }}
+                    </h3>
+                    {% else %}
+                    <h3 class="stat-card-value mb-0 measurement-unavailable">
+                        {{ avg_processing_time.display }}
+                    </h3>
+                    {% endif %}
+                    {% if avg_processing_time.detail %}
+                    <div class="measurement-detail">{{ avg_processing_time.detail }}</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -110,7 +122,19 @@
                 </div>
                 <div>
                     <div class="stat-card-title">{{ _('Success Rate') }}</div>
-                    <h3 class="stat-card-value mb-0">{{ "%.1f"|format(success_rate) }}%</h3>
+                    {% if success_rate.available %}
+                    <h3 class="stat-card-value mb-0">
+                        {% if success_rate.label %}<span class="measurement-label">{{ success_rate.label }}</span>{% endif %}
+                        {{ success_rate.display }}
+                    </h3>
+                    {% else %}
+                    <h3 class="stat-card-value mb-0 measurement-unavailable">
+                        {{ success_rate.display }}
+                    </h3>
+                    {% endif %}
+                    {% if success_rate.detail %}
+                    <div class="measurement-detail">{{ success_rate.detail }}</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -124,7 +148,19 @@
                 </div>
                 <div>
                     <div class="stat-card-title">{{ _('Est. Time') }}</div>
-                    <h3 class="stat-card-value mb-0" id="estimatedTime">{{ "%.1f"|format(estimated_time) }}m</h3>
+                    {% if estimated_time.available %}
+                    <h3 class="stat-card-value mb-0" id="estimatedTime">
+                        {% if estimated_time.label %}<span class="measurement-label">{{ estimated_time.label }}</span>{% endif %}
+                        {{ estimated_time.display }}
+                    </h3>
+                    {% else %}
+                    <h3 class="stat-card-value mb-0 measurement-unavailable" id="estimatedTime">
+                        {{ estimated_time.display }}
+                    </h3>
+                    {% endif %}
+                    {% if estimated_time.detail %}
+                    <div class="measurement-detail">{{ estimated_time.detail }}</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -428,35 +464,40 @@
             </div>
             <div class="modal-body">
                 <div class="history-timeline">
+                    {% for job in recent_jobs %}
                     <div class="history-item">
-                        <h6 class="mb-1">{{ _('Batch') }} #5 - {{ _('Completed') }}</h6>
-                        <small class="text-muted">{{ _('Today at 2:30 PM') }}</small>
+                        <h6 class="mb-1">
+                            <span class="font-monospace">{{ job.job_id }}</span> -
+                            {{ job.status|replace('_', ' ')|title }}
+                        </h6>
+                        <small class="text-muted">
+                            {{ job.job_type }}{% if job.created_at %} &middot; {{ job.created_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+                        </small>
                         <div class="mt-2">
-                            <span class="badge bg-success">1,247 {{ _('files') }}</span>
-                            <span class="badge bg-info">98.5% {{ _('success') }}</span>
-                            <span class="badge bg-secondary">2.3s {{ _('avg') }}</span>
+                            <span class="badge bg-success">{{ job.files_completed }} {{ _('files') }}</span>
+                            {% if job.files_failed %}
+                            <span class="badge bg-danger">{{ job.files_failed }} {{ _('failed') }}</span>
+                            {% endif %}
+                            {% if job.success_rate is not none %}
+                            {# Measured from this job's own counts, so it is a
+                               reading rather than an estimate. #}
+                            <span class="badge bg-info">{{ "%.1f"|format(job.success_rate) }}% {{ _('success') }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ _('No measurement available') }}</span>
+                            {% endif %}
+                            {% if job.duration_seconds is not none %}
+                            <span class="badge bg-secondary">{{ "%.0f"|format(job.duration_seconds) }}s {{ _('elapsed') }}</span>
+                            {% endif %}
                         </div>
                     </div>
-                    
+                    {% else %}
                     <div class="history-item">
-                        <h6 class="mb-1">{{ _('Batch') }} #4 - {{ _('Completed') }}</h6>
-                        <small class="text-muted">{{ _('Yesterday at 11:00 PM') }}</small>
-                        <div class="mt-2">
-                            <span class="badge bg-success">892 {{ _('files') }}</span>
-                            <span class="badge bg-info">97.2% {{ _('success') }}</span>
-                            <span class="badge bg-secondary">2.1s {{ _('avg') }}</span>
-                        </div>
+                        <h6 class="mb-1">{{ _('No jobs recorded yet') }}</h6>
+                        <small class="text-muted">
+                            {{ _('Batch and ingestion runs appear here once the job system has executed one.') }}
+                        </small>
                     </div>
-                    
-                    <div class="history-item">
-                        <h6 class="mb-1">{{ _('Batch') }} #3 - {{ _('Completed') }}</h6>
-                        <small class="text-muted">{{ _('2 days ago at 3:15 PM') }}</small>
-                        <div class="mt-2">
-                            <span class="badge bg-success">1,523 {{ _('files') }}</span>
-                            <span class="badge bg-info">99.1% {{ _('success') }}</span>
-                            <span class="badge bg-secondary">2.4s {{ _('avg') }}</span>
-                        </div>
-                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
