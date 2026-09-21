@@ -1666,6 +1666,42 @@
     "internal": true
   },
   {
+    "endpoint": "experience_contract",
+    "rule": "/api/experience/contracts/<interface_id>",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "experience_api",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "experience_contracts",
+    "rule": "/api/experience/contracts",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "experience_api",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "experience_coverage",
+    "rule": "/api/experience/coverage",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "experience_api",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "export_keywords",
     "rule": "/api/keywords/export",
     "methods": [

@@ -5,6 +5,8 @@ Provides endpoints for query performance analysis, indexing recommendations, and
 
 from flask import Blueprint, jsonify, request
 import logging
+
+from core.errors import client_error
 from typing import Dict, Any
 
 from database import (
@@ -50,10 +52,9 @@ def analyze_performance():
     
     except Exception as e:
         logger.error(f"Error performing performance analysis: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return client_error(e, subsystem="performance",
+                            public_message="The performance data could not be read",
+                            success_key="success")
 
 
 @performance_bp.route('/report', methods=['GET'])
@@ -75,10 +76,9 @@ def get_performance_report():
     
     except Exception as e:
         logger.error(f"Error generating performance report: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return client_error(e, subsystem="performance",
+                            public_message="The performance data could not be read",
+                            success_key="success")
 
 
 @performance_bp.route('/indexes', methods=['GET'])
@@ -134,10 +134,9 @@ def get_index_analysis():
     
     except Exception as e:
         logger.error(f"Error getting index analysis: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return client_error(e, subsystem="performance",
+                            public_message="The performance data could not be read",
+                            success_key="success")
 
 
 @performance_bp.route('/cache/stats', methods=['GET'])
@@ -165,10 +164,9 @@ def get_cache_stats():
     
     except Exception as e:
         logger.error(f"Error getting cache stats: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return client_error(e, subsystem="performance",
+                            public_message="The performance data could not be read",
+                            success_key="success")
 
 
 @performance_bp.route('/cache/clear', methods=['POST'])
@@ -189,10 +187,9 @@ def clear_cache():
     
     except Exception as e:
         logger.error(f"Error clearing cache: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return client_error(e, subsystem="performance",
+                            public_message="The performance data could not be read",
+                            success_key="success")
 
 
 @performance_bp.route('/cache/cleanup', methods=['POST'])
@@ -216,10 +213,9 @@ def cleanup_cache():
     
     except Exception as e:
         logger.error(f"Error cleaning up cache: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return client_error(e, subsystem="performance",
+                            public_message="The performance data could not be read",
+                            success_key="success")
 
 
 @performance_bp.route('/queries/slow', methods=['GET'])
@@ -258,10 +254,9 @@ def get_slow_queries():
     
     except Exception as e:
         logger.error(f"Error getting slow queries: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return client_error(e, subsystem="performance",
+                            public_message="The performance data could not be read",
+                            success_key="success")
 
 
 def register_performance_routes(app):

@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Any
 from datetime import date, datetime
 import logging
 
+from core.errors import client_error
+
 from database.analyzers import ContentAnalysisEngine
 from database.analyzers.analysis_engine import AnalysisConfig
 from database import DatabaseHub
@@ -60,11 +62,12 @@ def analyze_file(file_id: int):
         else:
             user_message = f"An error occurred while analyzing file {file_id}. Please try again or contact support if the problem persists."
         
-        return jsonify({
-            'success': False,
-            'error': user_message,
-            'technical_error': error_message if logger.isEnabledFor(logging.DEBUG) else None
-        }), 500
+        # The classification above is internal; the reader gets the sentence
+        # it selected and a correlation id, never the exception text - which
+        # used to be returned whenever debug logging was on.
+        return client_error(e, subsystem="content_analysis",
+                            public_message=user_message,
+                            success_key="success")
 
 
 @content_analysis_bp.route('/api/analysis/batch', methods=['POST'])
@@ -169,11 +172,12 @@ def analyze_batch():
         else:
             user_message = "An error occurred during batch analysis. Please try again or contact support if the problem persists."
         
-        return jsonify({
-            'success': False,
-            'error': user_message,
-            'technical_error': error_message if logger.isEnabledFor(logging.DEBUG) else None
-        }), 500
+        # The classification above is internal; the reader gets the sentence
+        # it selected and a correlation id, never the exception text - which
+        # used to be returned whenever debug logging was on.
+        return client_error(e, subsystem="content_analysis",
+                            public_message=user_message,
+                            success_key="success")
 
 
 @content_analysis_bp.route('/api/analysis/sentiment/<int:file_id>', methods=['GET'])
@@ -202,11 +206,11 @@ def get_sentiment(file_id: int):
         })
         
     except Exception as e:
-        logger.error(f"Error getting sentiment for file {file_id}: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error getting sentiment for file {file_id}: {e}",
+                     exc_info=True)
+        return client_error(e, subsystem="content_analysis",
+                            public_message="The sentiment analysis could not be read",
+                            success_key="success")
 
 
 @content_analysis_bp.route('/api/analysis/topics/<int:file_id>', methods=['GET'])
@@ -235,11 +239,11 @@ def get_topics(file_id: int):
         })
         
     except Exception as e:
-        logger.error(f"Error getting topics for file {file_id}: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error getting topics for file {file_id}: {e}",
+                     exc_info=True)
+        return client_error(e, subsystem="content_analysis",
+                            public_message="The topics analysis could not be read",
+                            success_key="success")
 
 
 @content_analysis_bp.route('/api/analysis/entities/<int:file_id>', methods=['GET'])
@@ -268,11 +272,11 @@ def get_entities(file_id: int):
         })
         
     except Exception as e:
-        logger.error(f"Error getting entities for file {file_id}: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error getting entities for file {file_id}: {e}",
+                     exc_info=True)
+        return client_error(e, subsystem="content_analysis",
+                            public_message="The entities analysis could not be read",
+                            success_key="success")
 
 
 @content_analysis_bp.route('/api/analysis/statistics/<int:file_id>', methods=['GET'])
@@ -302,9 +306,9 @@ def get_statistics(file_id: int):
         })
         
     except Exception as e:
-        logger.error(f"Error getting statistics for file {file_id}: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error getting statistics for file {file_id}: {e}",
+                     exc_info=True)
+        return client_error(e, subsystem="content_analysis",
+                            public_message="The statistics analysis could not be read",
+                            success_key="success")
 

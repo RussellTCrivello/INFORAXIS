@@ -1,3 +1,4 @@
+from core.errors import client_error
 from flask import Blueprint, request, jsonify
 
 from Api.models.paths import PathCreate
@@ -27,7 +28,12 @@ def api_create_path():
         new_id = PathsService.create_path(dto)
         return jsonify({"id": new_id}), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        # A path that could not be created: the reader is told what failed, not
+        # what the database said (spec §38, §76).
+        logger.error(f"Could not create path: {e}", exc_info=True)
+        return client_error(e, subsystem="paths",
+                            public_message="The path could not be created",
+                            status=400)
 
 
 @paths_bp.get("/<int:path_id>")

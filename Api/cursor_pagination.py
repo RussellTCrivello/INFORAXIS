@@ -3,6 +3,7 @@ import logging
 import time
 import re
 from typing import Dict, List, Optional, Tuple, Any
+from core.errors import new_correlation_id
 from datetime import datetime
 from enum import Enum
 
@@ -600,9 +601,15 @@ class CursorPagination:
         
         except Exception as e:
             logger.error(f"Integrity check error: {e}")
+            # The reader is told the check could not be completed; the
+            # exception text stays in the log with its correlation id.
+            correlation_id = new_correlation_id()
+            logger.error(f"Integrity check failed ({correlation_id}): {e}",
+                         exc_info=True)
             return {
                 'integrity_ok': False,
-                'error': str(e),
+                'error': f'Integrity check could not be completed ({correlation_id})',
+                'correlation_id': correlation_id,
                 'cursor': cursor,
                 'timestamp': datetime.now().isoformat()
             }

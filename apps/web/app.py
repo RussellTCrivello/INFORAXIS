@@ -432,6 +432,11 @@ from Api.routes.interfaces_api import register_interfaces_routes
 register_interfaces_routes(app)
 logger.info("✅ Interface registry views registered")
 
+# Register the experience contract views (how each screen presents itself)
+from Api.routes.experience_api import register_experience_routes
+register_experience_routes(app)
+logger.info("✅ Experience contract views registered")
+
 # ==================== FAVICON ROUTE ====================
 @app.route('/favicon.ico')
 def favicon():

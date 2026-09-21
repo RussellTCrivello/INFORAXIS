@@ -10,6 +10,8 @@ from Api.services.analysis_stats import (
 )
 
 import logging
+
+from core.errors import client_error
 import os
 from datetime import datetime
 
@@ -229,9 +231,10 @@ def register_analysis_routes(app):
             else:
                 user_message = f"An error occurred while processing file {file_id}. Please try again or contact support."
             
-            return jsonify({
-                'success': False,
-                'error': user_message,
-                'technical_error': error_message if logger.isEnabledFor(logging.DEBUG) else None
-            }), 500
+            # The reader gets the sentence the classification selected; the
+            # exception text is logged with a correlation id instead of being
+            # returned whenever debug logging happens to be on.
+            return client_error(e, subsystem="analysis",
+                                public_message=user_message,
+                                success_key="success")
     
