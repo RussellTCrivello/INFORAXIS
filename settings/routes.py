@@ -9,12 +9,14 @@ Enhanced with all existing system features
 from flask import Blueprint, request, jsonify, current_app, session
 from functools import wraps
 from pathlib import Path
+from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 import logging
 import os
 import uuid
 import re
 
+from core.errors import client_error, new_correlation_id, sanitize_message
 from .settings_manager import get_settings_manager
 from .database_validation import DatabaseConfigRejected
 
@@ -24,18 +26,72 @@ logger = logging.getLogger(__name__)
 settings_bp = Blueprint('settings_api', __name__, url_prefix='/api/settings')
 
 
+def _settings_failure(exc):
+    """Turn any settings failure into a response, in one place.
+
+    Three kinds of failure reach here and each is answered according to who
+    the text was written for:
+
+    * ``HTTPException`` - Flask's own abort (404/405/...): returned untouched
+      so the status and the error page stay what the framework intends.
+    * ``DatabaseConfigRejected`` - a configuration the operator just
+      submitted. Its message is built in ``database_validation.py`` from a
+      fixed vocabulary (no host, user, password or driver text), so it is
+      shown, as a 422, with a correlation id. This is the branch that used to
+      be five separate ``except`` blocks; having it here means a future
+      endpoint cannot forget to keep the operator's explanation.
+    * anything else - logged in full server-side, answered with a client-safe
+      message and a correlation id. The exception text is never returned: it
+      can carry SQL, filesystem paths, connection strings and credentials.
+    """
+    original = getattr(exc, "original_exception", None)
+    if isinstance(exc, HTTPException) and original is None:
+        return exc
+    candidate = original or exc
+    if isinstance(candidate, DatabaseConfigRejected):
+        return jsonify({
+            "success": False,
+            "error": sanitize_message(str(candidate)),
+            "correlation_id": new_correlation_id(),
+        }), 422
+    return client_error(
+        candidate,
+        subsystem="settings",
+        public_message="The settings request could not be completed",
+        success_key="success",
+    )
+
+
+@settings_bp.errorhandler(Exception)
+def _settings_unhandled(exc):
+    """Blueprint-level net: no settings endpoint can bypass the error model.
+
+    ``@handle_errors`` already covers every decorated view, but a new endpoint
+    that forgets the decorator must not become a hole in the rule the security
+    documentation states. Anything raised out of a settings view - including
+    from a ``before_request`` or a helper the view called - is answered the
+    same way.
+    """
+    return _settings_failure(exc)
+
+
 def handle_errors(f):
-    """Decorator for consistent error handling"""
+    """Decorator for consistent, sanitized error handling.
+
+    SEC-08 / the central error model: an unexpected failure is logged in full
+    server-side and answered with a client-safe message plus a correlation id.
+    Deliberate, user-facing rejections (a configuration the operator just
+    submitted, a value they just typed) keep their explanation - see
+    ``_settings_failure``.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         try:
             return f(*args, **kwargs)
-        except Exception as e:
-            logger.error(f"API error in {f.__name__}: {e}", exc_info=True)
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
+        except HTTPException:
+            raise  # Flask's own aborts (404/405/...) keep their normal handling
+        except Exception as e:  # noqa: BLE001 - every failure is sanitized
+            return _settings_failure(e)
     return decorated_function
 
 
