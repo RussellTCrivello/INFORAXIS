@@ -127,13 +127,49 @@ def register_common_routes(app, babel_instance):
             context['is_interface_enabled_by_endpoint'] = interface_manager.is_interface_enabled_by_endpoint
             # Also inject as user_settings for template compatibility
             context['user_settings'] = interface_manager
+
+            # The registry itself, so a template asks the product model rather
+            # than a copied list: what exists, what it is called, where it
+            # lives and who should see it.
+            from core.interfaces import get_interface, get_interfaces_by_domain
+            interface_state = interface_manager.get_state()
+            context['interface_state'] = interface_state
+            context['interface_registry'] = get_interface
+            context['interfaces_by_domain'] = get_interfaces_by_domain()
+            # Navigation data: the interfaces this user may actually see,
+            # grouped by domain - the shell renders from this instead of
+            # repeating the product map in markup.
+            try:
+                from core.interfaces import DOMAIN_LABELS
+                context['domain_labels'] = {str(d): label for d, label in DOMAIN_LABELS.items()}
+
+                current_user_obj = getattr(g, 'user', None)
+                # No session means no navigation: the sidebar is a list of what
+                # this operator may open, and an anonymous visitor may open
+                # nothing that requires a session.
+                if current_user_obj is None or not getattr(current_user_obj, 'is_authenticated', False):
+                    context['nav_interfaces'] = {}
+                else:
+                    context['nav_interfaces'] = interface_state.get_visible_by_domain(current_user_obj)
+            except Exception as e:
+                logger.debug("Navigation could not be built from the registry: %s", e)
+                context['nav_interfaces'] = {}
         except Exception as e:
             logger.warning(f"Failed to load interface manager in context processor: {e}")
-            # Provide fallback functions that always return True
+            # The registry is what decides whether an interface exists, so a
+            # failure here must not become "everything is enabled": templates
+            # get the strict answers (nothing is enabled, nothing is visible)
+            # and the page renders its empty state rather than claiming a
+            # product surface that could not be verified.
             context['interface_manager'] = None
             context['user_settings'] = None
-            context['is_interface_enabled'] = lambda interface_id: True
-            context['is_interface_enabled_by_endpoint'] = lambda endpoint: True
+            context['interface_state'] = None
+            context['interface_registry'] = lambda interface_id: None
+            context['interfaces_by_domain'] = {}
+            context['domain_labels'] = {}
+            context['nav_interfaces'] = {}
+            context['is_interface_enabled'] = lambda interface_id: False
+            context['is_interface_enabled_by_endpoint'] = lambda endpoint: False
         
         return context
     
@@ -152,32 +188,48 @@ def register_common_routes(app, babel_instance):
         # itself and the browser reports ERR_TOO_MANY_REDIRECTS, leaving the
         # application unusable with no way back into Settings to re-enable
         # anything. The home page must therefore never be gated.
-        if (request.endpoint and 
-            request.endpoint != 'static' and 
-            request.endpoint != 'index' and
-            not request.path.startswith('/api/') and
-            request.endpoint not in ('setup.setup_page', 'setup.system_check', 'setup.test_database',
-                                     'setup.run_installation', 'setup.check_setup_status',
-                                     'settings_page', 'settings_page_direct', 'settings_api.settings_page',
-                                     'settings_api.get_interfaces', 'settings_api.toggle_interface', 
-                                     'settings_api.reset_interfaces', 'settings_api.get_all_settings',
-                                     'settings_api.batch_update_settings', 'settings_api.settings_page') and
-            not request.path.startswith('/static') and
-            not request.path.startswith('/settings')):
-            
+        from core.interfaces import SYSTEM_ENDPOINTS, is_infrastructure_endpoint
+
+        endpoint = request.endpoint
+        settings_endpoint = bool(endpoint) and endpoint.startswith(('settings_page', 'settings_api.'))
+        infrastructure = is_infrastructure_endpoint(endpoint, request.path)
+
+        if (endpoint and endpoint != 'static' and endpoint != 'index'
+                and not infrastructure
+                and endpoint not in SYSTEM_ENDPOINTS
+                and not settings_endpoint
+                and not request.path.startswith('/static')
+                and not request.path.startswith('/settings')):
+
             try:
                 from settings import get_interface_manager
                 interface_manager = get_interface_manager()
-                
-                # Check if the endpoint's interface is disabled
-                if not interface_manager.is_interface_enabled_by_endpoint(request.endpoint):
-                    # Interface is disabled - redirect to dashboard with message
-                    logger.info(f"Access denied to disabled interface: {request.endpoint}")
+
+                # The interface that owns this endpoint decides whether it is
+                # served. An endpoint no interface owns is refused: the old
+                # behaviour ("not in the map, therefore enabled") made an
+                # unregistered page indistinguishable from a registered one,
+                # which is exactly the gap the registry exists to close.
+                if not interface_manager.is_interface_enabled_by_endpoint(endpoint):
+                    logger.info("Access denied to disabled or unregistered endpoint: %s", endpoint)
                     flash(_('This section is currently disabled. Please enable it in Settings to access.'), 'warning')
                     return redirect(url_for('index'))
-            except Exception as e:
-                # Don't block access if interface check fails (fallback to allow access)
-                logger.debug(f"Interface access check failed: {e}")
+            except Exception as check_error:
+                # A check that could not run is not permission to proceed.
+                #
+                # This used to log at debug level and serve the page anyway,
+                # which meant a broken interface state was indistinguishable
+                # from a working one: the operator saw a normal page and no
+                # indication that the product's own gate had failed. The error
+                # now goes through the common pipeline (correlation id, details
+                # server-side only, generic message to the browser), and the
+                # dashboard and Settings stay exempt so the failure can be
+                # inspected and repaired.
+                logger.warning(
+                    "Interface access check failed for endpoint %s: %s",
+                    endpoint, check_error,
+                )
+                raise
 
         # CRITICAL: Prioritize session language if it exists (user's explicit choice)
         # Handle X-Language header with explicit flag

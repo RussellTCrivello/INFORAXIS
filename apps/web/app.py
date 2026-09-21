@@ -427,6 +427,11 @@ from Api.routes.error_dashboard import error_dashboard_bp
 app.register_blueprint(error_dashboard_bp)
 logger.info("✅ Error monitoring dashboard API registered")
 
+# Register the interface registry views (what the product consists of)
+from Api.routes.interfaces_api import register_interfaces_routes
+register_interfaces_routes(app)
+logger.info("✅ Interface registry views registered")
+
 # ==================== FAVICON ROUTE ====================
 @app.route('/favicon.ico')
 def favicon():

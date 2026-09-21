@@ -602,64 +602,73 @@ def remove_logo():
 @settings_bp.route('/interfaces', methods=['GET'])
 @handle_errors
 def get_interfaces():
-    """Get all interface settings"""
-    manager = get_settings_manager()
-    interfaces = manager.settings.interfaces
-    
-    # Convert to dict format
-    interfaces_dict = {}
-    for interface_id, config in interfaces.interfaces.items():
-        interfaces_dict[interface_id] = config.to_dict()
-    
+    """Every interface the product declares, with its current state.
+
+    The list comes from the registry, so it can no longer describe a page that
+    does not exist or miss a page that does - which is what the previous
+    metadata table did (``analytics`` pointed at an endpoint that was never
+    registered, ``page_tips`` described no page at all, and two entries claimed
+    the same route).
+    """
+    from .settings_adapter import get_interface_manager
+
+    manager = get_interface_manager()
+    state = manager.get_state()
     return jsonify({
         'success': True,
-        'interfaces': interfaces_dict
+        'interfaces': {row['interface_id']: row for row in state.interfaces_with_state()},
+        'summary': state.summary(),
     })
 
 
 @settings_bp.route('/interfaces/<interface_id>', methods=['POST'])
 @handle_errors
 def toggle_interface(interface_id):
-    """Toggle interface enabled/disabled"""
+    """Switch one interface on or off.
+
+    A configuration that cannot work is refused with the reason and the way
+    out - disabling something another interface needs, or enabling something
+    whose dependency is off. The message names the interfaces involved; it is
+    the operator's own submitted configuration coming back, not a system fault.
+    """
+    from .settings_adapter import get_interface_manager
+
     data = request.get_json() or {}
-    enabled = data.get('enabled', True)
-    
-    manager = get_settings_manager()
-    full_key = f"interfaces.{interface_id}.enabled"
-    
-    success, error = manager.set(full_key, enabled, validate=True)
-    
-    if not success:
+    enabled = bool(data.get('enabled', True))
+
+    manager = get_interface_manager()
+    ok, message = manager.set_interface_enabled(interface_id, enabled)
+    if not ok:
         return jsonify({
             'success': False,
-            'error': error
-        }), 400
-    
-    manager.save()
-    
+            'error': message,
+            'interface_id': interface_id,
+        }), 409
+
+    state = manager.get_state()
+    entry = manager.get_all_interfaces().get(interface_id, {})
     return jsonify({
         'success': True,
         'interface_id': interface_id,
         'enabled': enabled,
-        'message': f"Interface '{interface_id}' {'enabled' if enabled else 'disabled'}"
+        'state': entry,
+        'dependents': [d.interface_id for d in manager.get_dependents(interface_id)],
+        'message': f"{entry.get('name', interface_id)} {'enabled' if enabled else 'disabled'}",
     })
 
 
 @settings_bp.route('/interfaces/reset', methods=['POST'])
 @handle_errors
 def reset_interfaces():
-    """Reset all interface settings to defaults"""
-    manager = get_settings_manager()
-    
-    # Reset all interfaces to enabled
-    for interface_id in manager.settings.interfaces.interfaces.keys():
-        manager.set(f"interfaces.{interface_id}.enabled", True)
-    
-    manager.save()
-    
+    """Reset every interface to the default the registry defines."""
+    from .settings_adapter import get_interface_manager
+
+    manager = get_interface_manager()
+    defaults = manager.reset_interfaces_to_defaults()
     return jsonify({
         'success': True,
-        'message': 'Interface settings reset to defaults'
+        'message': 'Interface settings reset to their registry defaults',
+        'defaults': defaults,
     })
 
 
@@ -1087,13 +1096,16 @@ def settings_page():
             return "3.0.0"
     
     interface_manager = get_interface_manager()
-    interfaces_by_category = interface_manager.get_interfaces_by_category()
+    interfaces_by_category = interface_manager.get_interfaces_by_domain()
     all_interfaces = interface_manager.get_all_interfaces()
-    
+    interface_state = interface_manager.get_state()
+
     return render_template(
         'Settings/settings.html',
         interfaces_by_category=interfaces_by_category,
         all_interfaces=all_interfaces,
+        interface_summary=interface_state.summary(),
+        interface_state_report=interface_state.state_report(),
         user_settings=interface_manager,
         version=get_version()
     )
@@ -1115,13 +1127,16 @@ def register_settings_page_route(app):
     def settings_page_direct():
         """Settings Page (direct route)"""
         interface_manager = get_interface_manager()
-        interfaces_by_category = interface_manager.get_interfaces_by_category()
+        interfaces_by_category = interface_manager.get_interfaces_by_domain()
         all_interfaces = interface_manager.get_all_interfaces()
-        
+        interface_state = interface_manager.get_state()
+
         return render_template(
             'Settings/settings.html',
             interfaces_by_category=interfaces_by_category,
             all_interfaces=all_interfaces,
+            interface_summary=interface_state.summary(),
+            interface_state_report=interface_state.state_report(),
             user_settings=interface_manager,
             version=get_version()
         )

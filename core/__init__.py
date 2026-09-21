@@ -1,5 +1,4 @@
-"""
-Core utilities module at project root
+"""Core utilities module at project root
 Provides path setup and other core functionality
 """
 
@@ -13,16 +12,21 @@ if _settings is None:
         _settings = None
 
 if _settings is not None:
-    get_config = _settings.get_config
-    set_config = _settings.set_config
-    reset_config = _settings.reset_config
-    get_processing_config = _settings.get_processing_config
-    get_storage_config = _settings.get_storage_config
-    get_database_config = _settings.get_database_config
-    AppConfig = _settings.AppConfig
-    ProcessingConfig = _settings.ProcessingConfig
-    StorageConfig = _settings.StorageConfig
-    DatabaseConfig = _settings.DatabaseConfig
+    # Read the names defensively. This module is a compatibility shim, and it
+    # is imported by anything that touches ``core.*`` - including modules that
+    # ``settings/__init__`` itself imports (the interface registry is one).
+    # Reaching for an attribute that a partially initialised ``settings``
+    # module does not have yet raised AttributeError and made ``import core``
+    # fail depending purely on which package was imported first.
+    for _name in (
+        "get_config", "set_config", "reset_config", "get_processing_config",
+        "get_storage_config", "get_database_config",
+        "AppConfig", "ProcessingConfig", "StorageConfig", "DatabaseConfig",
+    ):
+        _value = getattr(_settings, _name, None)
+        if _value is not None:
+            globals()[_name] = _value
+    del _name, _value
 
 """
 Core utilities module - Common toolkit for shared functions

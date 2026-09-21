@@ -1,0 +1,41 @@
+{# ==========================================================================
+   Sidebar navigation, rendered from the interface registry.
+
+   This file used to be a hand-written list of <li> entries, each gated by a
+   hard-coded interface id. That is why the product map existed in three places
+   - the settings adapter, this template and the request gate - and why
+   renaming one interface left a dead sidebar entry behind: the markup still
+   named the old id, and nothing failed.
+
+   Now the template renders what the registry says is both part of the product
+   and visible to this operator:
+        registry + domain + role + enabled state + dependencies
+   The view supplies `nav_interfaces` (domain -> interfaces) and
+   `domain_labels`; nothing here decides what exists or who may see it.
+
+   Markup, classes, icons and the data-endpoint attributes are unchanged, so
+   the stylesheet and the navigation scripts keep working.
+   ========================================================================== #}
+{% set _nav = nav_interfaces|default({}) %}
+<ul class="sidebar-nav">
+    {% for domain, interfaces in _nav.items() %}
+        {% if interfaces %}
+            <li class="sidebar-nav-item">
+                <span class="sidebar-section-label">{{ _(domain_labels.get(domain, domain)) }}</span>
+            </li>
+            {% for interface in interfaces %}
+                {% set is_active = request.endpoint == interface.route
+                                   or request.endpoint in interface.aliases %}
+                <li class="sidebar-nav-item">
+                    <a href="{{ url_for(interface.route) }}"
+                       class="sidebar-nav-link {% if is_active %}active{% endif %}"
+                       data-endpoint="{{ interface.route }}"
+                       {% if interface.description %}title="{{ interface.description }}"{% endif %}>
+                        <i class="bi {{ interface.icon }}"></i>
+                        <span>{{ _(interface.name) }}</span>
+                    </a>
+                </li>
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+</ul>
