@@ -65,9 +65,7 @@ FIELD = re.compile(r"^\s*(?P<key>\w+):\s*(?P<value>.*?)(?=\n\s*\w+:|\Z)",
 #: component that will implement each. This is a deliberate absence list, not
 #: a wish: the audit reports them as missing, a test fails when one appears or
 #: disappears without the list being updated, and nothing pretends otherwise.
-PLANNED_STATES: Dict[str, str] = {
-    "selected": "table",
-}
+PLANNED_STATES: Dict[str, str] = {}
 
 
 class Pattern(NamedTuple):

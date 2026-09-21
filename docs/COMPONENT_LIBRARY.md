@@ -76,6 +76,7 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 | `sidebar_nav` | `templates/components/sidebar_nav.html` | `normal`, `empty` | — | The product navigation, grouped by domain, rendered from the navigation model the application prepares. |
 | `states` | `templates/components/states.html` | `loading`, `empty`, `filtered`, `success`, `warning`, `error`, `unauthorized`, `unavailable`, `archived` | `state_panel`, `empty_state`, `filtered_state`, `loading_state`, `success_state`, `warning_state`, `error_state`, `unauthorized_state`, `unavailable_state`, `archived_state` | The states a region can be in, in one place, so a page never invents its own wording for "nothing here yet" or its own markup for "this failed". |
 | `status_badge` | `templates/components/status_badge.html` | `success`, `warning`, `error`, `unavailable`, `archived` | `status_badge`, `status_badge_with_icon` | One way to show a status word, so the same state is not green on one page and grey on the next. |
+| `table` | `templates/components/table.html` | `normal`, `empty`, `filtered`, `selected`, `loading`, `error` | `data_table`, `table_empty_row`, `table_loading_row`, `table_error_row`, `select_all_checkbox`, `sort_header` | The frame a list of records is read in, and the rows that stand in for a list that is empty, still loading or failed. Ten tables in this application were written with ten different class combinations; this is the one they become. |
 
 ### States (§63)
 
@@ -83,16 +84,16 @@ Every state in the vocabulary is answered by at least one component; a state nob
 
 | State | Meaning | Implemented by |
 | --- | --- | --- |
-| `loading` | Work is in progress; the reader is told what is being waited for. | `operations_widget`, `states` |
-| `empty` | Nothing exists here yet, and the reader is told how to start. | `file_nav`, `operations_widget`, `page_tips`, `sidebar_nav`, `states` |
-| `normal` | The ordinary case: content is present and usable. | `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `operations_widget`, `page_tips`, `sidebar_nav`, `pagination` |
-| `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `states`, `pagination` |
-| `selected` | A row or record is chosen; actions that need a choice appear. | **not yet** — planned for `table` |
+| `loading` | Work is in progress; the reader is told what is being waited for. | `operations_widget`, `states`, `table` |
+| `empty` | Nothing exists here yet, and the reader is told how to start. | `file_nav`, `operations_widget`, `page_tips`, `sidebar_nav`, `states`, `table` |
+| `normal` | The ordinary case: content is present and usable. | `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `operations_widget`, `page_tips`, `sidebar_nav`, `table`, `pagination` |
+| `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `states`, `table`, `pagination` |
+| `selected` | A row or record is chosen; actions that need a choice appear. | `table` |
 | `editing` | A value is being changed, and the change is not saved yet. | `analyst_classify` |
 | `saving` | A change is on its way to the server. | `analyst_classify` |
 | `success` | The last action worked. | `analyst_classify`, `states`, `status_badge` |
 | `warning` | Something needs attention but is not broken. | `states`, `status_badge` |
-| `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `operations_widget`, `states`, `status_badge` |
+| `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `operations_widget`, `states`, `status_badge`, `table` |
 | `unauthorized` | The server refused this for this account. | `analyst_classify`, `states` |
 | `unavailable` | It needs something this installation does not have. | `states`, `status_badge` |
 | `archived` | Kept and readable, but out of the working set. | `states`, `status_badge` |
@@ -106,7 +107,7 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Hand-written empty state | `states` | 4 |
 | Hand-written loading indicator | `states` | 8 |
 | Hand-written inline error | `states` | 7 |
-| Hand-written table | — | 14 |
+| Hand-written table | `table` | 13 |
 | Hand-written pagination | `pagination` | 6 |
 | Hand-written search input | — | 14 |
 | Hand-written filter control | — | 15 |
@@ -125,14 +126,16 @@ These class names are rendered by a component but no stylesheet defines them:
 * `templates/components/operations_widget.html`: `bi-box-arrow-in-down`, `bi-clock-history`, `bi-list-check`, `bi-plus-lg`, `bi-search`
 * `templates/components/page_tips.html`: `bi-chevron-up`, `bi-lightbulb-fill`
 * `templates/components/sidebar_nav.html`: `sidebar-nav-badge`
+* `templates/components/table.html`: `bi-arrow-down-up`
 * `templates/components/unified_pagination.html`: `bi-info-circle`
 
 <!-- END GENERATED COMPONENT AUDIT -->
 
 ## Where this goes next
 
-The data components of the same phase are not built yet, and the audit above
-names them rather than implying them: a table (with its own selection, empty
-and filtered answers), a filter bar, a search bar, a record header, an action
-toolbar, a confirmation dialog and a toast. Each will declare itself the same
-way, and the counts on this page are what will show the duplication falling.
+The table is built — the frame, the standing rows for a list that is empty,
+filtered or failed, the selection affordance and the sort header. What is still
+written by hand, and named by the audit above rather than implied: the filter
+bar, the search bar, the record header, the action toolbar, the confirmation
+dialog and the toast. Each will declare itself the same way, and the counts on
+this page are what will show the duplication falling.

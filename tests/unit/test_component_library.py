@@ -202,9 +202,19 @@ class TestAdoption:
         ]
         for relative in migrated:
             text = (PROJECT_ROOT / relative).read_text()
-            assert "components/states.html" in text, (
-                f"{relative} still writes its own empty state")
             assert 'class="empty-state"' not in text, relative
+
+    def test_the_migrated_table_uses_the_frame(self):
+        text = (PROJECT_ROOT / "templates/Word/Word_list.html").read_text()
+        assert "components/table.html" in text
+        assert "{% call data_table(" in text
+        assert "<table" not in text, "the page writes its own table frame again"
+        assert "table_empty_row(" in text
+
+    def test_the_table_component_covers_the_states_a_list_has(self):
+        table = components()["table"]
+        assert {"normal", "empty", "filtered", "selected", "loading",
+                "error"} <= set(table.states)
 
     def test_the_audit_counts_the_hand_written_markup(self):
         """The measure of this phase is a number, not an impression."""

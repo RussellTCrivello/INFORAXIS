@@ -19,7 +19,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
-{% from 'components/states.html' import empty_state %}
+{% from 'components/table.html' import data_table, table_empty_row %}
     {% call page_tips() %}
 
 <div class="tips-section">
@@ -209,7 +209,7 @@
 
 <div class="stat-card">
     <div class="table-wrapper">
-        <table class="table table-hover align-middle" id="wordsTable" style="width: 100%;">
+        {% call data_table(id='wordsTable', variant='hover align-middle', extra_style='width: 100%;') %}
             <thead>
                 <tr>
                     <th style="width:50px">
@@ -292,18 +292,15 @@
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center py-4">
-                            {{ empty_state(
-                                message=_('No words found.'),
-                                action_label=_('Add your first word'),
-                                action_onclick='openAddWordModal()',
-                                action_icon=None) }}
-                        </td>
-                    </tr>
+                    {{ table_empty_row(
+                        7,
+                        message=_('No words found.'),
+                        action_label=_('Add your first word'),
+                        action_onclick='openAddWordModal()',
+                        action_icon=None) }}
                 {% endif %}
             </tbody>
-        </table>
+        {% endcall %}
     </div>
 
     <!-- Server-rendered Pagination -->
