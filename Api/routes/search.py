@@ -732,69 +732,55 @@ def register_search_routes(app):
     # ==================== EXPORT SEARCH RESULTS ====================
     
     @app.route('/api/search/export', methods=['POST'])
+    @limiter.limit("6 per minute")
     def api_export_search_results():
-        """
-        Export search results to CSV, Excel, or JSON.
-        
+        """Export the authoritative result set of a query.
+
+        The client sends the *query definition* - what was searched for, under
+        which filters, in which order, over which scope - and this endpoint
+        re-runs it. The rows in the file come from the database, never from the
+        browser, so an export cannot contain a stale page, a truncated list or
+        rows that were never there.
+
         JSON Body:
-        - results: List of search result dictionaries
-        - format: Export format ('csv', 'excel', 'json')
-        - filename: Optional filename
+        - query, file_type, source_id(s), side_id(s), category_id(s),
+          analyst_category_id(s), date_from, date_to, sort_by, sort_order
+        - scope: 'page' (the page being read), 'filtered' (the whole result
+          set), 'dataset' (everything the filters allow, query dropped)
+        - page, per_page: required only for scope='page'
+        - format: 'csv', 'excel' or 'json'
+        - filename: optional stem
+
+        The response says what it contains: `X-Export-Scope`, `X-Export-Rows`,
+        `X-Export-Total` and `X-Export-Truncated`.
         """
+        from Api.services import search_export
+
         try:
-            data = request.get_json()
-            if not data:
-                return jsonify({'error': 'No data provided'}), 400
-            
-            results = data.get('results', [])
-            export_format = data.get('format', 'csv').lower()
-            filename = data.get('filename', f'search_results_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
-            
-            if not results:
-                return jsonify({'error': 'No results to export'}), 400
-            
-            # Convert results to list of dictionaries if needed
-            if results and isinstance(results[0], (list, tuple)):
-                # Convert tuple results to dictionaries
-                formatted_results = []
-                for result in results:
-                    if isinstance(result, (list, tuple)):
-                        formatted_results.append({
-                            'id': result[0] if len(result) > 0 else None,
-                            'file_name': result[1] if len(result) > 1 else None,
-                            'file_type': result[2] if len(result) > 2 else None,
-                            'file_date': result[3].isoformat() if len(result) > 3 and result[3] else None,
-                            'source_name': result[4] if len(result) > 4 else None,
-                            'side_name': result[5] if len(result) > 5 else None,
-                            'file_status': result[6] if len(result) > 6 else None
-                        })
-                    else:
-                        formatted_results.append(result)
-                results = formatted_results
-            
-            # Export based on format
-            if export_format == 'csv':
-                export_data = ExportService.export_search_results_csv(results)
-                mimetype = 'text/csv'
-                extension = 'csv'
-            elif export_format == 'excel':
-                export_data = ExportService.export_search_results_excel(results)
-                mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                extension = 'xlsx'
-            elif export_format == 'json':
-                export_data = ExportService.export_search_results_json(results)
-                mimetype = 'application/json'
-                extension = 'json'
-            else:
-                return jsonify({'error': f'Unsupported format: {export_format}'}), 400
-            
-            return send_file(
-                export_data,
-                mimetype=mimetype,
-                as_attachment=True,
-                download_name=f'{filename}.{extension}'
-            )
-            
+            definition = search_export.parse(request.get_json(silent=True))
+        except search_export.ExportRequestError as refused:
+            return jsonify({'success': False, 'error': str(refused),
+                            'code': 'invalid_export_request'}), 400
+
+        try:
+            result = search_export.resolve(definition, resolve_request_scope())
+            if not result.rows:
+                return jsonify({
+                    'success': False,
+                    'error': 'Nothing to export: the query and filters produced '
+                             'no results.',
+                    'scope': definition.scope,
+                    'total': 0,
+                }), 400
+            data, mimetype, extension = search_export.export_bytes(result)
+            response = send_file(
+                data, mimetype=mimetype, as_attachment=True,
+                download_name=(f"{search_export.suggested_filename(definition)}"
+                               f".{extension}"))
+            for header, value in result.headers.items():
+                response.headers[header] = value
+            return response
+
         except Exception as e:
             logger.error(f"Export search results error: {e}", exc_info=True)
             return client_error(e, subsystem='Api.routes.search', status=500)
