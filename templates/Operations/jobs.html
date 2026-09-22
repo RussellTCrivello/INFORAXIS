@@ -81,7 +81,7 @@
   // (core/frontend/status_vocabulary.py, injected as JSON by base.html):
   // the job pages used to disagree with each other about a status such as
   // COMPLETED_WITH_WARNINGS.
-  const statusBadge = (s) => window.InforaxisStatus.badge(s);
+  const statusBadge = (s) => (window.InforaxisStatus ? window.InforaxisStatus.badge(s) : '<span class="badge bg-secondary">' + String(s == null ? '' : s) + '</span>');
 
   async function loadJobs() {
     const p = new URLSearchParams();

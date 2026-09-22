@@ -158,6 +158,7 @@ def api_archives_categories():
                 SELECT wc.category_id, COUNT(DISTINCT p.id) as file_count 
                 FROM words_categorys wc 
                 LEFT JOIN words_hashs wp ON wc.word_id = wp.word_id
+                LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id LEFT JOIN paths p ON p.context_id = hc.id
                 GROUP BY wc.category_id
             """
             file_count_params = []
@@ -410,7 +411,9 @@ def api_archives_keywords():
         # Build query with joins for file counts - use INNER JOIN to filter only keywords with files
         # INNER JOIN naturally filters out keywords without any file associations
         joins = [
-            "INNER JOIN keywords_hashs kp ON k.id = kp.keyword_id"
+            "INNER JOIN keywords_hashs kp ON k.id = kp.keyword_id",
+            "LEFT JOIN hash_contexts hc ON hc.hash_id = kp.hash_id",
+            "LEFT JOIN paths p ON p.context_id = hc.id",
         ]
         
         select_columns = [
@@ -1084,6 +1087,7 @@ def api_archives_sources():
             FROM sources s
             WHERE EXISTS (
                 SELECT 1 FROM hashs h
+                JOIN hash_contexts hc ON hc.hash_id = h.id
                 JOIN paths p ON p.context_id = hc.id
                 WHERE hc.source_id = s.id
         """
@@ -1273,6 +1277,7 @@ def api_archives_sides():
             FROM sides si
             WHERE EXISTS (
                 SELECT 1 FROM hashs h
+                JOIN hash_contexts hc ON hc.hash_id = h.id
                 JOIN paths p ON p.context_id = hc.id
                 WHERE hc.side_id = si.id
         """
@@ -1537,7 +1542,11 @@ def api_archives_addresses():
         # Build query - addresses are stored in words table
         # Use subquery for file_count to avoid GROUP BY issues with cursor pagination
         joins = [
-            "LEFT JOIN (SELECT wp.word_id, COUNT(DISTINCT p.id) as file_count FROM words_hashs wp GROUP BY wp.word_id) file_counts ON w.id = file_counts.word_id"
+            "LEFT JOIN (SELECT wp.word_id, COUNT(DISTINCT p.id) as file_count"
+            " FROM words_hashs wp"
+            " LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id"
+            " LEFT JOIN paths p ON p.context_id = hc.id"
+            " GROUP BY wp.word_id) file_counts ON w.id = file_counts.word_id"
         ]
         
         select_columns = [

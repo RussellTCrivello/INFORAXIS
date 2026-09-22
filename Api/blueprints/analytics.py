@@ -1128,9 +1128,9 @@ def api_path_classifications():
         categorized_result = db_execute_query(f"""
             SELECT COUNT(DISTINCT p.id)
             FROM paths p
+            JOIN hash_contexts hc ON hc.id = p.context_id
             JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id
             JOIN keywords k ON kp.keyword_id = k.id
-            
             WHERE {where_clause}{filter_clause}
         """, tuple(params), fetch="one")
         categorized_files = categorized_result if isinstance(categorized_result, int) else (categorized_result[0] if categorized_result and isinstance(categorized_result, tuple) else 0)
@@ -1144,11 +1144,11 @@ def api_path_classifications():
                 COUNT(DISTINCT p.id) as file_count,
                 COUNT(DISTINCT kp.keyword_id) as total_keywords
             FROM paths p
+            JOIN hash_contexts hc ON hc.id = p.context_id
             JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id
             JOIN keywords k ON kp.keyword_id = k.id
             JOIN categorys c ON k.category_id = c.id
             JOIN words w ON c.word_id = w.id
-            
             WHERE {where_clause}{filter_clause}
             GROUP BY c.id, w.word
             ORDER BY file_count DESC
@@ -1230,11 +1230,11 @@ def api_path_category_words_analysis():
                 COUNT(DISTINCT p.id) as file_count,
                 COUNT(DISTINCT wc.word_id) as word_count
             FROM paths p
+            JOIN hash_contexts hc ON hc.id = p.context_id
             JOIN words_hashs wp ON wp.hash_id = hc.hash_id
             JOIN words_categorys wc ON wp.word_id = wc.word_id
             JOIN categorys c ON wc.category_id = c.id
             JOIN words w ON c.word_id = w.id
-            
             WHERE {where_clause}{filter_clause}
             GROUP BY c.id, w.word
             ORDER BY file_count DESC
@@ -1252,9 +1252,9 @@ def api_path_category_words_analysis():
         total_words_result = db_execute_query(f"""
             SELECT COUNT(DISTINCT wc.word_id)
             FROM paths p
+            JOIN hash_contexts hc ON hc.id = p.context_id
             JOIN words_hashs wp ON wp.hash_id = hc.hash_id
             JOIN words_categorys wc ON wp.word_id = wc.word_id
-            
             WHERE {where_clause}{filter_clause}
         """, tuple(params), fetch="one")
         total_words = total_words_result if isinstance(total_words_result, int) else (total_words_result[0] if total_words_result and isinstance(total_words_result, tuple) else 0)

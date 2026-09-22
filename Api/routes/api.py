@@ -217,6 +217,7 @@ def register_api_routes(app):
                 return client_error(e, subsystem='Api.routes.api', success_key='success', public_message='Error loading source', status=500)
         elif request.method == 'PUT':
             try:
+                from datetime import date, datetime
                 data = request.get_json(silent=True)
                 if not data:
                     return jsonify({'success': False, 'error': 'JSON data is required'}), 400
@@ -1197,6 +1198,7 @@ def register_api_routes(app):
                 JOIN words_categorys wc ON c.id = wc.category_id
                 JOIN words w ON wc.word_id = w.id
                 LEFT JOIN words_hashs wp ON w.id = wp.word_id
+                LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id LEFT JOIN paths p ON p.context_id = hc.id
             """
             
             params = []
@@ -1219,6 +1221,7 @@ def register_api_routes(app):
                     COUNT(DISTINCT p.id) as file_count
                 FROM words w
                 LEFT JOIN words_hashs wp ON w.id = wp.word_id
+                LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id LEFT JOIN paths p ON p.context_id = hc.id
                 WHERE NOT EXISTS (
                     SELECT 1 FROM words_categorys wc WHERE wc.word_id = w.id
                 )

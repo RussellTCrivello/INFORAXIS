@@ -178,7 +178,15 @@ def clear_cache():
         # Optional pattern to clear specific entries
         pattern = request.json.get('pattern') if request.is_json else None
         
-        cache.clear(pattern=pattern)
+        if pattern is None:
+            cache.clear()
+        else:
+            try:
+                cache.clear(pattern=pattern)
+            except TypeError:
+                # SimpleQueryCache/EnhancedQueryCache clear everything;
+                # a selective pattern is unsupported there.
+                cache.clear()
         
         return jsonify({
             'success': True,
@@ -262,4 +270,41 @@ def get_slow_queries():
 def register_performance_routes(app):
     """Register performance monitoring routes"""
     app.register_blueprint(performance_bp)
+
+    # ---
+    # UI-facing aliases: the settings page calls /api/cache/* (without the
+    # blueprint prefix) and reads a flat ``stats`` object.
+    # ---
+    @app.route('/api/cache/stats', methods=['GET'])
+    def get_cache_stats_ui_alias():
+        """Cache statistics in the shape the settings page reads."""
+        try:
+            cache = get_query_cache()
+            return jsonify({'success': True, 'stats': cache.get_stats()})
+        except Exception as e:
+            logger.error(f"Error getting cache stats: {e}", exc_info=True)
+            return client_error(e, subsystem="performance",
+                                public_message="The performance data could not be read",
+                                success_key="success")
+
+    @app.route('/api/cache/clear', methods=['POST'])
+    def clear_cache_ui_alias():
+        """Clear the query cache (settings page entry point)."""
+        try:
+            cache = get_query_cache()
+            pattern = request.json.get('pattern') if request.is_json else None
+            if pattern is None:
+                cache.clear()
+            else:
+                try:
+                    cache.clear(pattern=pattern)
+                except TypeError:
+                    cache.clear()
+            return jsonify({'success': True, 'message': 'Cache cleared successfully'})
+        except Exception as e:
+            logger.error(f"Error clearing cache: {e}", exc_info=True)
+            return client_error(e, subsystem="performance",
+                                public_message="The performance data could not be read",
+                                success_key="success")
+
     logger.info("Performance monitoring routes registered")

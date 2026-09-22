@@ -76,7 +76,12 @@ class SourceQueries(BaseQueries):
     @staticmethod
     def check_source_usage() -> str:
         """Check if source is used by any files"""
-        return "SELECT COUNT(*) FROM hashs WHERE source_id = %s"
+        return """
+            SELECT COUNT(DISTINCT p.id)
+            FROM paths p
+            JOIN hash_contexts hc ON hc.id = p.context_id
+            WHERE hc.source_id = %s
+        """
     
     @staticmethod
     def get_source_with_stats() -> str:

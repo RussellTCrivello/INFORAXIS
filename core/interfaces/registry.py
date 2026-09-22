@@ -251,6 +251,7 @@ REGISTRY: Tuple[Interface, ...] = (
         "as a job.",
         Domain.ANALYZE, "analysis_batch", "bi-lightning-charge",
         dependencies=("file_library",),
+        aliases=("analysis_batch_process",),
         settings=("processing.use_threading", "processing.max_workers",
                   "processing.auto_process_uploads"),
         help_topic="analyze/batch", keyboard_shortcut="g b",

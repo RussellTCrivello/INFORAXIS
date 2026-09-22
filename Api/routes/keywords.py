@@ -1564,8 +1564,8 @@ def register_keywords_routes(app):
                     s.name as source_name,
                     si.name as side_name
                 FROM paths p
+                JOIN hash_contexts hc ON hc.id = p.context_id
                 JOIN words_hashs wp ON wp.hash_id = hc.hash_id
-                
                 LEFT JOIN sources s ON hc.source_id = s.id
                 LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE wp.word_id = %s
@@ -1581,7 +1581,7 @@ def register_keywords_routes(app):
             
             # Get total count
             count_result = execute_query(
-                "SELECT COUNT(DISTINCT p.id) FROM paths p JOIN words_hashs wp ON wp.hash_id = hc.hash_id WHERE wp.word_id = %s",
+                "SELECT COUNT(DISTINCT p.id) FROM paths p JOIN hash_contexts hc ON hc.id = p.context_id JOIN words_hashs wp ON wp.hash_id = hc.hash_id WHERE wp.word_id = %s",
                 (word_id,),
                 fetch="one"
             )
