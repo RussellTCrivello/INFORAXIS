@@ -11,7 +11,7 @@ access, or executes anything a configuration file asked for; the checks in
 ``validation`` fail the build if a definition ever tries.
 """
 
-from . import declarations
+from . import action_registry, declarations
 from .contract import (
     build_contract,
     contract,
@@ -30,9 +30,16 @@ from .coverage import (
     screen_coverage,
     source_strings,
 )
+from .permissions import ACTION_PERMISSIONS, PERMISSION_NOTES
 from .model import (
+    ACTION_NAMESPACES,
     ACTION_SCOPES,
+    ACTION_STATES,
     ActionDefinition,
+    ActionState,
+    DISABLED_REASONS,
+    HIDDEN_REASONS,
+    SELECTION_RULES,
     ColumnDefinition,
     ContractError,
     ExperienceContract,
@@ -58,8 +65,16 @@ from .validation import (
 )
 
 __all__ = [
+    "ACTION_NAMESPACES",
+    "ACTION_PERMISSIONS",
     "ACTION_SCOPES",
+    "ACTION_STATES",
     "ActionDefinition",
+    "ActionState",
+    "DISABLED_REASONS",
+    "HIDDEN_REASONS",
+    "PERMISSION_NOTES",
+    "SELECTION_RULES",
     "ColumnDefinition",
     "ContractError",
     "ExperienceContract",
@@ -74,6 +89,7 @@ __all__ = [
     "StateDefinition",
     "TranslationDefinition",
     "available_locales",
+    "action_registry",
     "declarations",
     "build_contract",
     "catalog",

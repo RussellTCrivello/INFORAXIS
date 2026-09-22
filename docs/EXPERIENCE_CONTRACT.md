@@ -109,8 +109,8 @@ claimed about strings that have not been moved.
 ### What this build declares
 
 - Contracts: **25** (described: **5**, derived from the registry only: **20**)
-- Definitions: **24** actions, **14** columns, **6** filters, **0** fields, **5** states
-- Translation keys the screens need: **180**
+- Definitions: **33** actions, **14** columns, **6** filters, **0** fields, **5** states
+- Translation keys the screens need: **192**
 - With help: **23**; with a shortcut: **11**; with a navigation entry: **25**
 
 ### Every screen
@@ -118,7 +118,7 @@ claimed about strings that have not been moved.
 | Interface | Domain | Declared | Title key | Columns | Filters | Actions | States | Help |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `dashboard` | WORK | derived | `screen.dashboard.title` | — | — | — | — | yes |
-| `file_library` | DISCOVER | yes | `screen.file_library.title` | 7 | 4 | 3 | 1 | yes |
+| `file_library` | DISCOVER | yes | `screen.file_library.title` | 7 | 4 | 11 | 1 | yes |
 | `search` | DISCOVER | derived | `screen.search.title` | — | — | — | — | yes |
 | `sources` | DISCOVER | yes | `screen.sources.title` | — | — | 4 | 1 | yes |
 | `sides` | DISCOVER | yes | `screen.sides.title` | — | — | 4 | 1 | yes |
@@ -136,7 +136,7 @@ claimed about strings that have not been moved.
 | `classification` | CLASSIFY | derived | `screen.classification.title` | — | — | — | — | yes |
 | `comprehensive_dashboard` | REPORT | derived | `screen.comprehensive_dashboard.title` | — | — | — | — | yes |
 | `charts_dashboard` | REPORT | derived | `screen.charts_dashboard.title` | — | — | — | — | yes |
-| `jobs` | OPERATE | derived | `screen.jobs.title` | — | — | — | — | yes |
+| `jobs` | OPERATE | derived | `screen.jobs.title` | — | — | 1 | — | yes |
 | `import_export_console` | OPERATE | derived | `screen.import_export_console.title` | — | — | — | — | — |
 | `users` | ADMINISTRATION | derived | `screen.users.title` | — | — | — | — | yes |
 | `settings` | SETTINGS | derived | `screen.settings.title` | — | — | — | — | yes |
@@ -161,7 +161,7 @@ The strings a screen's contract asks for, and how many of them a language actual
 | Interface | Keys | ar | fa | he | hr |
 | --- | --- | --- | --- | --- | --- |
 | `dashboard` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
-| `file_library` | 22 | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) | 81.8% (0 by key) |
+| `file_library` | 32 | 81.2% (0 by key) | 81.2% (0 by key) | 81.2% (0 by key) | 75.0% (0 by key) |
 | `search` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
 | `sources` | 11 | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) |
 | `sides` | 11 | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) |
@@ -179,7 +179,7 @@ The strings a screen's contract asks for, and how many of them a language actual
 | `classification` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
 | `comprehensive_dashboard` | 5 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
 | `charts_dashboard` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
-| `jobs` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
+| `jobs` | 7 | 71.4% (0 by key) | 71.4% (0 by key) | 71.4% (0 by key) | 71.4% (0 by key) |
 | `import_export_console` | 3 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
 | `users` | 5 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
 | `settings` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |

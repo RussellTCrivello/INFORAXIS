@@ -5,22 +5,24 @@ question the Action Registry has to answer before it can exist: *which actions
 does this product actually offer, what does each apply to, and which of them
 cannot be described honestly by the model we have?*
 
-Three measurements, none of them typed by hand:
+Four measurements, none of them typed by hand:
 
-* **The declared contract** (``declarations.py``): what somebody has described,
-  and what the contract tests already verify against the screen itself.
+* **The registry** (``action_registry.py``): every registered action, with the
+  scope, permission, confirmation and operation reference it declares.
 * **The surfaces the templates still carry** - shared toolbar, hand-written
   bars, record-row actions, browser ``confirm()`` dialogs, viewer controls,
   page-local button state. Every scan is stated once and used for both the
   count and the file list, so the number and the evidence cannot disagree.
+* **What the registry itself is missing** - actions with no operation, and
+  screens nobody has described - counted, not glossed over.
 * **The gaps**: the short, curated list of actions whose behaviour the current
   model cannot say. Each entry names the code that proves it, and the test
   checks that the anchor still exists - so the list cannot quietly turn into
   opinion, and a fixed gap disappears from it instead of lingering.
 
 Nothing here performs an action or changes a screen. The audit is the agenda
-for the Action Registry, and it says out loud which screens nobody has
-described yet instead of implying every screen has been designed.
+for the next layer, and it says out loud which screens nobody has described
+yet instead of implying every screen has been designed.
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ from core.frontend import component_audit
 from core.interfaces import REGISTRY
 from core.interfaces.model import NAVIGABLE_KINDS
 
-from . import declarations
+from .action_registry import registered, without_operation
 from .model import ACTION_SCOPES
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -43,16 +45,20 @@ PAGES = PROJECT_ROOT / "static/js/pages"
 BEGIN = "<!-- BEGIN GENERATED: action surfaces -->"
 END = "<!-- END GENERATED: action surfaces -->"
 
-#: The screens whose experience is described, and the file that serves each.
-#: The contract tests keep the same mapping on purpose: one is the audit's
-#: evidence pointer, the other is what stops a declaration from drifting away
-#: from the screen it claims to describe.
-SCREEN_TEMPLATES: Dict[str, str] = {
-    "file_library": "templates/file/files_list.html",
-    "keywords": "templates/Keyword/keywords_list.html",
-    "words": "templates/Word/Word_list.html",
-    "sources": "templates/Sources/sources_list.html",
-    "sides": "templates/Side/sides_list.html",
+#: The screens whose experience is described, and the templates that serve
+#: each. An interface can have more than one screen - the file library has its
+#: list, a record page and the reader - and a declaration may name a string
+#: that appears on any of them. The contract tests use the same mapping, which
+#: is what stops a declaration from drifting away from the screen it claims to
+#: describe.
+SCREEN_TEMPLATES: Dict[str, Tuple[str, ...]] = {
+    "file_library": ("templates/file/files_list.html",
+                     "templates/file/file_detail.html",
+                     "templates/file/full_content.html"),
+    "keywords": ("templates/Keyword/keywords_list.html",),
+    "words": ("templates/Word/Word_list.html",),
+    "sources": ("templates/Sources/sources_list.html",),
+    "sides": ("templates/Side/sides_list.html",),
 }
 
 #: Repeated markup that means "there is an action here". Each entry is
@@ -78,19 +84,13 @@ SURFACES: Tuple[Tuple[str, str, str, Tuple[Path, ...]], ...] = (
 #: Actions the current model cannot describe honestly, each anchored to code.
 #: The point of the audit is not to be reassuring: an action that does not fit
 #: is how the next abstraction gets designed, and it is cheaper to name it here
-#: than to widen the toolbar for it.
+#: than to widen a component for it.
+#:
+#: Two gaps left this list when the Action Definition grew: "Edit Selected"
+#: used to have no way to say it acts on *one member* of a selection, which is
+#: now ``selection_rule="one"``; and the file library's bulk buttons had no
+#: vocabulary for "this work is running", which is now the ``running`` state.
 GAPS: Tuple[Dict[str, object], ...] = (
-    {
-        "what": "edit_selected",
-        "where": "keywords, words",
-        "cannot_say": "The action needs a selection (scope=selection) but acts "
-                      "on one member of it - the first record - asking first "
-                      "when several are selected. Nothing in the model "
-                      "distinguishes 'acts on all of the selection' from 'acts "
-                      "on one of it'.",
-        "evidence": ("static/js/pages/keywords-list-page.js",
-                     "static/js/pages/words-list-page.js"),
-    },
     {
         "what": "merge_duplicates",
         "where": "keywords",
@@ -101,24 +101,25 @@ GAPS: Tuple[Dict[str, object], ...] = (
         "evidence": ("static/js/pages/keywords-list-page.js",),
     },
     {
-        "what": "export_selected",
+        "what": "export_selected, edit_selected",
         "where": "sources, sides",
-        "cannot_say": "Declared bulk with no endpoint: the control exists and "
-                      "the operation does not. The model has no 'declared but "
-                      "not implemented' state, so the audit has to report it - "
-                      "and the pages still own a second refusal ('please select "
-                      "sources to export') that the toolbar already decides.",
+        "cannot_say": "Registered with no operation: the controls exist, the "
+                      "registry says so by leaving `execution` empty, and the "
+                      "audit counts them. What the model lacks is a way to say "
+                      "'shown, not built' that the interface can honour - today "
+                      "the button is simply there, enabled when rows are "
+                      "selected, and does nothing useful.",
         "evidence": ("static/js/pages/sources-list-page.js",
                      "static/js/pages/sides-list-page.js"),
     },
     {
         "what": "select_all / select_none",
-        "where": "keywords, words, sources, sides",
-        "cannot_say": "Selection *controls*, declared as page actions because "
-                      "that is the only vocabulary available. They produce the "
-                      "scope the other actions consume; the model has one word "
-                      "for both roles, so the pattern cannot be required of the "
-                      "next screen.",
+        "where": "keywords, words, sources, sides, file_library",
+        "cannot_say": "Selection *controls*, registered as page actions "
+                      "because that is the only vocabulary available. They "
+                      "produce the scope the other actions consume; the model "
+                      "has one word for both roles, so the pattern cannot be "
+                      "required of the next screen.",
         "evidence": ("templates/Sources/sources_list.html",
                      "templates/Side/sides_list.html"),
     },
@@ -126,64 +127,85 @@ GAPS: Tuple[Dict[str, object], ...] = (
         "what": "apply_filters",
         "where": "email_words",
         "cannot_say": "A page action that is really a filter surface's control "
-                      "(it submits the filter form). Declaring it as an action "
-                      "would give one control two owners - the filter "
+                      "(it submits the filter form). Registering it as an "
+                      "action would give one control two owners - the filter "
                       "definition and the action definition.",
         "evidence": ("templates/email_words/email_words.html",),
     },
     {
         "what": "open / edit / delete (record actions)",
         "where": "file_library, words",
-        "cannot_say": "Record scope, rendered inside the row today: the model "
-                      "can describe them, but no component owns where they are "
-                      "drawn. That is the Record Action Surface, which does not "
-                      "exist yet.",
+        "cannot_say": "Registered with the right scope, but rendered inside "
+                      "the row by hand: no component owns where a record's "
+                      "actions are drawn. That is the Record Action Surface, "
+                      "which does not exist yet.",
         "evidence": ("templates/Word/Word_list.html",
                      "templates/file/files_list.html"),
     },
     {
-        "what": "upload, bulk analyze, bulk archive",
+        "what": "analyze_selected, export_selected, upload",
         "where": "file_library",
-        "cannot_say": "Long-running work: these start persistent jobs, and the "
-                      "model has no job semantics (RUNNING, progress, 'finished "
-                      "later'). The disabled-until-selected rule is also "
-                      "implemented by hand in this bar.",
-        "evidence": ("templates/file/files_list.html",),
+        "cannot_say": "Registered, and the model can now say an action is "
+                      "running - but not what it started. There is no job "
+                      "reference on an action, so 'Analysis queued. Job "
+                      "AN-4921' cannot be produced from the definition.",
+        "evidence": ("templates/file/files_list.html",
+                     "static/js/modules/file-operations/file-management.js"),
+    },
+    {
+        "what": "view_original, download_original",
+        "where": "file_library",
+        "cannot_say": "The two operations are registered and distinct, and the "
+                      "service behind them is real (inline vs attachment, range "
+                      "requests, path from the database). What the model cannot "
+                      "say is where they are drawn: today they are two "
+                      "hand-written links in the reader, labelled 'Original "
+                      "File' and 'Original' - one of which is a download and "
+                      "does not say so.",
+        "evidence": ("templates/file/full_content.html",
+                     "Api/services/original_file.py"),
     },
     {
         "what": "export_data (email_words)",
         "where": "email_words",
         "cannot_say": "Loading is implemented by the page (button disabled, "
-                      "label swapped) because the action model has no RUNNING "
-                      "state; and the export acts on the filtered set, which is "
+                      "label swapped) although the model has a running state, "
+                      "because nothing tells the page which action it belongs "
+                      "to; and the export acts on the filtered set, which is "
                       "neither page nor selection scope as currently worded.",
         "evidence": ("static/js/pages/email-words-page.js",),
     },
     {
         "what": "viewer controls",
-        "where": "full_content",
+        "where": "file_library",
         "cannot_say": "Copy, Download, Print, Wrap, Smaller/Larger, Dark: "
-                      "document controls, not screen actions, and deliberately "
+                      "document controls, not record actions, and deliberately "
                       "not toolbar buttons. They need a viewer surface, and "
                       "the audit records them so nobody 'fixes' them into one.",
         "evidence": ("templates/file/full_content.html",),
     },
     {
         "what": "permission",
-        "where": ", ".join(sorted(declarations.DECLARED_SCREENS)),
-        "cannot_say": "No action names a permission, because there is no "
-                      "permission vocabulary for actions - only for interfaces. "
-                      "Until there is one, the registry cannot answer 'may this "
-                      "person run this?' when deciding what to render.",
-        "evidence": ("core/experience/declarations.py",),
+        "where": "every registered action",
+        "cannot_say": "Every action now names a permission domain, and nothing "
+                      "enforces one: the vocabulary "
+                      "(core/experience/permissions.py) is a naming scheme for "
+                      "visibility, while the server still authorises by role at "
+                      "the route. Until operations are bound to actions, a "
+                      "permission is a name the inspector can show - not a "
+                      "boundary, and not a reason to hide a control that the "
+                      "server would refuse anyway.",
+        "evidence": ("core/experience/permissions.py",),
     },
     {
         "what": "cancel_job, reprocess",
-        "where": "operations, file_detail",
-        "cannot_say": "Record-scope destructive actions confirmed with a "
-                      "browser dialog and declared nowhere, because those "
-                      "screens have no contract yet. They are why the audit is "
-                      "produced before more migration, not after.",
+        "where": "jobs, file_library",
+        "cannot_say": "Registered as record actions with a confirmation, but "
+                      "the screens they live on have no experience contract, "
+                      "and the confirmation is still a browser dialog written "
+                      "in the template or the page's JavaScript. They are the "
+                      "first two actions the shared Confirmation Dialog has to "
+                      "take over.",
         "evidence": ("templates/Operations/jobs.html",
                      "templates/file/file_detail.html"),
     },
@@ -215,50 +237,6 @@ def surfaces() -> Dict[str, List[str]]:
         for key, _what, pattern, roots in SURFACES}
 
 
-def declared_actions() -> List[Dict[str, object]]:
-    """The declared actions, with the component that renders each today."""
-    rows: List[Dict[str, object]] = []
-    for interface_id in declarations.DECLARED_SCREENS:
-        component = _component_for(interface_id)
-        for action in declarations.actions(interface_id):
-            rows.append({
-                "interface": interface_id,
-                "action": action.action_id,
-                "label": action.source,
-                "scope": action.scope,
-                "permission": action.permission,
-                "destructive": action.destructive,
-                "confirmation": action.confirmation,
-                "requires_selection": action.requires_selection,
-                "endpoint": action.endpoint,
-                "component": component if action.scope != "record"
-                             else "record row",
-            })
-    return rows
-
-
-def _component_for(interface_id: str) -> str:
-    template = SCREEN_TEMPLATES.get(interface_id)
-    if template is None:
-        return "not described"
-    text = _read(template)
-    if "action_toolbar(" in text:
-        return "ActionToolbar"
-    if re.search(r'class="[^"]*action-bar', text):
-        return "hand-written bar"
-    return "page"
-
-
-def described_interfaces() -> Tuple[str, ...]:
-    return tuple(sorted(set(declarations.DECLARED_SCREENS) & set(SCREEN_TEMPLATES)))
-
-
-def undescribed_interfaces() -> Tuple[str, ...]:
-    return tuple(sorted({i.interface_id for i in REGISTRY
-                         if i.kind in NAVIGABLE_KINDS
-                         and i.interface_id not in SCREEN_TEMPLATES}))
-
-
 def library_toolbar() -> Dict[str, int]:
     """The component library's own count for the action bar family.
 
@@ -273,24 +251,72 @@ def library_toolbar() -> Dict[str, int]:
     return {"standardized": row["standardized"], "hand_written": row["hand_written"]}
 
 
+def declared_actions() -> List[Dict[str, object]]:
+    """Every registered action, with the component that renders it today."""
+    rows: List[Dict[str, object]] = []
+    for action in registered():
+        interface_id = action.interfaces[0]
+        rows.append({
+            "interface": interface_id,
+            "also_on": ", ".join(action.interfaces[1:]),
+            "action": action.action_id,
+            "label": action.source,
+            "scope": action.scope,
+            "permission": action.permission,
+            "destructive": action.destructive,
+            "confirmation": action.confirmation,
+            "requires_selection": action.requires_selection,
+            "selection_rule": action.selection_rule,
+            "execution": action.execution,
+            "component": _component_for(interface_id, action.scope),
+        })
+    return rows
+
+
+def _component_for(interface_id: str, scope: str = "page") -> str:
+    templates = SCREEN_TEMPLATES.get(interface_id)
+    if templates is None:
+        return "no described screen"
+    text = "\n".join(_read(relative) for relative in templates)
+    if scope == "record":
+        return "record row" if "action_toolbar(" not in text else "record + toolbar"
+    if "action_toolbar(" in text:
+        return "ActionToolbar"
+    if re.search(r'class="[^"]*action-bar', text):
+        return "hand-written bar"
+    return "page"
+
+
+def described_interfaces() -> Tuple[str, ...]:
+    return tuple(sorted(set(SCREEN_TEMPLATES)))
+
+
+def undescribed_interfaces() -> Tuple[str, ...]:
+    return tuple(sorted({i.interface_id for i in REGISTRY
+                         if i.kind in NAVIGABLE_KINDS
+                         and i.interface_id not in SCREEN_TEMPLATES}))
+
+
 def counts() -> Dict[str, object]:
     """Everything the report claims, computed here and nowhere else."""
     rows = declared_actions()
     scanned = surfaces()
-    by_scope = {scope: sum(1 for row in rows if row["scope"] == scope)
-                for scope in ACTION_SCOPES}
     navigable = [i for i in REGISTRY if i.kind in NAVIGABLE_KINDS]
+    without = without_operation()
     return {
         "interfaces": len(REGISTRY),
         "navigable_interfaces": len(navigable),
         "described_interfaces": len(described_interfaces()),
         "undescribed_interfaces": len(undescribed_interfaces()),
-        "declared_actions": len(rows),
-        "by_scope": by_scope,
+        "registered_actions": len(rows),
+        "by_scope": {scope: sum(1 for row in rows if row["scope"] == scope)
+                     for scope in ACTION_SCOPES},
         "destructive": sum(1 for row in rows if row["destructive"]),
         "with_confirmation": sum(1 for row in rows if row["confirmation"]),
         "with_permission": sum(1 for row in rows if row["permission"]),
-        "with_endpoint": sum(1 for row in rows if row["endpoint"]),
+        "with_execution": sum(1 for row in rows if row["execution"]),
+        "without_execution": len(without),
+        "without_execution_names": ", ".join(a.action_id for a in without),
         "toolbar_component": len(scanned["toolbar_component"]),
         "hand_written_bars": len(scanned["hand_written_bar"]),
         "record_action_files": len(scanned["record_row_actions"]),
@@ -323,15 +349,19 @@ def reference_markdown() -> str:
     lines: List[str] = []
 
     lines += ["### What was measured", "",
-              "Three sources, none of them typed by hand:", "",
-              "* the **declared contract** - the actions somebody has described, "
-              "which the contract tests already verify against the screen;",
+              "Four sources, none of them typed by hand:", "",
+              "* the **Action Registry** - every action the product offers, "
+              "with the scope, permission, confirmation and operation reference "
+              "it declares;",
               "* the **surfaces the templates carry** - the shared toolbar, the "
               "bars still written by hand, record-row actions, browser "
               "confirmation dialogs, viewer controls and page-local button "
               "state, each with the files that prove it;",
-              "* the **gaps** - actions whose behaviour the current model cannot "
-              "say, each anchored to code.", "",
+              "* **what the registry is missing** - actions with no operation "
+              "behind them, and screens nobody has described;",
+              "* the **gaps** - actions whose behaviour the current model "
+              "cannot say, each anchored to code. A gap that closes leaves this "
+              "list; two already have.", "",
               "This is a measurement of the product as it is, not a target.", ""]
 
     lines += _table(
@@ -340,7 +370,7 @@ def reference_markdown() -> str:
          ("Navigable screens", values["navigable_interfaces"]),
          ("Screens with a described experience", values["described_interfaces"]),
          ("Screens nobody has described yet", values["undescribed_interfaces"]),
-         ("Declared actions", values["declared_actions"]),
+         ("Registered actions", values["registered_actions"]),
          ("- page / record / selection / bulk",
           "{} / {} / {} / {}".format(values["by_scope"]["page"],
                                      values["by_scope"]["record"],
@@ -349,28 +379,35 @@ def reference_markdown() -> str:
          ("- destructive", values["destructive"]),
          ("- naming a confirmation", values["with_confirmation"]),
          ("- naming a permission", values["with_permission"]),
-         ("- naming the endpoint that performs them", values["with_endpoint"]),
+         ("- naming the operation that owns them", values["with_execution"]),
+         ("- declared with no operation behind them",
+          values["without_execution"]),
          ("Templates rendering the shared ActionToolbar", values["toolbar_component"]),
          ("Hand-written action bars", values["hand_written_bars"]),
-         ("Templates with record actions in the row", values["record_action_files"]),
+         ("Templates with record actions drawn by hand", values["record_action_files"]),
          ("Templates with a filter submit inside a bar", values["filter_submit_files"]),
          ("Templates with document viewer controls", values["viewer_control_files"]),
          ("Files still calling the browser confirm()", values["confirm_files"]),
          ("Files deciding button state by hand", values["page_local_state_files"]),
-         ("Actions that do not fit the current abstractions", values["gaps"])))
+         ("Gaps: actions the model cannot describe", values["gaps"])))
     lines.append("")
 
-    lines += ["### Declared actions", "",
-              "Permission and endpoint are empty because nothing claims them "
-              "yet: the permission vocabulary for actions does not exist, and "
-              "no declared action names the route that performs it. Those two "
-              "columns are the reason the Action Registry comes next.", ""]
+    lines += ["### Registered actions", "",
+              "Every action names a permission domain and either an operation "
+              "or nothing at all. The empty operation column is the honest "
+              "part: {} of them are words on a screen that no service owns "
+              "yet.".format(values["without_execution"]), ""]
+    if values["without_execution"]:
+        lines += [f"Declared with no operation: `{values['without_execution_names']}`.",
+                  ""]
     lines += _table(
-        ("Interface", "Action", "Scope", "Permission", "Destructive",
-         "Confirmation", "Component"),
-        [(row["interface"], row["action"], row["scope"],
-          row["permission"] or "-", "yes" if row["destructive"] else "-",
-          row["confirmation"] or "-", row["component"])
+        ("Action", "Interface", "Scope", "Selection", "Permission",
+         "Destructive", "Confirmation", "Operation", "Component"),
+        [(row["action"], row["interface"]
+          + (f" (+{row['also_on']})" if row["also_on"] else ""),
+          row["scope"], row["selection_rule"] or "-", row["permission"] or "-",
+          "yes" if row["destructive"] else "-", row["confirmation"] or "-",
+          row["execution"] or "**none**", row["component"])
          for row in declared_actions()])
     lines.append("")
 
@@ -401,9 +438,8 @@ def reference_markdown() -> str:
 
     lines += ["### Candidate surfaces for the next layer", "",
               "Derived from the table above, not from taste:", "",
-              "* **Record action surface** - the {} declared record-scope "
-              "actions, plus the {} that draw record actions themselves "
-              "(in a row or on a record page).".format(
+              "* **Record action surface** - the {} registered record-scope "
+              "actions, plus the {} that draw record actions themselves.".format(
                   values["by_scope"]["record"],
                   _files(values["record_action_files"])),
               "* **Specialized composites** - a viewer surface ({}) for the "
@@ -411,14 +447,16 @@ def reference_markdown() -> str:
               "submits a filter form.".format(
                   _files(values["viewer_control_files"]),
                   _files(values["filter_submit_files"])),
-              "* **Long-running work** - the file library's upload, analyze and "
-              "archive buttons announce work that finishes later; the action "
-              "model has no job semantics for them yet.",
-              ""]
+              "* **Confirmation dialog** - {} registered actions require a "
+              "confirmation, and {} files still open the browser's own dialog "
+              "to get one.".format(values["with_confirmation"],
+                                   values["confirm_files"]),
+              ""
+              ]
 
     lines += ["### Actions that do not fit the current abstractions", "",
-              "This is the agenda for the Action Registry: each row is something "
-              "the model cannot say today, and the code that proves it.", ""]
+              "This is the agenda for the next layer: each row is something the "
+              "model cannot say today, and the code that proves it.", ""]
     lines += _table(("Action", "Where", "What the model cannot say", "Evidence"),
                     [(gap["what"], gap["where"], gap["cannot_say"],
                       ", ".join(f"`{f}`" for f in gap["evidence"]))

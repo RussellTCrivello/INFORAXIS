@@ -73,6 +73,7 @@ class TestTheGapsAreAnchored:
         """A gap may point at interfaces, declared screens, or its evidence."""
         for token in str(gap["where"]).split(", "):
             known = (token in INTERFACE_IDS or token in SCREEN_TEMPLATES
+                     or token in {"every registered action"}
                      or any(token in relative.lower()
                             for relative in gap["evidence"]))
             assert known, f"{gap['what']}: {token!r} names nothing"
@@ -84,12 +85,12 @@ class TestTheGapsAreAnchored:
 
 
 class TestTheNumbersAreTheProduct:
-    def test_the_declared_actions_come_from_the_contract(self):
-        expected = sum(len(declarations.actions(interface_id))
-                       for interface_id in declarations.DECLARED_SCREENS)
+    def test_the_registered_actions_are_the_catalog(self):
+        from core.experience.action_registry import registered
+
         rows = declared_actions()
-        assert len(rows) == expected
-        assert len(rows) == counts()["declared_actions"]
+        assert len(rows) == len(registered())
+        assert len(rows) == counts()["registered_actions"]
         assert set(counts()["by_scope"]) == set(ACTION_SCOPES)
         for scope in ACTION_SCOPES:
             assert counts()["by_scope"][scope] == sum(
@@ -101,13 +102,21 @@ class TestTheNumbersAreTheProduct:
         assert "record row" in components
         for row in declared_actions():
             assert row["component"] in {
-                "ActionToolbar", "record row", "hand-written bar",
-                "not described", "page"}
+                "ActionToolbar", "record row", "record + toolbar",
+                "hand-written bar", "no described screen", "page"}
 
     def test_the_screens_nobody_described_are_counted_not_implied(self):
         assert counts()["undescribed_interfaces"] == len(undescribed_interfaces())
         assert counts()["described_interfaces"] == len(declarations.DECLARED_SCREENS)
         assert set(SCREEN_TEMPLATES) == set(declarations.DECLARED_SCREENS)
+
+    def test_an_action_with_no_operation_is_reported_by_name(self):
+        from core.experience.action_registry import without_operation
+
+        missing = counts()["without_execution_names"]
+        for item in without_operation():
+            assert item.action_id in missing
+        assert counts()["without_execution"] == len(without_operation())
 
     def test_the_two_reports_reconcile(self):
         """The audit's bars and the component library's bars are the same bars."""

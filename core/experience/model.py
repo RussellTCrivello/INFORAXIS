@@ -33,6 +33,12 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 #: A semantic translation key: `screen.files.title`, `action.files.export.label`.
 KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$")
 
+#: An execution reference is one lowercase word. A route, a URL, a template, a
+#: file path and a Python callable all fail this pattern, which is the point:
+#: the definition names the operation, and the service layer owns how it is
+#: reached.
+_EXECUTION_REFERENCE = re.compile(r"^[a-z][a-z0-9_]*$")
+
 #: A stable id inside a screen: `name`, `usage_count`, `bulk_update`.
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -48,6 +54,43 @@ SCREEN_STATES: Tuple[str, ...] = (
 #: What an action applies to. A bulk action must show its scope; a dangerous
 #: action must be able to ask for confirmation (see `confirmation`).
 ACTION_SCOPES: Tuple[str, ...] = ("page", "selection", "bulk", "record")
+
+#: The resource an action acts on, and the first half of every action id.
+#: Deliberately a resource (`files`, `keywords`, `search`) and not a page: an
+#: action that appears on a second screen keeps its id, so nothing has to be
+#: renamed, and two pages cannot both register `delete_selected` and mean
+#: different things.
+ACTION_NAMESPACES: Tuple[str, ...] = (
+    "files", "sources", "sides", "keywords", "words", "categories", "search",
+    "viewer", "export", "jobs", "analysis",
+)
+
+#: How a selection is turned into work. ``all`` acts on every selected record.
+#: ``one`` acts on a single member of the selection - which member is the
+#: operation's own rule, stated by the page that performs it; a component never
+#: infers it, and the toolbar never needs to know. This is what keeps "edits the
+#: first of three selected rows" expressible without inventing a fifth scope.
+SELECTION_RULES: Tuple[str, ...] = ("all", "one")
+
+#: What an action can be doing right now. The definition describes the action;
+#: this is its state at a moment, which is a runtime fact, not a declaration.
+ACTION_STATES: Tuple[str, ...] = (
+    "available", "disabled", "hidden", "running", "success", "failed",
+)
+
+#: Why an action is present but unusable. Never mixed with the reasons an
+#: action is not shown: "nothing is selected" and "you may not do this" are
+#: different situations and must not collapse into one grey button.
+DISABLED_REASONS: Tuple[str, ...] = (
+    "no_selection", "single_selection_required", "not_built", "unavailable",
+    "record_archived", "original_missing",
+)
+
+#: Why an action is not shown at all. Decided by the server and passed in; a
+#: hidden action is not a secured one, and this vocabulary decides nothing.
+HIDDEN_REASONS: Tuple[str, ...] = (
+    "no_permission", "not_applicable", "not_built",
+)
 
 #: How an action's progress is shown while it runs.
 LOADING_STYLES: Tuple[str, ...] = ("inline", "button", "region", "toast")
@@ -139,46 +182,121 @@ def check_placeholders(source: str, translation: str) -> Tuple[str, ...]:
 class ActionDefinition:
     """Something a person can do on a screen.
 
-    It describes the action; it does not perform it. The permission named here
-    decides whether the control is *shown* - the request is still authorised
-    server-side, as it is for every other control (see the registry rules).
+    It describes the action; it does not perform it. Five separations are
+    deliberate, and each one is enforced below:
+
+    * **Execution is a reference, not a route.** ``execution`` names an
+      operation in a plain lowercase token (``download_original``). It is not a
+      URL, not a Flask endpoint, and not something this layer can resolve: the
+      service layer owns what the operation does, and the Action Registry must
+      never become a second router.
+    * **Permission is a name, not a decision.** ``permission`` says which
+      permission domain the action belongs to; the server decides whether this
+      request may run it, exactly as it does for every other request. A hidden
+      action is not therefore protected, and nothing here authorises anything.
+    * **Confirmation is required of anything destructive.** A destructive
+      action with no confirmation key is refused at definition time.
+    * **A bulk action requires a selection and acts on all of it.** Anything
+      that acts on one member of a selection says so with ``selection_rule``
+      instead of pretending to be bulk.
+    * **The id is namespaced by resource**, so the same action keeps one name
+      when it appears on a second screen.
     """
 
     action_id: str
     label_key: str
     source: str
     icon: str = "bi-lightning"
+    interfaces: Tuple[str, ...] = ()
     scope: str = "page"
     permission: Optional[str] = None
     destructive: bool = False
     confirmation: Optional[str] = None      # translation key, never a sentence
     shortcut: Optional[str] = None
     requires_selection: bool = False
-    requires_single_selection: bool = False
+    selection_rule: Optional[str] = None
     loading: str = "inline"
-    endpoint: Optional[str] = None           # the route that performs it
+    execution: Optional[str] = None          # opaque operation reference
 
     def __post_init__(self) -> None:
-        _ident(self.action_id, "action_id")
+        from .permissions import ACTION_PERMISSIONS
+
+        namespace, _, name = self.action_id.partition(".")
+        _check(bool(name), f"action {self.action_id}: an id is <resource>.<name>")
+        _ident(namespace, f"action {self.action_id} namespace")
+        _ident(name, f"action {self.action_id} name")
+        _check(namespace in ACTION_NAMESPACES,
+               f"action {self.action_id}: unknown namespace {namespace!r}")
         _key(self.label_key, f"action {self.action_id} label_key")
         _check(self.scope in ACTION_SCOPES,
                f"action {self.action_id}: unknown scope {self.scope!r}")
         _check(self.loading in LOADING_STYLES,
                f"action {self.action_id}: unknown loading style {self.loading!r}")
+        _check(bool(self.interfaces),
+               f"action {self.action_id}: no interface can show it")
+        _check(len(set(self.interfaces)) == len(self.interfaces),
+               f"action {self.action_id}: an interface is listed twice")
+        for interface_id in self.interfaces:
+            _ident(interface_id, f"action {self.action_id} interface")
+        if self.permission is not None:
+            _check(self.permission in ACTION_PERMISSIONS,
+                   f"action {self.action_id}: unknown permission "
+                   f"{self.permission!r} - permissions are a declared "
+                   "vocabulary, not free text")
         if self.confirmation:
             _key(self.confirmation, f"action {self.action_id} confirmation")
+        if self.shortcut:
+            _check(isinstance(self.shortcut, str) and self.shortcut.strip(),
+                   f"action {self.action_id}: empty shortcut")
+        if self.execution is not None:
+            _check(bool(_EXECUTION_REFERENCE.match(self.execution)),
+                   f"action {self.action_id}: execution {self.execution!r} is "
+                   "not an opaque operation reference - no route, no URL and "
+                   "no path belongs here")
         if self.destructive:
             # A destructive action that cannot ask for confirmation is how a
             # product loses data by accident.
             _check(bool(self.confirmation),
                    f"action {self.action_id} is destructive and declares no confirmation")
+        if self.selection_rule is not None:
+            _check(self.selection_rule in SELECTION_RULES,
+                   f"action {self.action_id}: unknown selection rule "
+                   f"{self.selection_rule!r}")
         if self.scope == "bulk":
             _check(self.requires_selection,
                    f"action {self.action_id} is a bulk action and must require a selection")
+            _check(self.selection_rule == "all",
+                   f"action {self.action_id} is bulk, so it acts on the whole "
+                   "selection; an action that acts on one member is a "
+                   "selection action with selection_rule='one'")
+        if self.scope == "selection":
+            _check(self.requires_selection,
+                   f"action {self.action_id} acts on a selection and must "
+                   "require one")
+            _check(self.selection_rule in SELECTION_RULES,
+                   f"action {self.action_id} acts on a selection and must say "
+                   "how (selection_rule='all' or 'one')")
+        if self.scope == "page":
+            _check(self.selection_rule is None,
+                   f"action {self.action_id} is a page action and cannot act "
+                   "on a selection")
+
+    # -- derived facts ----------------------------------------------------
+    @property
+    def namespace(self) -> str:
+        """The resource this action acts on - the first half of its id."""
+        return self.action_id.split(".", 1)[0]
+
+    @property
+    def confirmation_required(self) -> bool:
+        """Whether running it has to be confirmed before it happens."""
+        return bool(self.confirmation)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "action_id": self.action_id,
+            "namespace": self.namespace,
+            "interfaces": list(self.interfaces),
             "label_key": self.label_key,
             "source": self.source,
             "icon": self.icon,
@@ -186,12 +304,94 @@ class ActionDefinition:
             "permission": self.permission,
             "destructive": self.destructive,
             "confirmation": self.confirmation,
+            "confirmation_required": self.confirmation_required,
             "shortcut": self.shortcut,
             "requires_selection": self.requires_selection,
-            "requires_single_selection": self.requires_single_selection,
+            "selection_rule": self.selection_rule,
             "loading": self.loading,
-            "endpoint": self.endpoint,
+            "execution": self.execution,
         }
+
+
+@dataclass(frozen=True)
+class ActionState:
+    """What an action is doing at this moment.
+
+    A runtime fact about one action, not a declaration: the definition says
+    what can be done, this says how it is presented right now, and it carries
+    its reason. The reasons are kept apart on purpose - an action nobody has
+    selected anything for is disabled, an action this person may not use is
+    hidden, and a product that shows both as the same grey button has lost the
+    information the operator needed.
+
+    ``derive`` takes facts the server has already established (whether this
+    request is permitted, how many records are selected). It decides nothing:
+    it arranges what it was told.
+    """
+
+    action_id: str
+    state: str = "available"
+    disabled_reason: Optional[str] = None
+    hidden_reason: Optional[str] = None
+    confirmation_required: bool = False
+    message_key: Optional[str] = None      # why, in the reader's language
+
+    def __post_init__(self) -> None:
+        _ident(self.action_id.replace(".", "_"),
+               f"action state {self.action_id}")
+        _check(self.state in ACTION_STATES,
+               f"action {self.action_id}: unknown state {self.state!r}")
+        if self.state == "disabled":
+            _check(self.disabled_reason in DISABLED_REASONS,
+                   f"action {self.action_id}: disabled without a reason from "
+                   f"{DISABLED_REASONS}")
+        else:
+            _check(self.disabled_reason is None,
+                   f"action {self.action_id}: {self.state} cannot carry a "
+                   "disabled reason")
+        if self.state == "hidden":
+            _check(self.hidden_reason in HIDDEN_REASONS,
+                   f"action {self.action_id}: hidden without a reason from "
+                   f"{HIDDEN_REASONS}")
+        else:
+            _check(self.hidden_reason is None,
+                   f"action {self.action_id}: {self.state} cannot carry a "
+                   "hidden reason")
+
+    @classmethod
+    def derive(cls, definition: ActionDefinition, *, selected: int = 0,
+               permitted: bool = True, running: bool = False,
+               unavailable: Optional[str] = None) -> "ActionState":
+        """Present one action from facts somebody else established.
+
+        ``permitted`` must come from the server's own authorisation - this
+        method never evaluates a permission, it only reflects the answer. The
+        other inputs are the same: how many records are selected, whether the
+        operation is already running, and a named reason the action cannot be
+        used at all (a missing original file, an archived record).
+        """
+        _check(selected >= 0, "selected cannot be negative")
+        if not permitted:
+            return cls(action_id=definition.action_id, state="hidden",
+                       hidden_reason="no_permission")
+        if running:
+            return cls(action_id=definition.action_id, state="running")
+        if unavailable is not None:
+            return cls(action_id=definition.action_id, state="disabled",
+                       disabled_reason=unavailable,
+                       confirmation_required=definition.confirmation_required)
+        if definition.requires_selection and not selected:
+            return cls(action_id=definition.action_id, state="disabled",
+                       disabled_reason="no_selection",
+                       confirmation_required=definition.confirmation_required)
+        if (definition.selection_rule == "one" and selected > 1
+                and definition.selection_rule != "all"):
+            # The action can still run: it acts on one member of the selection.
+            # It stays available and the operation decides which member.
+            return cls(action_id=definition.action_id, state="available",
+                       confirmation_required=definition.confirmation_required)
+        return cls(action_id=definition.action_id, state="available",
+                   confirmation_required=definition.confirmation_required)
 
 
 @dataclass(frozen=True)

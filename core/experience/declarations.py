@@ -2,8 +2,8 @@
 
 Everything in this file is *verified against the product* by
 ``tests/unit/test_experience_contract.py``: a declared column, filter, action
-or state must name a string that really appears in that interface's template,
-or the test fails. That is the difference between a contract and a wish - a
+or state must name a string that really appears in one of that interface's
+templates, or the test fails. That is the difference between a contract and a wish - a
 declaration that has drifted from the screen is a defect, not documentation.
 
 Screens that are not listed here get a contract derived from the registry with
@@ -63,15 +63,6 @@ DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
             ("side", "Side", "screen.files.filter.side.label",
              {"control": "select"}),
         ),
-        "actions": (
-            ("upload", "Upload Files", "action.files.upload.label",
-             {"scope": "page"}),
-            ("read", "Read", "action.files.read.label",
-             {"scope": "record"}),
-            ("delete", "Delete", "action.files.delete.label",
-             {"scope": "record", "destructive": True,
-              "confirmation": "action.files.delete.confirm"}),
-        ),
         "states": (
             ("empty", "No files found.", "state.files.empty.title"),
         ),
@@ -98,33 +89,6 @@ DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
             ("sort", "Sort By", "screen.keywords.filter.sort.label",
              {"control": "select"}),
         ),
-        "actions": (
-            ("update", "Update Keywords", "action.keywords.update.label",
-             {"scope": "page"}),
-            # Selection controls: available whatever is selected, because their
-            # job is to create the selection the other two need.
-            ("select_all", "Select All", "action.keywords.select_all.label",
-             {"scope": "page"}),
-            ("select_none", "Select None", "action.keywords.select_none.label",
-             {"scope": "page"}),
-            # Acts on the selection but not on every record in it: it edits
-            # one keyword - the first selected - after asking when more than
-            # one is selected. Declared as selection scope, because that is
-            # what it needs and what it is offered beside; the "first of N"
-            # rule is recorded in the audit as a semantic the current model
-            # cannot yet say, rather than smuggled into requires_selection.
-            ("edit_selected", "Edit Selected",
-             "action.keywords.edit_selected.label",
-             {"scope": "selection", "requires_selection": True}),
-            ("bulk_delete", "Delete Selected",
-             "action.keywords.bulk_delete.label",
-             {"scope": "bulk", "requires_selection": True, "destructive": True,
-              "confirmation": "action.keywords.bulk_delete.confirm"}),
-            ("merge_duplicates", "Merge Duplicates",
-             "action.keywords.merge_duplicates.label",
-             {"scope": "page", "destructive": True,
-              "confirmation": "action.keywords.merge_duplicates.confirm"}),
-        ),
         "states": (
             ("empty", "No keywords found.", "state.keywords.empty.title"),
         ),
@@ -142,17 +106,6 @@ DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
     # reference (handler, endpoint) is the page's, not the definition's.
     "sources": {
         "title": "Sources",
-        "actions": (
-            ("select_all", "Select All", "action.sources.select_all.label",
-             {"scope": "page"}),
-            ("select_none", "Select None", "action.sources.select_none.label",
-             {"scope": "page"}),
-            ("export_selected", "Export Selected",
-             "action.sources.export_selected.label",
-             {"scope": "bulk", "requires_selection": True}),
-            ("edit_selected", "Edit Selected", "action.sources.edit_selected.label",
-             {"scope": "bulk", "requires_selection": True}),
-        ),
         "states": (
             ("empty", "No sources yet.", "state.sources.empty.title"),
         ),
@@ -162,17 +115,6 @@ DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
     # ---------------------------------------------------------------- sides
     "sides": {
         "title": "Sides",
-        "actions": (
-            ("select_all", "Select All", "action.sides.select_all.label",
-             {"scope": "page"}),
-            ("select_none", "Select None", "action.sides.select_none.label",
-             {"scope": "page"}),
-            ("export_selected", "Export Selected",
-             "action.sides.export_selected.label",
-             {"scope": "bulk", "requires_selection": True}),
-            ("edit_selected", "Edit Selected", "action.sides.edit_selected.label",
-             {"scope": "bulk", "requires_selection": True}),
-        ),
         "states": (
             ("empty", "No sides yet.", "state.sides.empty.title"),
         ),
@@ -189,32 +131,6 @@ DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
              {"render": "number", "align": "end", "sortable": True}),
             ("status", "Status", "screen.words.column.status.label",
              {"render": "status"}),
-        ),
-        "actions": (
-            ("select_all", "Select All", "action.words.select_all.label",
-             {"scope": "page"}),
-            ("select_none", "Select None", "action.words.select_none.label",
-             {"scope": "page"}),
-            # Not a bulk operation, whatever it sits beside: it opens the
-            # editor for one word - the first selected - and asks first when
-            # more than one is selected. Same shape as keywords; the missing
-            # semantic ("one member of the selection") is an audit finding,
-            # not something requires_single_selection can honestly claim.
-            ("edit_selected", "Edit Selected", "action.words.edit_selected.label",
-             {"scope": "selection", "requires_selection": True}),
-            ("bulk_delete", "Delete Selected",
-             "action.words.bulk_delete.label",
-             {"scope": "bulk", "requires_selection": True, "destructive": True,
-              "confirmation": "action.words.bulk_delete.confirm"}),
-            # Per-record actions live in the row, not the toolbar; declaring
-            # them here is what makes the audit able to say so.
-            ("open", "View Details", "action.words.open.label",
-             {"scope": "record"}),
-            ("edit", "Edit", "action.words.edit.label",
-             {"scope": "record"}),
-            ("delete", "Delete", "action.words.delete.label",
-             {"scope": "record", "destructive": True,
-              "confirmation": "action.words.delete.confirm"}),
         ),
         "states": (
             ("empty", "No words found.", "state.words.empty.title"),
@@ -242,12 +158,16 @@ def filters(interface_id: str) -> Tuple[FilterDefinition, ...]:
 
 
 def actions(interface_id: str) -> Tuple[ActionDefinition, ...]:
-    entries = DECLARED_SCREENS.get(interface_id, {}).get("actions", ())
-    return tuple(
-        ActionDefinition(action_id=action_id, label_key=key, source=source,
-                         **options)
-        for action_id, source, key, options in entries
-    )
+    """The actions this screen shows, from the Action Registry.
+
+    A screen does not restate what its buttons *mean*: one catalog owns every
+    action's scope, permission, confirmation and operation reference, and the
+    screen says which interface it is. That is what stops the same action
+    being declared twice with two different meanings.
+    """
+    from .action_registry import for_interface
+
+    return for_interface(interface_id)
 
 
 def states(interface_id: str, prefix: str) -> Tuple[StateDefinition, ...]:

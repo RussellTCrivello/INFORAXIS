@@ -49,12 +49,17 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOC = PROJECT_ROOT / "docs/EXPERIENCE_CONTRACT.md"
 
 #: The interface whose template is read to verify its declarations.
+#: An interface can be served by more than one screen, and a declaration may
+#: name a string that appears on any of them: the file library has its list, a
+#: record page and the reader. A declaration still has to be somewhere real.
 TEMPLATES = {
-    "file_library": "templates/file/files_list.html",
-    "keywords": "templates/Keyword/keywords_list.html",
-    "words": "templates/Word/Word_list.html",
-    "sources": "templates/Sources/sources_list.html",
-    "sides": "templates/Side/sides_list.html",
+    "file_library": ("templates/file/files_list.html",
+                     "templates/file/file_detail.html",
+                     "templates/file/full_content.html"),
+    "keywords": ("templates/Keyword/keywords_list.html",),
+    "words": ("templates/Word/Word_list.html",),
+    "sources": ("templates/Sources/sources_list.html",),
+    "sides": ("templates/Side/sides_list.html",),
 }
 
 
@@ -99,7 +104,8 @@ class TestDeclarationsAreVerifiedAgainstTheScreens:
     @pytest.mark.parametrize("interface_id", sorted(TEMPLATES))
     def test_declared_columns_filters_actions_and_states_exist_on_screen(
             self, interface_id):
-        text = (PROJECT_ROOT / TEMPLATES[interface_id]).read_text()
+        text = "\n".join((PROJECT_ROOT / relative).read_text()
+                         for relative in TEMPLATES[interface_id])
         missing = []
         for items, attribute in (
             (declarations.columns(interface_id), "column_id"),
@@ -139,14 +145,18 @@ class TestTheModelRefusesWhatItShould:
 
     def test_a_destructive_action_must_declare_a_confirmation(self):
         with pytest.raises(ContractError) as error:
-            ActionDefinition(action_id="purge", label_key="action.x.purge.label",
-                             source="Purge", destructive=True)
+            ActionDefinition(action_id="files.purge",
+                             label_key="action.files.purge.label",
+                             source="Purge", interfaces=("file_library",),
+                             destructive=True)
         assert "confirmation" in str(error.value)
 
     def test_a_bulk_action_must_require_a_selection(self):
         with pytest.raises(ContractError) as error:
-            ActionDefinition(action_id="bulk", label_key="action.x.bulk.label",
-                             source="Do many", scope="bulk")
+            ActionDefinition(action_id="files.do_many",
+                             label_key="action.files.do_many.label",
+                             source="Do many", interfaces=("file_library",),
+                             scope="bulk")
         assert "selection" in str(error.value)
 
     def test_a_screen_refuses_two_items_with_the_same_id(self):
@@ -287,51 +297,92 @@ class TestTheDocumentCannotDrift:
 
 
 class TestTheApiIsReadOnlyAndHonest:
-    @pytest.fixture()
-    def client(self):
-        import os
-        import sys
+    """The contract API, against the application the rest of the suite uses.
 
-        sys.path.insert(0, str(PROJECT_ROOT))
-        os.chdir(PROJECT_ROOT)
-        for line in open("/home/user/demo/db.env"):
-            key, value = line.strip().split("=", 1)
-            os.environ[key] = value
-        os.environ["APP_DATA_DIR"] = str(PROJECT_ROOT / "data")
-        from apps.web.app import app
+    These tests used to authenticate against a named demo database on one
+    machine. They take the session's authenticated client instead: the API
+    reads the contract modules, so the database in front of it should be the
+    disposable one the fixtures created, not whatever happened to be running.
+    """
 
-        app.config["WTF_CSRF_ENABLED"] = False
-        client = app.test_client()
-        client.post("/auth/login",
-                    json={"username": "admin", "password": "Inforaxis-Demo-2026"})
-        return client
-
-    def test_contracts_endpoint_reports_the_same_counts(self, client):
+    def test_contracts_endpoint_reports_the_same_counts(self, admin_client):
+        client = admin_client
         payload = client.get("/api/experience/contracts").get_json()
         assert payload["success"] is True
         assert payload["counts"] == contract_counts()
         assert payload["total"] == len(contracts())
 
-    def test_an_unknown_interface_is_a_clear_404(self, client):
+    def test_an_unknown_interface_is_a_clear_404(self, admin_client):
+        client = admin_client
         response = client.get("/api/experience/contracts/not_a_screen")
         assert response.status_code == 404
         body = response.get_json()
         assert body["success"] is False
         assert "registered" in body["error"]
 
-    def test_one_contract_carries_its_problems_and_keys(self, client):
+    def test_one_contract_carries_its_problems_and_keys(self, admin_client):
+        client = admin_client
         payload = client.get("/api/experience/contracts/keywords").get_json()
         assert payload["success"] is True
         assert payload["problems"] == []
         assert payload["contract"]["screen"]["declared"] is True
         assert payload["keys_still_keyed_by_source"]
 
-    def test_the_endpoints_do_not_accept_writes(self, client):
+    def test_the_endpoints_do_not_accept_writes(self, admin_client):
+        client = admin_client
         assert client.post("/api/experience/contracts").status_code == 405
         assert client.put("/api/experience/contracts/keywords").status_code == 405
         assert client.delete("/api/experience/contracts/keywords").status_code == 405
+        for path in ("/api/experience/actions", "/api/experience/actions/keywords.update",
+                     "/api/experience/permissions"):
+            assert client.post(path).status_code == 405, path
+            assert client.delete(path).status_code == 405, path
 
-    def test_coverage_endpoint_matches_the_module(self, client):
+    def test_the_action_registry_is_readable_as_data(self, admin_client):
+        from core.experience.action_registry import counts, registered
+
+        client = admin_client
+        payload = client.get("/api/experience/actions").get_json()
+        assert payload["success"] is True
+        assert payload["counts"] == counts()
+        assert payload["total"] == len(registered())
+
+        one = client.get("/api/experience/actions/keywords.delete_selected").get_json()
+        assert one["success"] is True
+        assert one["action"]["scope"] == "bulk"
+        assert one["action"]["destructive"] is True
+        assert one["action"]["execution"] == "delete_keywords"
+        assert "permission" in one["action"]
+
+        missing = client.get("/api/experience/actions/files.nope")
+        assert missing.status_code == 404
+        assert "registered" in missing.get_json()["error"]
+
+    def test_the_permission_vocabulary_reports_that_it_grants_nothing(
+            self, admin_client):
+        client = admin_client
+        payload = client.get("/api/experience/permissions").get_json()
+        assert payload["success"] is True
+        assert "authoris" in payload["note"]
+        names = [item["permission"] for item in payload["permissions"]]
+        assert "files.download_original" in names
+        for item in payload["permissions"]:
+            assert item["description"], item["permission"]
+            if item["permission"] in payload["reserved"]:
+                assert item["actions"] == [], item["permission"]
+            else:
+                assert item["actions"], (
+                    f"{item['permission']} is neither used nor reported as "
+                    "reserved")
+        # The vocabulary may run ahead of the catalog - the taxonomy and
+        # export families have no actions yet - but never silently: the names
+        # that no action uses are reported.
+        assert set(payload["reserved"]) <= set(names)
+        for name in payload["reserved"]:
+            assert name.startswith(("categories.", "search.", "files.", "jobs.")), name
+
+    def test_coverage_endpoint_matches_the_module(self, admin_client):
+        client = admin_client
         payload = client.get("/api/experience/coverage").get_json()
         assert payload["success"] is True
         assert payload["languages"] == language_coverage()

@@ -30,11 +30,12 @@ python3 -m core.experience.action_audit docs/ACTION_SURFACE_AUDIT.md
 <!-- BEGIN GENERATED: action surfaces -->
 ### What was measured
 
-Three sources, none of them typed by hand:
+Four sources, none of them typed by hand:
 
-* the **declared contract** - the actions somebody has described, which the contract tests already verify against the screen;
+* the **Action Registry** - every action the product offers, with the scope, permission, confirmation and operation reference it declares;
 * the **surfaces the templates carry** - the shared toolbar, the bars still written by hand, record-row actions, browser confirmation dialogs, viewer controls and page-local button state, each with the files that prove it;
-* the **gaps** - actions whose behaviour the current model cannot say, each anchored to code.
+* **what the registry is missing** - actions with no operation behind them, and screens nobody has described;
+* the **gaps** - actions whose behaviour the current model cannot say, each anchored to code. A gap that closes leaves this list; two already have.
 
 This is a measurement of the product as it is, not a target.
 
@@ -44,51 +45,63 @@ This is a measurement of the product as it is, not a target.
 | Navigable screens | 23 |
 | Screens with a described experience | 5 |
 | Screens nobody has described yet | 18 |
-| Declared actions | 24 |
-| - page / record / selection / bulk | 11 / 5 / 2 / 6 |
-| - destructive | 5 |
-| - naming a confirmation | 5 |
-| - naming a permission | 0 |
-| - naming the endpoint that performs them | 0 |
+| Registered actions | 33 |
+| - page / record / selection / bulk | 13 / 9 / 2 / 9 |
+| - destructive | 6 |
+| - naming a confirmation | 8 |
+| - naming a permission | 33 |
+| - naming the operation that owns them | 29 |
+| - declared with no operation behind them | 4 |
 | Templates rendering the shared ActionToolbar | 5 |
 | Hand-written action bars | 1 |
-| Templates with record actions in the row | 3 |
+| Templates with record actions drawn by hand | 3 |
 | Templates with a filter submit inside a bar | 1 |
 | Templates with document viewer controls | 1 |
-| Files still calling the browser confirm() | 20 |
+| Files still calling the browser confirm() | 18 |
 | Files deciding button state by hand | 7 |
-| Actions that do not fit the current abstractions | 11 |
+| Gaps: actions the model cannot describe | 11 |
 
-### Declared actions
+### Registered actions
 
-Permission and endpoint are empty because nothing claims them yet: the permission vocabulary for actions does not exist, and no declared action names the route that performs it. Those two columns are the reason the Action Registry comes next.
+Every action names a permission domain and either an operation or nothing at all. The empty operation column is the honest part: 4 of them are words on a screen that no service owns yet.
 
-| Interface | Action | Scope | Permission | Destructive | Confirmation | Component |
-| --- | --- | --- | --- | --- | --- | --- |
-| file_library | upload | page | - | - | - | hand-written bar |
-| file_library | read | record | - | - | - | record row |
-| file_library | delete | record | - | yes | action.files.delete.confirm | record row |
-| keywords | update | page | - | - | - | ActionToolbar |
-| keywords | select_all | page | - | - | - | ActionToolbar |
-| keywords | select_none | page | - | - | - | ActionToolbar |
-| keywords | edit_selected | selection | - | - | - | ActionToolbar |
-| keywords | bulk_delete | bulk | - | yes | action.keywords.bulk_delete.confirm | ActionToolbar |
-| keywords | merge_duplicates | page | - | yes | action.keywords.merge_duplicates.confirm | ActionToolbar |
-| sources | select_all | page | - | - | - | ActionToolbar |
-| sources | select_none | page | - | - | - | ActionToolbar |
-| sources | export_selected | bulk | - | - | - | ActionToolbar |
-| sources | edit_selected | bulk | - | - | - | ActionToolbar |
-| sides | select_all | page | - | - | - | ActionToolbar |
-| sides | select_none | page | - | - | - | ActionToolbar |
-| sides | export_selected | bulk | - | - | - | ActionToolbar |
-| sides | edit_selected | bulk | - | - | - | ActionToolbar |
-| words | select_all | page | - | - | - | ActionToolbar |
-| words | select_none | page | - | - | - | ActionToolbar |
-| words | edit_selected | selection | - | - | - | ActionToolbar |
-| words | bulk_delete | bulk | - | yes | action.words.bulk_delete.confirm | ActionToolbar |
-| words | open | record | - | - | - | record row |
-| words | edit | record | - | - | - | record row |
-| words | delete | record | - | yes | action.words.delete.confirm | record row |
+Declared with no operation: `sources.edit_selected, sources.export_selected, sides.edit_selected, sides.export_selected`.
+
+| Action | Interface | Scope | Selection | Permission | Destructive | Confirmation | Operation | Component |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| files.select_all | file_library | page | - | files.view | - | - | select_all | hand-written bar |
+| files.select_none | file_library | page | - | files.view | - | - | select_none | hand-written bar |
+| files.upload | file_library | page | - | files.upload | - | - | upload_files | hand-written bar |
+| files.open_record | file_library | record | - | files.view | - | - | view_details | record row |
+| files.analyze_selected | file_library | bulk | all | files.analyze | - | - | analyze_selected | hand-written bar |
+| files.export_selected | file_library | bulk | all | files.export | - | - | export_selected | hand-written bar |
+| files.delete_selected | file_library | bulk | all | files.delete | yes | action.files.delete_selected.confirm | delete_selected | hand-written bar |
+| files.delete | file_library | record | - | files.delete | yes | action.files.delete.confirm | delete_file | record row |
+| files.reprocess | file_library | record | - | files.reprocess | - | action.files.reprocess.confirm | reprocess_file | record row |
+| files.view_original | file_library | record | - | files.view_original | - | - | view_original | record row |
+| files.download_original | file_library | record | - | files.download_original | - | - | download_original | record row |
+| keywords.select_all | keywords | page | - | keywords.view | - | - | select_all | ActionToolbar |
+| keywords.select_none | keywords | page | - | keywords.view | - | - | select_none | ActionToolbar |
+| keywords.update | keywords | page | - | keywords.edit | - | - | update_keywords | ActionToolbar |
+| keywords.edit_selected | keywords | selection | one | keywords.edit | - | - | edit_keyword | ActionToolbar |
+| keywords.delete_selected | keywords | bulk | all | keywords.delete | yes | action.keywords.delete_selected.confirm | delete_keywords | ActionToolbar |
+| keywords.merge_duplicates | keywords | page | - | keywords.delete | yes | action.keywords.merge_duplicates.confirm | merge_duplicate_keywords | ActionToolbar |
+| words.select_all | words | page | - | words.view | - | - | select_all | ActionToolbar |
+| words.select_none | words | page | - | words.view | - | - | select_none | ActionToolbar |
+| words.edit_selected | words | selection | one | words.edit | - | - | edit_word | ActionToolbar |
+| words.delete_selected | words | bulk | all | words.delete | yes | action.words.delete_selected.confirm | delete_words | ActionToolbar |
+| words.open | words | record | - | words.view | - | - | view_details | record + toolbar |
+| words.edit | words | record | - | words.edit | - | - | edit_word | record + toolbar |
+| words.delete | words | record | - | words.delete | yes | action.words.delete.confirm | delete_word | record + toolbar |
+| sources.select_all | sources | page | - | sources.view | - | - | select_all | ActionToolbar |
+| sources.select_none | sources | page | - | sources.view | - | - | select_none | ActionToolbar |
+| sources.edit_selected | sources | bulk | all | sources.edit | - | - | **none** | ActionToolbar |
+| sources.export_selected | sources | bulk | all | export.create | - | - | **none** | ActionToolbar |
+| sides.select_all | sides | page | - | sides.view | - | - | select_all | ActionToolbar |
+| sides.select_none | sides | page | - | sides.view | - | - | select_none | ActionToolbar |
+| sides.edit_selected | sides | bulk | all | sides.edit | - | - | **none** | ActionToolbar |
+| sides.export_selected | sides | bulk | all | export.create | - | - | **none** | ActionToolbar |
+| jobs.cancel | jobs | record | - | jobs.cancel | - | action.jobs.cancel.confirm | cancel_job | no described screen |
 
 ### Surfaces the model does not own yet
 
@@ -101,7 +114,7 @@ Each row is a scan from `SURFACES`, so the count and the files come from one sta
 | Record actions drawn by hand | 3 | `templates/Word/Word_detail.html`, `templates/Word/Word_list.html`, `templates/file/files_list.html` |
 | Filter form submitted from a bar | 1 | `templates/email_words/email_words.html` |
 | Document viewer controls | 1 | `templates/file/full_content.html` |
-| Browser confirm() dialog | 20 | `static/js/pages/analysis-batch-page.js`, `static/js/pages/analyst-categorization-page.js`, `static/js/pages/base-page.js`, `static/js/pages/categories-list-page.js`, `static/js/pages/category-words-page.js`, `static/js/pages/keyword-detail-page.js`, `static/js/pages/keywords-list-page.js`, `static/js/pages/notifications-page.js`, `static/js/pages/saved-searches-page.js`, `static/js/pages/search-advanced-page.js`, `static/js/pages/search-enhanced-page.js`, `static/js/pages/side-detail-page.js`, `static/js/pages/sides-list-page.js`, `static/js/pages/source-detail-page.js`, `static/js/pages/sources-list-page.js`, `static/js/pages/users-page.js`, `static/js/pages/word-detail-page.js`, `static/js/pages/words-list-page.js`, `templates/Operations/jobs.html`, `templates/file/file_detail.html` |
+| Browser confirm() dialog | 18 | `static/js/pages/analysis-batch-page.js`, `static/js/pages/analyst-categorization-page.js`, `static/js/pages/base-page.js`, `static/js/pages/categories-list-page.js`, `static/js/pages/category-words-page.js`, `static/js/pages/keyword-detail-page.js`, `static/js/pages/keywords-list-page.js`, `static/js/pages/notifications-page.js`, `static/js/pages/saved-searches-page.js`, `static/js/pages/search-advanced-page.js`, `static/js/pages/search-enhanced-page.js`, `static/js/pages/side-detail-page.js`, `static/js/pages/sides-list-page.js`, `static/js/pages/source-detail-page.js`, `static/js/pages/sources-list-page.js`, `static/js/pages/users-page.js`, `static/js/pages/word-detail-page.js`, `static/js/pages/words-list-page.js` |
 | Button state decided by the page | 7 | `static/js/pages/analysis-batch-page.js`, `static/js/pages/categories-list-page.js`, `static/js/pages/email-words-page.js`, `static/js/pages/ingestion-studio-page.js`, `static/js/pages/keywords-list-page.js`, `static/js/pages/notifications-page.js`, `static/js/pages/users-page.js` |
 
 The component library counts 5 standardised and 2 hand-written action bars. Those are the same bars seen from two directions: the 5 templates rendering the shared toolbar are listed above, and the hand-written ones split into the file list's action bar and the full-content viewer's bar - which this audit counts as a viewer control, because that is what it is, not as an action bar to migrate.
@@ -112,25 +125,25 @@ The scripts are scanned as well as the templates, which is why the browser `conf
 
 Derived from the table above, not from taste:
 
-* **Record action surface** - the 5 declared record-scope actions, plus the 3 templates that draw record actions themselves (in a row or on a record page).
+* **Record action surface** - the 9 registered record-scope actions, plus the 3 templates that draw record actions themselves.
 * **Specialized composites** - a viewer surface (1 template) for the document controls, and a filter surface (1 template) for the bar that submits a filter form.
-* **Long-running work** - the file library's upload, analyze and archive buttons announce work that finishes later; the action model has no job semantics for them yet.
+* **Confirmation dialog** - 8 registered actions require a confirmation, and 18 files still open the browser's own dialog to get one.
 
 ### Actions that do not fit the current abstractions
 
-This is the agenda for the Action Registry: each row is something the model cannot say today, and the code that proves it.
+This is the agenda for the next layer: each row is something the model cannot say today, and the code that proves it.
 
 | Action | Where | What the model cannot say | Evidence |
 | --- | --- | --- | --- |
-| edit_selected | keywords, words | The action needs a selection (scope=selection) but acts on one member of it - the first record - asking first when several are selected. Nothing in the model distinguishes 'acts on all of the selection' from 'acts on one of it'. | `static/js/pages/keywords-list-page.js`, `static/js/pages/words-list-page.js` |
 | merge_duplicates | keywords | A page action whose confirmation carries runtime numbers - how many duplicates, what will be merged. `confirmation` is a translation key and nothing else, so the dialog cannot be handed values. | `static/js/pages/keywords-list-page.js` |
-| export_selected | sources, sides | Declared bulk with no endpoint: the control exists and the operation does not. The model has no 'declared but not implemented' state, so the audit has to report it - and the pages still own a second refusal ('please select sources to export') that the toolbar already decides. | `static/js/pages/sources-list-page.js`, `static/js/pages/sides-list-page.js` |
-| select_all / select_none | keywords, words, sources, sides | Selection *controls*, declared as page actions because that is the only vocabulary available. They produce the scope the other actions consume; the model has one word for both roles, so the pattern cannot be required of the next screen. | `templates/Sources/sources_list.html`, `templates/Side/sides_list.html` |
-| apply_filters | email_words | A page action that is really a filter surface's control (it submits the filter form). Declaring it as an action would give one control two owners - the filter definition and the action definition. | `templates/email_words/email_words.html` |
-| open / edit / delete (record actions) | file_library, words | Record scope, rendered inside the row today: the model can describe them, but no component owns where they are drawn. That is the Record Action Surface, which does not exist yet. | `templates/Word/Word_list.html`, `templates/file/files_list.html` |
-| upload, bulk analyze, bulk archive | file_library | Long-running work: these start persistent jobs, and the model has no job semantics (RUNNING, progress, 'finished later'). The disabled-until-selected rule is also implemented by hand in this bar. | `templates/file/files_list.html` |
-| export_data (email_words) | email_words | Loading is implemented by the page (button disabled, label swapped) because the action model has no RUNNING state; and the export acts on the filtered set, which is neither page nor selection scope as currently worded. | `static/js/pages/email-words-page.js` |
-| viewer controls | full_content | Copy, Download, Print, Wrap, Smaller/Larger, Dark: document controls, not screen actions, and deliberately not toolbar buttons. They need a viewer surface, and the audit records them so nobody 'fixes' them into one. | `templates/file/full_content.html` |
-| permission | file_library, keywords, sides, sources, words | No action names a permission, because there is no permission vocabulary for actions - only for interfaces. Until there is one, the registry cannot answer 'may this person run this?' when deciding what to render. | `core/experience/declarations.py` |
-| cancel_job, reprocess | operations, file_detail | Record-scope destructive actions confirmed with a browser dialog and declared nowhere, because those screens have no contract yet. They are why the audit is produced before more migration, not after. | `templates/Operations/jobs.html`, `templates/file/file_detail.html` |
+| export_selected, edit_selected | sources, sides | Registered with no operation: the controls exist, the registry says so by leaving `execution` empty, and the audit counts them. What the model lacks is a way to say 'shown, not built' that the interface can honour - today the button is simply there, enabled when rows are selected, and does nothing useful. | `static/js/pages/sources-list-page.js`, `static/js/pages/sides-list-page.js` |
+| select_all / select_none | keywords, words, sources, sides, file_library | Selection *controls*, registered as page actions because that is the only vocabulary available. They produce the scope the other actions consume; the model has one word for both roles, so the pattern cannot be required of the next screen. | `templates/Sources/sources_list.html`, `templates/Side/sides_list.html` |
+| apply_filters | email_words | A page action that is really a filter surface's control (it submits the filter form). Registering it as an action would give one control two owners - the filter definition and the action definition. | `templates/email_words/email_words.html` |
+| open / edit / delete (record actions) | file_library, words | Registered with the right scope, but rendered inside the row by hand: no component owns where a record's actions are drawn. That is the Record Action Surface, which does not exist yet. | `templates/Word/Word_list.html`, `templates/file/files_list.html` |
+| analyze_selected, export_selected, upload | file_library | Registered, and the model can now say an action is running - but not what it started. There is no job reference on an action, so 'Analysis queued. Job AN-4921' cannot be produced from the definition. | `templates/file/files_list.html`, `static/js/modules/file-operations/file-management.js` |
+| view_original, download_original | file_library | The two operations are registered and distinct, and the service behind them is real (inline vs attachment, range requests, path from the database). What the model cannot say is where they are drawn: today they are two hand-written links in the reader, labelled 'Original File' and 'Original' - one of which is a download and does not say so. | `templates/file/full_content.html`, `Api/services/original_file.py` |
+| export_data (email_words) | email_words | Loading is implemented by the page (button disabled, label swapped) although the model has a running state, because nothing tells the page which action it belongs to; and the export acts on the filtered set, which is neither page nor selection scope as currently worded. | `static/js/pages/email-words-page.js` |
+| viewer controls | file_library | Copy, Download, Print, Wrap, Smaller/Larger, Dark: document controls, not record actions, and deliberately not toolbar buttons. They need a viewer surface, and the audit records them so nobody 'fixes' them into one. | `templates/file/full_content.html` |
+| permission | every registered action | Every action now names a permission domain, and nothing enforces one: the vocabulary (core/experience/permissions.py) is a naming scheme for visibility, while the server still authorises by role at the route. Until operations are bound to actions, a permission is a name the inspector can show - not a boundary, and not a reason to hide a control that the server would refuse anyway. | `core/experience/permissions.py` |
+| cancel_job, reprocess | jobs, file_library | Registered as record actions with a confirmation, but the screens they live on have no experience contract, and the confirmation is still a browser dialog written in the template or the page's JavaScript. They are the first two actions the shared Confirmation Dialog has to take over. | `templates/Operations/jobs.html`, `templates/file/file_detail.html` |
 <!-- END GENERATED: action surfaces -->
