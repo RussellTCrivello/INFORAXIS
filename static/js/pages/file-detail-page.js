@@ -5,6 +5,7 @@
 
 import { buildPattern, highlight, clearHighlights, getMarks, setCurrentMatch }
     from '../modules/content-highlighter.js';
+import { initOriginalContentTab } from '../modules/original-content-tab.js';
 
 // Load translations from JSON script tag
 let translations = {};
@@ -61,6 +62,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('File detail page loaded');
     console.log(`Total chars: ${totalChars}, Total pages: ${totalPages}`);
+
+    // Extracted/Original tabs — the original file renders in place, where
+    // the extracted text is (same pop-up viewer the analysis uses).
+    initOriginalContentTab(fileId);
     
     // Format content based on file type
     const contentViewer = document.getElementById('contentViewer');
