@@ -27,7 +27,11 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
-    {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+{% from 'components/states.html' import empty_state %}
+{% from 'components/status_badge.html' import status_badge %}
+{% from 'components/filter_bar.html' import filter_section, filter_grid, filter_group, search_group %}
+{% from 'components/action_toolbar.html' import action_toolbar, action_group, action_button, bulk_action_button, selection_summary %}
+    {% call page_tips() %}
 
 <div class="tips-section">
     <div class="tips-section-title">
@@ -107,106 +111,66 @@
 </div>
 
 <!-- Filters Section -->
-<div class="file-filters-section">
+{% call filter_section() %}
     <!-- Search and Main Filters -->
-    <div class="filter-controls-grid">
-        <div class="filter-group filter-group-search">
-            <label for="searchKeywords" class="filter-label">
-                <i class="bi bi-search"></i>
-                {{ _('Search Keywords') }}
-            </label>
-            <div class="search-input-wrapper">
-                <input type="text" 
-                       id="searchKeywords" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search keywords...') }}" 
-                       autocomplete="off">
-                <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
-                    <i class="bi bi-x"></i>
-                </button>
-            </div>
-        </div>
+    {% call filter_grid() %}
+        {{ search_group('searchKeywords', _('Search Keywords'),
+                        _('Search keywords...'), onclear='clearSearch()') }}
 
-        <div class="filter-group">
-            <label for="statusFilter" class="filter-label">
-                <i class="bi bi-check-circle"></i>
-                {{ _('Status') }}
-            </label>
+        {% call filter_group('statusFilter', _('Status'), 'bi-check-circle') %}
             <select class="form-select" id="statusFilter" onchange="applyFilters()">
                 <option value="">{{ _('All Status') }}</option>
                 <option value="active">{{ _('Active') }}</option>
                 <option value="unused">{{ _('Unused') }}</option>
             </select>
-        </div>
+        {% endcall %}
 
-        <div class="filter-group">
-            <label for="categoryFilter" class="filter-label">
-                <i class="bi bi-tags"></i>
-                {{ _('Category') }}
-            </label>
+        {% call filter_group('categoryFilter', _('Category'), 'bi-tags') %}
             <select class="form-select" id="categoryFilter" onchange="applyFilters()">
                 <option value="">{{ _('All Categories') }}</option>
             </select>
-        </div>
+        {% endcall %}
 
-        <div class="filter-group">
-            <label for="sortBy" class="filter-label">
-                <i class="bi bi-sort-alpha-down"></i>
-                {{ _('Sort By') }}
-            </label>
+        {% call filter_group('sortBy', _('Sort By'), 'bi-sort-alpha-down') %}
             <select class="form-select" id="sortBy" onchange="applySorting()">
                 <option value="usage_count">{{ _('Usage Count') }}</option>
                 <option value="text">{{ _('Text') }}</option>
                 <option value="id">{{ _('ID') }}</option>
                 <option value="date_creation">{{ _('Date Created') }}</option>
             </select>
-        </div>
+        {% endcall %}
 
-        <div class="filter-group">
-            <label for="sortOrder" class="filter-label">
-                <i class="bi bi-arrow-down-up"></i>
-                {{ _('Order') }}
-            </label>
+        {% call filter_group('sortOrder', _('Order'), 'bi-arrow-down-up') %}
             <select class="form-select" id="sortOrder" onchange="applySorting()">
                 <option value="desc">{{ _('Descending') }}</option>
                 <option value="asc">{{ _('Ascending') }}</option>
             </select>
-        </div>
-    </div>
+        {% endcall %}
+    {% endcall %}
 
     <!-- Action Bar -->
-    <div class="action-bar">
-        <div class="action-group">
-            <span class="action-label">{{ _('Selection:') }}</span>
-            <button class="btn-action" onclick="selectAll()">
-                <i class="bi bi-check-square"></i>
-                {{ _('Select All') }}
-            </button>
-            <button class="btn-action" onclick="selectNone()">
-                <i class="bi bi-square"></i>
-                {{ _('Select None') }}
-            </button>
-        </div>
-        <div class="action-group">
-            <span class="action-label">{{ _('Bulk Actions:') }}</span>
-            <button class="btn-action btn-outline-warning" onclick="bulkUpdate()" id="bulkUpdateBtn" disabled>
-                <i class="bi bi-pencil"></i>
-                {{ _('Edit Selected') }}
-            </button>
-            <button class="btn-action btn-outline-danger" onclick="bulkDelete()" id="bulkDeleteBtn" disabled>
-                <i class="bi bi-trash"></i>
-                {{ _('Delete Selected') }}
-            </button>
-        </div>
-        <div class="action-group">
-            <span class="action-label">{{ _('Actions:') }}</span>
-            <button class="btn-action btn-warning" onclick="mergeAllDuplicates()" title="{{ _('Merge all duplicate keywords') }}">
-                <i class="bi bi-arrow-down-up"></i>
-                {{ _('Merge Duplicates') }}
-            </button>
-        </div>
-    </div>
-</div>
+    {% call action_toolbar(id='keywordsActionBar', label=_('Actions'), interface_id=inspector_interface) %}
+        {% call action_group(_('Selection:')) %}
+            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()', interface_id=inspector_interface, action_id='keywords.select_all') }}
+            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()', interface_id=inspector_interface, action_id='keywords.select_none') }}
+        {% endcall %}
+        {% call action_group(_('Bulk Actions:')) %}
+            {{ selection_summary(total_keywords|default(0), _('keywords'), _('keyword')) }}
+            {{ bulk_action_button(_('Edit Selected'), icon='bi-pencil', onclick='bulkUpdate()',
+                 tone='outline-warning', id='bulkUpdateBtn', noun=_('keywords'),
+                 interface_id=inspector_interface, action_id='keywords.edit_selected') }}
+            {{ bulk_action_button(_('Delete Selected'), icon='bi-trash', onclick='bulkDelete()',
+                 tone='outline-danger', id='bulkDeleteBtn', noun=_('keywords'),
+                 interface_id=inspector_interface, action_id='keywords.delete_selected') }}
+        {% endcall %}
+        {% call action_group(_('Actions:')) %}
+            {{ action_button(_('Merge Duplicates'), icon='bi-arrow-down-up',
+                 onclick='mergeAllDuplicates()', tone='warning',
+                 title=_('Merge all duplicate keywords'),
+                 interface_id=inspector_interface, action_id='keywords.merge_duplicates') }}
+        {% endcall %}
+    {% endcall %}
+{% endcall %}
 
 <!-- Pagination info above table -->
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -286,18 +250,14 @@
                         <td>
                             <strong>{{ keyword.text }}</strong>
                             {% if keyword.is_duplicate %}
-                                <span class="badge bg-warning ms-2" title="{{ _('Duplicate keyword') }}">{{ _('Duplicate') }}</span>
+                                {{ status_badge(status='duplicate', title=_('Duplicate keyword'), extra_class='ms-2') }}
                             {% endif %}
                         </td>
                         <td>
                             <span class="badge bg-info">{{ keyword.usage_count }}</span>
                         </td>
                         <td>
-                            {% if keyword.usage_count > 0 %}
-                                <span class="badge bg-success">{{ _('Active') }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ _('Unused') }}</span>
-                            {% endif %}
+                            {{ status_badge(status='active' if keyword.usage_count > 0 else 'unused') }}
                         </td>
                         <td>
                             <span class="text-muted">{{ keyword.category_name|default(_('Uncategorized')) }}</span>
@@ -326,13 +286,11 @@
                 {% else %}
                     <tr>
                         <td colspan="7" class="text-center py-4">
-                            <div class="empty-state">
-                                <i class="bi bi-inbox"></i>
-                                <p>{{ _('No keywords found.') }}</p>
-                                <button class="btn btn-primary" onclick="openAddKeywordModal()">
-                                    {{ _('Add your first keyword') }}
-                                </button>
-                            </div>
+                            {{ empty_state(
+                                message=_('No keywords found.'),
+                                action_label=_('Add your first keyword'),
+                                action_onclick='openAddKeywordModal()',
+                                action_icon=None) }}
                         </td>
                     </tr>
                 {% endif %}

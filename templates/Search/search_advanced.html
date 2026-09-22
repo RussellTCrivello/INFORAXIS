@@ -24,7 +24,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
-{% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+{% call page_tips() %}
 <div class="tips-section">
     <div class="tips-section-title">
         <i class="bi bi-funnel"></i>
@@ -233,7 +233,7 @@
             <!-- Analyst Categories Filter (manual taxonomy - separate namespace, FR-1.4) -->
             <div class="filter-group">
                 <label class="filter-label" for="analystCategoriesFilter">
-                    <i class="bi bi-person-tags me-1" aria-hidden="true"></i>
+                    <i class="bi bi-person-badge me-1" aria-hidden="true"></i>
                     {{ _('Analyst Categories') }}
                     <small class="filter-sublabel">{{ _('manually assigned') }}</small>
                 </label>

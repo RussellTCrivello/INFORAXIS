@@ -190,6 +190,39 @@
     <script src="{{ url_for('static', filename='js/i18n/locales/he.js') }}?v=20260912b" defer></script>
     <script src="{{ url_for('static', filename='js/i18n/locales/fa.js') }}?v=20260912b" defer></script>
     <script src="{{ url_for('static', filename='js/modules/core/app-i18n.js') }}?v=20260912b" defer></script>
+    {#- The status vocabulary, defined once in core/frontend/status_vocabulary.py.
+        Server-rendered badges and JavaScript that draws a status chip both read
+        this, so there is one answer to "what colour is a paused job". -#}
+    {% if status_vocabulary %}
+    <script type="application/json" id="status-vocabulary">{{ status_vocabulary|tojson }}</script>
+    {% endif %}
+    <script src="{{ url_for('static', filename='js/modules/core/status.js') }}?v=20260921a" defer></script>
+    {#- Keyboard and loading behaviour for the search box component. The
+        component renders it; this is what makes Escape clear it. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/search-input.js') }}?v=20260921a" defer></script>
+    {#- The selection a bulk action applies to. The component renders the bar
+        and the disabled state; this keeps the scope in step as rows are
+        selected, so a bulk action is never enabled without saying what it
+        would affect. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/action-toolbar.js') }}?v=20260921a" defer></script>
+    {#- Asking before something irreversible. The dialog is a component each
+        page renders; this is what turns an answer into a boolean and nothing
+        else - the page still performs the operation. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/confirm-dialog.js') }}?v=20260921a" defer></script>
+    {#- Every action ends visibly. One region, one set of tones, text only. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/toast.js') }}?v=20260921a" defer></script>
+    {#- The actions a record offers: the question, the busy state and the
+        toast. The page supplies what each action does; this supplies how it
+        is asked for, and nothing else. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/record-actions.js') }}?v=20260922a" defer></script>
+    {#- The Screen Inspector: a read-only panel that says which registry entry,
+        component, action and binding owns an element. Rendered and loaded only
+        when the installation switched it on and this account may use it; the
+        endpoint it reads is guarded on its own, because a hidden tool is not a
+        secured one. -#}
+    {% if inspector_enabled %}
+    <script src="{{ url_for('static', filename='js/modules/core/screen-inspector.js') }}?v=20260923a" defer></script>
+    {% endif %}
 </head>
 
 <body data-page-type="{% block page_type %}default{% endblock %}"
@@ -216,215 +249,9 @@
             <h4>{{ user_settings.get('system', 'app_name', _('File Analysis')) if user_settings else _('File Analysis') }}</h4>
         </div>
         
-        <!-- Navigation Menu -->
-        <ul class="sidebar-nav">
-            <!-- Dashboard -->
-            {% if is_interface_enabled('dashboard') %}
-            <li class="sidebar-nav-item">
-                <span class="sidebar-section-label">{{ _('General') }}</span>
-            </li>
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('index') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'index' or request.endpoint == 'comprehensive_dashboard' or request.endpoint == 'charts_dashboard' %}active{% endif %}" 
-                   data-endpoint="index">
-                    <i class="bi bi-speedometer2"></i>
-                    <span>{{ _('Dashboard') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            <!-- Operations (unified input/import/jobs control surface) -->
-            {# The ONLY way into ingestion. The retired upload page had its own
-               shortcut here as well ("Upload Files" -> files.upload_page); both
-               landed on this same page, so the sidebar showed two icons for one
-               destination. The interface switch that used to gate that shortcut
-               ('upload_files') now gates this one, which is what it always
-               meant: whether the operator sees a way in from the menu. #}
-            {% if is_interface_enabled('upload_files') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('operations_input_page') }}"
-                   class="sidebar-nav-link {% if request.endpoint == 'operations_input_page' or request.endpoint == 'files.upload_page' %}active{% endif %}"
-                   data-endpoint="operations_input_page">
-                    <i class="bi bi-folder-plus"></i>
-                    <span>{{ _('Input / Ingestion') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('operations_import_page') }}"
-                   class="sidebar-nav-link {% if request.endpoint == 'operations_import_page' %}active{% endif %}"
-                   data-endpoint="operations_import_page">
-                    <i class="bi bi-box-arrow-in-down"></i>
-                    <span>{{ _('Import Center') }}</span>
-                </a>
-            </li>
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('operations_jobs_page') }}"
-                   class="sidebar-nav-link {% if request.endpoint == 'operations_jobs_page' or request.endpoint == 'operations_job_detail_page' %}active{% endif %}"
-                   data-endpoint="operations_jobs_page">
-                    <i class="bi bi-list-check"></i>
-                    <span>{{ _('Jobs') }}</span>
-                </a>
-            </li>
-            
-            <!-- Analysis -->
-            {% if is_interface_enabled('file_analysis') or is_interface_enabled('path_analysis') or is_interface_enabled('batch_analysis') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('archives_page') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'archives_page' or request.endpoint == 'path_analysis_page' or request.endpoint == 'analysis_batch' %}active{% endif %}" 
-                   data-endpoint="archives_page">
-                    <i class="bi bi-archive"></i>
-                    <span>{{ _('Analysis') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            <!-- Search -->
-            {% if is_interface_enabled('search') or is_interface_enabled('advanced_search') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('search_page') }}"
-                   class="sidebar-nav-link {% if request.endpoint == 'search_page' or request.endpoint == 'search_advanced' or request.endpoint == 'search_enhanced_page' %}active{% endif %}"
-                   data-endpoint="search_page">
-                    <i class="bi bi-search"></i>
-                    <span>{{ _('Search') }}</span>
-                </a>
-            </li>
-            {% endif %}
+        <!-- Navigation Menu: rendered from the interface registry -->
+        {% include 'components/sidebar_nav.html' %}
 
-            <!-- Analyst Categorization (manual layer - separate from smart
-                 classification; guarded by its own interface toggle) -->
-            {% if is_interface_enabled('analyst_categorization') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('analyst_categorization_page') }}"
-                   class="sidebar-nav-link analyst-nav-link {% if request.endpoint == 'analyst_categorization_page' %}active{% endif %}"
-                   data-endpoint="analyst_categorization_page">
-                    <i class="bi bi-person-tags"></i>
-                    <span>{{ _('Analyst Categories') }}</span>
-                </a>
-            </li>
-            {% endif %}
-
-            <!-- Data Management -->
-            {% set data_section_visible = is_interface_enabled('sources') or is_interface_enabled('sides') or is_interface_enabled('email_words') or is_interface_enabled('keywords') or is_interface_enabled('words') or is_interface_enabled('categories') or is_interface_enabled('file_library') %}
-            {% if data_section_visible %}
-            <li class="sidebar-nav-item">
-                <span class="sidebar-section-label">{{ _('Data Management') }}</span>
-            </li>
-            {% endif %}
-            {% if is_interface_enabled('sources') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('sources_list') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'sources_list' %}active{% endif %}" 
-                   data-endpoint="sources_list">
-                    <i class="bi bi-building"></i>
-                    <span>{{ _('Sources') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            {% if is_interface_enabled('sides') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('sides_list') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'sides_list' %}active{% endif %}" 
-                   data-endpoint="sides_list">
-                    <i class="bi bi-diagram-3"></i>
-                    <span>{{ _('Sides') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            {% if is_interface_enabled('email_words') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('email_words') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'email_words' %}active{% endif %}" 
-                   data-endpoint="email_words">
-                    <i class="bi bi-envelope-at"></i>
-                    <span>{{ _('Email Words') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            {% if is_interface_enabled('keywords') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('keywords_list') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'keywords_list' %}active{% endif %}" 
-                   data-endpoint="keywords_list">
-                    <i class="bi bi-key"></i>
-                    <span>{{ _('Keywords') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            {% if is_interface_enabled('words') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('words_list') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'words_list' %}active{% endif %}" 
-                   data-endpoint="words_list">
-                    <i class="bi bi-book"></i>
-                    <span>{{ _('Words') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            {% if is_interface_enabled('categories') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('categories_list') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'categories_list' %}active{% endif %}" 
-                   data-endpoint="categories_list">
-                    <i class="bi bi-tags"></i>
-                    <span>{{ _('Categories') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            {% if is_interface_enabled('file_library') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('files.files_list') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'files.files_list' %}active{% endif %}" 
-                   data-endpoint="files.files_list">
-                    <i class="bi bi-folder2-open"></i>
-                    <span>{{ _('File Library') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            <!-- System -->
-            {% if is_interface_enabled('notifications') or (is_interface_enabled('settings') and current_user.is_admin) %}
-            <li class="sidebar-nav-item">
-                <span class="sidebar-section-label">{{ _('System') }}</span>
-            </li>
-            {% endif %}
-            {% if is_interface_enabled('notifications') %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('notifications_page') }}" 
-                   class="sidebar-nav-link {% if request.endpoint == 'notifications_page' %}active{% endif %}" 
-                   data-endpoint="notifications_page">
-                    <i class="bi bi-bell"></i>
-                    <span>{{ _('Notifications') }}</span>
-                </a>
-            </li>
-            {% endif %}
-            
-            {% if is_interface_enabled('settings') and current_user.is_admin %}
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('settings_page_direct') }}"
-                   class="sidebar-nav-link {% if request.endpoint == 'settings_page_direct' %}active{% endif %}"
-                   data-endpoint="settings_page_direct">
-                    <i class="bi bi-gear"></i>
-                    <span>{{ _('Settings') }}</span>
-                </a>
-            </li>
-            <li class="sidebar-nav-item">
-                <a href="{{ url_for('users_page') }}"
-                   class="sidebar-nav-link {% if request.endpoint == 'users_page' %}active{% endif %}"
-                   data-endpoint="users_page">
-                    <i class="bi bi-people"></i>
-                    <span>{{ _('User Management') }}</span>
-                </a>
-            </li>
-            {% endif %}
-        </ul>
-        
         <!-- Sidebar Footer: Language Switcher + Version -->
         <div class="sidebar-footer">
             <label class="sidebar-section-label" for="sidebarLanguageSelect">{{ _('Language') }}</label>
@@ -510,40 +337,22 @@
                     <nav aria-label="breadcrumb" class="flex-grow-1">
                         <ol class="breadcrumb mb-0">
                             {% block breadcrumb %}
-                            <li class="breadcrumb-item">
-                                <a href="{{ url_for('index') }}">
-                                    <i class="bi bi-house-door me-1"></i>{{ _('Home') }}
-                                </a>
+                            {# Labels come from the registry, via the `page`
+                               the application prepared. `base.html` used to
+                               carry two hand-written endpoint dictionaries,
+                               which disagreed with each other and with the
+                               registry. #}
+                            {% set _crumbs = page_identity.breadcrumbs if page_identity and page_identity.breadcrumbs else () %}
+                            {% for crumb in _crumbs %}
+                            <li class="breadcrumb-item {% if crumb.current %}active{% endif %}"
+                                {% if crumb.current %}aria-current="page"{% endif %}>
+                                {% if crumb.url and not crumb.current %}
+                                    <a href="{{ crumb.url }}">{% if crumb.icon %}<i class="bi {{ crumb.icon }} me-1" aria-hidden="true"></i>{% endif %}{{ _(crumb.label) }}</a>
+                                {% else %}
+                                    {{ _(crumb.label) }}
+                                {% endif %}
                             </li>
-                            {% if request.endpoint and request.endpoint != 'index' %}
-                            <li class="breadcrumb-item active" aria-current="page">
-                                {% set endpoint_labels = {
-                                    'index': _('Dashboard'),
-                                    'comprehensive_dashboard': _('Dashboard'),
-                                    'charts_dashboard': _('Dashboard'),
-                                    'archives_page': _('Analysis'),
-                                    'path_analysis_page': _('Analysis'),
-                                    'analysis_batch': _('Analysis'),
-                                    'file_classification_page': _('Analysis'),
-                                    'saved_searches_page': _('Search'),
-                                    'sources_list': _('Sources'),
-                                    'sides_list': _('Sides'),
-                                    'email_words': _('Email Words'),
-                                    'search_page': _('Search'),
-                                    'search_advanced': _('Search'),
-                                    'search_enhanced_page': _('Search'),
-                                    'operations_input_page': _('Input / Ingestion'),
-                                    'files.files_list': _('File Library'),
-                                    'keywords_list': _('Keywords'),
-                                    'words_list': _('Words'),
-                                    'word_detail': _('Word Details'),
-                                    'settings_page': _('Settings'),
-                                    'notifications_page': _('Notifications')
-                                } %}
-                                {% set endpoint_name = endpoint_labels.get(request.endpoint, request.endpoint.replace('_', ' ').title()) %}
-                                {{ endpoint_name }}
-                            </li>
-                            {% endif %}
+                            {% endfor %}
                             {% endblock %}
                         </ol>
                     </nav>
@@ -564,33 +373,11 @@
                         </a>
                         
                         {% block page_title %}
-                        {% if request.endpoint %}
-                        <span class="text-muted small">
-                            <i class="bi bi-file-earmark-text me-1"></i>
-                            {% set endpoint_labels = {
-                                    'index': _('Dashboard'),
-                                    'comprehensive_dashboard': _('Dashboard'),
-                                    'charts_dashboard': _('Dashboard'),
-                                    'archives_page': _('Analysis'),
-                                    'path_analysis_page': _('Analysis'),
-                                    'analysis_batch': _('Analysis'),
-                                    'file_classification_page': _('Analysis'),
-                                    'saved_searches_page': _('Search'),
-                                    'sources_list': _('Sources'),
-                                    'sides_list': _('Sides'),
-                                    'email_words': _('Email Words'),
-                                    'search_page': _('Search'),
-                                    'search_advanced': _('Search'),
-                                    'search_enhanced_page': _('Search'),
-                                    'operations_input_page': _('Input / Ingestion'),
-                                    'files.files_list': _('File Library'),
-                                    'keywords_list': _('Keywords'),
-                                    'words_list': _('Words'),
-                                    'word_detail': _('Word Details'),
-                                    'settings_page': _('Settings'),
-                                    'notifications_page': _('Notifications')
-                                } %}
-                            {{ endpoint_labels.get(request.endpoint, request.endpoint.replace('_', ' ').title()) }}
+                        {% if page_identity and page_identity.interface_id %}
+                        <span class="text-muted small topbar-page-identity">
+                            <i class="bi {{ page_identity.icon or 'bi-file-earmark-text' }} me-1" aria-hidden="true"></i>
+                            {{ _(page_identity.label) }}
+                            {% if page_identity.badge %}<span class="badge text-bg-secondary ms-1">{{ _(page_identity.badge) }}</span>{% endif %}
                         </span>
                         {% endif %}
                         {% endblock %}
@@ -776,6 +563,27 @@
     <!-- Global Modal Fix - Ensures proper modal behavior and interaction -->
     <script type="module" src="{{ url_for('static', filename='js/modules/core/modal-fix.js') }}" defer></script>
     
+    {#- The Screen Inspector, when the installation turned it on for an account
+        that may use it. -#}
+    {% if inspector_enabled %}
+    {% from 'components/screen_inspector.html' import screen_inspector %}
+    {{ screen_inspector(enabled=True, interface_id=inspector_interface) }}
+    <script type="module">
+        // Deferred scripts run before DOMContentLoaded, so the runtime is there;
+        // `init()` is idempotent, which is what lets a page module call it too.
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.ScreenInspector) {
+                window.ScreenInspector.init();
+            }
+        });
+    </script>
+    {% endif %}
+
+    {#- One live region for the whole application: an action that finished
+        says so in one place, whatever page it happened on. -#}
+    {% from 'components/toast.html' import toast_region %}
+    {{ toast_region() }}
+
     <!-- Page-Specific JavaScript -->
     {% block extra_js %}{% endblock %}
     

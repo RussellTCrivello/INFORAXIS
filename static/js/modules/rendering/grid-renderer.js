@@ -3,7 +3,7 @@
  * Extracted from the legacy file-management-system.js
  */
 
-import { escapeHtml } from '../core/utils.js';
+import { escapeAttribute, escapeHtml } from '../core/utils.js';
 import { translations, sectionLabels } from '../core/config.js';
 import { renderSectionPaginationControls } from './pagination.js';
 
@@ -99,16 +99,18 @@ export function renderGridView(items, section, showPagination = false) {
                         const lon = item.longitude !== null && item.longitude !== undefined ? item.longitude : '';
                         const coordsStr = item.coordinates || '';
                         
-                        // Escape for HTML attribute
-                        const safeLat = escapeHtml(String(lat)).replace(/"/g, '&quot;');
-                        const safeLon = escapeHtml(String(lon)).replace(/"/g, '&quot;');
-                        const safeCoords = escapeHtml(coordsStr).replace(/"/g, '&quot;');
+                        // Attribute context: escapeAttribute handles quotes and
+                        // ampersands, so a coordinate string can never end the
+                        // attribute or open a handler of its own.
+                        const latAttr = escapeAttribute(String(lat));
+                        const lonAttr = escapeAttribute(String(lon));
+                        const coordsAttr = escapeAttribute(coordsStr);
                         
                         // If we have parsed lat/lon, pass them; otherwise pass the string
                         if (lat !== '' && lon !== '') {
                             copyButtonHtml = `
                                 <button class="btn btn-sm btn-outline-secondary geolocation-copy-btn" 
-                                        onclick="event.stopPropagation(); copyGeolocationCoordinates('${safeLat}', this, '${safeLon}');"
+                                        data-copy-coordinates="${latAttr}" data-copy-longitude="${lonAttr}"
                                         title="${translations.copyCoordinates || 'Copy coordinates'}"
                                         aria-label="${translations.copyCoordinates || 'Copy coordinates'}"
                                         style="position: absolute; top: 0.25rem; right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; z-index: 10;">
@@ -117,7 +119,7 @@ export function renderGridView(items, section, showPagination = false) {
                         } else if (coordsStr) {
                             copyButtonHtml = `
                                 <button class="btn btn-sm btn-outline-secondary geolocation-copy-btn" 
-                                        onclick="event.stopPropagation(); copyGeolocationCoordinates('${safeCoords}', this);"
+                                        data-copy-coordinates="${coordsAttr}"
                                         title="${translations.copyCoordinates || 'Copy coordinates'}"
                                         aria-label="${translations.copyCoordinates || 'Copy coordinates'}"
                                         style="position: absolute; top: 0.25rem; right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; z-index: 10;">

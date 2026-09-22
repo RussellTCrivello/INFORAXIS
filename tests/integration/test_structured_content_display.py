@@ -257,6 +257,13 @@ def test_docx_raw_text_preserves_styles_and_tables(ingested):
     assert "The year in review was stable." in text
     assert "Metric\tValue" in text
     assert "Uptime\t99.9%" in text
+    # The table marker is what the display layer uses to open the table: the
+    # rows alone would come back as tab-separated prose (the reported defect).
+    assert "Table 1" in text
+    # One row per line, cells tab-separated: two rows, not one paragraph.
+    table_lines = [line for line in text.splitlines()
+                   if line.startswith(("Metric\t", "Uptime\t"))]
+    assert table_lines == ["Metric\tValue", "Uptime\t99.9%"], table_lines
 
 
 def test_markdown_source_is_verbatim(ingested):

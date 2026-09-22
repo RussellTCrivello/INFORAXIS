@@ -3,25 +3,110 @@
  * Extracted from the legacy file-management-system.js
  */
 
-import { escapeHtml, formatFileSize } from '../core/utils.js';
+import { escapeAttribute, escapeHtml, formatFileSize } from '../core/utils.js';
 import { translations } from '../core/config.js';
 import { renderFilePaginationControls, updateNavItemCount, initializeFilePaginationControls } from '../rendering/pagination.js';
 import { navigationState, fileNavigationState } from '../core/state.js';
 import { getFileViewMode } from '../ui/view-mode.js';
 
 /**
+ * One delegated handler for the file list.
+ *
+ * Cards used to carry their whole payload inside inline handlers:
+ *
+ *     onclick="showFileDetails?.(12, '<name>', <files as JSON>, 0)"
+ *
+ * and a filename is not code. escapeHtml is a text-node escaper - it leaves
+ * quotes alone - so a name with an apostrophe ended the JavaScript string
+ * early and the browser refused to compile the handler ("missing ) after
+ * argument list" repeated in the console); a name with a double quote closed
+ * the attribute as well. Every card in the listing was dead: clicking did
+ * nothing, and the console filled with errors.
+ *
+ * The click contract is therefore data, not source text:
+ *
+ *     data-file-id / data-file-name / data-file-index   who the card is
+ *     data-file-action="open" | "export" | "full-view"  what the click does
+ *
+ * Names live in attributes escaped with escapeAttribute and are read back with
+ * getAttribute(), which the browser un-escapes - so the modal still shows the
+ * real filename, and no filename is ever parsed as code. Links, checkboxes and
+ * other native controls keep their own behaviour.
+ *
+ * @param {Event} event - click event (delegated from the content container)
+ * @returns {boolean} true when the click was handled here
+ */
+export function handleFileCardClick(event) {
+    const target = event && event.target;
+    if (!target || typeof target.closest !== 'function') return false;
+    // Native controls first: an anchor navigates, a checkbox toggles.
+    if (target.closest('a, input, select, textarea, label')) return false;
+
+    const card = target.closest('.file-card, .file-grid-item, [data-file-id]');
+    if (!card) return false;
+
+    const actionEl = target.closest('[data-file-action]');
+    const action = (actionEl && actionEl.getAttribute('data-file-action')) || 'open';
+
+    const idSource = (actionEl && actionEl.getAttribute('data-file-id'))
+        || card.getAttribute('data-file-id');
+    const fileId = parseInt(idSource, 10);
+    if (!Number.isInteger(fileId)) return false;
+
+    if (action === 'export') {
+        if (typeof window.exportFile === 'function') window.exportFile(fileId);
+        return true;
+    }
+    if (action !== 'open') return false;
+
+    const name = card.getAttribute('data-file-name') || 'File';
+    const indexAttr = card.getAttribute('data-file-index');
+    const index = indexAttr === null ? -1 : parseInt(indexAttr, 10);
+    // The page on screen is the list this renderer stored, so Previous/Next in
+    // the modal keeps walking the page the user is looking at.
+    const files = Array.isArray(fileNavigationState.currentFiles)
+        ? fileNavigationState.currentFiles : null;
+    const details = window.fms && window.fms.fileOperations
+        && window.fms.fileOperations.fileDetails;
+    const open = (details && details.showFileDetails) || window.showFileDetails;
+    if (typeof open !== 'function') return false;
+    open(fileId, name, files, Number.isInteger(index) ? index : -1);
+    return true;
+}
+
+//: Delegation is registered once per document, however often the list re-renders.
+let fileCardDelegationBound = false;
+
+/**
+ * Attach the delegated click handler to the rendered file list (idempotent).
+ */
+export function ensureFileCardDelegation() {
+    if (fileCardDelegationBound) return;
+    const host = (typeof document !== 'undefined'
+        && (document.getElementById('unifiedContentView') || document.body))
+        || null;
+    if (!host || typeof host.addEventListener !== 'function') return;
+    host.addEventListener('click', handleFileCardClick);
+    fileCardDelegationBound = true;
+}
+
+/**
  * Render a single file card (for list view)
  */
-function renderFileCard(file, fileNumber, filesList, index) {
+function renderFileCard(file, fileNumber, index) {
     const fileSize = formatFileSize(file.size || 0);
     const fileType = file.type || file.file_type || '';
     const fileDate = file.file_date || file.date || file.created_at || '';
     const fileSource = file.source || file.source_name || '';
     const fileSide = file.side || file.side_name || '';
-    const safeName = escapeHtml(file.name || `File ${fileNumber}`);
+    const displayName = file.name || `File ${fileNumber}`;
+    const safeName = escapeHtml(displayName);
+    // Attribute context needs the attribute escaper: a quote in a filename
+    // must not be able to close the attribute or open a handler of its own.
+    const nameAttr = escapeAttribute(displayName);
     
     return `
-        <div class="file-card" data-file-id="${file.id}" data-file-name="${safeName}" data-file-index="${index}" style="border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem; display: flex; gap: 1rem; align-items: flex-start; cursor: pointer; position: relative;" onclick="showFileDetails?.(${file.id}, '${safeName}', ${JSON.stringify(filesList).replace(/"/g, '&quot;')}, ${index})">
+        <div class="file-card" data-file-id="${file.id}" data-file-action="open" data-file-name="${nameAttr}" data-file-index="${index}" style="border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem; display: flex; gap: 1rem; align-items: flex-start; cursor: pointer; position: relative;">
             <div class="file-card-number" style="position: absolute; top: 0.5rem; left: 0.5rem; background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; z-index: 10; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">${fileNumber}</div>
             <div class="file-card-icon"><i class="bi bi-file-earmark" aria-hidden="true"></i></div>
             <div class="file-card-body" style="flex: 1;">
@@ -34,22 +119,22 @@ function renderFileCard(file, fileNumber, filesList, index) {
                     <span><i class="bi bi-tag"></i> ${escapeHtml(fileType || '—')}</span>
                 </div>
                 <div class="file-card-actions" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="action-btn" onclick="showFileDetails?.(${file.id}, '${safeName}', ${JSON.stringify(filesList).replace(/"/g, '&quot;')}, ${index}); event.stopPropagation();" title="${translations.viewDetails || 'View Details'}" aria-label="${translations.viewDetailsFor || 'View Details for'} ${safeName}">
+                    <button class="action-btn" data-file-action="open" title="${translations.viewDetails || 'View Details'}" aria-label="${translations.viewDetailsFor || 'View Details for'} ${nameAttr}">
                         <i class="bi bi-eye" aria-hidden="true"></i>
                         <span>${translations.viewDetails || 'View Details'}</span>
                     </button>
-                    <a class="action-btn" href="/file/${file.id}" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="${translations.openFullView || 'Open Full View'}" aria-label="${translations.openFullViewFor || 'Open Full View for'} ${safeName}">
+                    <a class="action-btn" href="/file/${file.id}" target="_blank" rel="noopener" data-file-action="full-view" title="${translations.openFullView || 'Open Full View'}" aria-label="${translations.openFullViewFor || 'Open Full View for'} ${nameAttr}">
                         <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
                         <span>${translations.fullView || 'Full View'}</span>
                     </a>
-                    <button class="action-btn export-btn" onclick="exportFile?.(${file.id}); event.stopPropagation();" title="${translations.exportFile || 'Export File'}" aria-label="${translations.export || 'Export'}: ${safeName}">
+                    <button class="action-btn export-btn" data-file-action="export" title="${translations.exportFile || 'Export File'}" aria-label="${translations.export || 'Export'}: ${nameAttr}">
                         <i class="bi bi-download" aria-hidden="true"></i>
                         <span class="sr-only">${translations.export || 'Export'}</span>
                     </button>
                 </div>
             </div>
             <div class="file-card-select" style="display: flex; align-items: center;">
-                <input type="checkbox" class="file-checkbox" value="${file.id}" aria-label="${translations.selectFile || 'Select file'}: ${safeName}">
+                <input type="checkbox" class="file-checkbox" value="${file.id}" aria-label="${translations.selectFile || 'Select file'}: ${nameAttr}">
             </div>
         </div>
     `;
@@ -58,16 +143,16 @@ function renderFileCard(file, fileNumber, filesList, index) {
 /**
  * Render a file grid item (for grid view)
  */
-function renderFileGridItem(file, fileNumber, filesList, index) {
+function renderFileGridItem(file, fileNumber, index) {
     const fileSize = formatFileSize(file.size || 0);
     const fileType = file.type || file.file_type || '';
     const fileDate = file.file_date || file.date || file.created_at || '';
-    const fileSource = file.source || file.source_name || '';
-    const fileSide = file.side || file.side_name || '';
-    const safeName = escapeHtml(file.name || `File ${fileNumber}`);
+    const displayName = file.name || `File ${fileNumber}`;
+    const safeName = escapeHtml(displayName);
+    const nameAttr = escapeAttribute(displayName);
     
     return `
-        <div class="file-grid-item" data-file-id="${file.id}" data-file-name="${safeName}" data-file-index="${index}" style="border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; cursor: pointer; position: relative; background: white; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.transform=''; this.style.boxShadow=''" onclick="showFileDetails?.(${file.id}, '${safeName}', ${JSON.stringify(filesList).replace(/"/g, '&quot;')}, ${index})">
+        <div class="file-grid-item" data-file-id="${file.id}" data-file-action="open" data-file-name="${nameAttr}" data-file-index="${index}" style="border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; cursor: pointer; position: relative; background: white; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
             <div class="file-card-number" style="position: absolute; top: 0.5rem; right: 0.5rem; background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; z-index: 10; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">${fileNumber}</div>
             <div style="text-align: center; margin-bottom: 0.75rem;">
                 <div class="file-grid-icon" style="font-size: 3rem; color: #3b82f6; margin-bottom: 0.5rem;">
@@ -75,25 +160,25 @@ function renderFileGridItem(file, fileNumber, filesList, index) {
                 </div>
             </div>
             <div class="file-grid-body">
-                <div class="file-grid-name" style="font-weight: 600; margin-bottom: 0.5rem; text-align: center; font-size: 0.875rem; line-height: 1.4; min-height: 2.8em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="${safeName}">${safeName}</div>
+                <div class="file-grid-name" style="font-weight: 600; margin-bottom: 0.5rem; text-align: center; font-size: 0.875rem; line-height: 1.4; min-height: 2.8em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="${nameAttr}">${safeName}</div>
                 <div class="file-grid-meta" style="color: #64748b; font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem;">
                     <div><i class="bi bi-tag"></i> ${escapeHtml(fileType || '—')}</div>
                     <div><i class="bi bi-hdd"></i> ${fileSize}</div>
                     <div><i class="bi bi-calendar"></i> ${escapeHtml(fileDate || '—')}</div>
                 </div>
                 <div class="file-grid-actions" style="margin-top: 0.75rem; display: flex; gap: 0.25rem; justify-content: center; flex-wrap: wrap;">
-                    <button class="action-btn" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="showFileDetails?.(${file.id}, '${safeName}', ${JSON.stringify(filesList).replace(/"/g, '&quot;')}, ${index}); event.stopPropagation();" title="${translations.viewDetails || 'View Details'}" aria-label="${translations.viewDetailsFor || 'View Details for'} ${safeName}">
+                    <button class="action-btn" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" data-file-action="open" title="${translations.viewDetails || 'View Details'}" aria-label="${translations.viewDetailsFor || 'View Details for'} ${nameAttr}">
                         <i class="bi bi-eye" aria-hidden="true"></i>
                     </button>
-                    <a class="action-btn" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" href="/file/${file.id}" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="${translations.openFullView || 'Open Full View'}" aria-label="${translations.openFullViewFor || 'Open Full View for'} ${safeName}">
+                    <a class="action-btn" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" href="/file/${file.id}" target="_blank" rel="noopener" data-file-action="full-view" title="${translations.openFullView || 'Open Full View'}" aria-label="${translations.openFullViewFor || 'Open Full View for'} ${nameAttr}">
                         <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
                     </a>
-                    <button class="action-btn export-btn" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="exportFile?.(${file.id}); event.stopPropagation();" title="${translations.exportFile || 'Export File'}" aria-label="${translations.export || 'Export'}: ${safeName}">
+                    <button class="action-btn export-btn" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" data-file-action="export" title="${translations.exportFile || 'Export File'}" aria-label="${translations.export || 'Export'}: ${nameAttr}">
                         <i class="bi bi-download" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div class="file-grid-select" style="margin-top: 0.5rem; text-align: center;">
-                    <input type="checkbox" class="file-checkbox" value="${file.id}" aria-label="${translations.selectFile || 'Select file'}: ${safeName}" onclick="event.stopPropagation();">
+                    <input type="checkbox" class="file-checkbox" value="${file.id}" aria-label="${translations.selectFile || 'Select file'}: ${nameAttr}">
                 </div>
             </div>
         </div>
@@ -174,14 +259,14 @@ export function renderFilesView(files, section, itemName, pagination) {
             html += '<div class="files-grid-view" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">';
             files.forEach((file, index) => {
                 const fileNumber = startNumber + index;
-                html += renderFileGridItem(file, fileNumber, filesList, index);
+                html += renderFileGridItem(file, fileNumber, index);
             });
             html += '</div>';
         } else {
             // List view (default)
             files.forEach((file, index) => {
                 const fileNumber = startNumber + index;
-                html += renderFileCard(file, fileNumber, filesList, index);
+                html += renderFileCard(file, fileNumber, index);
             });
         }
 
@@ -193,7 +278,11 @@ export function renderFilesView(files, section, itemName, pagination) {
     }
 
     contentView.innerHTML = html;
-    
+
+    // Clicks on the rendered cards are handled by one delegated listener that
+    // reads the data attributes - never by a handler built out of a filename.
+    ensureFileCardDelegation();
+
     // Initialize pagination controls after DOM is ready
     requestAnimationFrame(() => {
         if (files && files.length > 0 && pagination) {

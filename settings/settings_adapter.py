@@ -12,164 +12,27 @@ import logging
 from typing import Dict, Any, Optional
 from pathlib import Path
 
+from core.interfaces import (
+    RETIRED_INTERFACE_IDS,
+    InterfaceKind,
+    get_all_interfaces as registry_interfaces,
+    get_interface,
+    get_interface_for_endpoint,
+    is_registered,
+)
+
+from .interface_state import InterfaceState
 from .settings_manager import get_settings_manager
 from .settings_models import AllSettings, InterfaceConfig
 
 logger = logging.getLogger(__name__)
 
 
-#: Interface switches that no longer correspond to anything. ``file_upload``
-#: was the "core" twin of ``upload_files``: it pointed at the same endpoint and
-#: gated no route (the endpoint map resolves files.upload_page to
-#: ``upload_files``), so Settings offered two switches for one page. The key is
-#: not deleted from anyone's settings file - it is simply no longer listed, so
-#: a stored value cannot break anything and the listing always matches the
-#: interface registry above.
-RETIRED_INTERFACES = frozenset({"file_upload"})
-
-#: What each interface switch controls: label, one-line explanation, icon
-#: and the endpoint it gates. Kept next to the retired-key set above so every
-#: listing (Settings' grouped view and the flat API view) describes an
-#: interface the same way - a switch whose label disagrees with the page it
-#: opens is how "Upload Files" outlived the page it named.
-INTERFACE_METADATA: Dict[str, Dict[str, str]] = {
-    "dashboard": {
-        "name": "Dashboard",
-        "description": "Main dashboard with overview statistics",
-        "icon": "bi-speedometer2",
-        "endpoint": "index"
-    },
-    "comprehensive_dashboard": {
-        "name": "Comprehensive Dashboard",
-        "description": "Detailed dashboard with comprehensive analytics",
-        "icon": "bi-graph-up",
-        "endpoint": "comprehensive_dashboard"
-    },
-    "charts_dashboard": {
-        "name": "Charts Dashboard",
-        "description": "Dashboard with interactive charts and visualizations",
-        "icon": "bi-bar-chart",
-        "endpoint": "charts_dashboard"
-    },
-    "file_analysis": {
-        "name": "INFORAXIS",
-        "description": "Analyze individual files and their properties",
-        "icon": "bi-file-earmark-text",
-        "endpoint": "archives_page"
-    },
-    "path_analysis": {
-        "name": "Path Analysis",
-        "description": "Analyze file paths and directory structures",
-        "icon": "bi-folder",
-        "endpoint": "path_analysis_page"
-    },
-    "batch_analysis": {
-        "name": "Batch Analysis",
-        "description": "Analyze multiple files in batches",
-        "icon": "bi-files",
-        "endpoint": "analysis_batch"
-    },
-    "sources": {
-        "name": "Sources",
-        "description": "Manage data sources",
-        "icon": "bi-database",
-        "endpoint": "sources_list"
-    },
-    "sides": {
-        "name": "Sides",
-        "description": "Manage data sides",
-        "icon": "bi-layers",
-        "endpoint": "sides_list"
-    },
-    "email_words": {
-        "name": "Email Words",
-        "description": "Manage email-related words",
-        "icon": "bi-envelope",
-        "endpoint": "email_words"
-    },
-    "search": {
-        "name": "Search",
-        "description": "Basic search functionality",
-        "icon": "bi-search",
-        "endpoint": "search_page"
-    },
-    "advanced_search": {
-        "name": "Advanced Search",
-        "description": "Advanced search with filters and options",
-        "icon": "bi-search-heart",
-        "endpoint": "search_advanced"
-    },
-    "upload_files": {
-        # One interface, named for what it now is: /operations/input is
-        # the single surface for a single file, a whole folder, a server
-        # path and the jobs they create. The old "Upload Files" page is
-        # a redirect to it, so the switch keeps its original meaning
-        # (does the operator see a way in from the menu) and its
-        # original key (existing settings files stay valid).
-        "name": "Input / Ingestion",
-        "description": "Bring evidence in - one file, a whole folder, or "
-                       "a path on the server - and follow the jobs it creates",
-        "icon": "bi-folder-plus",
-        "endpoint": "operations_input_page"
-    },
-    "file_library": {
-        "name": "File Library",
-        "description": "Browse and manage file library",
-        "icon": "bi-folder2-open",
-        "endpoint": "files.files_list"
-    },
-    "keywords": {
-        "name": "Keywords",
-        "description": "Manage keywords",
-        "icon": "bi-tags",
-        "endpoint": "keywords_list"
-    },
-    "words": {
-        "name": "Words",
-        "description": "Manage words dictionary",
-        "icon": "bi-book",
-        "endpoint": "words_list"
-    },
-    "categories": {
-        "name": "Categories",
-        "description": "Manage categories",
-        "icon": "bi-tags",
-        "endpoint": "categories_list"
-    },
-    "notifications": {
-        "name": "Notifications",
-        "description": "View and manage notifications",
-        "icon": "bi-bell",
-        "endpoint": "notifications_page"
-    },
-    "settings": {
-        "name": "Settings",
-        "description": "System settings and configuration",
-        "icon": "bi-gear",
-        "endpoint": "settings_page"
-    },
-    "file_browser": {
-        "name": "File Browser",
-        "description": "Core file browser functionality",
-        "icon": "bi-folder",
-        "endpoint": "files.files_list",
-        "category": "core"
-    },
-    "analytics": {
-        "name": "Analytics",
-        "description": "System analytics and reporting",
-        "icon": "bi-graph-up-arrow",
-        "endpoint": "analytics",
-        "category": "analysis"
-    },
-    "page_tips": {
-        "name": "Page Tips & Documentation",
-        "description": "Enable or disable comprehensive tips and instructions on each page. Tips explain all interface elements, features, how to use them, and how to add/manage data. When enabled, tips appear at the top of each page with detailed explanations.",
-        "icon": "bi-lightbulb",
-        "endpoint": "",
-        "category": "user"
-    }
-}
+#: Ids that no longer name anything. Sourced from the registry so there is one
+#: list: ``file_upload`` was the "core" twin of the ingestion page and gated no
+#: route. Kept under its original name because callers outside this module use
+#: it; the registry is where it is defined.
+RETIRED_INTERFACES = frozenset(RETIRED_INTERFACE_IDS)
 
 
 class SettingsAdapter:
@@ -310,132 +173,145 @@ class SettingsAdapter:
         """Get storage configuration (old API style)"""
         return self.settings.storage.to_dict()
     
-    def get_all_interfaces(self) -> Dict[str, Dict[str, Any]]:
-        """Get all interfaces with metadata (old API style)"""
-        interface_metadata = INTERFACE_METADATA
+    # -- registry-backed interface API -----------------------------------
+    def get_state(self) -> InterfaceState:
+        """The registry applied to the stored settings.
 
-        interfaces = {}
-        for interface_id, config in self.settings.interfaces.interfaces.items():
-            if interface_id in RETIRED_INTERFACES:
-                continue
-            interface_dict = config.to_dict()
-            # Add metadata if available
-            if interface_id in interface_metadata:
-                metadata = interface_metadata[interface_id]
-                interface_dict.update({
-                    "name": metadata.get("name", interface_id.replace("_", " ").title()),
-                    "description": metadata.get("description", ""),
-                    "icon": metadata.get("icon", "bi-gear"),
-                    "endpoint": metadata.get("endpoint", interface_id)
-                })
-            else:
-                # Default metadata
-                interface_dict.update({
-                    "name": interface_id.replace("_", " ").title(),
-                    "description": "",
-                    "icon": "bi-gear",
-                    "endpoint": interface_id
-                })
-            interfaces[interface_id] = interface_dict
+        Everything that asks a question about interfaces goes through this, so
+        there is one place where "enabled", "visible" and "may be switched off"
+        are decided - and it is not a dictionary copied beside the settings.
+        """
+        return InterfaceState(self.settings.interfaces)
+
+    def get_interface(self, interface_id: str):
+        """The registry entry for an id, or ``None``."""
+        return get_interface(interface_id)
+
+    def get_all_interfaces(self) -> Dict[str, Dict[str, Any]]:
+        """Every interface the product declares, with its current state.
+
+        Legacy shape (``{id: {...}}``) preserved for callers that still expect
+        a dictionary; the contents now come from the registry, so an entry can
+        no longer describe a page that does not exist - the previous version
+        answered from a hand-written metadata table and a stored settings dict
+        that could disagree with each other and with the application.
+        """
+        state = self.get_state()
+        interfaces: Dict[str, Dict[str, Any]] = {}
+        for row in state.interfaces_with_state():
+            entry = dict(row)
+            # ``endpoint`` is what the settings template has always read.
+            entry["endpoint"] = row.get("route") or ""
+            entry["category"] = row.get("domain")
+            interfaces[row["interface_id"]] = entry
         return interfaces
-    
-    def get_interfaces_by_category(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
-        """Get interfaces grouped by category (old API style)"""
-        by_category = {}
-        for interface_id, config in self.settings.interfaces.interfaces.items():
-            if interface_id in RETIRED_INTERFACES:
+
+    def get_interfaces_by_domain(self, user=None) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """Interfaces grouped by the domain that owns them.
+
+        Domains replace the old free-text ``category`` values ('user', 'core',
+        'analysis') that were stored per interface and could drift from what
+        the interface actually was. A section or a feature has no page, so it is
+        listed under its domain too - an operator can switch it, which is the
+        point of the screen.
+        """
+        state = self.get_state()
+        grouped: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        for row in state.interfaces_with_state(user):
+            if row["kind"] == str(InterfaceKind.INTERNAL):
+                # Diagnostics surfaces are not offered as switches.
                 continue
-            category = config.category
-            if category not in by_category:
-                by_category[category] = {}
-            entry = config.to_dict()
-            metadata = INTERFACE_METADATA.get(interface_id)
-            if metadata:
-                # Settings renders this entry, so it must name the interface and
-                # the page it opens - not a title-cased id from a retired page.
-                entry.update(metadata)
-            by_category[category][interface_id] = entry
-        return by_category
-    
-    def set_interface_enabled(self, interface_id: str, enabled: bool) -> None:
-        """Set interface enabled status (old API style)"""
+            domain = row["domain"]
+            entry = dict(row)
+            entry["endpoint"] = row.get("route") or ""
+            entry["category"] = domain
+            grouped.setdefault(domain, {})[row["interface_id"]] = entry
+        return grouped
+
+    def get_interfaces_by_category(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """Legacy name for :meth:`get_interfaces_by_domain`.
+
+        The old grouping came from a stored ``category`` string; it is now the
+        interface's domain, which the registry owns.
+        """
+        return self.get_interfaces_by_domain()
+
+    def get_dependents(self, interface_id: str):
+        from core.interfaces import get_dependents
+
+        return get_dependents(interface_id)
+
+    def missing_dependencies(self, interface_id: str):
+        return self.get_state().missing_dependencies(interface_id)
+
+    def can_disable(self, interface_id: str):
+        return self.get_state().can_disable(interface_id)
+
+    def can_enable(self, interface_id: str):
+        return self.get_state().can_enable(interface_id)
+
+    def state_report(self):
+        return self.get_state().state_report()
+
+    def set_interface_enabled(self, interface_id: str, enabled: bool):
+        """Switch an interface on or off, refusing configurations that cannot work.
+
+        Returns ``(ok, message)``. The dependency rules live in
+        ``InterfaceState``; this method's job is to persist an accepted change.
+        """
+        state = self.get_state()
+        allowed, message = state.can_enable(interface_id) if enabled else state.can_disable(interface_id)
+        if not allowed:
+            return False, message
+
         full_key = f"interfaces.{interface_id}.enabled"
-        self._manager.set(full_key, enabled, validate=True)
+        success, error = self._manager.set(full_key, enabled, validate=True)
+        if not success:
+            return False, error or "The setting could not be saved."
         self._manager.save()
-    
-    def reset_interfaces_to_defaults(self) -> None:
-        """Reset all interfaces to defaults (old API style)"""
-        for interface_id in self.settings.interfaces.interfaces.keys():
-            self._manager.set(f"interfaces.{interface_id}.enabled", True)
+        return True, None
+
+    def reset_interfaces_to_defaults(self) -> Dict[str, bool]:
+        """Reset to the registry's defaults - and to nothing else.
+
+        The previous version enabled every interface it found in the settings
+        file, which made the *settings file* authoritative over the product
+        model: a switch that exists but should default to off was turned on by
+        resetting. Defaults now come from the registry (one definition), and an
+        interface whose default is off stays off after a reset.
+        """
+        state = self.get_state()
+        defaults = state.defaults()
+        for interface_id, default in defaults.items():
+            self._manager.set(f"interfaces.{interface_id}.enabled", bool(default))
         self._manager.save()
-    
+        return defaults
+
     def is_interface_enabled(self, interface_id: str) -> bool:
+        """Is this interface switched on and usable?
+
+        False for anything the registry does not declare. That is the point:
+        the old settings file could contain an id nothing had heard of, and the
+        application would happily treat it as on.
         """
-        Check if an interface is enabled (old API style).
-        
-        Args:
-            interface_id: Interface identifier (e.g., 'dashboard', 'search')
-            
-        Returns:
-            True if interface is enabled, False otherwise
-        """
-        return self.settings.interfaces.get_interface_enabled(interface_id)
-    
+        return self.get_state().is_enabled(interface_id)
+
     def is_interface_enabled_by_endpoint(self, endpoint: str) -> bool:
+        """May the interface that owns this endpoint be served?
+
+        Replaces a hand-written endpoint -> interface map whose fallback was
+        ``return True``: an endpoint nobody had registered was treated as
+        enabled, which is indistinguishable from a page somebody forgot to add
+        to the product model. Unknown now means unregistered, and unregistered
+        means it is not served - the coverage test fails the build long before
+        an operator meets it.
         """
-        Check if an interface is enabled by Flask endpoint name (old API style).
-        
-        Maps common endpoints to interface IDs and checks if enabled.
-        
-        Args:
-            endpoint: Flask endpoint name (e.g., 'index', 'search_page')
-            
-        Returns:
-            True if interface is enabled, False otherwise
-        """
-        # Map endpoints to interface IDs
-        endpoint_to_interface = {
-            'index': 'dashboard',
-            'comprehensive_dashboard': 'dashboard',
-            'charts_dashboard': 'dashboard',
-            'dashboard': 'dashboard',
-            
-            'archives_page': 'file_analysis',
-            'path_analysis_page': 'path_analysis',
-            'analysis_batch': 'batch_analysis',
-            
-            'search_page': 'search',
-            'search_advanced': 'advanced_search',
-            'search_enhanced_page': 'advanced_search',
-            'analyst_categorization_page': 'analyst_categorization',
-            
-            'sources_list': 'sources',
-            'sides_list': 'sides',
-            'email_words': 'email_words',
-            'keywords_list': 'keywords',
-            'words_list': 'words',
-            'categories_list': 'categories',
-            
-            # Both spellings of the one ingestion surface resolve to the
-            # interface that owns it: /operations/input and the /upload
-            # alias kept for bookmarks.
-            'operations_input_page': 'upload_files',
-            'files.upload_page': 'upload_files',
-            'files.files_list': 'file_library',
-            'files.file_detail': 'file_library',
-            
-            'notifications_page': 'notifications',
-            'settings_page': 'settings',
-        }
-        
-        # Get interface ID from endpoint
-        interface_id = endpoint_to_interface.get(endpoint)
-        if interface_id:
-            return self.is_interface_enabled(interface_id)
-        
-        # If endpoint not in mapping, default to enabled (backward compatibility)
-        return True
-    
+        return self.get_state().endpoint_enabled(endpoint)
+
+    def get_interface_for_endpoint(self, endpoint: str):
+        """Which interface owns this endpoint (``None`` when none does)."""
+        return get_interface_for_endpoint(endpoint)
+
     def reload_from_file(self) -> bool:
         """Reload settings from file (old API style)"""
         return self._manager.reload()

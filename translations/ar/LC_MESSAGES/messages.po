@@ -9319,3 +9319,129 @@ msgstr "غير متاح"
 #: static/js/modules/charts/chart-customizer.js
 msgid "Applied"
 msgstr "تم التطبيق"
+
+# The action toolbar's own sentences. The component renders them as phrase
+# templates and its runtime fills in {count}, {total} and {noun}, so the scope
+# of a bulk action can be said in the reader's language rather than only in
+# English. Written by hand rather than extracted: this catalog is maintained
+# against the product, not regenerated wholesale.
+#: templates/components/action_toolbar.html
+msgid "Select {noun} first"
+msgstr "اختر {noun} أولاً"
+
+#: templates/components/action_toolbar.html
+msgid "{count} {noun} selected"
+msgstr "تم تحديد {count} {noun}"
+
+#: templates/components/action_toolbar.html
+msgid "{count} of {total} {noun} selected"
+msgstr "تم تحديد {count} من {total} {noun}"
+
+#: templates/components/action_toolbar.html
+msgid "source"
+msgstr "مصدر"
+
+#: templates/components/action_toolbar.html
+msgid "side"
+msgstr "جانب"
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "keyword"
+msgstr "كلمة مفتاحية"
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "word"
+msgstr "كلمة"
+
+# ---------------------------------------------------------------------------
+# The confirmation dialog and the toast, as the pages put them to work.
+#
+# The wording belongs to the page that asks the question, not to the
+# component: ``confirm_dialog.html`` renders whatever question it is given.
+# Written by hand rather than extracted, like the toolbar strings above -
+# this catalog is maintained against the product, not regenerated wholesale.
+#: templates/Operations/jobs.html:8
+msgid "Cancel this job?"
+msgstr "إلغاء هذه المهمة؟"
+
+#: templates/Operations/jobs.html:9
+msgid "In-flight files finish; no new files start."
+msgstr "الملفات الجارية تكتمل؛ ولن تبدأ ملفات جديدة."
+
+#: templates/Operations/jobs.html:11
+msgid "Cancel job"
+msgstr "إلغاء المهمة"
+
+#: templates/Operations/jobs.html:12
+msgid "Keep running"
+msgstr "الإبقاء على التشغيل"
+
+#: templates/Operations/jobs.html:163
+msgid "Job cancelled."
+msgstr "تم إلغاء المهمة."
+
+#: templates/Operations/jobs.html:165
+msgid "The job could not be cancelled."
+msgstr "تعذّر إلغاء المهمة."
+
+#: templates/file/file_detail.html:581
+msgid "Reprocess this file?"
+msgstr "إعادة معالجة هذا الملف؟"
+
+#: templates/file/file_detail.html:295
+msgid "This will extract and store the content again."
+msgstr "سيتم استخراج المحتوى وتخزينه مرة أخرى."
+
+#: templates/file/file_detail.html:582
+msgid "This may take a moment."
+msgstr "قد يستغرق ذلك بعض الوقت."
+
+# ---------------------------------------------------------------------------
+# The record action surface: the labels the Action Registry owns, and the
+# questions the page asks before it uses them.
+#
+# A label lives with the action (`source=` in action_registry.py) and is
+# translated at render time, so the template never restates it; the
+# dialog's words belong to the page that asks the question.
+# Written by hand rather than extracted, like the toolbar's strings:
+# this catalog is maintained against the product, not regenerated
+# wholesale.
+#: core/experience/action_registry.py
+msgid "View Original"
+msgstr "عرض الأصل"
+
+#: core/experience/action_registry.py
+msgid "Download Original"
+msgstr "تنزيل الأصل"
+
+#: core/experience/action_registry.py
+msgid "Export Extracted Text"
+msgstr "تصدير النص المستخرج"
+
+#: templates/components/record_actions.html
+msgid "More actions"
+msgstr "مزيد من الإجراءات"
+
+#: templates/file/file_detail.html
+msgid "Actions for this file"
+msgstr "إجراءات هذا الملف"
+
+#: templates/file/file_detail.html
+msgid "Full Screen"
+msgstr "ملء الشاشة"
+
+#: templates/file/file_detail.html
+msgid "Delete this file?"
+msgstr "حذف هذا الملف؟"
+
+#: templates/file/file_detail.html
+msgid "This permanently removes the record and everything extracted from it. The original file on disk is not touched."
+msgstr "يؤدي هذا إلى إزالة السجل وكل ما استُخرج منه نهائيًا. ولا يُمسّ الملف الأصلي على القرص."
+
+#: templates/file/file_detail.html
+msgid "Delete file"
+msgstr "حذف الملف"
+
+#: templates/file/file_detail.html
+msgid "Keep it"
+msgstr "الإبقاء عليه"

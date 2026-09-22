@@ -152,27 +152,26 @@ async function loadAssignments(page = 1) {
 }
 
 function renderPagination() {
+    // The assignments list pages through the same bar as every other list:
+    // this page used to build its own buttons, which is how two paginations
+    // come to exist in one application.
     const container = document.getElementById('assignmentsPagination');
     if (!container) return;
     container.innerHTML = '';
     if (analystState.totalPages <= 1) return;
 
-    const make = (label, page, disabled, active) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-outline-secondary' + (active ? ' active' : '');
-        btn.textContent = label;
-        btn.disabled = disabled;
-        btn.onclick = () => loadAssignments(page);
-        container.appendChild(btn);
-    };
-    make('‹', analystState.page - 1, analystState.page <= 1, false);
-    const windowStart = Math.max(1, Math.min(analystState.page - 2, analystState.totalPages - 4));
-    const windowEnd = Math.min(analystState.totalPages, windowStart + 4);
-    for (let p = windowStart; p <= windowEnd; p++) {
-        make(String(p), p, false, p === analystState.page);
-    }
-    make('›', analystState.page + 1, analystState.page >= analystState.totalPages, false);
+    import('../modules/rendering/unified-pagination.js').then(module => {
+        module.renderUnifiedPagination({
+            currentPage: analystState.page,
+            totalPages: analystState.totalPages,
+            containerId: 'assignmentsPagination',
+            onPageChange: (page) => loadAssignments(page),
+            urlParams: {},
+            showInfo: true,
+            showJump: analystState.totalPages > 5,
+            baseUrl: window.location.pathname
+        });
+    });
 }
 
 // Reversibility (NFR-3): remove one category from one file. Only the

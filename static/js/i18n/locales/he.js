@@ -70,7 +70,7 @@ window.I18N_UI_PACKS['he'] = {
     "Customize chart appearance": "התאם אישית את מראה התרשים",
     "Data Table": "טבלת נתונים",
     "default": "ברירת מחדל",
-    "Delete this file?": "למחוק קובץ זה?",
+    "Delete this file?": "למחוק את הקובץ הזה?",
     "Delete this saved search?": "למחוק חיפוש שמור זה?",
     "Description cannot exceed 2000 characters": "התיאור לא יכול לחרוג מ-2000 תווים",
     "direct upload": "העלאה ישירה",

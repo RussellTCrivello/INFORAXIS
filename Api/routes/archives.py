@@ -6,7 +6,7 @@ from flask import render_template, request, jsonify, flash, make_response
 from Api.utils import (
     execute_query, load_text_keyword, load_text_title,
     select_info_sources, select_info_sides, get_categories_with_stats,
-    get_archive_statistics
+    get_archive_statistics, relation_duplicates_sql
 )
 import logging
 from core.serialization import pack_int_list, unpack_int_list
@@ -208,16 +208,13 @@ def register_archives_routes(app):
                 })
             
 
-            hashs_data = execute_query("""
-                SELECT h.id, h.hash, h.side_id, h.source_id,
-                       COUNT(DISTINCT p.id) as file_count,
-                       COUNT(DISTINCT h2.id) as hash_variants
-                FROM hashs h
-                LEFT JOIN paths p ON h.id = p.hash_id
-                LEFT JOIN hashs h2 ON h.hash = h2.hash AND (h.source_id != h2.source_id OR h.side_id != h2.side_id)
-                GROUP BY h.id, h.hash, h.side_id, h.source_id
-                HAVING COUNT(DISTINCT p.id) > 1 OR COUNT(DISTINCT h2.id) > 0
-                ORDER BY file_count DESC, hash_variants DESC
+            # Relations: the same duplicate-content definition the API and the
+            # sidebar count use (``relation_duplicates_sql``).
+            relations_sql, _ = relation_duplicates_sql()
+            hashs_data = execute_query(f"""
+                SELECT id, name, side_id, source_id, file_count, hash_variants
+                FROM ({relations_sql}) AS relations
+                ORDER BY file_count DESC, id ASC
                 LIMIT 100
             """)
             
@@ -457,35 +454,18 @@ def register_archives_routes(app):
                     })
             
             elif section == 'hash':
-                if search_query:
-                    query = """
-                        SELECT h.id, h.hash, h.side_id, h.source_id,
-                               COUNT(DISTINCT p.id) as file_count,
-                               COUNT(DISTINCT h2.id) as hash_variants
-                        FROM hashs h
-                        LEFT JOIN paths p ON h.id = p.hash_id
-                        LEFT JOIN hashs h2 ON h.hash = h2.hash AND (h.source_id != h2.source_id OR h.side_id != h2.side_id)
-                        WHERE h.hash ILIKE %s
-                        GROUP BY h.id, h.hash, h.side_id, h.source_id
-                        HAVING COUNT(DISTINCT p.id) > 1 OR COUNT(DISTINCT h2.id) > 0
-                        ORDER BY file_count DESC, hash_variants DESC
-                        LIMIT 100
-                    """
-                    data = execute_query(query, (f'%{search_query}%',))
-                else:
-                    query = """
-                        SELECT h.id, h.hash, h.side_id, h.source_id,
-                               COUNT(DISTINCT p.id) as file_count,
-                               COUNT(DISTINCT h2.id) as hash_variants
-                        FROM hashs h
-                        LEFT JOIN paths p ON h.id = p.hash_id
-                        LEFT JOIN hashs h2 ON h.hash = h2.hash AND (h.source_id != h2.source_id OR h.side_id != h2.side_id)
-                        GROUP BY h.id, h.hash, h.side_id, h.source_id
-                        HAVING COUNT(DISTINCT p.id) > 1 OR COUNT(DISTINCT h2.id) > 0
-                        ORDER BY file_count DESC, hash_variants DESC
-                        LIMIT 100
-                    """
-                    data = execute_query(query)
+                # Relations: same duplicate-content definition as the API and
+                # the sidebar count (``relation_duplicates_sql``).
+                relations_sql, relations_params = relation_duplicates_sql(
+                    search_query or None)
+                query = f"""
+                    SELECT id, name, side_id, source_id, file_count, hash_variants
+                    FROM ({relations_sql}) AS relations
+                    ORDER BY file_count DESC, id ASC
+                    LIMIT 100
+                """
+                data = execute_query(
+                    query, tuple(relations_params) if relations_params else None)
                 
                 for row in (data or []):
                     results.append({

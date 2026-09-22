@@ -9,12 +9,14 @@ Enhanced with all existing system features
 from flask import Blueprint, request, jsonify, current_app, session
 from functools import wraps
 from pathlib import Path
+from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 import logging
 import os
 import uuid
 import re
 
+from core.errors import client_error, new_correlation_id, sanitize_message
 from .settings_manager import get_settings_manager
 from .database_validation import DatabaseConfigRejected
 
@@ -24,18 +26,72 @@ logger = logging.getLogger(__name__)
 settings_bp = Blueprint('settings_api', __name__, url_prefix='/api/settings')
 
 
+def _settings_failure(exc):
+    """Turn any settings failure into a response, in one place.
+
+    Three kinds of failure reach here and each is answered according to who
+    the text was written for:
+
+    * ``HTTPException`` - Flask's own abort (404/405/...): returned untouched
+      so the status and the error page stay what the framework intends.
+    * ``DatabaseConfigRejected`` - a configuration the operator just
+      submitted. Its message is built in ``database_validation.py`` from a
+      fixed vocabulary (no host, user, password or driver text), so it is
+      shown, as a 422, with a correlation id. This is the branch that used to
+      be five separate ``except`` blocks; having it here means a future
+      endpoint cannot forget to keep the operator's explanation.
+    * anything else - logged in full server-side, answered with a client-safe
+      message and a correlation id. The exception text is never returned: it
+      can carry SQL, filesystem paths, connection strings and credentials.
+    """
+    original = getattr(exc, "original_exception", None)
+    if isinstance(exc, HTTPException) and original is None:
+        return exc
+    candidate = original or exc
+    if isinstance(candidate, DatabaseConfigRejected):
+        return jsonify({
+            "success": False,
+            "error": sanitize_message(str(candidate)),
+            "correlation_id": new_correlation_id(),
+        }), 422
+    return client_error(
+        candidate,
+        subsystem="settings",
+        public_message="The settings request could not be completed",
+        success_key="success",
+    )
+
+
+@settings_bp.errorhandler(Exception)
+def _settings_unhandled(exc):
+    """Blueprint-level net: no settings endpoint can bypass the error model.
+
+    ``@handle_errors`` already covers every decorated view, but a new endpoint
+    that forgets the decorator must not become a hole in the rule the security
+    documentation states. Anything raised out of a settings view - including
+    from a ``before_request`` or a helper the view called - is answered the
+    same way.
+    """
+    return _settings_failure(exc)
+
+
 def handle_errors(f):
-    """Decorator for consistent error handling"""
+    """Decorator for consistent, sanitized error handling.
+
+    SEC-08 / the central error model: an unexpected failure is logged in full
+    server-side and answered with a client-safe message plus a correlation id.
+    Deliberate, user-facing rejections (a configuration the operator just
+    submitted, a value they just typed) keep their explanation - see
+    ``_settings_failure``.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         try:
             return f(*args, **kwargs)
-        except Exception as e:
-            logger.error(f"API error in {f.__name__}: {e}", exc_info=True)
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
+        except HTTPException:
+            raise  # Flask's own aborts (404/405/...) keep their normal handling
+        except Exception as e:  # noqa: BLE001 - every failure is sanitized
+            return _settings_failure(e)
     return decorated_function
 
 
@@ -546,64 +602,73 @@ def remove_logo():
 @settings_bp.route('/interfaces', methods=['GET'])
 @handle_errors
 def get_interfaces():
-    """Get all interface settings"""
-    manager = get_settings_manager()
-    interfaces = manager.settings.interfaces
-    
-    # Convert to dict format
-    interfaces_dict = {}
-    for interface_id, config in interfaces.interfaces.items():
-        interfaces_dict[interface_id] = config.to_dict()
-    
+    """Every interface the product declares, with its current state.
+
+    The list comes from the registry, so it can no longer describe a page that
+    does not exist or miss a page that does - which is what the previous
+    metadata table did (``analytics`` pointed at an endpoint that was never
+    registered, ``page_tips`` described no page at all, and two entries claimed
+    the same route).
+    """
+    from .settings_adapter import get_interface_manager
+
+    manager = get_interface_manager()
+    state = manager.get_state()
     return jsonify({
         'success': True,
-        'interfaces': interfaces_dict
+        'interfaces': {row['interface_id']: row for row in state.interfaces_with_state()},
+        'summary': state.summary(),
     })
 
 
 @settings_bp.route('/interfaces/<interface_id>', methods=['POST'])
 @handle_errors
 def toggle_interface(interface_id):
-    """Toggle interface enabled/disabled"""
+    """Switch one interface on or off.
+
+    A configuration that cannot work is refused with the reason and the way
+    out - disabling something another interface needs, or enabling something
+    whose dependency is off. The message names the interfaces involved; it is
+    the operator's own submitted configuration coming back, not a system fault.
+    """
+    from .settings_adapter import get_interface_manager
+
     data = request.get_json() or {}
-    enabled = data.get('enabled', True)
-    
-    manager = get_settings_manager()
-    full_key = f"interfaces.{interface_id}.enabled"
-    
-    success, error = manager.set(full_key, enabled, validate=True)
-    
-    if not success:
+    enabled = bool(data.get('enabled', True))
+
+    manager = get_interface_manager()
+    ok, message = manager.set_interface_enabled(interface_id, enabled)
+    if not ok:
         return jsonify({
             'success': False,
-            'error': error
-        }), 400
-    
-    manager.save()
-    
+            'error': message,
+            'interface_id': interface_id,
+        }), 409
+
+    state = manager.get_state()
+    entry = manager.get_all_interfaces().get(interface_id, {})
     return jsonify({
         'success': True,
         'interface_id': interface_id,
         'enabled': enabled,
-        'message': f"Interface '{interface_id}' {'enabled' if enabled else 'disabled'}"
+        'state': entry,
+        'dependents': [d.interface_id for d in manager.get_dependents(interface_id)],
+        'message': f"{entry.get('name', interface_id)} {'enabled' if enabled else 'disabled'}",
     })
 
 
 @settings_bp.route('/interfaces/reset', methods=['POST'])
 @handle_errors
 def reset_interfaces():
-    """Reset all interface settings to defaults"""
-    manager = get_settings_manager()
-    
-    # Reset all interfaces to enabled
-    for interface_id in manager.settings.interfaces.interfaces.keys():
-        manager.set(f"interfaces.{interface_id}.enabled", True)
-    
-    manager.save()
-    
+    """Reset every interface to the default the registry defines."""
+    from .settings_adapter import get_interface_manager
+
+    manager = get_interface_manager()
+    defaults = manager.reset_interfaces_to_defaults()
     return jsonify({
         'success': True,
-        'message': 'Interface settings reset to defaults'
+        'message': 'Interface settings reset to their registry defaults',
+        'defaults': defaults,
     })
 
 
@@ -1031,13 +1096,16 @@ def settings_page():
             return "3.0.0"
     
     interface_manager = get_interface_manager()
-    interfaces_by_category = interface_manager.get_interfaces_by_category()
+    interfaces_by_category = interface_manager.get_interfaces_by_domain()
     all_interfaces = interface_manager.get_all_interfaces()
-    
+    interface_state = interface_manager.get_state()
+
     return render_template(
         'Settings/settings.html',
         interfaces_by_category=interfaces_by_category,
         all_interfaces=all_interfaces,
+        interface_summary=interface_state.summary(),
+        interface_state_report=interface_state.state_report(),
         user_settings=interface_manager,
         version=get_version()
     )
@@ -1059,13 +1127,16 @@ def register_settings_page_route(app):
     def settings_page_direct():
         """Settings Page (direct route)"""
         interface_manager = get_interface_manager()
-        interfaces_by_category = interface_manager.get_interfaces_by_category()
+        interfaces_by_category = interface_manager.get_interfaces_by_domain()
         all_interfaces = interface_manager.get_all_interfaces()
-        
+        interface_state = interface_manager.get_state()
+
         return render_template(
             'Settings/settings.html',
             interfaces_by_category=interfaces_by_category,
             all_interfaces=all_interfaces,
+            interface_summary=interface_state.summary(),
+            interface_state_report=interface_state.state_report(),
             user_settings=interface_manager,
             version=get_version()
         )

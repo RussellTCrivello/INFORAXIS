@@ -937,36 +937,27 @@ function saveMetadata() {
 
 // ==================== FULLSCREEN & SHARE ====================
 
+/**
+ * Full screen and print: how the page is shown, not what the record is.
+ *
+ * `shareFile()` and `exportFile()` are gone with the rest of the dead
+ * controls. Share copied a link to `/file/<id>/share`, which no route ever
+ * served; export navigated to `/file/<id>/export`, which no route served
+ * either. What replaced them is real: the record's actions are prepared by the
+ * server from the Action Registry and bound above, and "Export Extracted Text"
+ * is one of them.
+ */
 function toggleFullscreen() {
     const elem = document.documentElement;
     if (!document.fullscreenElement) {
         elem.requestFullscreen().catch(err => {
-            alert(translations.error + ': ' + err.message);
+            if (window.Toast) {
+                window.Toast.error(translations.error);
+            }
         });
     } else {
         document.exitFullscreen();
     }
-}
-
-function shareFile() {
-    const shareLink = `${window.location.origin}/file/${fileId}/share`;
-    const shareText = `Check out this document: ${fileName}`;
-    
-    if (navigator.share) {
-        navigator.share({
-            title: fileName,
-            text: shareText,
-            url: shareLink
-        }).catch(err => console.log('Error sharing:', err));
-    } else {
-        navigator.clipboard.writeText(shareLink).then(() => {
-            alert(translations.shareLinkCopiedToClipboard);
-        });
-    }
-}
-
-function exportFile() {
-    window.location.href = `/file/${fileId}/export?format=pdf`;
 }
 
 function ensureMetadataVisible() {
@@ -1052,3 +1043,55 @@ window.attachImageErrorHandlers = function attachImageErrorHandlers(container) {
         });
     });
 };
+
+/**
+ * This record's actions, on the shared surface.
+ *
+ * The surface draws what the server prepared from the Action Registry: the
+ * question, the scope, the group, and whether the record currently allows it.
+ * This script owns only what a server cannot do: the request, the redirect,
+ * and what the reader is told when it ends. It names the one action whose
+ * outcome changes where the reader goes; every address, method and question is
+ * read off the element, because the server decided all of them.
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    const surface = document.getElementById('fileRecordActions');
+    if (!surface || !window.RecordActions) return;
+
+    window.RecordActions.bind(surface, async function (actionId, context) {
+        const element = context.element;
+        const endpoint = element.getAttribute('data-record-endpoint');
+        const method = element.getAttribute('data-record-method') || 'POST';
+
+        if (actionId === 'files.delete') {
+            const response = await fetch(endpoint, {
+                method: method,
+                headers: {
+                    'X-CSRFToken': (window.CSRF && window.CSRF.getToken) ? window.CSRF.getToken() : '',
+                    'Accept': 'application/json',
+                },
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload.success === false) {
+                return {ok: false, detail: null};
+            }
+            // The record is gone: the reader goes back to the library rather
+            // than staying on a page describing something that no longer
+            // exists.
+            window.location.href = '/files';
+            return {ok: true, handled: true};
+        }
+
+        if (endpoint) {
+            // A navigation the server prepared - the extracted text, for
+            // instance. The browser performs it; the surface reports it.
+            window.location.href = endpoint;
+            return {ok: true, handled: true};
+        }
+
+        // A link (the original, inline or as an attachment): let the browser
+        // follow it, which is what the element already says.
+        return {ok: true, handled: false};
+    });
+});
+

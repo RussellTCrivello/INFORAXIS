@@ -118,6 +118,12 @@ class SystemSettings:
     default_sort: str = "date_creation"
     sort_direction: str = "desc"
     debug_mode: bool = False
+    #: The Screen Inspector: a read-only panel that says which registry entry,
+    #: component, action and binding owns an element. Off by default, because a
+    #: diagnostic tool is a decision an operator makes, not a default a reader
+    #: meets. Administrators only, and the endpoint behind it is guarded on its
+    #: own.
+    screen_inspector: bool = False
     log_level: str = "INFO"
     log_file: Optional[str] = None
     action_logging_enabled: bool = True
@@ -586,6 +592,17 @@ SETTING_DEFINITIONS = {
         category="interfaces"
     ),
     
+    "system.screen_inspector": SettingDefinition(
+        key="screen_inspector",
+        type=SettingType.BOOLEAN,
+        default=False,
+        label="Screen Inspector",
+        description="Show the Screen Inspector: a read-only panel that reports "
+                    "which interface, component, action and binding owns an "
+                    "element on the page (administrators only)",
+        category="system"
+    ),
+
     # Theme settings
     "theme.primary_color": SettingDefinition(
         key="primary_color",

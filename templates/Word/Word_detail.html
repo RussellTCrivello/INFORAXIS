@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'components/status_badge.html' import status_badge %}
 
 {% block title %}{{ _('Word Details') }}{% endblock %}
 
@@ -36,7 +37,7 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
-    {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+    {% call page_tips() %}
 
 <div class="tips-section">
     <div class="tips-section-title">
@@ -89,13 +90,9 @@
                         <label class="form-label text-muted">{{ _('Status') }}</label>
                         <p class="form-control-plaintext">
                             {% if word.usage_count and word.usage_count > 0 %}
-                                <span class="badge bg-success">
-                                    <i class="bi bi-check-circle me-1"></i>{{ _('Active') }}
-                                </span>
+                                {{ status_badge(status='active', icon='bi-check-circle') }}
                             {% else %}
-                                <span class="badge bg-secondary">
-                                    <i class="bi bi-dash-circle me-1"></i>{{ _('Unused') }}
-                                </span>
+                                {{ status_badge(status='unused', icon='bi-dash-circle') }}
                             {% endif %}
                         </p>
                     </div>

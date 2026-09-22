@@ -5,13 +5,34 @@ Provides centralized translation management for the frontend
 
 from flask import Blueprint, jsonify, request, current_app
 from flask_babel import get_locale, _
+from werkzeug.exceptions import HTTPException
 import json
 import logging
 from pathlib import Path
 
+from core.errors import client_error, new_correlation_id
+
 logger = logging.getLogger(__name__)
 
 translations_bp = Blueprint('translations', __name__)
+
+
+def _translations_failure(exc, public_message: str):
+    """A translation failure, answered the way every other failure is.
+
+    The reader is told what could not be done and given a correlation id to
+    quote; the exception text stays in the log. `str(exc)` used to be returned
+    from two of these endpoints, which is how a filesystem path or a locale
+    parser's message reaches a browser - the same defect the settings pipeline
+    was built to stop (spec §38, §76).
+    """
+    original = getattr(exc, "original_exception", None)
+    if isinstance(exc, HTTPException) and original is None:
+        return exc
+    return client_error(original or exc,
+                        subsystem="translations",
+                        public_message=public_message,
+                        success_key="success")
 
 
 def get_all_translations(locale: str = None) -> dict:
@@ -177,11 +198,8 @@ def get_translations():
             'translations': translations
         })
     except Exception as e:
-        logger.error(f"Error getting translations: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Error getting translations: {e}", exc_info=True)
+        return _translations_failure(e, "The translation catalog could not be read")
 
 
 @translations_bp.route('/api/translations/locale', methods=['GET'])
@@ -211,13 +229,8 @@ def get_available_locales():
             'languages': languages
         })
     except Exception as e:
-        logger.error(f"Error getting available locales: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'locales': ['en'],
-            'languages': {'en': 'English'}
-        })
+        logger.error(f"Error getting available locales: {e}", exc_info=True)
+        return _translations_failure(e, "The language list could not be read")
 
 
 def register_translation_routes(app):

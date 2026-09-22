@@ -59,7 +59,7 @@ def test_upload_url_redirects_to_the_single_ingestion_page(app, admin_client):
     followed = admin_client.get("/upload", follow_redirects=True)
     assert followed.status_code == 200
 
-    if get_interface_manager().is_interface_enabled("upload_files"):
+    if get_interface_manager().is_interface_enabled("input_ingestion"):
         assert location.endswith("/operations/input")
         assert b"Start Analysis" in followed.data
     else:
@@ -151,25 +151,37 @@ def test_the_sidebar_shows_one_shortcut_per_destination(app, admin_client):
 
 
 def test_the_settings_offer_one_ingestion_switch(app, admin_client):
-    """``upload_files`` and the retired core twin ``file_upload`` both pointed at
-    the upload page, so Settings listed two switches for the same interface -
-    one of which gated nothing at all. The listing now matches the interface
-    registry, which holds exactly one ingestion interface.
+    """One ingestion interface, and only one.
+
+    The retired core twin ``file_upload`` and the old ``upload_files`` key both
+    named this capability, so Settings listed two switches for one page - one of
+    which gated nothing at all. The listing now comes from the interface
+    registry, which declares exactly one ingestion interface
+    (``input_ingestion``); the earlier keys survive only as stored settings
+    whose values are folded onto it.
     """
+    from core.interfaces import LEGACY_INTERFACE_IDS
     from settings import get_interface_manager
 
     manager = get_interface_manager()
-    listed = manager.get_interfaces_by_category()
+    listed = manager.get_interfaces_by_domain()
     flat = {name: entry for group in listed.values() for name, entry in group.items()}
 
     assert "file_upload" not in flat, "the retired duplicate switch is listed again"
-    assert "upload_files" in flat
-    entry = flat["upload_files"]
+    assert "upload_files" not in flat, "the renamed key is not an interface any more"
+
+    entry = flat["input_ingestion"]
     assert entry["name"] == "Input / Ingestion"
     assert entry["endpoint"] == "operations_input_page"
+    assert entry["domain"] == "INGEST"
 
-    # The switch still controls the navigation entry it always meant to gate.
+    # The switch still controls the navigation entry and the old /upload alias.
     assert manager.is_interface_enabled_by_endpoint("operations_input_page") == \
-        manager.is_interface_enabled("upload_files")
+        manager.is_interface_enabled("input_ingestion")
     assert manager.is_interface_enabled_by_endpoint("files.upload_page") == \
-        manager.is_interface_enabled("upload_files")
+        manager.is_interface_enabled("input_ingestion")
+
+    # Both earlier keys are declared, so a stored choice reaches the interface
+    # that replaced them rather than being silently dropped.
+    assert LEGACY_INTERFACE_IDS["upload_files"] == "input_ingestion"
+    assert LEGACY_INTERFACE_IDS["file_upload"] == "input_ingestion"

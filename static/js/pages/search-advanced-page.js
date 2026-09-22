@@ -538,22 +538,9 @@ async function executeAdvancedSearch() {
     
     // Collect filters. Source/side scoping lives in the advanced-filters
     // panel (the former "Search Within" block was merged into it).
-    const sourceIds = Array.from(document.getElementById('sourcesSelect').selectedOptions).map(o => parseInt(o.value));
-    const sideIds = Array.from(document.getElementById('sidesSelect').selectedOptions).map(o => parseInt(o.value));
-    
-    const filters = {
-        file_type: Array.from(document.getElementById('fileType').selectedOptions).map(o => o.value).filter(v => v),
-        category_id: Array.from(document.getElementById('categoriesSelect').selectedOptions).map(o => parseInt(o.value)),
-        analyst_category_id: Array.from(document.getElementById('analystCategoriesFilter')?.selectedOptions || []).map(o => parseInt(o.value)).filter(v => !isNaN(v)),
-        source_id: sourceIds.filter(id => !isNaN(id)),
-        side_id: sideIds.filter(id => !isNaN(id)),
-        date_from: document.getElementById('dateFrom').value || null,
-        date_to: document.getElementById('dateTo').value || null,
-        status: []
-    };
-    
-    if (document.getElementById('statusRead').checked) filters.status.push('Read');
-    if (document.getElementById('statusUnread').checked) filters.status.push('Unread');
+    const filters = collectFilters();
+    const sourceIds = filters.source_id;
+    const sideIds = filters.side_id;
     
     // Show warning if searching without source/side filter (for large databases)
     if (!filters.source_id.length && !filters.side_id.length && !query) {
@@ -1185,134 +1172,98 @@ function sortResults() {
 }
 
 // Export results in various formats
-function exportResults(format = 'csv') {
+/**
+ * The filters as they stand on screen.
+ *
+ * Read in one place because two operations depend on them agreeing: the search
+ * the reader is looking at, and the export of its result set. An export built
+ * from a second reading of the same controls is an export of a different
+ * query.
+ */
+function collectFilters() {
+    const sourceIds = Array.from(document.getElementById('sourcesSelect').selectedOptions)
+        .map(o => parseInt(o.value)).filter(id => !isNaN(id));
+    const sideIds = Array.from(document.getElementById('sidesSelect').selectedOptions)
+        .map(o => parseInt(o.value)).filter(id => !isNaN(id));
+    const filters = {
+        file_type: Array.from(document.getElementById('fileType').selectedOptions)
+            .map(o => o.value).filter(v => v),
+        category_id: Array.from(document.getElementById('categoriesSelect').selectedOptions)
+            .map(o => parseInt(o.value)).filter(id => !isNaN(id)),
+        analyst_category_id: Array.from(document.getElementById('analystCategoriesFilter')?.selectedOptions || [])
+            .map(o => parseInt(o.value)).filter(v => !isNaN(v)),
+        source_id: sourceIds,
+        side_id: sideIds,
+        date_from: document.getElementById('dateFrom').value || null,
+        date_to: document.getElementById('dateTo').value || null,
+        status: [],
+    };
+    if (document.getElementById('statusRead').checked) filters.status.push('Read');
+    if (document.getElementById('statusUnread').checked) filters.status.push('Unread');
+    return filters;
+}
+
+async function exportResults(format = 'csv') {
     if (searchState.results.length === 0) {
-        alert('No results to export');
+        Toast.info(tPage('nothingToExport', 'No results to export.'));
         return;
     }
-    
-    const timestamp = new Date().toISOString().split('T')[0];
-    const query = document.getElementById('mainSearchInput')?.value || 'search';
-    
-    switch (format) {
-        case 'csv':
-            exportAsCSV(timestamp, query);
-            break;
-        case 'excel':
-            exportAsExcel(timestamp, query);
-            break;
-        case 'json':
-            exportAsJSON(timestamp, query);
-            break;
-        default:
-            exportAsCSV(timestamp, query);
-    }
-}
 
-// Export as CSV with all details
-function exportAsCSV(timestamp, query) {
-    // CSV header with all available fields
-    const headers = [
-        'File ID',
-        'File Name',
-        'File Path',
-        'File Type',
-        'File Size (bytes)',
-        'File Size (formatted)',
-        'File Date',
-        'File Status',
-        'Source Name',
-        'Source ID',
-        'Side Name',
-        'Side ID',
-        'Relevance Score',
-        'Categories',
-        'Date Created',
-        'Snippet'
-    ];
-    
-    const csvRows = [headers.join(',')];
-    
-    searchState.results.forEach(result => {
-        const row = [
-            escapeCSV(result.id || ''),
-            escapeCSV(result.file_name || ''),
-            escapeCSV(result.file_path || ''),
-            escapeCSV(result.file_type || ''),
-            result.file_size || 0,
-            escapeCSV(formatFileSize(result.file_size || 0)),
-            escapeCSV(result.file_date ? new Date(result.file_date).toLocaleDateString() : ''),
-            escapeCSV(result.file_status || ''),
-            escapeCSV(result.source_name || ''),
-            result.source_id || '',
-            escapeCSV(result.side_name || ''),
-            result.side_id || '',
-            (result.relevance_score || 0).toFixed(2),
-            escapeCSV(Array.isArray(result.categories) ? result.categories.join('; ') : ''),
-            escapeCSV(result.date_creation ? new Date(result.date_creation).toLocaleDateString() : ''),
-            escapeCSV(result.snippet || '')
-        ];
-        csvRows.push(row.join(','));
-    });
-    
-    const csv = csvRows.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    downloadBlob(blob, `search_results_${sanitizeFilename(query)}_${timestamp}.csv`);
-}
-
-// Export as Excel (CSV format with .xlsx extension, or use a library)
-function exportAsExcel(timestamp, query) {
-    // For now, export as CSV with Excel-compatible format
-    // In production, you might want to use a library like SheetJS
-    exportAsCSV(timestamp, query);
-    
-    // Alternative: Use server-side Excel generation
-    // fetch('/api/search/export', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ results: searchState.results, format: 'excel' })
-    // }).then(response => response.blob())
-    //   .then(blob => downloadBlob(blob, `search_results_${query}_${timestamp}.xlsx`));
-}
-
-// Export as JSON
-function exportAsJSON(timestamp, query) {
-    const exportData = {
-        query: query,
-        timestamp: new Date().toISOString(),
-        total_results: searchState.totalResults,
-        search_time: searchState.searchTime,
-        filters: {
-            source_id: Array.from(document.getElementById('sourcesSelect')?.selectedOptions || []).map(o => parseInt(o.value)),
-            side_id: Array.from(document.getElementById('sidesSelect')?.selectedOptions || []).map(o => parseInt(o.value)),
-            categories: Array.from(document.getElementById('categoriesSelect')?.selectedOptions || []).map(o => parseInt(o.value)),
-            file_type: Array.from(document.getElementById('fileType')?.selectedOptions || []).map(o => o.value),
-            date_from: document.getElementById('dateFrom')?.value || null,
-            date_to: document.getElementById('dateTo')?.value || null
-        },
-        results: searchState.results.map(result => ({
-            id: result.id,
-            file_name: result.file_name,
-            file_path: result.file_path,
-            file_type: result.file_type,
-            file_size: result.file_size,
-            file_size_formatted: formatFileSize(result.file_size || 0),
-            file_date: result.file_date,
-            file_status: result.file_status,
-            source_name: result.source_name,
-            source_id: result.source_id,
-            side_name: result.side_name,
-            side_id: result.side_id,
-            relevance_score: result.relevance_score,
-            categories: result.categories || [],
-            date_creation: result.date_creation,
-            snippet: result.snippet
-        }))
+    // The definition of the query, not its rows. The server re-runs it and
+    // decides what the file contains; the browser never supplies the data.
+    const filters = collectFilters();
+    const payload = {
+        query: document.getElementById('mainSearchInput')?.value || '',
+        scope: 'filtered',
+        format: format,
+        // The same sort the screen is showing, read from the same control.
+        sort_by: document.getElementById('sortBy').value || 'relevance',
+        sort_order: 'desc',
+        source_ids: filters.source_id,
+        side_ids: filters.side_id,
+        category_ids: filters.category_id,
+        analyst_category_ids: filters.analyst_category_id,
+        file_type: filters.file_type.length === 1 ? filters.file_type[0] : null,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
     };
-    
-    const json = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
-    downloadBlob(blob, `search_results_${sanitizeFilename(query)}_${timestamp}.json`);
+
+    try {
+        const response = await fetch('/api/search/export', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const problem = await response.json().catch(() => ({}));
+            Toast.error(problem.error || tPage('exportFailed', 'The export could not be produced.'));
+            return;
+        }
+
+        const blob = await response.blob();
+        const rows = response.headers.get('X-Export-Rows') || '';
+        const truncated = response.headers.get('X-Export-Truncated') === 'true';
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const named = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+        downloadBlob(blob, named
+            ? decodeURIComponent(named[1].replace(/"/g, ''))
+            : `search_export_${new Date().toISOString().split('T')[0]}.${format}`);
+
+        // Say what was exported, and say it out loud when it was capped.
+        if (truncated) {
+            Toast.warning(tPage('exportTruncated',
+                'The export reached the size limit; narrow the query to get everything.'),
+                {detail: `${rows} rows`});
+        } else {
+            Toast.success(tPage('exportReady', 'Export ready.'), {detail: `${rows} rows`});
+        }
+    } catch (error) {
+        Toast.error(tPage('exportFailed', 'The export could not be produced.'));
+    }
 }
 
 // Print results
@@ -1405,14 +1356,6 @@ function printResults() {
 }
 
 // Helper function to escape CSV values
-function escapeCSV(value) {
-    if (value === null || value === undefined) return '""';
-    const stringValue = String(value);
-    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-        return `"${stringValue.replace(/"/g, '""')}"`;
-    }
-    return stringValue;
-}
 
 // Helper function to escape HTML
 function escapeHtml(text) {
@@ -1455,9 +1398,6 @@ function formatFileSize(bytes) {
 }
 
 // Helper function to sanitize filename
-function sanitizeFilename(filename) {
-    return filename.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 50);
-}
 
 // Expose functions globally
 if (typeof window !== 'undefined') {

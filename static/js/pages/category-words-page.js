@@ -473,138 +473,32 @@ function changeDisplayFormat() {
 
 // Render pagination
 function renderPagination() {
-    const paginationContainer = document.getElementById('pagination');
-    if (!paginationContainer) return;
-    
-    // Ensure container has an ID
-    if (!paginationContainer.id) {
-        paginationContainer.id = 'pagination';
-    }
-    
-    const totalPages = Math.ceil(filteredWords.length / itemsPerPage);
-    const totalItems = filteredWords.length;
-    
-    if (totalPages <= 1 && totalItems === 0) {
-        paginationContainer.innerHTML = '';
-        return;
-    }
-    
-    // Try to use unified pagination if available
-    if (window.renderUnifiedPagination && typeof window.renderUnifiedPagination === 'function') {
-        try {
-            window.renderUnifiedPagination({
-                currentPage: currentPage,
-                totalPages: totalPages,
-                containerId: paginationContainer.id,
-                onPageChange: (targetPage) => {
-                    changePage(targetPage);
-                },
-                urlParams: {},
-                showInfo: true,
-                showJump: totalPages > 5,
-                baseUrl: window.location.pathname
-            });
-            return;
-        } catch (err) {
-            console.error('Error rendering unified pagination:', err);
-        }
-    }
-    
-    // Try dynamic import as fallback
-    import('../modules/rendering/unified-pagination.js').then(module => {
-        if (module && module.renderUnifiedPagination) {
-            module.renderUnifiedPagination({
-                currentPage: currentPage,
-                totalPages: totalPages,
-                containerId: paginationContainer.id,
-                onPageChange: (targetPage) => {
-                    changePage(targetPage);
-                },
-                urlParams: {},
-                showInfo: true,
-                showJump: totalPages > 5,
-                baseUrl: window.location.pathname
-            });
-        } else {
-            renderOldPagination();
-        }
-    }).catch(err => {
-        console.error('Error loading unified pagination:', err);
-        // Fallback to old pagination
-        renderOldPagination();
-    });
-}
+    // One renderer. This page used to carry its own fallback pager, so the
+    // same list could be drawn two different ways depending on whether a
+    // module had loaded - the second implementation is gone.
+    const container = document.getElementById('pagination');
+    if (!container) return;
 
-// Fallback old pagination renderer
-function renderOldPagination() {
-    const paginationContainer = document.getElementById('pagination');
-    if (!paginationContainer) return;
-    
-    const totalPages = Math.ceil(filteredWords.length / itemsPerPage);
+    const totalPages = Math.ceil(filteredWords.length / itemsPerPage) || 1;
     const totalItems = filteredWords.length;
-    const startItem = totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
-    const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-    
+
     if (totalPages <= 1 && totalItems === 0) {
-        paginationContainer.innerHTML = '';
+        container.innerHTML = '';
         return;
     }
-    
-    // Use event delegation instead of inline onclick for better reliability
-    let html = '<div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">';
-    html += `<div class="small text-muted pagination-info">${translations.showing || 'Showing'} ${startItem}-${endItem} ${translations.of || 'of'} ${totalItems}</div>`;
-    html += '<div class="pagination-page-numbers d-flex align-items-center gap-1">';
-    
-    // Previous button
-    html += `<button class="pagination-btn" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button>`;
-    
-    const maxVisible = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-    if (endPage - startPage < maxVisible - 1) {
-        startPage = Math.max(1, endPage - maxVisible + 1);
-    }
-    
-    if (startPage > 1) {
-        html += `<button class="pagination-btn" data-page="1">1</button>`;
-        if (startPage > 2) html += `<span class="pagination-ellipsis">...</span>`;
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-        html += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
-    }
-    
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) html += `<span class="pagination-ellipsis">...</span>`;
-        html += `<button class="pagination-btn" data-page="${totalPages}">${totalPages}</button>`;
-    }
-    
-    // Next button
-    html += `<button class="pagination-btn" data-page="${currentPage + 1}" ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button>`;
-    html += '</div></div>';
-    paginationContainer.innerHTML = html;
-    
-    // Attach event listeners using event delegation
-    // Remove old listener if it exists to avoid duplicates
-    if (paginationContainer._paginationClickHandler) {
-        paginationContainer.removeEventListener('click', paginationContainer._paginationClickHandler);
-    }
-    
-    // Create new handler
-    paginationContainer._paginationClickHandler = function(e) {
-        const btn = e.target.closest('.pagination-btn');
-        if (!btn || btn.disabled) return;
-        
-        const page = parseInt(btn.getAttribute('data-page'));
-        if (!isNaN(page) && page >= 1) {
-            const currentTotalPages = Math.ceil(filteredWords.length / itemsPerPage);
-            if (page <= currentTotalPages) {
-                changePage(page);
-            }
-        }
-    };
-    
-    paginationContainer.addEventListener('click', paginationContainer._paginationClickHandler);
+
+    import('../modules/rendering/unified-pagination.js').then(module => {
+        module.renderUnifiedPagination({
+            currentPage: currentPage,
+            totalPages: totalPages,
+            containerId: container.id,
+            onPageChange: (targetPage) => changePage(targetPage),
+            urlParams: {},
+            showInfo: true,
+            showJump: totalPages > 5,
+            baseUrl: window.location.pathname
+        });
+    });
 }
 
 // Change page

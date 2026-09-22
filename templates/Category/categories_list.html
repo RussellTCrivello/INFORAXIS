@@ -7,16 +7,8 @@
 <link href="{{ url_for('static', filename='dist/css/select2.min.css') }}" rel="stylesheet" />
 {% endblock %}
 
-{% block breadcrumb %}
-<li class="breadcrumb-item">
-    <a href="{{ url_for('index') }}">
-        <i class="bi bi-house-door me-1"></i>{{ _('Home') }}
-    </a>
-</li>
-<li class="breadcrumb-item active" aria-current="page">
-    <i class="bi bi-tags me-1"></i>{{ _('Categories') }}
-</li>
-{% endblock %}
+{% from 'components/breadcrumbs.html' import breadcrumbs %}
+{% block breadcrumb %}{{ breadcrumbs() }}{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -43,7 +35,8 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
-    {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+{% from 'components/filter_bar.html' import search_group %}
+    {% call page_tips() %}
 
 <div class="tips-section">
     <div class="tips-section-title">
@@ -136,22 +129,7 @@
 <!-- Filters Section -->
 <div class="file-filters-section mb-3">
     <div class="filter-controls-grid">
-        <div class="filter-group filter-group-search">
-            <label for="categorySearch" class="filter-label">
-                <i class="bi bi-search"></i>
-                {{ _('Search Categories') }}
-            </label>
-            <div class="search-input-wrapper">
-                <input type="text" 
-                       id="categorySearch" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search categories...') }}" 
-                       autocomplete="off">
-                <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
-                    <i class="bi bi-x"></i>
-                </button>
-            </div>
-        </div>
+        {{ search_group('categorySearch', _("Search Categories"), _("Search categories..."), onclear='clearSearch()') }}
 
         <div class="filter-group">
             <label for="sortBy" class="filter-label">

@@ -73,3 +73,27 @@ def test_every_javascript_module_parses(tmp_path):
             failures.append(f"{path.relative_to(PROJECT_ROOT)}: {first_line}")
 
     assert not failures, "JavaScript that does not parse:\n" + "\n".join(failures)
+
+
+def test_content_formatter_display_harness_passes():
+    """Run the formatters' own harness - it pins the rendered structure.
+
+    ``tests/js/content_formatter_smoke.mjs`` drives the real display
+    formatters and checks the markup they produce. It is the only place the
+    Word table shape is asserted (the "Table N" marker must open a table and
+    the tab-delimited rows must come back as rows, not as prose), so a change
+    that parses but flattens the tables has to fail here.
+    """
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+
+    harness = PROJECT_ROOT / "tests" / "js" / "content_formatter_smoke.mjs"
+    proc = subprocess.run(
+        [node, str(harness)], capture_output=True, text=True,
+        timeout=300, cwd=str(PROJECT_ROOT),
+    )
+    assert proc.returncode == 0, (
+        f"display harness failed\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+    )
+    assert "checks passed" in proc.stdout, proc.stdout[-2000:]

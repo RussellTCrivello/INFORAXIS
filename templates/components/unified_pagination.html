@@ -1,3 +1,11 @@
+{# component: pagination
+   purpose: Moving through a long list: where you are, how much there is, and
+            how to get to a page you know the number of.
+   states: normal, filtered
+   classes: pagination, page-item, page-link, page-navigation-bar
+   notes: Renders links for the endpoint it is given; it does not query and
+          does not decide the page size.
+#}
 {%- macro unified_pagination(page, total_pages, url_for_func, endpoint, url_params={}, show_info=true, show_jump=true) -%}
 {# 
     Unified Pagination Component

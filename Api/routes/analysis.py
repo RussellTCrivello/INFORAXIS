@@ -4,12 +4,63 @@ Analysis routes
 
 from flask import render_template, request, jsonify
 from Api.utils import execute_query, select_info_sources, select_info_sides
+from Api.services.analysis_stats import (
+    analysis_measurements,
+    unavailable_measurements as unavailable_analysis_measurements,
+)
 
 import logging
+
+from core.errors import client_error
 import os
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def get_recent_jobs(execute_query, limit: int = 5):
+    """Recent jobs, with the outcome of each - the page's history panel.
+
+    Reported as stored: the counts come from the job's own statistics, and a
+    job with no timings shows no duration rather than an assumed one.
+    """
+    try:
+        rows = execute_query(
+            """
+            SELECT job_id, job_type, status, started_at, completed_at,
+                   COALESCE((stats->>'files_completed')::int, 0) AS files_completed,
+                   COALESCE((stats->>'files_failed')::int, 0) AS files_failed,
+                   COALESCE((stats->>'files_discovered')::int, 0) AS files_discovered
+            FROM jobs
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (int(limit),),
+            fetch="all",
+        ) or []
+    except Exception as exc:
+        logger.warning("Could not load recent jobs for the analysis page: %s", exc)
+        return []
+
+    jobs = []
+    for row in rows:
+        (job_id, job_type, status, started_at, completed_at,
+         completed, failed, discovered) = list(row)[:8]
+        duration = None
+        if started_at and completed_at and completed_at > started_at:
+            duration = (completed_at - started_at).total_seconds()
+        jobs.append({
+            "job_id": job_id,
+            "job_type": job_type,
+            "status": status,
+            "created_at": started_at or completed_at,
+            "duration_seconds": duration,
+            "files_completed": completed or 0,
+            "files_failed": failed or 0,
+            "files_discovered": discovered or 0,
+            "success_rate": (100.0 * completed / (completed + failed)) if (completed or failed) else None,
+        })
+    return jobs
 
 def register_analysis_routes(app):
     """Register analysis routes with the Flask app"""
@@ -53,43 +104,43 @@ def register_analysis_routes(app):
             sources = select_info_sources() or {}
             sides = select_info_sides() or {}
             
-            # Get processing statistics (success rate only, since we don't have processing time data)
-            stats = execute_query("""
-                SELECT 
-                    COUNT(*) FILTER (WHERE file_status = 'Read') * 100.0 / NULLIF(COUNT(*), 0) as success_rate
-                FROM paths
-                WHERE date_creation >= CURRENT_DATE - INTERVAL '7 days'
-            """, fetch="one")
+            # Get recent jobs for the history panel. The panel used to be three
+            # hard-coded examples ("Batch #5 - 98.5% success"); showing invented
+            # runs beside real ones is indistinguishable from real history, so
+            # it now lists the jobs the system actually recorded.
+            recent_jobs = get_recent_jobs(execute_query, limit=5)
             
-            # Calculate average processing time (default to 2.3 seconds - no actual data available)
-            avg_processing_time = 2.3
-            
-            # Calculate success rate (default to 98.5% if no data)
-            success_rate = 98.5
-            if stats is not None:
-                success_rate = float(stats)
-            
-            # Estimated time based on queue size
+            # Processing figures. Every one of these is a Measurement: a value
+            # with a recorded basis, or an explicit "no measurement available".
+            # Nothing here is ever a stand-in constant.
             queue_size = len(unanalyzed)
-            estimated_time = (queue_size * avg_processing_time / 60.0) if queue_size > 0 else 0.0
+            stats = analysis_measurements(execute_query, queue_size=queue_size)
             
             return render_template('Analysis/analysis_batch.html',
-                                 avg_processing_time=avg_processing_time,
-                                 success_rate=success_rate,
-                                 estimated_time=estimated_time,
+                                 stats=stats,
+                                 success_rate=stats['success_rate'],
+                                 avg_processing_time=stats['avg_processing_time'],
+                                 estimated_time=stats['estimated_time'],
                                  queue_size=queue_size,
+                                 recent_jobs=recent_jobs,
                                  unanalyzed=unanalyzed,
                                  failed_files=failed_files,
                                  sources=sources,
                                  sides=sides)
         except Exception as e:
-            logger.error(f"Error loading batch analysis page: {e}")
-            # Return with default values on error
+            # The page still renders, but with measurements that say they are
+            # unavailable - never with invented values that look like a reading.
+            logger.error(f"Error loading batch analysis page: {e}", exc_info=True)
+            fallback = unavailable_analysis_measurements(
+                "The processing figures could not be read for this request"
+            )
             return render_template('Analysis/analysis_batch.html',
-                                 avg_processing_time=2.3,
-                                 success_rate=98.5,
-                                 estimated_time=0.0,
+                                 stats=fallback,
+                                 success_rate=fallback['success_rate'],
+                                 avg_processing_time=fallback['avg_processing_time'],
+                                 estimated_time=fallback['estimated_time'],
                                  queue_size=0,
+                                 recent_jobs=[],
                                  unanalyzed=[],
                                  failed_files=[],
                                  sources={},
@@ -180,9 +231,10 @@ def register_analysis_routes(app):
             else:
                 user_message = f"An error occurred while processing file {file_id}. Please try again or contact support."
             
-            return jsonify({
-                'success': False,
-                'error': user_message,
-                'technical_error': error_message if logger.isEnabledFor(logging.DEBUG) else None
-            }), 500
+            # The reader gets the sentence the classification selected; the
+            # exception text is logged with a correlation id instead of being
+            # returned whenever debug logging happens to be on.
+            return client_error(e, subsystem="analysis",
+                                public_message=user_message,
+                                success_key="success")
     

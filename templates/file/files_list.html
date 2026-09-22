@@ -21,7 +21,9 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
-    {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+{% from 'components/filter_bar.html' import search_group %}
+{% from 'components/states.html' import empty_state %}
+    {% call page_tips() %}
 
 <div class="tips-section">
     <div class="tips-section-title">
@@ -107,23 +109,7 @@
     <div class="file-filters-section">
         <!-- Search and Main Filters -->
         <div class="filter-controls-grid">
-            <div class="filter-group filter-group-search">
-                <label for="smartSearch" class="filter-label">
-                    <i class="bi bi-search"></i>
-                    {{ _('Search Files') }}
-                </label>
-                <div class="search-input-wrapper">
-                    <input type="text" 
-                           id="smartSearch" 
-                           class="form-control search-input" 
-                           placeholder="{{ _('Search by name, content...') }}" 
-                           value="{{ search }}"
-                           autocomplete="off">
-                    <button class="btn-clear-search" onclick="clearFileSearch()" title="{{ _('Clear search') }}">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            </div>
+        {{ search_group('smartSearch', _("Search Files"), _("Search by name, content..."), value=search, onclear='clearFileSearch()') }}
 
             <div class="filter-group">
                 <label for="sourceFilter" class="filter-label">
@@ -361,14 +347,12 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="10" class="empty-state">
-                                <div class="empty-state-content">
-                                    <i class="bi bi-inbox"></i>
-                                    <p>{{ _('No files found.') }}</p>
-                                    <a href="{{ url_for('operations_input_page') }}" class="btn btn-primary">
-                                        {{ _('Upload your first file') }}
-                                    </a>
-                                </div>
+                            <td colspan="10">
+                                {{ empty_state(
+                                    message=_('No files found.'),
+                                    action_label=_('Upload your first file'),
+                                    action_href=url_for('operations_input_page'),
+                                    action_icon=None) }}
                             </td>
                         </tr>
                         {% endfor %}

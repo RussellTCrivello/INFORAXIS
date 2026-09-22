@@ -11628,3 +11628,129 @@ msgstr ""
 
 msgid "Sheets"
 msgstr ""
+
+# The action toolbar's own sentences. The component renders them as phrase
+# templates and its runtime fills in {count}, {total} and {noun}, so the scope
+# of a bulk action can be said in the reader's language rather than only in
+# English. Written by hand rather than extracted: this catalog is maintained
+# against the product, not regenerated wholesale.
+#: templates/components/action_toolbar.html
+msgid "Select {noun} first"
+msgstr ""
+
+#: templates/components/action_toolbar.html
+msgid "{count} {noun} selected"
+msgstr ""
+
+#: templates/components/action_toolbar.html
+msgid "{count} of {total} {noun} selected"
+msgstr ""
+
+#: templates/components/action_toolbar.html
+msgid "source"
+msgstr ""
+
+#: templates/components/action_toolbar.html
+msgid "side"
+msgstr ""
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "keyword"
+msgstr ""
+
+#: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
+msgid "word"
+msgstr ""
+
+# ---------------------------------------------------------------------------
+# The confirmation dialog and the toast, as the pages put them to work.
+#
+# The wording belongs to the page that asks the question, not to the
+# component: ``confirm_dialog.html`` renders whatever question it is given.
+# Written by hand rather than extracted, like the toolbar strings above -
+# this catalog is maintained against the product, not regenerated wholesale.
+#: templates/Operations/jobs.html:8
+msgid "Cancel this job?"
+msgstr ""
+
+#: templates/Operations/jobs.html:9
+msgid "In-flight files finish; no new files start."
+msgstr ""
+
+#: templates/Operations/jobs.html:11
+msgid "Cancel job"
+msgstr ""
+
+#: templates/Operations/jobs.html:12
+msgid "Keep running"
+msgstr ""
+
+#: templates/Operations/jobs.html:163
+msgid "Job cancelled."
+msgstr ""
+
+#: templates/Operations/jobs.html:165
+msgid "The job could not be cancelled."
+msgstr ""
+
+#: templates/file/file_detail.html:581
+msgid "Reprocess this file?"
+msgstr ""
+
+#: templates/file/file_detail.html:295
+msgid "This will extract and store the content again."
+msgstr ""
+
+#: templates/file/file_detail.html:582
+msgid "This may take a moment."
+msgstr ""
+
+# ---------------------------------------------------------------------------
+# The record action surface: the labels the Action Registry owns, and the
+# questions the page asks before it uses them.
+#
+# A label lives with the action (`source=` in action_registry.py) and is
+# translated at render time, so the template never restates it; the
+# dialog's words belong to the page that asks the question.
+# Written by hand rather than extracted, like the toolbar's strings:
+# this catalog is maintained against the product, not regenerated
+# wholesale.
+#: core/experience/action_registry.py
+msgid "View Original"
+msgstr ""
+
+#: core/experience/action_registry.py
+msgid "Download Original"
+msgstr ""
+
+#: core/experience/action_registry.py
+msgid "Export Extracted Text"
+msgstr ""
+
+#: templates/components/record_actions.html
+msgid "More actions"
+msgstr ""
+
+#: templates/file/file_detail.html
+msgid "Actions for this file"
+msgstr ""
+
+#: templates/file/file_detail.html
+msgid "Full Screen"
+msgstr ""
+
+#: templates/file/file_detail.html
+msgid "Delete this file?"
+msgstr ""
+
+#: templates/file/file_detail.html
+msgid "This permanently removes the record and everything extracted from it. The original file on disk is not touched."
+msgstr ""
+
+#: templates/file/file_detail.html
+msgid "Delete file"
+msgstr ""
+
+#: templates/file/file_detail.html
+msgid "Keep it"
+msgstr ""

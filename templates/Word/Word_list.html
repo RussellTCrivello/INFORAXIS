@@ -19,7 +19,11 @@
 
 <!-- Page Tips -->
 {% from 'components/page_tips.html' import page_tips %}
-    {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+{% from 'components/filter_bar.html' import search_group %}
+{% from 'components/table.html' import data_table, table_empty_row %}
+{% from 'components/status_badge.html' import status_badge %}
+{% from 'components/action_toolbar.html' import action_toolbar, action_group, action_button, bulk_action_button, selection_summary %}
+    {% call page_tips() %}
 
 <div class="tips-section">
     <div class="tips-section-title">
@@ -102,22 +106,7 @@
 <div class="file-filters-section">
     <!-- Search and Main Filters -->
     <div class="filter-controls-grid">
-        <div class="filter-group filter-group-search">
-            <label for="searchWords" class="filter-label">
-                <i class="bi bi-search"></i>
-                {{ _('Search Words') }}
-            </label>
-            <div class="search-input-wrapper">
-                <input type="text" 
-                       id="searchWords" 
-                       class="form-control search-input" 
-                       placeholder="{{ _('Search words...') }}" 
-                       autocomplete="off">
-                <button class="btn-clear-search" onclick="clearSearch()" title="{{ _('Clear search') }}">
-                    <i class="bi bi-x"></i>
-                </button>
-            </div>
-        </div>
+        {{ search_group('searchWords', _("Search Words"), _("Search words..."), onclear='clearSearch()') }}
 
         <div class="filter-group">
             <label for="statusFilter" class="filter-label">
@@ -156,30 +145,38 @@
     </div>
 
     <!-- Action Bar -->
-    <div class="action-bar">
-        <div class="action-group">
-            <span class="action-label">{{ _('Selection:') }}</span>
-            <button class="btn-action" onclick="selectAll()">
-                <i class="bi bi-check-square"></i>
-                {{ _('Select All') }}
-            </button>
-            <button class="btn-action" onclick="selectNone()">
-                <i class="bi bi-square"></i>
-                {{ _('Select None') }}
-            </button>
-        </div>
-        <div class="action-group">
-            <span class="action-label">{{ _('Bulk Actions:') }}</span>
-            <button class="btn-action btn-outline-warning" onclick="bulkUpdate()" id="bulkUpdateBtn" disabled>
-                <i class="bi bi-pencil"></i>
-                {{ _('Edit Selected') }}
-            </button>
-            <button class="btn-action btn-outline-danger" onclick="bulkDelete()" id="bulkDeleteBtn" disabled>
-                <i class="bi bi-trash"></i>
-                {{ _('Delete Selected') }}
-            </button>
-        </div>
-    </div>
+    {#-
+       Every action on this page, classified before it was rendered (§ action
+       audit). Word is not a page of bulk operations:
+
+         Select All / Select None   selection controls, page scope
+         Edit Selected              selection scope - it edits ONE word (the
+                                    first selected) and asks before doing it,
+                                    so it needs a scope but is not a bulk
+                                    operation; the definition layer carries
+                                    that distinction as requires_single_selection
+         Delete Selected            bulk + destructive
+         View / Edit / Delete       per record, in the row (record scope)
+
+       Nothing here is forced into the bulk primitive because it sits beside
+       bulk actions; the two selection-scoped ones use it because a scope is
+       what they need, and that is all the primitive claims.
+    -#}
+    {% call action_toolbar(id='wordsActionBar', label=_('Actions'), interface_id=inspector_interface) %}
+        {% call action_group(_('Selection:')) %}
+            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()', interface_id=inspector_interface, action_id='words.select_all') }}
+            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()', interface_id=inspector_interface, action_id='words.select_none') }}
+        {% endcall %}
+        {% call action_group(_('Bulk Actions:')) %}
+            {{ selection_summary(total_words|default(0), _('words'), _('word')) }}
+            {{ bulk_action_button(_('Edit Selected'), icon='bi-pencil', onclick='bulkUpdate()',
+                 tone='outline-warning', id='bulkUpdateBtn', noun=_('words'),
+                 interface_id=inspector_interface, action_id='words.edit_selected') }}
+            {{ bulk_action_button(_('Delete Selected'), icon='bi-trash', onclick='bulkDelete()',
+                 tone='outline-danger', id='bulkDeleteBtn', noun=_('words'),
+                 interface_id=inspector_interface, action_id='words.delete_selected') }}
+        {% endcall %}
+    {% endcall %}
 </div>
 
 <!-- Pagination info above table -->
@@ -208,7 +205,7 @@
 
 <div class="stat-card">
     <div class="table-wrapper">
-        <table class="table table-hover align-middle" id="wordsTable" style="width: 100%;">
+        {% call data_table(id='wordsTable', variant='hover align-middle', extra_style='width: 100%;') %}
             <thead>
                 <tr>
                     <th style="width:50px">
@@ -263,11 +260,7 @@
                             <span class="badge bg-info">{{ word.usage_count }}</span>
                         </td>
                         <td>
-                            {% if word.usage_count > 0 %}
-                                <span class="badge bg-success">{{ _('Active') }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ _('Unused') }}</span>
-                            {% endif %}
+                            {{ status_badge(status='active' if word.usage_count > 0 else 'unused') }}
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm">
@@ -291,20 +284,15 @@
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center py-4">
-                            <div class="empty-state">
-                                <i class="bi bi-inbox"></i>
-                                <p>{{ _('No words found.') }}</p>
-                                <button class="btn btn-primary" onclick="openAddWordModal()">
-                                    {{ _('Add your first word') }}
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
+                    {{ table_empty_row(
+                        7,
+                        message=_('No words found.'),
+                        action_label=_('Add your first word'),
+                        action_onclick='openAddWordModal()',
+                        action_icon=None) }}
                 {% endif %}
             </tbody>
-        </table>
+        {% endcall %}
     </div>
 
     <!-- Server-rendered Pagination -->

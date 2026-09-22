@@ -26,7 +26,7 @@
     <!-- Page Tips -->
     {% from 'components/page_tips.html' import page_tips %}
     {% from 'components/analyst_classify.html' import analyst_classify %}
-        {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+        {% call page_tips() %}
 
     <div class="tips-section">
         <div class="tips-section-title">
@@ -761,7 +761,22 @@
                     <!-- Left Section: File Content -->
                     <div class="file-details-content-section">
                         <div class="file-details-section-header">
-                            <h3><i class="bi bi-file-text"></i> {{ _('File Content') }}</h3>
+                            <!-- Two sides of the same object: the text that was
+                                 extracted and stored, and the source file it
+                                 came from. An examiner verifies the first
+                                 against the second. -->
+                            <div class="file-content-tabs" role="tablist" aria-label="{{ _('File Content') }}">
+                                <button type="button" class="file-content-tab active" id="extractedContentTab"
+                                        role="tab" aria-selected="true" data-content-tab="extracted"
+                                        onclick="switchModalContentTab('extracted')">
+                                    <i class="bi bi-file-text" aria-hidden="true"></i> {{ _('Extracted Text') }}
+                                </button>
+                                <button type="button" class="file-content-tab" id="originalFileTab"
+                                        role="tab" aria-selected="false" data-content-tab="original"
+                                        onclick="switchModalContentTab('original')">
+                                    <i class="bi bi-file-earmark-image" aria-hidden="true"></i> {{ _('Original File') }}
+                                </button>
+                            </div>
                             <div class="file-content-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                                 <button class="btn btn-sm btn-outline-primary" onclick="copyModalContent()" title="{{ _('Copy Content') }}">
                                     <i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}
@@ -775,8 +790,8 @@
                             </div>
                         </div>
                         
-                        <!-- Search Controls -->
-                        <div class="file-content-search" style="padding: 1rem; background: var(--bg-section); border-bottom: 1px solid var(--border-color);">
+                        <!-- Search Controls (extracted text only) -->
+                        <div class="file-content-search" id="extractedContentSearch" style="padding: 1rem; background: var(--bg-section); border-bottom: 1px solid var(--border-color);">
                             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                                 <div style="flex: 1; min-width: 200px;">
                                     <div style="display: flex; gap: 0.25rem;">
@@ -828,6 +843,12 @@
                         
                         <div class="file-details-content-view" id="fileContentSection" style="position: relative; overflow-y: auto; overflow-x: auto; max-height: calc(100vh - 400px); width: 100%; word-wrap: break-word; overflow-wrap: break-word;">
                             <div class="content-loading">{{ _('Loading content...') }}</div>
+                        </div>
+                        <!-- The original/source file (images, PDF pages, raw
+                             text, or an explicit "not available") so the
+                             extracted text can be checked against it. -->
+                        <div class="file-details-content-view" id="originalFileSection" style="display: none; position: relative; overflow-y: auto; overflow-x: auto; max-height: calc(100vh - 400px); width: 100%; word-wrap: break-word; overflow-wrap: break-word;">
+                            <div class="content-loading">{{ _('Loading original file...') }}</div>
                         </div>
                     </div>
                     

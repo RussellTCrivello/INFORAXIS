@@ -658,27 +658,64 @@ function formatWordContent(content) {
         const line = lines[i];
         const trimmedLine = line.trim();
         
+        // Table marker FIRST - before the explanatory-text skip below.
+        // "Table N" is structural metadata (never displayed) AND the signal
+        // that starts a table; swallowing it as explanatory text is what made
+        // every Word table render as tab-separated prose.
+        if (isTableStartLine(trimmedLine)) {
+            // End the paragraph in progress so document order is preserved.
+            if (currentParagraph.length > 0) {
+                html += formatParagraph(currentParagraph.join(' '));
+                currentParagraph = [];
+                lastElementType = 'paragraph';
+            }
+            
+            // End the previous table, if any.
+            if (currentTable.length > 0) {
+                html += formatAsTable(currentTable, currentTableHeader);
+                currentTable = [];
+                tableRows = [];
+            }
+            
+            currentTableHeader = tableHeaderInfo(trimmedLine);
+            inTable = true;
+            expectedColumns = null; // Column count comes from the first row
+            lastElementType = 'table';
+            continue;
+        }
+        
         if (!trimmedLine) {
+            // Inside a table a line of nothing but tabs is an explicit empty
+            // row, not a blank line: a single-column table's empty row cannot
+            // be written any other way (it would be read as the end of the
+            // table). Cell boundaries are still visible in ``line``.
+            if (inTable && line.includes('\t')) {
+                const emptyRow = normalizeRow([], expectedColumns);
+                currentTable.push(emptyRow);
+                tableRows.push(emptyRow);
+                continue;
+            }
             // Empty line - end current section if we have enough data
             if (inTable && currentTable.length > 0) {
-                // Check if next non-empty line is also a table row
-                let nextNonEmpty = null;
-                for (let j = i + 1; j < lines.length; j++) {
-                    if (lines[j].trim()) {
-                        nextNonEmpty = lines[j].trim();
-                        break;
-                    }
+                const nextNonEmpty = nextNonEmptyLine(lines, i);
+                
+                // A blank line between rows keeps its row position (an
+                // all-empty row is still a row); otherwise it is the block
+                // separator the extractor writes between document elements
+                // and the table ends here.
+                if (nextNonEmpty && continuesTable(nextNonEmpty, expectedColumns)) {
+                    const emptyRow = normalizeRow([], expectedColumns);
+                    currentTable.push(emptyRow);
+                    tableRows.push(emptyRow);
+                    continue;
                 }
                 
-                // If next line is not a table row or table header, end current table
-                if (!nextNonEmpty || (!detectTableHeader(nextNonEmpty) && !isLikelyTableRow(nextNonEmpty, expectedColumns, currentTable))) {
-                    html += formatAsTable(currentTable, currentTableHeader);
-                    currentTable = [];
-                    currentTableHeader = null;
-                    tableRows = [];
-                    inTable = false;
-                    expectedColumns = null;
-                }
+                html += formatAsTable(currentTable, currentTableHeader);
+                currentTable = [];
+                currentTableHeader = null;
+                tableRows = [];
+                inTable = false;
+                expectedColumns = null;
             } else if (currentParagraph.length > 0) {
                 const paraText = currentParagraph.join(' ');
                 if (paraText.trim()) {
@@ -689,114 +726,31 @@ function formatWordContent(content) {
             continue;
         }
         
+        // Inside a table every non-blank line IS a row: a one-column table has
+        // rows of a single cell with no separator at all, and requiring a
+        // separator dropped them (and ended the table early).
+        if (inTable) {
+            const cells = splitTableRow(line, expectedColumns, currentTable);
+            if (expectedColumns === null) {
+                expectedColumns = cells.length;
+            }
+            const row = normalizeRow(cells, expectedColumns);
+            currentTable.push(row);
+            tableRows.push(row);
+            continue;
+        }
+        
         // Skip explanatory text lines (metadata markers)
         if (isExplanatoryText(trimmedLine)) {
             // These are organizational markers - skip them but preserve structure
             continue;
         }
         
-        // Check for table header (storage format)
-        // Support both "Table N" and "word_table" markers for new ordered format
-        const tableHeader = detectTableHeader(trimmedLine);
-        const isWordTableMarker = trimmedLine.match(/^word_table/i);
-        
-        if ((tableHeader && tableHeader.type === 'table') || isWordTableMarker) {
-            console.log('formatWordContent: Found table header at line', i, ':', tableHeader || 'word_table marker');
-            
-            // End any current paragraph to preserve order
-            if (currentParagraph.length > 0) {
-                html += formatParagraph(currentParagraph.join(' '));
-                currentParagraph = [];
-                lastElementType = 'paragraph';
-            }
-            
-            // End previous table if any
-            if (currentTable.length > 0) {
-                html += formatAsTable(currentTable, currentTableHeader);
-                currentTable = [];
-                tableRows = [];
-            }
-            
-            // Start new table
-            if (tableHeader && tableHeader.type === 'table') {
-                currentTableHeader = {
-                    number: tableHeader.number,
-                    caption: tableHeader.caption
-                };
-            } else {
-                // Extract table number from word_table marker if available
-                const tableNumMatch = trimmedLine.match(/table\s+(\d+)/i);
-                currentTableHeader = {
-                    number: tableNumMatch ? parseInt(tableNumMatch[1]) : null,
-                    caption: null
-                };
-            }
-            inTable = true;
-            expectedColumns = null; // Reset column count for new table
-            lastElementType = 'table';
-            continue;
-        }
-        
         // Check for word_paragraph marker (new ordered format)
         if (trimmedLine.match(/^word_paragraph/i)) {
-            // End any current table
-            if (inTable && currentTable.length > 0) {
-                html += formatAsTable(currentTable, currentTableHeader);
-                currentTable = [];
-                tableRows = [];
-                currentTableHeader = null;
-                inTable = false;
-                expectedColumns = null;
-            }
-            // Continue to process as paragraph (skip the marker line)
+            // Marker only: the paragraph text follows on the next line.
             lastElementType = 'paragraph';
             continue;
-        }
-        
-        // Check if we're in a table section
-        if (inTable) {
-            // Parse row using enhanced parser with previous rows context
-            const cells = parseTableRow(trimmedLine, expectedColumns, currentTable);
-            
-            // Determine if this is a table row
-            const isTableRow = cells.length > 1 || (cells.length === 1 && cells[0].length > 0 && expectedColumns === 1);
-            
-            if (isTableRow) {
-                // Update expected columns from first row
-                if (expectedColumns === null && currentTable.length === 0) {
-                    expectedColumns = cells.length;
-                    console.log('Table first row detected with', expectedColumns, 'columns');
-                }
-                
-                // Normalize column count if we have expected columns
-                if (expectedColumns && cells.length !== expectedColumns) {
-                    if (cells.length < expectedColumns) {
-                        // Pad with empty cells
-                        while (cells.length < expectedColumns) {
-                            cells.push('');
-                        }
-                    } else {
-                        // Merge excess into last column
-                        const excess = cells.slice(expectedColumns).join(' ');
-                        cells.splice(expectedColumns);
-                        cells[expectedColumns - 1] = (cells[expectedColumns - 1] || '') + ' ' + excess;
-                    }
-                }
-                
-                currentTable.push(cells);
-                tableRows.push(cells);
-                continue;
-            } else if (currentTable.length > 0) {
-                // End of table - format it
-                console.log('Ending table with', currentTable.length, 'rows');
-                html += formatAsTable(currentTable, currentTableHeader);
-                currentTable = [];
-                currentTableHeader = null;
-                tableRows = [];
-                expectedColumns = null;
-                inTable = false;
-                // Continue processing this line as regular text
-            }
         }
         
         // Handle paragraph text (may include style info)
@@ -810,6 +764,13 @@ function formatWordContent(content) {
                 if (styleMatch && styleMatch[2].trim()) {
                     const style = styleMatch[1];
                     const text = styleMatch[2].trim();
+                    // Styled paragraphs render immediately, so flush the
+                    // buffered paragraph first: otherwise it would be emitted
+                    // after this line and the document order would flip.
+                    if (currentParagraph.length > 0) {
+                        html += formatParagraph(currentParagraph.join(' '));
+                        currentParagraph = [];
+                    }
                     html += formatParagraph(text, style);
                 }
             } else if (cleanedLine.trim()) {
@@ -833,6 +794,113 @@ function formatWordContent(content) {
     html += '</div>';
     console.log('formatWordContent: Final HTML length:', html.length);
     return html;
+}
+
+/**
+ * Does this line open a table in the stored format?
+ *
+ * The extractor writes a table as a marker line - "Table 3", optionally
+ * "Table 3 | Caption: ..." - followed by one line per row with cells
+ * separated by tabs, then a blank line before the next document element.
+ *
+ * The marker is BOTH structural metadata (never displayed) and the signal
+ * that switches the reader into table mode. It has to be recognised before
+ * the explanatory-text skip, otherwise the marker is swallowed as metadata,
+ * the reader never enters table mode, and the tab-delimited rows fall through
+ * to the paragraph path - which is how every Word table came out as
+ * tab-separated prose instead of a table.
+ *
+ * @param {string} line - Line to check
+ * @returns {boolean} - True if the line starts a table
+ */
+function isTableStartLine(line) {
+    if (/^(word|slide)_table/i.test(line)) return true;
+    const header = detectTableHeader(line);
+    return Boolean(header && header.type === 'table');
+}
+
+/**
+ * Header info (table number / caption) of a table marker line.
+ * @param {string} line - Table marker line
+ * @returns {Object} - {number, caption}
+ */
+function tableHeaderInfo(line) {
+    const header = detectTableHeader(line);
+    if (header && header.type === 'table') {
+        return { number: header.number, caption: header.caption };
+    }
+    const match = line.match(/table\s+(\d+)/i);
+    return { number: match ? parseInt(match[1], 10) : null, caption: null };
+}
+
+/**
+ * Cells of one stored row.
+ *
+ * Tabs are the extractor's cell separator, so a tab-delimited row is split
+ * exactly - empty leading, middle and trailing cells included (they are
+ * columns, not padding). A row with no tab is a single-cell row: it belongs to
+ * a one-column table and must NOT be split on its spaces.
+ *
+ * @param {string} line - Raw row line (not trimmed)
+ * @param {number|null} expectedColumns - Columns established by earlier rows
+ * @param {Array<Array<string>>} previousRows - Rows already collected
+ * @returns {Array<string>} - Cell values
+ */
+function splitTableRow(line, expectedColumns, previousRows) {
+    if (line.includes('\t')) {
+        return line.split('\t').map(cell => cell.trim());
+    }
+    const cells = parseTableRow(line, expectedColumns, previousRows);
+    return cells.length ? cells : [line.trim()];
+}
+
+/**
+ * Pad/shrink a row to the table's column count, keeping empty cells.
+ * @param {Array<string>} cells - Row cells
+ * @param {number} columnCount - Column count of the table
+ * @returns {Array<string>} - Row with exactly ``columnCount`` cells
+ */
+function normalizeRow(cells, columnCount) {
+    const width = Math.max(1, columnCount || 0);
+    const row = cells.slice(0, width);
+    while (row.length < width) row.push('');
+    return row;
+}
+
+/**
+ * Does the line after a blank line continue the table in progress?
+ *
+ * A blank line normally separates two document elements (the extractor joins
+ * blocks with a blank line), so it ends the table. It only does NOT when the
+ * next non-empty line is unambiguously another row of the same table: a
+ * tab-delimited row, or a space-delimited row with the table's column count.
+ * That keeps an all-empty row inside a table from being read as the end of it.
+ *
+ * @param {string} line - Next non-empty line (trimmed)
+ * @param {number|null} expectedColumns - Columns of the table in progress
+ * @returns {boolean} - True when the line continues the table
+ */
+function continuesTable(line, expectedColumns) {
+    if (!line) return false;
+    if (line.includes('\t')) {
+        return line.split('\t').filter(c => c.trim()).length > 1;
+    }
+    if (!expectedColumns || expectedColumns < 2) return false;
+    const bySpace = line.split(/\s{2,}/).map(c => c.trim()).filter(c => c);
+    return bySpace.length === expectedColumns;
+}
+
+/**
+ * The next non-empty line after ``startIndex`` (trimmed), or null.
+ * @param {Array<string>} lines - Content lines
+ * @param {number} startIndex - Index to look after
+ * @returns {string|null} - Next non-empty trimmed line
+ */
+function nextNonEmptyLine(lines, startIndex) {
+    for (let j = startIndex + 1; j < lines.length; j++) {
+        if (lines[j].trim()) return lines[j].trim();
+    }
+    return null;
 }
 
 /**
@@ -1410,8 +1478,21 @@ function formatPowerPointContent(content) {
         const trimmedLine = line.trim();
         
         if (!trimmedLine) {
-            // Empty line - end current table if in one
+            // Tab-only line: explicit empty row (see the Word path above).
+            if (inTable && line.includes('\t')) {
+                currentTable.push(normalizeRow([], expectedColumns));
+                continue;
+            }
+            // Empty line - end current table if in one, unless the next line
+            // is unambiguously another row of it (an all-empty row keeps its
+            // position instead of ending the table).
             if (inTable && currentTable.length > 0) {
+                const nextNonEmpty = nextNonEmptyLine(lines, i);
+                if (nextNonEmpty && continuesTable(nextNonEmpty, expectedColumns)) {
+                    const emptyRow = normalizeRow([], expectedColumns);
+                    currentTable.push(emptyRow);
+                    continue;
+                }
                 currentSlide.push({
                     type: 'table',
                     table: currentTable,
@@ -1422,6 +1503,29 @@ function formatPowerPointContent(content) {
                 inTable = false;
                 expectedColumns = null;
             }
+            continue;
+        }
+        
+        // Slide table marker: must be recognised before the explanatory-text
+        // skip below, which otherwise swallows "Table N" and leaves the
+        // tab-delimited rows to be rendered as slide text.
+        if (isTableStartLine(trimmedLine) && !trimmedLine.match(/^slide_image/i)) {
+            if (!inSlide) {
+                currentSlideNumber++;
+                currentSlideHeader = { number: currentSlideNumber, title: null };
+                inSlide = true;
+            }
+            if (currentTable.length > 0) {
+                currentSlide.push({
+                    type: 'table',
+                    table: currentTable,
+                    header: currentTableHeader
+                });
+                currentTable = [];
+            }
+            currentTableHeader = tableHeaderInfo(trimmedLine);
+            inTable = true;
+            expectedColumns = null;
             continue;
         }
         
@@ -1464,9 +1568,9 @@ function formatPowerPointContent(content) {
             continue;
         }
         
-        // Check for slide element markers (new ordered format)
+        // Check for slide element markers (new ordered format).
+        // Table markers were consumed above (``isTableStartLine``).
         const slideTextMatch = trimmedLine.match(/^slide_text/i);
-        const slideTableMatch = trimmedLine.match(/^slide_table/i) || detectTableHeader(trimmedLine);
         const slideImageMatch = trimmedLine.match(/^slide_image/i) || trimmedLine.match(/\[Image:\s*(.+)\]/i);
         
         if (slideTextMatch) {
@@ -1479,34 +1583,6 @@ function formatPowerPointContent(content) {
             }
             // Skip the marker line, next line will be the text
             continue;
-        } else if (slideTableMatch && !trimmedLine.match(/^slide_table/i)) {
-            // Slide table element (detected via table header, not marker)
-            if (!inSlide) {
-                currentSlideNumber++;
-                currentSlideHeader = { number: currentSlideNumber, title: null };
-                inSlide = true;
-            }
-            
-            // Check if this is a table header
-            const tableHeader = detectTableHeader(trimmedLine);
-            if (tableHeader && tableHeader.type === 'table') {
-                // End previous table if any
-                if (currentTable.length > 0) {
-                    currentSlide.push({
-                        type: 'table',
-                        table: currentTable,
-                        header: currentTableHeader
-                    });
-                    currentTable = [];
-                }
-                currentTableHeader = {
-                    number: tableHeader.number,
-                    caption: tableHeader.caption
-                };
-                inTable = true;
-                expectedColumns = null;
-            }
-            // Continue processing - table rows will be handled below
         } else if (slideImageMatch) {
             // Slide image element
             if (!inSlide) {
@@ -1523,48 +1599,14 @@ function formatPowerPointContent(content) {
         }
         
         if (inSlide) {
-            // Check if we're in a table section
+            // Check if we're in a table section: every non-blank line is a row
+            // (a one-column table has single-cell rows with no separator).
             if (inTable) {
-                const cells = parseTableRow(trimmedLine, expectedColumns, currentTable);
-                const isTableRow = cells.length > 1 || (cells.length === 1 && expectedColumns === 1);
-                
-                if (isTableRow) {
-                    if (expectedColumns === null && currentTable.length === 0) {
-                        expectedColumns = cells.length;
-                    }
-                    if (expectedColumns && cells.length !== expectedColumns) {
-                        while (cells.length < expectedColumns) {
-                            cells.push('');
-                        }
-                        if (cells.length > expectedColumns) {
-                            const excess = cells.slice(expectedColumns).join(' ');
-                            cells.splice(expectedColumns);
-                            cells[expectedColumns - 1] = (cells[expectedColumns - 1] || '') + ' ' + excess;
-                        }
-                    }
-                    currentTable.push(cells);
-                } else if (currentTable.length > 0) {
-                    // End of table
-                    currentSlide.push({
-                        type: 'table',
-                        table: currentTable,
-                        header: currentTableHeader
-                    });
-                    currentTable = [];
-                    currentTableHeader = null;
-                    inTable = false;
-                    expectedColumns = null;
-                    // Add this line as text
-                    currentSlide.push({
-                        type: 'text',
-                        text: trimmedLine
-                    });
-                } else {
-                    currentSlide.push({
-                        type: 'text',
-                        text: trimmedLine
-                    });
+                const cells = splitTableRow(line, expectedColumns, currentTable);
+                if (expectedColumns === null) {
+                    expectedColumns = cells.length;
                 }
+                currentTable.push(normalizeRow(cells, expectedColumns));
             } else {
                 // Regular text content
                 currentSlide.push({

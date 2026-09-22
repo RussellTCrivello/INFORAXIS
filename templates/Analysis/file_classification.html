@@ -38,7 +38,7 @@
     
     <!-- Page Tips -->
     {% from 'components/page_tips.html' import page_tips %}
-        {% call page_tips(enabled=is_interface_enabled('page_tips') if is_interface_enabled is defined else (user_settings.is_interface_enabled('page_tips') if user_settings else False)) %}
+        {% call page_tips() %}
 
     <div class="tips-section">
         <div class="tips-section-title">

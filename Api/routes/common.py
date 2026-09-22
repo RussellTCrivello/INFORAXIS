@@ -7,8 +7,104 @@ from flask_babel import Babel, gettext as _
 from datetime import datetime, date
 import time
 import logging
+from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
+
+
+def _interface_state():
+    """The stored interface state, or None when it cannot be read.
+
+    Used by the Jinja globals below. They are globals rather than context
+    values because a Jinja *macro* cannot see the render context: a component
+    imported with `{% from %}` gets its arguments and the environment globals,
+    and nothing else. Passing the whole shell into every component call would
+    put the wiring back into the pages.
+    """
+    try:
+        from settings import get_interface_manager
+
+        return get_interface_manager().get_state()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("interface state unavailable for template globals: %s", exc)
+        return None
+
+
+def feature_enabled(feature_id: str) -> bool:
+    """Is a cross-cutting feature switched on? (Safe when state is unreadable.)"""
+    state = _interface_state()
+    return bool(state.is_enabled(feature_id)) if state is not None else False
+
+
+def status_presentation(status):
+    """How to present an application status (see core/frontend/status_vocabulary).
+
+    A global rather than a context value because the badge component is a
+    macro, and a macro cannot see the render context.
+    """
+    try:
+        from core.frontend.status_vocabulary import present
+
+        return present(status)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("status vocabulary unavailable for %r: %s", status, exc)
+
+        class _Unknown(NamedTuple):
+            status: str
+            state: str = "neutral"
+            label: str = ""
+            known: bool = False
+
+        return _Unknown(str(status or ""), label=str(status or ""))
+
+
+def status_state(status):
+    """Just the presentation state, for a caller that needs the word."""
+    return status_presentation(status).state
+
+
+def status_label(status):
+    """Just the label, translated."""
+    return _(status_presentation(status).label)
+
+
+def status_vocabulary():
+    """The vocabulary as a plain dict, for the JSON the page injects."""
+    from core.frontend.status_vocabulary import VOCABULARY
+
+    return {status: {"state": state, "label": label}
+            for status, (state, label) in VOCABULARY.items()}
+
+
+def interface_for(endpoint):
+    """Read-only presentation lookup: what is this page called, and its icon?
+
+    Answers identity questions only - never whether an interface is enabled,
+    who may see it, or what it depends on. Those belong to the state service
+    and arrive through `navigation` and `page_identity`.
+    """
+    try:
+        from core.interfaces import get_interface_for_endpoint, status_policy
+
+        interface = get_interface_for_endpoint(endpoint) if endpoint else None
+        if interface is None:
+            return None
+        policy = status_policy(interface.status)
+        return {
+            "interface_id": interface.interface_id,
+            "label": interface.name,
+            "icon": interface.icon,
+            "description": interface.description,
+            "domain": str(interface.domain),
+            "help_topic": interface.help_topic,
+            "shortcut": interface.keyboard_shortcut,
+            "status": str(interface.status),
+            "badge": policy.badge,
+            "note": policy.note,
+        }
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("interface_for(%r) failed: %s", endpoint, exc)
+        return None
 
 
 def register_common_routes(app, babel_instance):
@@ -94,6 +190,15 @@ def register_common_routes(app, babel_instance):
         
         return redirect(request.referrer or url_for('index'))
     
+    # Components (macros) cannot read the render context, so the two lookups
+    # they need are environment globals. A page still receives the prepared
+    # shell through the context processor below.
+    app.jinja_env.globals.setdefault("feature_enabled", feature_enabled)
+    app.jinja_env.globals.setdefault("interface_for", interface_for)
+    app.jinja_env.globals.setdefault("status_presentation", status_presentation)
+    app.jinja_env.globals.setdefault("status_state", status_state)
+    app.jinja_env.globals.setdefault("status_label", status_label)
+
     @app.context_processor
     def inject_now():
         """Inject datetime functions and translation helper into templates"""
@@ -116,6 +221,12 @@ def register_common_routes(app, babel_instance):
             'current_language': get_locale(),
             'csrf_token': generate_csrf,  # CSRF token function for templates
             'version': app_version,  # Application version
+            # The Screen Inspector, off unless both the installation and this
+            # account say otherwise. Filled in below with the settings and the
+            # registry; the endpoint it reads is guarded on its own, because a
+            # tool nobody renders is not a tool nobody can call.
+            'inspector_enabled': False,
+            'inspector_interface': None,
         }
         
         # Safely inject interface manager - wrap in try-except to prevent cascading errors
@@ -127,13 +238,83 @@ def register_common_routes(app, babel_instance):
             context['is_interface_enabled_by_endpoint'] = interface_manager.is_interface_enabled_by_endpoint
             # Also inject as user_settings for template compatibility
             context['user_settings'] = interface_manager
+
+            # The shell is prepared here, not in markup.
+            #
+            # `navigation` is a list of domains with ready-to-render entries
+            # (label, url, icon, active state, badge, shortcut) and `page` is
+            # the current page's identity (label, domain, icon, help topic,
+            # breadcrumbs). The template renders them and decides nothing: it
+            # must not ask whether an interface is enabled, who owns it, or
+            # what role it needs.
+            from core.interfaces import (
+                get_interface, get_interfaces_by_domain, present_page,
+                build_navigation, get_features,
+            )
+            interface_state = interface_manager.get_state()
+            context['interface_state'] = interface_state
+            context['interface_registry'] = get_interface
+            context['interfaces_by_domain'] = get_interfaces_by_domain()
+
+            # Cross-cutting features (page tips and the like) are state, so a
+            # component asks for its own feature and no template names a
+            # product id to gate markup.
+            context['features'] = {
+                feature.feature_id: interface_state.is_enabled(feature.feature_id)
+                for feature in get_features()
+            }
+
+            current_user_obj = getattr(g, 'user', None)
+            context['navigation'] = build_navigation(
+                interface_state, current_user_obj, request.endpoint, url_for)
+            # Named `page_identity`, not `page`: several routes already pass
+            # `page` as the current pagination cursor, and a template that
+            # received a number where it expected the page model (or the other
+            # way round) would fail quietly.
+            context['page_identity'] = present_page(
+                request.endpoint, interface_state, current_user_obj, url_for)
+            # The status vocabulary, for the JavaScript that renders a status
+            # chip when a page updates without reloading. Injected as data, so
+            # the mapping has one owner (core/frontend/status_vocabulary.py)
+            # and both renderers read it.
+            context['status_vocabulary'] = status_vocabulary()
+
+            # The Screen Inspector is offered only when the installation
+            # switched it on and the account is an administrator. The interface
+            # it will inspect is the registry's answer for this request's
+            # endpoint - never parsed from the URL - so the panel can say which
+            # screen it is showing even before anything is selected.
+            try:
+                from core.interfaces import get_interface_for_endpoint
+                context['inspector_interface'] = getattr(
+                    get_interface_for_endpoint(request.endpoint), 'interface_id', None)
+                context['inspector_enabled'] = bool(
+                    current_user_obj and getattr(current_user_obj, 'is_admin', False)
+                    and interface_manager.get('system', 'screen_inspector', False))
+            except Exception as inspector_error:  # pragma: no cover - defensive
+                logger.warning(f"Screen Inspector not enabled: {inspector_error}")
+                context['inspector_enabled'] = False
+                context['inspector_interface'] = None
+
+            # `interface_for` is an environment global (see above): components
+            # need it, and macros cannot see this context.
         except Exception as e:
             logger.warning(f"Failed to load interface manager in context processor: {e}")
-            # Provide fallback functions that always return True
+            # The registry is what decides whether an interface exists, so a
+            # failure here must not become "everything is enabled": templates
+            # get the strict answers (nothing is enabled, nothing is visible)
+            # and the page renders its empty state rather than claiming a
+            # product surface that could not be verified.
             context['interface_manager'] = None
             context['user_settings'] = None
-            context['is_interface_enabled'] = lambda interface_id: True
-            context['is_interface_enabled_by_endpoint'] = lambda endpoint: True
+            context['interface_state'] = None
+            context['interface_registry'] = lambda interface_id: None
+            context['interfaces_by_domain'] = {}
+            context['navigation'] = ()
+            context['features'] = {}
+            context['page_identity'] = None
+            context['is_interface_enabled'] = lambda interface_id: False
+            context['is_interface_enabled_by_endpoint'] = lambda endpoint: False
         
         return context
     
@@ -152,32 +333,48 @@ def register_common_routes(app, babel_instance):
         # itself and the browser reports ERR_TOO_MANY_REDIRECTS, leaving the
         # application unusable with no way back into Settings to re-enable
         # anything. The home page must therefore never be gated.
-        if (request.endpoint and 
-            request.endpoint != 'static' and 
-            request.endpoint != 'index' and
-            not request.path.startswith('/api/') and
-            request.endpoint not in ('setup.setup_page', 'setup.system_check', 'setup.test_database',
-                                     'setup.run_installation', 'setup.check_setup_status',
-                                     'settings_page', 'settings_page_direct', 'settings_api.settings_page',
-                                     'settings_api.get_interfaces', 'settings_api.toggle_interface', 
-                                     'settings_api.reset_interfaces', 'settings_api.get_all_settings',
-                                     'settings_api.batch_update_settings', 'settings_api.settings_page') and
-            not request.path.startswith('/static') and
-            not request.path.startswith('/settings')):
-            
+        from core.interfaces import SYSTEM_ENDPOINTS, is_infrastructure_endpoint
+
+        endpoint = request.endpoint
+        settings_endpoint = bool(endpoint) and endpoint.startswith(('settings_page', 'settings_api.'))
+        infrastructure = is_infrastructure_endpoint(endpoint, request.path)
+
+        if (endpoint and endpoint != 'static' and endpoint != 'index'
+                and not infrastructure
+                and endpoint not in SYSTEM_ENDPOINTS
+                and not settings_endpoint
+                and not request.path.startswith('/static')
+                and not request.path.startswith('/settings')):
+
             try:
                 from settings import get_interface_manager
                 interface_manager = get_interface_manager()
-                
-                # Check if the endpoint's interface is disabled
-                if not interface_manager.is_interface_enabled_by_endpoint(request.endpoint):
-                    # Interface is disabled - redirect to dashboard with message
-                    logger.info(f"Access denied to disabled interface: {request.endpoint}")
+
+                # The interface that owns this endpoint decides whether it is
+                # served. An endpoint no interface owns is refused: the old
+                # behaviour ("not in the map, therefore enabled") made an
+                # unregistered page indistinguishable from a registered one,
+                # which is exactly the gap the registry exists to close.
+                if not interface_manager.is_interface_enabled_by_endpoint(endpoint):
+                    logger.info("Access denied to disabled or unregistered endpoint: %s", endpoint)
                     flash(_('This section is currently disabled. Please enable it in Settings to access.'), 'warning')
                     return redirect(url_for('index'))
-            except Exception as e:
-                # Don't block access if interface check fails (fallback to allow access)
-                logger.debug(f"Interface access check failed: {e}")
+            except Exception as check_error:
+                # A check that could not run is not permission to proceed.
+                #
+                # This used to log at debug level and serve the page anyway,
+                # which meant a broken interface state was indistinguishable
+                # from a working one: the operator saw a normal page and no
+                # indication that the product's own gate had failed. The error
+                # now goes through the common pipeline (correlation id, details
+                # server-side only, generic message to the browser), and the
+                # dashboard and Settings stay exempt so the failure can be
+                # inspected and repaired.
+                logger.warning(
+                    "Interface access check failed for endpoint %s: %s",
+                    endpoint, check_error,
+                )
+                raise
 
         # CRITICAL: Prioritize session language if it exists (user's explicit choice)
         # Handle X-Language header with explicit flag

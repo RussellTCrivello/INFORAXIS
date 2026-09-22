@@ -647,6 +647,15 @@ class SettingsManager:
                 interface_id = parts[1]
                 attr = parts[2]
                 
+                # The registry decides what exists. Writing a state for an id
+                # nothing declares would put a switch in the settings file that
+                # cannot do anything (and that an older version of this code
+                # would have read as "on"). Legacy ids are still writable so a
+                # migration can carry their value across.
+                from core.interfaces import LEGACY_INTERFACE_IDS, is_registered
+                if not is_registered(interface_id) and interface_id not in LEGACY_INTERFACE_IDS:
+                    return False, f"There is no interface called '{interface_id}'."
+
                 if interface_id not in self._settings.interfaces.interfaces:
                     # Create new interface config
                     self._settings.interfaces.interfaces[interface_id] = InterfaceConfig()
@@ -962,38 +971,59 @@ class SettingsManager:
                 return False, str(e)
     
     def _restore_missing_interfaces(self):
-        """Restore missing interfaces with default values"""
+        """Give every interface the product declares a stored state.
+
+        The default for an interface is defined once, in the registry
+        (``core.interfaces.defaults()``). This method used to carry its own
+        hand-written dictionary of defaults, which meant the product model lived
+        in two places and drifted: the registry listed interfaces the defaults
+        dictionary had never heard of, and a reset enabled everything that
+        happened to be in the settings file instead of what the registry says.
+
+        Legacy ids are folded in first, so a settings file written by an earlier
+        version keeps its choices: the value stored under an old key
+        (``file_analysis``, ``upload_files``, ``file_browser`` ...) reaches the
+        interface that replaced it. The old key itself is left in the file - it
+        is the operator's file, and deleting it would lose information a
+        rollback would need.
+        """
+        from core.interfaces import LEGACY_INTERFACE_IDS, defaults
+
+        current = self._settings.interfaces.interfaces
+
+        # 1. Carry legacy choices onto the interface that replaced them.
+        migrated = []
+        for legacy_id, canonical_id in LEGACY_INTERFACE_IDS.items():
+            legacy = current.get(legacy_id)
+            if legacy is None:
+                continue
+            canonical = current.get(canonical_id)
+            legacy_enabled = bool(getattr(legacy, "enabled", False))
+            if canonical is None:
+                current[canonical_id] = InterfaceConfig(
+                    enabled=legacy_enabled,
+                    category=getattr(legacy, "category", "user"),
+                )
+                migrated.append(f"{legacy_id}->{canonical_id}")
+            elif legacy_enabled and not canonical.enabled:
+                # A merged twin only ever turns something on: an explicit "off"
+                # on one of two switches for the same capability would otherwise
+                # hide it even though the other said yes.
+                canonical.enabled = True
+                migrated.append(f"{legacy_id}+->{canonical_id}")
+
+        # 2. Fill in what the registry declares and the file has never seen.
         default_interfaces = {
-            "dashboard": {"enabled": True, "category": "user"},
-            "comprehensive_dashboard": {"enabled": True, "category": "user"},
-            "charts_dashboard": {"enabled": True, "category": "user"},
-            "file_analysis": {"enabled": True, "category": "user"},
-            "path_analysis": {"enabled": True, "category": "user"},
-            "batch_analysis": {"enabled": True, "category": "user"},
-            "sources": {"enabled": True, "category": "user"},
-            "sides": {"enabled": True, "category": "user"},
-            "email_words": {"enabled": True, "category": "user"},
-            "search": {"enabled": True, "category": "user"},
-            "advanced_search": {"enabled": True, "category": "user"},
-            # Analyst-driven manual categorization workspace (FRS): its own
-            # interface toggle, separate from the smart-classification pages.
-            "analyst_categorization": {"enabled": True, "category": "user"},
-            "upload_files": {"enabled": True, "category": "user"},
-            "file_library": {"enabled": True, "category": "user"},
-            "keywords": {"enabled": True, "category": "user"},
-            "words": {"enabled": True, "category": "user"},
-            "categories": {"enabled": True, "category": "user"},
-            "notifications": {"enabled": True, "category": "user"},
-            "settings": {"enabled": True, "category": "user"},
-            "file_browser": {"enabled": True, "category": "core"},
-            "analytics": {"enabled": True, "category": "analysis"},
-            "page_tips": {"enabled": True, "category": "user"},  # New interface for page tips
+            interface_id: {"enabled": enabled, "category": "user"}
+            for interface_id, enabled in defaults().items()
         }
-        
         restored = self._settings.interfaces.restore_missing_interfaces(default_interfaces)
+
+        if migrated:
+            logger.info("Folded legacy interface settings: %s", ", ".join(migrated))
         if restored:
             logger.info(f"✅ Restored {len(restored)} missing interfaces: {', '.join(restored)}")
-            # Save if any were restored
+        if restored or migrated:
             self.save(create_backup=False)
 
 

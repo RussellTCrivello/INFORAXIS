@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import itertools
+import re
 import threading
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -41,12 +42,25 @@ def new_correlation_id() -> str:
     return f"ERR-{datetime.utcnow().strftime('%Y%m%d')}-{n:06d}"
 
 
+#: A full connection string - ``scheme://rest-of-token``.
+_DSN_RE = re.compile(r"\b[a-zA-Z][\w+.\-]*://\S+")
+#: Credentials without a scheme - ``user:password@host``.
+_CREDENTIALS_RE = re.compile(r"\b[\w.\-]+:[^\s/@:]+@[\w.\-]+")
+
+
 def sanitize_message(message: str) -> str:
-    """Best-effort scrubbing of low-level details from any text we must emit."""
+    """Best-effort scrubbing of low-level details from any text we must emit.
+
+    Used on the rare messages that are shown to an operator but originate
+    outside the application's own vocabulary. Connection strings are removed
+    whole (their user, password, host and database included) rather than just
+    their scheme, so a DSN cannot survive as a fragment.
+    """
     if not message:
         return message
-    scrubbed = message
-    for token in ("Traceback (most recent call last)", "psql:", "postgres://", "postgresql://"):
+    scrubbed = _DSN_RE.sub("[removed]", message)
+    scrubbed = _CREDENTIALS_RE.sub("[removed]", scrubbed)
+    for token in ("Traceback (most recent call last)", "psql:"):
         scrubbed = scrubbed.replace(token, "[removed]")
     return scrubbed
 

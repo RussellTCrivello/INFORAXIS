@@ -8,6 +8,7 @@ Part 1: Core pipeline and text extraction
 
 import logging
 import os
+import re
 import threading
 from collections import OrderedDict
 import math
@@ -2593,6 +2594,26 @@ class StoragePipeline:
         
         return '\n'.join(parts)
     
+    @staticmethod
+    def _cell_text(value) -> str:
+        """One cell as a single line of text.
+
+        A stored row is ONE line with tab-separated cells, so a cell value
+        containing a newline (a multi-paragraph table cell) would split that
+        row in two, and a tab inside a value would look like an extra column.
+        Either way the reconstructed grid no longer matches the document -
+        which is the whole point of storing the cells separately.
+
+        Only the intra-cell break is folded to a space; the words themselves
+        are kept, so search, classification and word counts are unaffected.
+        """
+        if value is None:
+            return ''
+        text = str(value)
+        if '\n' in text or '\r' in text or '\t' in text:
+            text = re.sub(r'[\r\n\t]+', ' ', text)
+        return text
+
     def _extract_sheet_text(self, data: List[List]) -> str:
         """
         Extract text from Excel/ODS sheet data - comprehensive extraction
@@ -2606,14 +2627,14 @@ class StoragePipeline:
         for row in data:
             # Handle both list of cells and other formats
             if isinstance(row, (list, tuple)):
-                # Filter out None values and convert to strings
+                # Convert to strings; a cell never spans a line
                 # Use tab delimiter for clear cell separation (easier to parse for display)
-                row_cells = [str(cell) if cell is not None else '' for cell in row]
+                row_cells = [self._cell_text(cell) for cell in row]
                 # Join with tab character for explicit cell boundaries
                 row_text = '\t'.join(row_cells)
             else:
                 # Single value row
-                row_text = str(row) if row is not None else ""
+                row_text = self._cell_text(row)
             
             # Include all rows (even empty ones) to preserve structure
             text_parts.append(row_text)
@@ -2622,10 +2643,42 @@ class StoragePipeline:
     
     def _extract_table_text(self, rows: List[List]) -> str:
         """
-        Extract text from table rows
+        Extract text from table rows (Word tables, slide tables)
         Uses tab delimiters for clear cell separation to enable accurate display
+
+        One row per line, cells separated by tabs, is the contract the display
+        layer reads back. The one value that cannot be written literally is an
+        all-empty row: a row that serializes to an empty line is
+        indistinguishable from the blank line the extractor puts between two
+        document elements, and the display layer would read it as the END of
+        the table - printing the remaining rows as prose. Such a row is
+        written with an explicit tab (an empty cell boundary) instead, which
+        the display layer turns back into an empty row.
         """
-        return self._extract_sheet_text(rows)
+        text_parts = []
+
+        if not rows:
+            return ""
+
+        for row in rows:
+            if isinstance(row, (list, tuple)):
+                cells = [self._cell_text(cell) for cell in row]
+                if not any(cells):
+                    cells = cells or ['']
+                    if len(cells) == 1:
+                        # Single-column table: the tab is what keeps this row
+                        # a row instead of a block separator.
+                        cells = ['', '']
+                row_text = '\t'.join(cells)
+            else:
+                row_text = self._cell_text(row)
+                if not row_text:
+                    row_text = '\t'
+
+            # Include all rows (even empty ones) to preserve structure
+            text_parts.append(row_text)
+
+        return '\n'.join(text_parts)
     
     def _extract_csv_text(self, rows: List[List], headers: List) -> str:
         """
@@ -2636,12 +2689,12 @@ class StoragePipeline:
         
         if headers:
             # Use tab delimiter for clear column separation
-            header_cells = [str(h) if h is not None else '' for h in headers]
+            header_cells = [self._cell_text(h) for h in headers]
             text_parts.append('\t'.join(header_cells))
         
         for row in rows:
             # Use tab delimiter for clear cell separation
-            row_cells = [str(cell) if cell is not None else '' for cell in row]
+            row_cells = [self._cell_text(cell) for cell in row]
             row_text = '\t'.join(row_cells)
             # Keep EMPTY rows too: row positions are part of the document
             # (cell B5 must stay B5); dropping blank rows shifted every

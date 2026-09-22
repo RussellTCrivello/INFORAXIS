@@ -246,15 +246,18 @@ function selectNone() {
     updateBulkButtons();
 }
 
+// The toolbar owns how the scope is drawn and announced; this page owns the
+// numbers, because they are what the reader can see: how many rows are on
+// screen right now, and how many of them are chosen. The words come from the
+// bar (the component renders them through the catalogs), so no English is
+// assembled here. One call, and the toolbar decides the rest - no action is
+// named, and nothing is bound.
 function updateBulkButtons() {
-    const checkboxes = document.querySelectorAll('.source-checkbox:checked');
-    const hasSelection = checkboxes.length > 0;
-    
-    const bulkExportBtn = document.getElementById('bulkExportBtn');
-    const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
-    
-    if (bulkExportBtn) bulkExportBtn.disabled = !hasSelection;
-    if (bulkUpdateBtn) bulkUpdateBtn.disabled = !hasSelection;
+    if (!window.ActionToolbar) return;
+    window.ActionToolbar.sync('sourcesActionBar', {
+        selected: document.querySelectorAll('.source-checkbox:checked').length,
+        total: document.querySelectorAll('.source-checkbox').length
+    });
 }
 
 // Bulk operations
@@ -340,12 +343,9 @@ function initializeEventListeners() {
         });
     }
     
-    // Checkbox change listeners
-    document.addEventListener('change', (e) => {
-        if (e.target.classList.contains('source-checkbox')) {
-            updateBulkButtons();
-        }
-    });
+    // No checkbox listener is registered here. Each row's own `onchange`
+    // calls `updateBulkButtons()`, and a second, document-wide listener for
+    // the same event would update the toolbar twice per click for no gain.
 }
 
 // Initialize on DOM ready

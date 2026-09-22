@@ -2,7 +2,8 @@
 
 {% block title %}Job {{ job_id }}{% endblock %}
 {% block page_type %}default{% endblock %}
-{% block page_title %}Job {{ job_id }}{% endblock %}
+{# The interface supplies the name; the page adds its own subject. #}
+{% block page_title %}{{ page_identity.label }} · {{ job_id }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -88,12 +89,7 @@
 (function () {
   const JOB_ID = '{{ job_id }}';
   const csrf = {'X-CSRFToken': '{{ csrf_token() }}'};
-  const badge = (s) => {
-    const cls = {RUNNING:'primary', QUEUED:'secondary', PAUSED:'warning',
-      CANCELLING:'warning', CANCELLED:'dark', COMPLETED:'success',
-      COMPLETED_WITH_WARNINGS:'info', FAILED:'danger'}[s] || 'light';
-    return `<span class="badge bg-${cls}">${(s||'').replace(/_/g,' ')}</span>`;
-  };
+  const badge = (s) => window.InforaxisStatus.badge(s);
   let lastEventId = 0;
   let errorsCache = [], warningsCache = [];
 
