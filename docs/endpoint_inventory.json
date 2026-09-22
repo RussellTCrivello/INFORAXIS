@@ -1666,6 +1666,30 @@
     "internal": true
   },
   {
+    "endpoint": "experience_action",
+    "rule": "/api/experience/actions/<action_id>",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "experience_api",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "experience_actions",
+    "rule": "/api/experience/actions",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "experience_api",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "experience_contract",
     "rule": "/api/experience/contracts/<interface_id>",
     "methods": [
@@ -1692,6 +1716,18 @@
   {
     "endpoint": "experience_coverage",
     "rule": "/api/experience/coverage",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "experience_api",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "experience_permissions",
+    "rule": "/api/experience/permissions",
     "methods": [
       "GET"
     ],
