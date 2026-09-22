@@ -106,6 +106,7 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 | `action_toolbar` | `templates/components/action_toolbar.html` | `selected`, `loading` | `action_toolbar`, `action_group`, `action_button`, `bulk_action_button`, `selection_summary` | The bar of actions on a list: the groups, the buttons, and the one state the server can know for certain - nothing is selected yet. |
 | `analyst_classify` | `templates/components/analyst_classify.html` | `normal`, `editing`, `saving`, `success`, `error`, `unauthorized` | `analyst_classify` | The analyst-category control for the record being read, usable from wherever that record is displayed. |
 | `breadcrumbs` | `templates/components/breadcrumbs.html` | `normal` | `breadcrumbs` | Where the reader is, rendered from the interface registry: a page says what it is about, the registry supplies the words and icons. |
+| `confirm_dialog` | `templates/components/confirm_dialog.html` | `normal`, `saving`, `error`, `unauthorized` | `confirm_dialog` | One way to ask "are you sure?" before something irreversible. The component renders the question; it never performs the operation and never knows what the operation is. The page decides - and it says which action it is asking about, by id, so the dialog and the action registry agree on what is happening. |
 | `file_nav` | `templates/components/file_nav.html` | `normal`, `empty` | `file_nav` | Previous/next through the records the reader is working through, and where this one sits in that set. |
 | `filter_bar` | `templates/components/filter_bar.html` | `normal`, `filtered`, `empty` | `filter_section`, `filter_grid`, `filter_bar`, `filter_group`, `search_group`, `hidden_filter` | The controls above a list that decide which records it shows: a search box and the filters that narrow it, in the arrangement fifteen pages currently rebuild by hand. |
 | `operations_widget` | `templates/components/operations_widget.html` | `normal`, `loading`, `empty`, `error` | — | What the ingestion and processing system is doing right now: active jobs, throughput, and the shortcuts into Operations. |
@@ -118,6 +119,7 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 | `states` | `templates/components/states.html` | `loading`, `empty`, `filtered`, `success`, `warning`, `error`, `unauthorized`, `unavailable`, `archived` | `state_panel`, `empty_state`, `filtered_state`, `loading_state`, `success_state`, `warning_state`, `error_state`, `unauthorized_state`, `unavailable_state`, `archived_state` | The states a region can be in, in one place, so a page never invents its own wording for "nothing here yet" or its own markup for "this failed". |
 | `status_badge` | `templates/components/status_badge.html` | `success`, `warning`, `error`, `unavailable`, `archived` | `status_badge`, `_chip`, `status_badge_with_icon` | One way to show a status word, so the same state is not green on one page and grey on the next. An application status is looked up in the vocabulary - `core/frontend/status_vocabulary.py` - which maps it to one of a few presentation states; the component only turns that state into classes. |
 | `table` | `templates/components/table.html` | `normal`, `empty`, `filtered`, `selected`, `loading`, `error` | `data_table`, `table_empty_row`, `table_loading_row`, `table_error_row`, `select_all_checkbox`, `sort_header` | The frame a list of records is read in, and the rows that stand in for a list that is empty, still loading or failed. Ten tables in this application were written with ten different class combinations; this is the one they become. |
+| `toast` | `templates/components/toast.html` | `success`, `warning`, `error`, `loading`, `unavailable` | `toast_region` | One place where the application tells the reader that something happened. Every action ends visibly - success, information, warning, failure - and every message passes through here, so no page invents its own notification and no failure goes silent. |
 
 ### States (§63)
 
@@ -125,18 +127,18 @@ Every state in the vocabulary is answered by at least one component; a state nob
 
 | State | Meaning | Implemented by |
 | --- | --- | --- |
-| `loading` | Work is in progress; the reader is told what is being waited for. | `action_toolbar`, `operations_widget`, `search_input`, `states`, `table` |
+| `loading` | Work is in progress; the reader is told what is being waited for. | `action_toolbar`, `operations_widget`, `search_input`, `states`, `table`, `toast` |
 | `empty` | Nothing exists here yet, and the reader is told how to start. | `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `sidebar_nav`, `states`, `table` |
-| `normal` | The ordinary case: content is present and usable. | `analyst_classify`, `page_data`, `breadcrumbs`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `search_input`, `sidebar_nav`, `table`, `pagination` |
+| `normal` | The ordinary case: content is present and usable. | `analyst_classify`, `page_data`, `breadcrumbs`, `confirm_dialog`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `search_input`, `sidebar_nav`, `table`, `pagination` |
 | `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `filter_bar`, `search_input`, `states`, `table`, `pagination` |
 | `selected` | A row or record is chosen; actions that need a choice appear. | `action_toolbar`, `table` |
 | `editing` | A value is being changed, and the change is not saved yet. | `analyst_classify` |
-| `saving` | A change is on its way to the server. | `analyst_classify` |
-| `success` | The last action worked. | `analyst_classify`, `states`, `status_badge` |
-| `warning` | Something needs attention but is not broken. | `states`, `status_badge` |
-| `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `operations_widget`, `states`, `status_badge`, `table` |
-| `unauthorized` | The server refused this for this account. | `analyst_classify`, `states` |
-| `unavailable` | It needs something this installation does not have. | `search_input`, `states`, `status_badge` |
+| `saving` | A change is on its way to the server. | `analyst_classify`, `confirm_dialog` |
+| `success` | The last action worked. | `analyst_classify`, `states`, `status_badge`, `toast` |
+| `warning` | Something needs attention but is not broken. | `states`, `status_badge`, `toast` |
+| `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `confirm_dialog`, `operations_widget`, `states`, `status_badge`, `table`, `toast` |
+| `unauthorized` | The server refused this for this account. | `analyst_classify`, `confirm_dialog`, `states` |
+| `unavailable` | It needs something this installation does not have. | `search_input`, `states`, `status_badge`, `toast` |
 | `archived` | Kept and readable, but out of the working set. | `states`, `status_badge` |
 
 ### Markup pages still write by hand
@@ -153,7 +155,7 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Pagination mount (filled by the shared renderer) | `pagination` | 4 templates |
 | Hand-written search input | `search_input` | 6 templates |
 | Hand-written filter control | `filter_bar` | 14 templates |
-| Browser confirm() dialog | — | 2 templates |
+| Browser confirm() dialog | `confirm_dialog` | 0 templates |
 | Hand-written status badge | `status_badge` | 0 badges, in 0 templates |
 | Hand-written badge chip (count, id, method) | — | 68 badges |
 | Hand-written action bar | `action_toolbar` | 2 templates |
@@ -169,7 +171,7 @@ How much of the repeated markup has moved onto its component. Standardized count
 | Hand-written pagination markup | 10 | 0 | 100% |
 | Hand-written search input | 8 | 6 | 57% |
 | Hand-written filter control | 1 | 14 | 7% |
-| Browser confirm() dialog | 0 | 2 | 0% |
+| Browser confirm() dialog | 2 | 0 | 100% |
 | Hand-written status badge | 6 | 0 | 100% |
 | Hand-written action bar | 5 | 2 | 71% |
 
@@ -185,8 +187,8 @@ Every class a component renders has exactly one owner. **OWNED** means an INFORA
 
 | Ownership | Classes |
 | --- | --- |
-| OWNED (INFORAXIS) | 55 |
-| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 146 |
+| OWNED (INFORAXIS) | 56 |
+| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 176 |
 | UNKNOWN | 0 |
 
 Third-party stylesheets bundled with the application: `static/css/bootstrap.min.css`, `static/icons/bootstrap-icons.css`.

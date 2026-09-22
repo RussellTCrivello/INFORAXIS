@@ -280,7 +280,7 @@
                                     <i class="bi bi-eye me-1"></i>{{ _('View Full Content') }}
                                 </a>
                                 <a href="/file/{{ file[0] }}/reprocess" class="btn btn-warning btn-sm ms-2"
-                                   onclick='return confirm({{ _('Reprocess this file? This may take a moment.')|tojson }})'>
+                                   data-reprocess data-action="files.reprocess">
                                     <i class="bi bi-arrow-clockwise me-1"></i>{{ _('Reprocess') }}
                                 </a>
                             </div>
@@ -291,7 +291,8 @@
                                 <p class="text-muted">{{ _('This file may not have been processed yet, or the content could not be loaded.') }}</p>
                                 <div class="mt-3">
                                     <a href="/file/{{ file[0] }}/reprocess" class="btn btn-warning btn-sm"
-                                       onclick='return confirm({{ _('Reprocess this file? This will extract and store the content again.')|tojson }})'>
+                                       data-reprocess data-action="files.reprocess"
+                                       data-reprocess-message="{{ _('This will extract and store the content again.') }}">
                                         <i class="bi bi-arrow-clockwise me-1"></i>{{ _('Reprocess File') }}
                                     </a>
                                 </div>
@@ -575,6 +576,14 @@
 {% endblock %}
 
 {% block extra_js %}
+{% from 'components/confirm_dialog.html' import confirm_dialog %}
+{{ confirm_dialog(id='reprocessDialog',
+                  title=_('Reprocess this file?'),
+                  message=_('This may take a moment.'),
+                  confirm_label=_('Reprocess'),
+                  cancel_label=_('Cancel'),
+                  action='files.reprocess',
+                  confirmation_key='action.files.reprocess.confirm') }}
 {% set file_id = file[0] if file is defined and file else 0 %}
 {% set file_name = file[1] if file is defined and file and file|length > 1 else '' %}
 {% set current_page_val = current_page|default(1) %}

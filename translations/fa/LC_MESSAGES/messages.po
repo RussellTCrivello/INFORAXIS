@@ -9485,3 +9485,46 @@ msgstr "کلیدواژه"
 #: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
 msgid "word"
 msgstr "واژه"
+
+# ---------------------------------------------------------------------------
+# The confirmation dialog and the toast, as the pages put them to work.
+#
+# The wording belongs to the page that asks the question, not to the
+# component: ``confirm_dialog.html`` renders whatever question it is given.
+# Written by hand rather than extracted, like the toolbar strings above -
+# this catalog is maintained against the product, not regenerated wholesale.
+#: templates/Operations/jobs.html:8
+msgid "Cancel this job?"
+msgstr "این کار لغو شود؟"
+
+#: templates/Operations/jobs.html:9
+msgid "In-flight files finish; no new files start."
+msgstr "فایل‌های در حال اجرا کامل می‌شوند؛ فایل جدیدی شروع نمی‌شود."
+
+#: templates/Operations/jobs.html:11
+msgid "Cancel job"
+msgstr "لغو کار"
+
+#: templates/Operations/jobs.html:12
+msgid "Keep running"
+msgstr "ادامه اجرا"
+
+#: templates/Operations/jobs.html:163
+msgid "Job cancelled."
+msgstr "کار لغو شد."
+
+#: templates/Operations/jobs.html:165
+msgid "The job could not be cancelled."
+msgstr "کار لغو نشد."
+
+#: templates/file/file_detail.html:581
+msgid "Reprocess this file?"
+msgstr "این فایل دوباره پردازش شود؟"
+
+#: templates/file/file_detail.html:295
+msgid "This will extract and store the content again."
+msgstr "محتوا دوباره استخراج و ذخیره می‌شود."
+
+#: templates/file/file_detail.html:582
+msgid "This may take a moment."
+msgstr "ممکن است کمی طول بکشد."

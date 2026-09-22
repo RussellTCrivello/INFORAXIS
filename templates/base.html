@@ -205,6 +205,12 @@
         selected, so a bulk action is never enabled without saying what it
         would affect. -#}
     <script src="{{ url_for('static', filename='js/modules/core/action-toolbar.js') }}?v=20260921a" defer></script>
+    {#- Asking before something irreversible. The dialog is a component each
+        page renders; this is what turns an answer into a boolean and nothing
+        else - the page still performs the operation. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/confirm-dialog.js') }}?v=20260921a" defer></script>
+    {#- Every action ends visibly. One region, one set of tones, text only. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/toast.js') }}?v=20260921a" defer></script>
 </head>
 
 <body data-page-type="{% block page_type %}default{% endblock %}"
@@ -545,6 +551,11 @@
     <!-- Global Modal Fix - Ensures proper modal behavior and interaction -->
     <script type="module" src="{{ url_for('static', filename='js/modules/core/modal-fix.js') }}" defer></script>
     
+    {#- One live region for the whole application: an action that finished
+        says so in one place, whatever page it happened on. -#}
+    {% from 'components/toast.html' import toast_region %}
+    {{ toast_region() }}
+
     <!-- Page-Specific JavaScript -->
     {% block extra_js %}{% endblock %}
     

@@ -9592,3 +9592,46 @@ msgstr "ključna riječ"
 #: templates/Word/Word_list.html, templates/Keyword/keywords_list.html
 msgid "word"
 msgstr "riječ"
+
+# ---------------------------------------------------------------------------
+# The confirmation dialog and the toast, as the pages put them to work.
+#
+# The wording belongs to the page that asks the question, not to the
+# component: ``confirm_dialog.html`` renders whatever question it is given.
+# Written by hand rather than extracted, like the toolbar strings above -
+# this catalog is maintained against the product, not regenerated wholesale.
+#: templates/Operations/jobs.html:8
+msgid "Cancel this job?"
+msgstr "Otkazati ovaj posao?"
+
+#: templates/Operations/jobs.html:9
+msgid "In-flight files finish; no new files start."
+msgstr "Datoteke u obradi dovršavaju se; nove datoteke ne započinju."
+
+#: templates/Operations/jobs.html:11
+msgid "Cancel job"
+msgstr "Otkaži posao"
+
+#: templates/Operations/jobs.html:12
+msgid "Keep running"
+msgstr "Nastavi izvršavanje"
+
+#: templates/Operations/jobs.html:163
+msgid "Job cancelled."
+msgstr "Posao je otkazan."
+
+#: templates/Operations/jobs.html:165
+msgid "The job could not be cancelled."
+msgstr "Posao nije bilo moguće otkazati."
+
+#: templates/file/file_detail.html:581
+msgid "Reprocess this file?"
+msgstr "Ponovno obraditi ovu datoteku?"
+
+#: templates/file/file_detail.html:295
+msgid "This will extract and store the content again."
+msgstr "Sadržaj će se ponovno izdvojiti i pohraniti."
+
+#: templates/file/file_detail.html:582
+msgid "This may take a moment."
+msgstr "To može potrajati."

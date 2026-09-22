@@ -1052,3 +1052,27 @@ window.attachImageErrorHandlers = function attachImageErrorHandlers(container) {
         });
     });
 };
+
+/**
+ * Reprocessing asks before it starts.
+ *
+ * The link stays a link: without JavaScript it still navigates, which is the
+ * honest fallback for an operation the server performs anyway. With the dialog
+ * component present, the question is asked in the application's own words
+ * instead of the browser's, and the action it belongs to is named - the same
+ * id the Action Registry uses ('files.reprocess').
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-reprocess]').forEach(function (link) {
+        link.addEventListener('click', async function (event) {
+            if (!window.ConfirmDialog) return;   // no runtime: the link works
+            event.preventDefault();
+            const confirmed = await window.ConfirmDialog.request({
+                action: link.getAttribute('data-action') || 'files.reprocess',
+                scope: fileName || null,
+                message: link.getAttribute('data-reprocess-message') || undefined,
+            });
+            if (confirmed) window.location.href = link.href;
+        });
+    });
+});
