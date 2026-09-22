@@ -211,6 +211,10 @@
     <script src="{{ url_for('static', filename='js/modules/core/confirm-dialog.js') }}?v=20260921a" defer></script>
     {#- Every action ends visibly. One region, one set of tones, text only. -#}
     <script src="{{ url_for('static', filename='js/modules/core/toast.js') }}?v=20260921a" defer></script>
+    {#- The actions a record offers: the question, the busy state and the
+        toast. The page supplies what each action does; this supplies how it
+        is asked for, and nothing else. -#}
+    <script src="{{ url_for('static', filename='js/modules/core/record-actions.js') }}?v=20260922a" defer></script>
 </head>
 
 <body data-page-type="{% block page_type %}default{% endblock %}"

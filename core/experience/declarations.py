@@ -22,6 +22,7 @@ from typing import Any, Dict, Tuple
 
 from .model import (
     ActionDefinition,
+    ContractError,
     ColumnDefinition,
     FieldDefinition,
     FilterDefinition,
@@ -30,6 +31,65 @@ from .model import (
     ShortcutDefinition,
     StateDefinition,
 )
+
+#: Which of a screen's registered actions that screen actually presents.
+#:
+#: The Action Registry owns what an action *is* - one catalog, one meaning per
+#: id, whichever screen shows it. A screen still has to say which of those
+#: actions it puts in front of a reader: the file library is attributed eleven
+#: actions, and no single page of it shows all eleven. Without this, "the
+#: registry says the interface may show it" quietly becomes "every screen of it
+#: shows it", and a not-built action is drawn by a page that never intended to.
+#:
+#: An id here must be registered and attributed to that interface - the tests
+#: check both, so this table cannot invent an action or steal another screen's.
+SCREEN_ACTIONS: Dict[str, Tuple[str, ...]] = {
+    "file_library": (
+        # The library list, which the migration has not reached yet.
+        "files.select_all", "files.select_none", "files.upload",
+        "files.open_record", "files.analyze_selected", "files.export_selected",
+        "files.delete_selected",
+        # The record page, on the shared action surface.
+        "files.view_original", "files.download_original", "files.export_content",
+        "files.delete",
+        # files.reprocess belongs here - this is the screen a reprocess action
+        # would live on - and is listed even though nothing is built: the
+        # registry marks it `visibility="not_built"`, the state derivation
+        # refuses it, and the surface therefore draws nothing. A declaration
+        # says *where* an action belongs; it does not claim the product can do
+        # it yet, which is why leaving it out would hide a gap instead of
+        # reporting one.
+        "files.reprocess",
+    ),
+    "keywords": (
+        "keywords.select_all", "keywords.select_none", "keywords.update",
+        "keywords.edit_selected", "keywords.delete_selected",
+        "keywords.merge_duplicates",
+    ),
+    "words": (
+        "words.select_all", "words.select_none", "words.edit_selected",
+        "words.delete_selected", "words.open", "words.edit", "words.delete",
+    ),
+    "sources": (
+        "sources.select_all", "sources.select_none", "sources.edit_selected",
+        "sources.export_selected",
+    ),
+    "sides": (
+        "sides.select_all", "sides.select_none", "sides.edit_selected",
+        "sides.export_selected",
+    ),
+}
+
+#: Where a screen's *bindings* live - the non-template sources that say what
+#: each presented action does on that screen. A declaration's evidence used to
+#: be a template string only; once a screen binds its actions through the shared
+#: surface, the screen's own source of truth is the code that prepares them, and
+#: a verification that only read templates would call a migrated screen
+#: undeclared.
+BINDING_SOURCES: Dict[str, Tuple[str, ...]] = {
+    "file_library": ("Api/blueprints/files.py",),
+}
+
 
 #: Screens whose experience has been described. Everything else is derived.
 DECLARED_SCREENS: Dict[str, Dict[str, Any]] = {
@@ -158,16 +218,36 @@ def filters(interface_id: str) -> Tuple[FilterDefinition, ...]:
 
 
 def actions(interface_id: str) -> Tuple[ActionDefinition, ...]:
-    """The actions this screen shows, from the Action Registry.
+    """The actions this screen presents, from the Action Registry.
 
-    A screen does not restate what its buttons *mean*: one catalog owns every
-    action's scope, permission, confirmation and operation reference, and the
-    screen says which interface it is. That is what stops the same action
-    being declared twice with two different meanings.
+    Two tables meet here and neither duplicates the other: ``SCREEN_ACTIONS``
+    says *which* actions a screen offers, and the Action Registry says what each
+    of them is - scope, permission, confirmation, operation reference. Nothing
+    restates a definition, so the same action cannot mean two things on two
+    screens, and a screen cannot present an action that does not exist.
     """
     from .action_registry import for_interface
 
-    return for_interface(interface_id)
+    wanted = SCREEN_ACTIONS.get(interface_id)
+    if wanted is None:
+        # Nobody has declared this screen's actions, so the registry's own
+        # account stands: a screen that has not been described yet is not a
+        # screen with no actions, and dropping its actions would make the
+        # contract quietly smaller than the product.
+        return tuple(for_interface(interface_id))
+    available = {item.action_id: item for item in for_interface(interface_id)}
+    missing = [action_id for action_id in wanted
+               if action_id not in available]
+    if missing:
+        raise ContractError(
+            f"{interface_id}: SCREEN_ACTIONS names {missing}, which the Action "
+            "Registry does not attribute to this interface")
+    return tuple(available[action_id] for action_id in wanted)
+
+
+def binding_sources(interface_id: str) -> Tuple[str, ...]:
+    """The files, besides the templates, where this screen's bindings live."""
+    return BINDING_SOURCES.get(interface_id, ())
 
 
 def states(interface_id: str, prefix: str) -> Tuple[StateDefinition, ...]:

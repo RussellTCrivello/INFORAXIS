@@ -94,21 +94,30 @@ ACTION_REGISTRY: Tuple[ActionDefinition, ...] = (
         execution="delete_file", icon="bi-trash"),
     ActionDefinition(
         action_id="files.reprocess", source="Reprocess",
-        label_key="action.files.reprocess.label",
-        interfaces=("file_library",), scope="record",
-        permission="files.reprocess",
-        # Not destructive - the record stays - but it replaces derived content
-        # and takes time, so it asks first.
-        confirmation="action.files.reprocess.confirm",
-        execution="reprocess_file", loading="toast", icon="bi-arrow-clockwise"),
+        label_key="action.files.reprocess.label", interfaces=("file_library",),
+        scope="record", permission="files.reprocess", loading="toast",
+        icon="bi-arrow-clockwise",
+        # NOT BUILT, and declared as such rather than dressed up. The page
+        # carried a link to /file/<id>/reprocess; no route ever served it, and
+        # re-ingesting the stored path is refused as a duplicate by
+        # contents_db_service (a hash with a stored path returns the existing
+        # record), so there is no operation to reference. See the gaps table in
+        # docs/ACTION_SURFACE_AUDIT.md.
+        visibility="not_built"),
     ActionDefinition(
-        action_id="files.view_original", source="Original File",
+        action_id="files.view_original", source="View Original",
         label_key="action.files.view_original.label",
         interfaces=("file_library",), scope="record",
         permission="files.view_original", execution="view_original",
         icon="bi-file-earmark-image"),
     ActionDefinition(
-        action_id="files.download_original", source="Original",
+        action_id="files.export_content", source="Export Extracted Text",
+        label_key="action.files.export_content.label",
+        interfaces=("file_library",), scope="record",
+        permission="files.export", execution="export_file_content",
+        icon="bi-file-earmark-arrow-down"),
+    ActionDefinition(
+        action_id="files.download_original", source="Download Original",
         label_key="action.files.download_original.label",
         interfaces=("file_library",), scope="record",
         permission="files.download_original", execution="download_original",
@@ -304,10 +313,46 @@ def action(action_id: str) -> Optional[ActionDefinition]:
     return None
 
 
+def _check_scope(scope: str) -> None:
+    from .model import ACTION_SCOPES
+
+    if scope not in ACTION_SCOPES:
+        raise ValueError(
+            f"unknown scope {scope!r}; an action applies to one of "
+            f"{list(ACTION_SCOPES)}")
+
+
 def for_interface(interface_id: str) -> Tuple[ActionDefinition, ...]:
     """The actions one screen may show, in declaration order."""
     return tuple(item for item in ACTION_REGISTRY
                  if interface_id in item.interfaces)
+
+
+def all_actions() -> Tuple[ActionDefinition, ...]:
+    """Every declared action, in declaration order (the catalog itself)."""
+    return ACTION_REGISTRY
+
+
+def registered_ids() -> Tuple[str, ...]:
+    """Every action id, in declaration order."""
+    return tuple(item.action_id for item in ACTION_REGISTRY)
+
+
+def actions_for(interface_id: str) -> Tuple[ActionDefinition, ...]:
+    """Every action one screen may show, whatever its scope."""
+    return for_interface(interface_id)
+
+
+def actions_for_scope(interface_id: str, scope: str) -> Tuple[ActionDefinition, ...]:
+    """The actions one screen may show for one scope."""
+    _check_scope(scope)
+    return tuple(item for item in for_interface(interface_id)
+                 if item.scope == scope)
+
+
+def not_built() -> Tuple[ActionDefinition, ...]:
+    """Actions the product declares and no operation performs yet."""
+    return tuple(item for item in ACTION_REGISTRY if not item.built)
 
 
 def without_operation() -> Tuple[ActionDefinition, ...]:
@@ -346,6 +391,9 @@ def counts() -> Dict[str, object]:
         "with_permission": sum(1 for item in rows if item.permission),
         "with_execution": sum(1 for item in rows if item.execution),
         "without_execution": len(without_operation()),
+        # Declared and not built: counted, named by the audit, never drawn.
+        "not_built": len(not_built()),
+        "not_built_ids": ", ".join(item.action_id for item in not_built()),
         "selection_actions": sum(1 for item in rows
                                  if item.scope == "selection"),
         "kinds": {
@@ -357,6 +405,15 @@ def counts() -> Dict[str, object]:
     }
 
 
+def to_dict() -> Dict[str, object]:
+    """The registry as one object: every action, plus what it adds up to."""
+    return {
+        "actions": [item.to_dict() for item in ACTION_REGISTRY],
+        "counts": counts(),
+        "registered_ids": list(registered_ids()),
+    }
+
+
 def to_json() -> List[Dict]:
     return [item.to_dict() for item in ACTION_REGISTRY]
 
@@ -364,11 +421,17 @@ def to_json() -> List[Dict]:
 __all__ = [
     "ACTION_REGISTRY",
     "action",
+    "actions_for",
+    "actions_for_scope",
+    "all_actions",
     "by_namespace",
     "counts",
     "for_interface",
     "namespaced",
+    "not_built",
     "registered",
+    "registered_ids",
+    "to_dict",
     "to_json",
     "without_operation",
 ]

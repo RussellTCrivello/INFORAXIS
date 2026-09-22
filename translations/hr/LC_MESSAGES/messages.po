@@ -9635,3 +9635,53 @@ msgstr "Sadržaj će se ponovno izdvojiti i pohraniti."
 #: templates/file/file_detail.html:582
 msgid "This may take a moment."
 msgstr "To može potrajati."
+
+# ---------------------------------------------------------------------------
+# The record action surface: the labels the Action Registry owns, and the
+# questions the page asks before it uses them.
+#
+# A label lives with the action (`source=` in action_registry.py) and is
+# translated at render time, so the template never restates it; the
+# dialog's words belong to the page that asks the question.
+# Written by hand rather than extracted, like the toolbar's strings:
+# this catalog is maintained against the product, not regenerated
+# wholesale.
+#: core/experience/action_registry.py
+msgid "View Original"
+msgstr "Prikaži izvornik"
+
+#: core/experience/action_registry.py
+msgid "Download Original"
+msgstr "Preuzmi izvornik"
+
+#: core/experience/action_registry.py
+msgid "Export Extracted Text"
+msgstr "Izvezi izdvojeni tekst"
+
+#: templates/components/record_actions.html
+msgid "More actions"
+msgstr "Više radnji"
+
+#: templates/file/file_detail.html
+msgid "Actions for this file"
+msgstr "Radnje za ovu datoteku"
+
+#: templates/file/file_detail.html
+msgid "Full Screen"
+msgstr "Cijeli zaslon"
+
+#: templates/file/file_detail.html
+msgid "Delete this file?"
+msgstr "Izbrisati ovu datoteku?"
+
+#: templates/file/file_detail.html
+msgid "This permanently removes the record and everything extracted from it. The original file on disk is not touched."
+msgstr "Time se trajno uklanja zapis i sve što je iz njega izdvojeno. Izvorna datoteka na disku ostaje netaknuta."
+
+#: templates/file/file_detail.html
+msgid "Delete file"
+msgstr "Izbriši datoteku"
+
+#: templates/file/file_detail.html
+msgid "Keep it"
+msgstr "Zadrži"

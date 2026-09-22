@@ -109,7 +109,7 @@ claimed about strings that have not been moved.
 ### What this build declares
 
 - Contracts: **25** (described: **5**, derived from the registry only: **20**)
-- Definitions: **33** actions, **14** columns, **6** filters, **0** fields, **5** states
+- Definitions: **34** actions, **14** columns, **6** filters, **0** fields, **5** states
 - Translation keys the screens need: **192**
 - With help: **23**; with a shortcut: **11**; with a navigation entry: **25**
 
@@ -118,7 +118,7 @@ claimed about strings that have not been moved.
 | Interface | Domain | Declared | Title key | Columns | Filters | Actions | States | Help |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `dashboard` | WORK | derived | `screen.dashboard.title` | — | — | — | — | yes |
-| `file_library` | DISCOVER | yes | `screen.file_library.title` | 7 | 4 | 11 | 1 | yes |
+| `file_library` | DISCOVER | yes | `screen.file_library.title` | 7 | 4 | 12 | 1 | yes |
 | `search` | DISCOVER | derived | `screen.search.title` | — | — | — | — | yes |
 | `sources` | DISCOVER | yes | `screen.sources.title` | — | — | 4 | 1 | yes |
 | `sides` | DISCOVER | yes | `screen.sides.title` | — | — | 4 | 1 | yes |
@@ -149,10 +149,10 @@ Counted from the catalogs the build ships - the Babel catalogs under `translatio
 
 | Language | Catalog entries | Source strings | Translated | Fallback | Missing | Coverage | Of which translated |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `ar` | 2879 | 2512 | 2505 | 7 | 0 | 100.0% | 99.7% |
-| `fa` | 2879 | 2512 | 2507 | 5 | 0 | 100.0% | 99.8% |
-| `he` | 2879 | 2512 | 2501 | 11 | 0 | 100.0% | 99.6% |
-| `hr` | 2627 | 2512 | 2429 | 21 | 62 | 97.5% | 96.7% |
+| `ar` | 2897 | 2531 | 2524 | 7 | 0 | 100.0% | 99.7% |
+| `fa` | 2897 | 2531 | 2526 | 5 | 0 | 100.0% | 99.8% |
+| `he` | 2897 | 2531 | 2520 | 11 | 0 | 100.0% | 99.6% |
+| `hr` | 2646 | 2531 | 2448 | 21 | 62 | 97.6% | 96.7% |
 
 ### Coverage per screen
 
@@ -161,7 +161,7 @@ The strings a screen's contract asks for, and how many of them a language actual
 | Interface | Keys | ar | fa | he | hr |
 | --- | --- | --- | --- | --- | --- |
 | `dashboard` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
-| `file_library` | 32 | 81.2% (0 by key) | 81.2% (0 by key) | 81.2% (0 by key) | 75.0% (0 by key) |
+| `file_library` | 32 | 90.6% (0 by key) | 90.6% (0 by key) | 90.6% (0 by key) | 84.4% (0 by key) |
 | `search` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
 | `sources` | 11 | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) |
 | `sides` | 11 | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) | 90.9% (0 by key) |
@@ -196,5 +196,5 @@ These have a contract derived from the registry, so they work: they have an iden
 
 Every contract passes the declarative checks: no SQL, no imports, no calls, no authorisation decisions, destructive actions carry a confirmation, bulk actions require a selection, and no key holds two different source strings.
 
-_Generated from 25 contracts, 2512 source strings and 5 catalogs._
+_Generated from 25 contracts, 2531 source strings and 5 catalogs._
 <!-- END GENERATED EXPERIENCE CONTRACT -->

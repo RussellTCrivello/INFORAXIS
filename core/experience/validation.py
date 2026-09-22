@@ -15,7 +15,7 @@ from a configuration file.
 from __future__ import annotations
 
 import re
-from typing import Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .model import (
     ExperienceContract,
@@ -135,6 +135,70 @@ def check_all() -> List[str]:
     return problems
 
 
+#: The application's own interface ids, resolved lazily so this package stays
+#: importable while the registry itself is what is being validated.
+def _interface_ids() -> Tuple[str, ...]:
+    from core.interfaces import REGISTRY
+
+    return tuple(item.interface_id for item in REGISTRY)
+
+
+def check_registry(rows: Optional[Sequence[Any]] = None) -> List[str]:
+    """Everything wrong with the Action Registry *as a catalog*.
+
+    The definition class already refuses what one action may not be - an
+    unknown scope, an unknown permission, a destructive action with no
+    confirmation, a URL typed into ``execution``. What it cannot see is
+    anything that only exists *between* actions, and those are the mistakes
+    that matter once there is a catalog rather than a page:
+
+    * two actions claiming one id, or one shortcut (a key that does two things
+      is a key nobody can rely on);
+    * an action attributed to an interface that does not exist, so no screen
+      will ever show it and nobody will notice;
+    * an action that is not built and still names the operation that performs
+      it, which is a claim rather than a reference.
+
+    ``rows`` is the catalog to check; the registry itself by default, so the
+    tests can hold a synthetic one to the same rules.
+    """
+    from .action_registry import registered
+
+    problems: List[str] = []
+    catalog = list(rows) if rows is not None else list(registered())
+    known_interfaces = set(_interface_ids())
+
+    seen: Dict[str, str] = {}
+    for item in catalog:
+        previous = seen.get(item.action_id)
+        if previous is not None:
+            problems.append(
+                f"action id {item.action_id!r} is declared twice "
+                f"({previous} and {', '.join(item.interfaces)})")
+        seen[item.action_id] = ", ".join(item.interfaces)
+        for interface_id in item.interfaces:
+            if interface_id not in known_interfaces:
+                problems.append(
+                    f"{item.action_id}: interface {interface_id!r} is not in "
+                    "the interface registry, so no screen can show this action")
+        if not item.built and item.execution:
+            problems.append(
+                f"{item.action_id}: not built, yet names execution "
+                f"{item.execution!r}")
+
+    shortcuts: Dict[str, str] = {}
+    for item in catalog:
+        if not item.shortcut:
+            continue
+        holder = shortcuts.get(item.shortcut)
+        if holder is not None and holder != item.action_id:
+            problems.append(
+                f"shortcut {item.shortcut!r} is claimed by both {holder} and "
+                f"{item.action_id}")
+        shortcuts[item.shortcut] = item.action_id
+    return problems
+
+
 def check_translation_edit(source: str, translation: str) -> List[str]:
     """Whether a translation may be saved, and why not.
 
@@ -159,6 +223,7 @@ __all__ = [
     "check_all",
     "check_contract",
     "check_declarative",
+    "check_registry",
     "check_translation_edit",
     "check_translations",
 ]

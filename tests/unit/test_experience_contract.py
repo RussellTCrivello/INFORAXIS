@@ -41,6 +41,7 @@ from core.experience import (
     source_strings,
     translation_index,
 )
+from core.experience.action_registry import action
 from core.experience.coverage import JS_PACKS, TRANSLATIONS, _read_js_pack, _read_po
 from core.experience.docgen import BEGIN, END, reference_markdown
 from core.interfaces import REGISTRY
@@ -104,13 +105,25 @@ class TestDeclarationsAreVerifiedAgainstTheScreens:
     @pytest.mark.parametrize("interface_id", sorted(TEMPLATES))
     def test_declared_columns_filters_actions_and_states_exist_on_screen(
             self, interface_id):
+        """Every declared thing is evidenced by the screen it belongs to.
+
+        Templates are the evidence for columns, filters and states. Actions are
+        the exception now, and deliberately: a screen's actions are handed to a
+        prepared surface, so the words a reader sees come from the registry's
+        label and the screen's own binding source - the file it declares beside
+        its actions - rather than from a string typed into the template. The
+        action ids are checked against the screen's declarations as well, so a
+        prepared action cannot be attributed to a screen that does not offer it.
+        """
         text = "\n".join((PROJECT_ROOT / relative).read_text()
                          for relative in TEMPLATES[interface_id])
+        binding_text = "\n".join(
+            (PROJECT_ROOT / relative).read_text()
+            for relative in declarations.binding_sources(interface_id))
         missing = []
         for items, attribute in (
             (declarations.columns(interface_id), "column_id"),
             (declarations.filters(interface_id), "filter_id"),
-            (declarations.actions(interface_id), "action_id"),
             (declarations.states(interface_id, interface_id), "state"),
         ):
             for item in items:
@@ -118,6 +131,20 @@ class TestDeclarationsAreVerifiedAgainstTheScreens:
                     missing.append(
                         f"{attribute}={getattr(item, attribute)!r} "
                         f"source {item.source!r} is not in {TEMPLATES[interface_id]}")
+        for item in declarations.actions(interface_id):
+            if item.source in text:
+                continue
+            if item.source in binding_text:
+                continue
+            registry_row = action(item.action_id)
+            if registry_row is not None and registry_row.source == item.source:
+                # The words come from the registry, which is where a label
+                # belongs once the surface is prepared rather than hand-written.
+                continue
+            missing.append(
+                f"action_id={item.action_id!r} source {item.source!r} is in "
+                f"neither {TEMPLATES[interface_id]} nor the screen's binding "
+                f"source {declarations.binding_sources(interface_id)}")
         assert missing == [], missing
 
     def test_a_declared_screen_has_a_title_and_keys_for_its_strings(self):

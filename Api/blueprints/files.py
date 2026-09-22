@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 files_bp = Blueprint("files", __name__)
 
 
+# The words a prepared action carries (its question, its terminal messages) are
+# the page's, and they are translated here rather than assembled in JavaScript.
+from flask_babel import gettext as _
+
 from core.serialization import pack_int_list, unpack_int_list
 from core.errors import client_error, client_safe_message
 from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
@@ -33,6 +37,97 @@ from Api.services.file_navigation import (
     LIBRARY_JOINS, ORDER_BY, build_library_filters, context_params,
     navigation_for,
 )
+
+
+# ---------------------------------------------------------------------------
+# The actions a record page offers
+# ---------------------------------------------------------------------------
+def record_actions_for(file_id, original=None):
+    """Prepare this record's actions from the registry plus this page's bindings.
+
+    Three layers meet here, and each keeps its own job:
+
+    * the **Action Registry** says what each action is - its scope, the
+      permission domain it belongs to, whether it is destructive, the
+      confirmation key it asks with, the operation reference it will one day
+      run, and whether the product offers it at all;
+    * the **screen** (this function) says what each action does *here*: the
+      endpoint, the group it is drawn in, the question it asks in the reader's
+      language, and what the record currently allows;
+    * the **runtime** asks the question, marks the control busy, and reports
+      through the toast.
+
+    Nothing here performs anything, and nothing here decides access: the
+    endpoints authorise every request on their own, and ``permitted`` below is
+    this page reading the same answer the route guard would give - a hidden
+    control is not a secured one.
+    """
+    from core.experience import presentation
+    from core.security import current_user
+
+    user = current_user()
+    can_write = bool(user and user.has_role("admin", "analyst"))
+
+    if original is None:
+        from Api.services.original_file import OriginalFileService
+
+        original = OriginalFileService.describe(file_id)
+
+    availability = None if original.get('available') else 'original_missing'
+    message = None
+    if availability:
+        message = original.get('message') or _ORIGINAL_UNAVAILABLE
+
+    bindings = {
+        # The two halves of one idea, deliberately separate: showing a document
+        # and taking a copy of it are different operations with different
+        # consequences, and the labels say which is which.
+        "files.view_original": {
+            "href": url_for('files.original_file_content', file_id=file_id),
+            "target": "_blank", "group": "primary",
+            "disabled_reason": availability, "disabled_label": message,
+        },
+        "files.download_original": {
+            "href": url_for('files.original_file_content', file_id=file_id,
+                            download=1),
+            "group": "secondary",
+            "disabled_reason": availability, "disabled_label": message,
+        },
+        "files.export_content": {
+            "endpoint": url_for('files.file_export', file_id=file_id),
+            "method": "GET", "group": "secondary",
+            "success_message": _("The extracted text was exported."),
+            "failure_message": _("The extracted text could not be exported."),
+        },
+        "files.delete": {
+            "endpoint": url_for('files.delete_file', file_id=file_id),
+            "method": "POST", "group": "overflow",
+            "permitted": can_write,
+            "confirmation": {
+                "title": _("Delete this file?"),
+                "message": _(
+                    "This permanently removes the record and everything "
+                    "extracted from it. The original file on disk is not "
+                    "touched."),
+                "confirm_label": _("Delete file"),
+                "cancel_label": _("Keep it"),
+            },
+            "success_message": _("The record was deleted."),
+            "failure_message": _("The record could not be deleted."),
+        },
+        # Registered and not built. It is bound here so the page records what it
+        # knows - the action exists, no operation performs it - and the surface
+        # leaves it out with the reason `not_built` rather than offering a
+        # control that cannot work.
+        "files.reprocess": {"permitted": True},
+    }
+    return presentation.record_actions("file_library", bindings, scope="record")
+
+
+#: Said when a source file is no longer where the record says it was. The
+#: service's own wording is preferred whenever it has one.
+_ORIGINAL_UNAVAILABLE = ("The original file is not available at its recorded "
+                         "location.")
 
 
 def get_keyword_frequencies(file_id, limit=50):
@@ -770,8 +865,13 @@ def file_detail(file_id):
     # or the whole library when the page is opened directly).
     nav = navigation_for(file_id, request.args, endpoint='files.file_detail')
 
+    # What can be done with this record, prepared from the Action Registry and
+    # this page's bindings; the surface draws it and the runtime runs it.
+    record_actions = record_actions_for(file_id)
+
     return render_template('file/file_detail.html',
                          nav=nav,
+                         record_actions=record_actions,
                          file=file_info,
                          content=content,  # Already ensured to be string
                          content_stats=content_stats,

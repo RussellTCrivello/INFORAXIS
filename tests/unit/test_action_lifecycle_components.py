@@ -158,25 +158,31 @@ class TestTheActionsThatNeededThemUseThem:
 
     def test_they_ask_by_action_id(self):
         jobs = (TEMPLATES / "Operations/jobs.html").read_text(encoding="utf-8")
-        detail = (TEMPLATES / "file/file_detail.html").read_text(encoding="utf-8")
         assert "action='jobs.cancel'" in jobs or 'action="jobs.cancel"' in jobs
         assert "'jobs.cancel'" in jobs
-        assert ("action='files.reprocess'" in detail
-                or 'action="files.reprocess"' in detail)
-        assert 'data-action="files.reprocess"' in detail
-        assert "'files.reprocess'" in (PROJECT_ROOT /
-                                       "static/js/pages/file-detail-page.js").read_text(
-            encoding="utf-8")
 
-    def test_both_actions_exist_in_the_registry_with_the_right_shape(self):
+        # Reprocess left this list, and deliberately: it was drawn on the file
+        # detail page and pointed at /file/<id>/reprocess, which no route ever
+        # served. It is now declared and not built, the page does not offer it,
+        # and the record's own actions ask through the same dialog by id.
+        detail = (TEMPLATES / "file/file_detail.html").read_text(encoding="utf-8")
+        assert "data-action=\"files.reprocess\"" not in detail
+        assert "action='files.delete'" in detail or 'action="files.delete"' in detail
+        # The key reaches the surface through the prepared action, not from a
+        # literal in the template: the registry owns it.
+        assert "confirmation_key='action.files.delete.confirm'" in detail
+
+    def test_the_registry_says_what_it_can_and_cannot_do(self):
         cancel = action("jobs.cancel")
         reprocess = action("files.reprocess")
         assert cancel.scope == "record" and cancel.confirmation
-        assert reprocess.scope == "record" and reprocess.confirmation
         assert cancel.destructive is False, (
             "cancelling stops work; it destroys no record, and the registry "
             "should not call it destructive")
-        assert reprocess.destructive is False
+        assert reprocess.built is False, (
+            "the operation does not exist, and the registry says so instead of "
+            "letting a page draw it as available")
+        assert reprocess.execution is None
 
     def test_an_action_that_ends_visibly_goes_through_the_toast(self):
         jobs = (TEMPLATES / "Operations/jobs.html").read_text(encoding="utf-8")

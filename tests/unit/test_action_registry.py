@@ -129,12 +129,26 @@ class TestDescriptionNotExecution:
         functions = {node.name for node in tree.body
                      if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
         assert functions == {
-            "_unique_ids", "registered", "action", "for_interface",
-            "without_operation", "by_namespace", "namespaced", "counts", "to_json",
+            "_unique_ids", "_check_scope", "registered", "registered_ids",
+            "action", "for_interface", "without_operation", "not_built",
+            "all_actions", "actions_for", "actions_for_scope", "by_namespace",
+            "namespaced", "counts", "to_json", "to_dict",
         }, functions
-        banned = re.compile(r"\b(execute|perform|dispatch|run_action|url_for|redirect)\b")
-        assert not banned.search(REGISTRY_SOURCE), (
-            "the registry must describe actions, never perform them")
+        # The set above is the whole API, and every name in it is a question
+        # about the catalog. Reading the calls rather than the text keeps the
+        # module's own prose - which says there is no run() here to be tempted
+        # by - out of the judgement.
+        called = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                name = (getattr(node.func, "id", None)
+                        or getattr(node.func, "attr", None))
+                if name:
+                    called.add(name)
+        forbidden_calls = {name for name in called if re.match(
+            r"^(run|run_action|perform|dispatch|execute|eval|exec|system|popen)$",
+            name)}
+        assert not forbidden_calls, forbidden_calls
 
     def test_the_registry_does_not_import_the_service_or_the_route_layer(self):
         tree = ast.parse(REGISTRY_SOURCE)
@@ -256,11 +270,21 @@ class TestStatesCarryTheirReason:
         assert (hidden.state, hidden.hidden_reason) == ("hidden", "no_permission")
 
     def test_derive_never_invents_a_permission_decision(self):
-        """With permission given, no input produces a hidden state."""
+        """Permission granted means the action is considered, not hidden.
+
+        The one thing that can still keep an allowed action off the screen is
+        the product not having built it - and that is a fact about the product,
+        not a decision about the reader, so it says so in its own reason.
+        """
         for item in registered():
             for selected in (0, 1, 5):
                 state = ActionState.derive(item, selected=selected, permitted=True)
-                assert state.state != "hidden", item.action_id
+                if item.built:
+                    assert state.state != "hidden", item.action_id
+                else:
+                    assert (state.state, state.hidden_reason) == (
+                        "hidden", "not_built"), item.action_id
+                    assert state.hidden_reason != "no_permission", item.action_id
 
     def test_a_missing_operation_is_a_named_disabled_reason(self):
         definition = action("sources.export_selected")
@@ -333,13 +357,30 @@ class TestTheModelRefusesWhatItCannotDescribe:
 class TestTheDeclarationsAgreeWithTheRegistry:
     @pytest.mark.parametrize("interface_id", sorted(declarations.DECLARED_SCREENS))
     def test_a_screen_shows_what_the_registry_says(self, interface_id):
-        assert declarations.actions(interface_id) == for_interface(interface_id)
+        """Same definitions, in the screen's order, and no others.
+
+        The screen declaration owns the order (a toolbar puts its destructive
+        action last) and the registry owns what each one *is*. Comparing id
+        lists keeps both halves honest: a definition cannot be restated here,
+        and an action cannot be presented by a screen the registry does not
+        attribute it to.
+        """
+        declared = declarations.actions(interface_id)
+        available = {item.action_id: item for item in for_interface(interface_id)}
+        assert set(item.action_id for item in declared) <= set(available)
+        assert [item.action_id for item in declared] == list(
+            declarations.SCREEN_ACTIONS[interface_id]), (
+                "the declared order is what the surface draws")
+        for item in declared:
+            assert item == available[item.action_id], (
+                "the screen must carry the registry's definition, not a copy")
 
     @pytest.mark.parametrize("interface_id", sorted(declarations.DECLARED_SCREENS))
     def test_the_contract_carries_the_registry_definitions(self, interface_id):
         item = contract(interface_id)
         assert item is not None
-        assert item.screen.actions == for_interface(interface_id)
+        assert [action.action_id for action in item.screen.actions] == [
+            action.action_id for action in declarations.actions(interface_id)]
 
     def test_a_screen_does_not_restate_an_action(self):
         """The declarations must not grow their own copy of an action."""

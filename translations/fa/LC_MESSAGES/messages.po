@@ -9528,3 +9528,53 @@ msgstr "محتوا دوباره استخراج و ذخیره می‌شود."
 #: templates/file/file_detail.html:582
 msgid "This may take a moment."
 msgstr "ممکن است کمی طول بکشد."
+
+# ---------------------------------------------------------------------------
+# The record action surface: the labels the Action Registry owns, and the
+# questions the page asks before it uses them.
+#
+# A label lives with the action (`source=` in action_registry.py) and is
+# translated at render time, so the template never restates it; the
+# dialog's words belong to the page that asks the question.
+# Written by hand rather than extracted, like the toolbar's strings:
+# this catalog is maintained against the product, not regenerated
+# wholesale.
+#: core/experience/action_registry.py
+msgid "View Original"
+msgstr "نمایش اصل"
+
+#: core/experience/action_registry.py
+msgid "Download Original"
+msgstr "دانلود اصل"
+
+#: core/experience/action_registry.py
+msgid "Export Extracted Text"
+msgstr "برون‌بری متن استخراج‌شده"
+
+#: templates/components/record_actions.html
+msgid "More actions"
+msgstr "کارهای بیشتر"
+
+#: templates/file/file_detail.html
+msgid "Actions for this file"
+msgstr "کارهای این فایل"
+
+#: templates/file/file_detail.html
+msgid "Full Screen"
+msgstr "تمام‌صفحه"
+
+#: templates/file/file_detail.html
+msgid "Delete this file?"
+msgstr "این فایل حذف شود؟"
+
+#: templates/file/file_detail.html
+msgid "This permanently removes the record and everything extracted from it. The original file on disk is not touched."
+msgstr "این کار رکورد و همه چیزهای استخراج‌شده از آن را برای همیشه حذف می‌کند. فایل اصلی روی دیسک دست‌نخورده می‌ماند."
+
+#: templates/file/file_detail.html
+msgid "Delete file"
+msgstr "حذف فایل"
+
+#: templates/file/file_detail.html
+msgid "Keep it"
+msgstr "نگهش دار"

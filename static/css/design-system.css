@@ -923,3 +923,97 @@ a {
     margin-top: 0.15rem;
     line-height: 1.3;
 }
+
+/* ---------------------------------------------------------------------------
+   The record header and the record action surface.
+
+   One owner for both: a record page says what a record is (title, state,
+   metadata) and what can be done with it (the action surface), and every
+   record page looks the same because this block is the only place the layout
+   is decided. Both components are markup-plus-these-classes; nothing here is
+   a second design system, and no colour is invented - the theme variables are
+   the ones the shell already sets.
+--------------------------------------------------------------------------- */
+.record-header {
+    border-bottom: 1px solid var(--border-color, #dee2e6);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+.record-header-main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.record-header-identity {
+    min-width: 0;
+    flex: 1 1 22rem;
+}
+
+.record-header-eyebrow {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary, #6b7280);
+}
+
+.record-header-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0.15rem 0 0.25rem;
+    overflow-wrap: anywhere;
+}
+
+.record-header-subtitle {
+    margin: 0;
+    color: var(--text-secondary, #6b7280);
+    overflow-wrap: anywhere;
+}
+
+.record-header-status {
+    margin-top: 0.35rem;
+}
+
+.record-header-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin: 0.6rem 0 0;
+    font-size: 0.8125rem;
+}
+
+.record-header-metadata-item {
+    display: flex;
+    gap: 0.35rem;
+    align-items: baseline;
+}
+
+.record-header-metadata dt {
+    font-weight: 500;
+    color: var(--text-secondary, #6b7280);
+}
+
+.record-header-metadata dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.record-header-actions {
+    flex: 0 0 auto;
+}
+
+.record-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.record-actions .dropdown-menu .btn {
+    width: 100%;
+    text-align: start;
+    border: 0;
+}

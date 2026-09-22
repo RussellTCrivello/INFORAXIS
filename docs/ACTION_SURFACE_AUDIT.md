@@ -45,13 +45,13 @@ This is a measurement of the product as it is, not a target.
 | Navigable screens | 23 |
 | Screens with a described experience | 5 |
 | Screens nobody has described yet | 18 |
-| Registered actions | 33 |
-| - page / record / selection / bulk | 13 / 9 / 2 / 9 |
+| Registered actions | 34 |
+| - page / record / selection / bulk | 13 / 10 / 2 / 9 |
 | - destructive | 6 |
-| - naming a confirmation | 8 |
-| - naming a permission | 33 |
+| - naming a confirmation | 7 |
+| - naming a permission | 34 |
 | - naming the operation that owns them | 29 |
-| - declared with no operation behind them | 4 |
+| - declared with no operation behind them | 5 |
 | Templates rendering the shared ActionToolbar | 5 |
 | Hand-written action bars | 1 |
 | Templates with record actions drawn by hand | 3 |
@@ -59,13 +59,13 @@ This is a measurement of the product as it is, not a target.
 | Templates with document viewer controls | 1 |
 | Files still calling the browser confirm() | 18 |
 | Files deciding button state by hand | 7 |
-| Gaps: actions the model cannot describe | 11 |
+| Gaps: actions the model cannot describe | 12 |
 
 ### Registered actions
 
-Every action names a permission domain and either an operation or nothing at all. The empty operation column is the honest part: 4 of them are words on a screen that no service owns yet.
+Every action names a permission domain and either an operation or nothing at all. The empty operation column is the honest part: 5 of them are words on a screen that no service owns yet.
 
-Declared with no operation: `sources.edit_selected, sources.export_selected, sides.edit_selected, sides.export_selected`.
+Declared with no operation: `files.reprocess, sources.edit_selected, sources.export_selected, sides.edit_selected, sides.export_selected`.
 
 | Action | Interface | Scope | Selection | Permission | Destructive | Confirmation | Operation | Component |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -77,8 +77,9 @@ Declared with no operation: `sources.edit_selected, sources.export_selected, sid
 | files.export_selected | file_library | bulk | all | files.export | - | - | export_selected | hand-written bar |
 | files.delete_selected | file_library | bulk | all | files.delete | yes | action.files.delete_selected.confirm | delete_selected | hand-written bar |
 | files.delete | file_library | record | - | files.delete | yes | action.files.delete.confirm | delete_file | record row |
-| files.reprocess | file_library | record | - | files.reprocess | - | action.files.reprocess.confirm | reprocess_file | record row |
+| files.reprocess | file_library | record | - | files.reprocess | - | - | **none** | record row |
 | files.view_original | file_library | record | - | files.view_original | - | - | view_original | record row |
+| files.export_content | file_library | record | - | files.export | - | - | export_file_content | record row |
 | files.download_original | file_library | record | - | files.download_original | - | - | download_original | record row |
 | keywords.select_all | keywords | page | - | keywords.view | - | - | select_all | ActionToolbar |
 | keywords.select_none | keywords | page | - | keywords.view | - | - | select_none | ActionToolbar |
@@ -103,6 +104,27 @@ Declared with no operation: `sources.edit_selected, sources.export_selected, sid
 | sides.export_selected | sides | bulk | all | export.create | - | - | **none** | ActionToolbar |
 | jobs.cancel | jobs | record | - | jobs.cancel | - | action.jobs.cancel.confirm | cancel_job | no described screen |
 
+### How each action stands
+
+Four conditions, and they are not the same condition:
+
+* **registered** - the catalog has a row for it;
+* **presented** - a screen declaration says that screen offers it (`SCREEN_ACTIONS`);
+* **bound** - something in the product names it: an attribute in markup, a macro argument, a string in the page script that drives the control, or an id written in the file a screen declares as its binding source (`BINDING_SOURCES`);
+* **built** - the registry names the operation that performs it.
+
+A control a reader can press without the operation existing is exactly the defect this audit was written after, so an action that is presented and not built is a finding, not a style note.
+
+| Condition | Actions |
+| --- | --- |
+| bound | 5 |
+| declared, not built; a page still prepares it | 1 |
+| presented by declaration; no control names it | 28 |
+
+The scan found 8 bindings in 4 files: 0 in markup attributes, 3 named as values (a macro argument or a page script), and 5 in the files the screens declare as their binding sources. The attribute count is the one that falls as this layer lands: an action drawn from prepared data needs no id typed into a template.
+
+Every one of those bindings is then resolved against the application's own URL map (`core.experience.bindings.check`), so a control pointing at a route nobody serves is a test failure rather than a 404 a reader finds. That check is what retired the Reprocess link.
+
 ### Surfaces the model does not own yet
 
 Each row is a scan from `SURFACES`, so the count and the files come from one statement.
@@ -125,9 +147,9 @@ The scripts are scanned as well as the templates, which is why the browser `conf
 
 Derived from the table above, not from taste:
 
-* **Record action surface** - the 9 registered record-scope actions, plus the 3 templates that draw record actions themselves.
+* **Record action surface** - the 10 registered record-scope actions, plus the 3 templates that draw record actions themselves.
 * **Specialized composites** - a viewer surface (1 template) for the document controls, and a filter surface (1 template) for the bar that submits a filter form.
-* **Confirmation dialog** - 8 registered actions require a confirmation, and 18 files still open the browser's own dialog to get one.
+* **Confirmation dialog** - 7 registered actions require a confirmation, and 18 files still open the browser's own dialog to get one.
 
 ### Actions that do not fit the current abstractions
 
@@ -135,6 +157,7 @@ This is the agenda for the next layer: each row is something the model cannot sa
 
 | Action | Where | What the model cannot say | Evidence |
 | --- | --- | --- | --- |
+| files.reprocess | file_library | The registry can say 'declared, not built' and the surface honours it - the action is hidden, nothing is drawn, and no route is bound - but the model still cannot describe the work: no persistent job type exists for re-extraction, and the pipeline refuses a duplicate hash whose path is already stored. Registering an operation for it means giving it a job and a path policy first, which the action vocabulary has no room for. | `core/experience/action_registry.py`, `Api/blueprints/files.py`, `pipeline/storage_pipeline.py` |
 | merge_duplicates | keywords | A page action whose confirmation carries runtime numbers - how many duplicates, what will be merged. `confirmation` is a translation key and nothing else, so the dialog cannot be handed values. | `static/js/pages/keywords-list-page.js` |
 | export_selected, edit_selected | sources, sides | Registered with no operation: the controls exist, the registry says so by leaving `execution` empty, and the audit counts them. What the model lacks is a way to say 'shown, not built' that the interface can honour - today the button is simply there, enabled when rows are selected, and does nothing useful. | `static/js/pages/sources-list-page.js`, `static/js/pages/sides-list-page.js` |
 | select_all / select_none | keywords, words, sources, sides, file_library | Selection *controls*, registered as page actions because that is the only vocabulary available. They produce the scope the other actions consume; the model has one word for both roles, so the pattern cannot be required of the next screen. | `templates/Sources/sources_list.html`, `templates/Side/sides_list.html` |

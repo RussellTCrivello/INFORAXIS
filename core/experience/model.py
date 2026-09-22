@@ -95,6 +95,17 @@ HIDDEN_REASONS: Tuple[str, ...] = (
 #: How an action's progress is shown while it runs.
 LOADING_STYLES: Tuple[str, ...] = ("inline", "button", "region", "toast")
 
+#: Whether the product actually offers the action.
+#:
+#: ``offered`` is everything the product presents today. ``not_built`` is a
+#: capability that has been declared - because an interface is expected to have
+#: it, because a control once existed for it - and that **no operation performs
+#: yet**. A surface may not draw one as available, and the audit reports it by
+#: name; declaring it is honest, hiding the absence is not. An action that is
+#: not built carries no execution reference, because there is nothing to
+#: reference.
+ACTION_VISIBILITIES: Tuple[str, ...] = ("offered", "not_built")
+
 #: What kind of value a field holds. Not a validation engine: a hint the form
 #: component uses to pick a control, and the server keeps its own rules.
 FIELD_TYPES: Tuple[str, ...] = (
@@ -216,6 +227,7 @@ class ActionDefinition:
     requires_selection: bool = False
     selection_rule: Optional[str] = None
     loading: str = "inline"
+    visibility: str = "offered"
     execution: Optional[str] = None          # opaque operation reference
 
     def __post_init__(self) -> None:
@@ -232,6 +244,8 @@ class ActionDefinition:
                f"action {self.action_id}: unknown scope {self.scope!r}")
         _check(self.loading in LOADING_STYLES,
                f"action {self.action_id}: unknown loading style {self.loading!r}")
+        _check(self.visibility in ACTION_VISIBILITIES,
+               f"action {self.action_id}: unknown visibility {self.visibility!r}")
         _check(bool(self.interfaces),
                f"action {self.action_id}: no interface can show it")
         _check(len(set(self.interfaces)) == len(self.interfaces),
@@ -248,6 +262,12 @@ class ActionDefinition:
         if self.shortcut:
             _check(isinstance(self.shortcut, str) and self.shortcut.strip(),
                    f"action {self.action_id}: empty shortcut")
+        if self.visibility == "not_built":
+            # A capability nobody has built cannot name the operation that
+            # performs it: naming one would be a claim, not a reference.
+            _check(self.execution is None,
+                   f"action {self.action_id} is not built and yet names "
+                   f"execution {self.execution!r}")
         if self.execution is not None:
             _check(bool(_EXECUTION_REFERENCE.match(self.execution)),
                    f"action {self.action_id}: execution {self.execution!r} is "
@@ -292,6 +312,11 @@ class ActionDefinition:
         """Whether running it has to be confirmed before it happens."""
         return bool(self.confirmation)
 
+    @property
+    def built(self) -> bool:
+        """Whether the product offers this action at all."""
+        return self.visibility == "offered"
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "action_id": self.action_id,
@@ -309,6 +334,8 @@ class ActionDefinition:
             "requires_selection": self.requires_selection,
             "selection_rule": self.selection_rule,
             "loading": self.loading,
+            "visibility": self.visibility,
+            "built": self.built,
             "execution": self.execution,
         }
 
@@ -371,6 +398,11 @@ class ActionState:
         used at all (a missing original file, an archived record).
         """
         _check(selected >= 0, "selected cannot be negative")
+        if not definition.built:
+            # The honest answer, whatever else is true: there is nothing here
+            # to run, so the surface must not offer it.
+            return cls(action_id=definition.action_id, state="hidden",
+                       hidden_reason="not_built")
         if not permitted:
             return cls(action_id=definition.action_id, state="hidden",
                        hidden_reason="no_permission")

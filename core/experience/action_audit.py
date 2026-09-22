@@ -35,7 +35,9 @@ from core.frontend import component_audit
 from core.interfaces import REGISTRY
 from core.interfaces.model import NAVIGABLE_KINDS
 
-from .action_registry import registered, without_operation
+from . import bindings as binding_scan
+from .action_registry import not_built, registered, without_operation
+from .declarations import BINDING_SOURCES, SCREEN_ACTIONS
 from .model import ACTION_SCOPES
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -91,6 +93,22 @@ SURFACES: Tuple[Tuple[str, str, str, Tuple[Path, ...]], ...] = (
 #: now ``selection_rule="one"``; and the file library's bulk buttons had no
 #: vocabulary for "this work is running", which is now the ``running`` state.
 GAPS: Tuple[Dict[str, object], ...] = (
+    {
+        "what": "files.reprocess",
+        "where": "file_library",
+        "cannot_say": "The registry can say 'declared, not built' and the "
+                      "surface honours it - the action is hidden, nothing is "
+                      "drawn, and no route is bound - but the model still "
+                      "cannot describe the work: no persistent job type exists "
+                      "for re-extraction, and the pipeline refuses a duplicate "
+                      "hash whose path is already stored. Registering an "
+                      "operation for it means giving it a job and a path "
+                      "policy first, which the action vocabulary has no room "
+                      "for.",
+        "evidence": ("core/experience/action_registry.py",
+                     "Api/blueprints/files.py",
+                     "pipeline/storage_pipeline.py"),
+    },
     {
         "what": "merge_duplicates",
         "where": "keywords",
@@ -251,8 +269,67 @@ def library_toolbar() -> Dict[str, int]:
     return {"standardized": row["standardized"], "hand_written": row["hand_written"]}
 
 
+def action_status() -> Dict[str, str]:
+    """How each action stands, measured rather than assumed.
+
+    Five facts, and they are not the same fact:
+
+    * **registered** - it is in the category (every row here is);
+    * **presented** - a screen declaration says that screen offers it
+      (``declarations.SCREEN_ACTIONS``);
+    * **bound** - markup in the product names it, so a reader can press it;
+    * **built** - the product performs it: ``visibility`` is ``offered``;
+    * **unbuilt** - declared, and no operation exists. Named, not hidden.
+
+    An action can be registered and presented without being built (the pages
+    did that for months), and presented without being bound (the declaration is
+    ahead of the screen). Each combination is a different piece of work, and
+    collapsing them into one "done" column is how a dead control survives.
+    """
+    bound = binding_scan.by_action(binding_scan.scan())
+    presented = {action_id
+                 for ids in SCREEN_ACTIONS.values() for action_id in ids}
+    status: Dict[str, str] = {}
+    for item in registered():
+        if not item.built:
+            status[item.action_id] = ("declared, not built; a page still "
+                                      "prepares it" if item.action_id in bound
+                                      else "declared, not built")
+        elif item.action_id in bound:
+            status[item.action_id] = "bound"
+        elif item.action_id in presented:
+            status[item.action_id] = "presented by declaration; no control names it"
+        elif item.execution:
+            status[item.action_id] = "built, no screen presents it"
+        else:
+            status[item.action_id] = "no operation named"
+    return status
+
+
+def status_counts(rows: Optional[Sequence[Dict[str, object]]] = None
+                  ) -> Dict[str, int]:
+    """How many actions are in each condition. The agenda, as numbers."""
+    counted: Dict[str, int] = {}
+    for row in (rows if rows is not None else declared_actions()):
+        counted[row["status"]] = counted.get(row["status"], 0) + 1
+    return counted
+
+
+def bound_evidence() -> Dict[str, List[str]]:
+    """Where each bound action is written, as `file:line`."""
+    found: Dict[str, List[str]] = {}
+    for item in binding_scan.scan():
+        found.setdefault(item["action_id"], []).append(
+            f"{item['file']}:{item['line']}")
+    return found
+
+
 def declared_actions() -> List[Dict[str, object]]:
-    """Every registered action, with the component that renders it today."""
+    """Every registered action, with what the product does about it today."""
+    status = action_status()
+    bound = bound_evidence()
+    presented = {action_id
+                 for ids in SCREEN_ACTIONS.values() for action_id in ids}
     rows: List[Dict[str, object]] = []
     for action in registered():
         interface_id = action.interfaces[0]
@@ -268,6 +345,10 @@ def declared_actions() -> List[Dict[str, object]]:
             "requires_selection": action.requires_selection,
             "selection_rule": action.selection_rule,
             "execution": action.execution,
+            "visibility": action.visibility,
+            "presented": action.action_id in presented,
+            "bound": ", ".join(bound.get(action.action_id, ())) or "-",
+            "status": status[action.action_id],
             "component": _component_for(interface_id, action.scope),
         })
     return rows
@@ -325,6 +406,15 @@ def counts() -> Dict[str, object]:
         "confirm_files": len(scanned["browser_confirm"]),
         "page_local_state_files": len(scanned["page_local_button_state"]),
         "library_toolbar": library_toolbar(),
+        "not_built": len(not_built()),
+        "not_built_names": ", ".join(item.action_id for item in not_built()),
+        "presented_actions": sum(1 for row in rows if row["presented"]),
+        "bound_actions": sum(1 for row in rows if row["bound"] != "-"),
+        "status_counts": status_counts(rows),
+        "bindings": binding_scan.counts()["bindings"],
+        "bindings_by_kind": {kind: binding_scan.counts()[kind]
+                             for kind in ("attributes", "literals", "prepared")},
+        "binding_files": binding_scan.counts()["files"],
         "gaps": len(GAPS),
     }
 
@@ -410,6 +500,44 @@ def reference_markdown() -> str:
           row["execution"] or "**none**", row["component"])
          for row in declared_actions()])
     lines.append("")
+
+    lines += ["### How each action stands", "",
+              "Four conditions, and they are not the same condition:", "",
+              "* **registered** - the catalog has a row for it;",
+              "* **presented** - a screen declaration says that screen offers "
+              "it (`SCREEN_ACTIONS`);",
+              "* **bound** - something in the product names it: an attribute in "
+              "markup, a macro argument, a string in the page script that drives "
+              "the control, or an id written in the file a screen declares as its "
+              "binding source (`BINDING_SOURCES`);",
+              "* **built** - the registry names the operation that performs it.",
+              "",
+              "A control a reader can press without the operation existing is "
+              "exactly the defect this audit was written after, so an action "
+              "that is presented and not built is a finding, not a style note.",
+              ""]
+    lines += _table(
+        ("Condition", "Actions"),
+        sorted((status, count)
+               for status, count in values["status_counts"].items())
+        if values["status_counts"] else (("none", 0),))
+    lines.append("")
+    kinds = values["bindings_by_kind"]
+    lines += [
+        "The scan found {} bindings in {} files: {} in markup attributes, {} "
+        "named as values (a macro argument or a page script), and {} in the "
+        "files the screens declare as their binding sources. The attribute "
+        "count is the one that falls as this layer lands: an action drawn from "
+        "prepared data needs no id typed into a template.".format(
+            values["bindings"], values["binding_files"],
+            kinds["attributes"], kinds["literals"], kinds["prepared"]),
+        "",
+        "Every one of those bindings is then resolved against the "
+        "application's own URL map (`core.experience.bindings.check`), so a "
+        "control pointing at a route nobody serves is a test failure rather "
+        "than a 404 a reader finds. That check is what retired the Reprocess "
+        "link.",
+        ""]
 
     lines += ["### Surfaces the model does not own yet", "",
               "Each row is a scan from `SURFACES`, so the count and the files "

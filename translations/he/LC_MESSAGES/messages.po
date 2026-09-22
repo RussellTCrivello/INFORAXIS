@@ -9232,3 +9232,53 @@ msgstr "התוכן ייחולץ ויאוחסן מחדש."
 #: templates/file/file_detail.html:582
 msgid "This may take a moment."
 msgstr "זה עשוי לקחת רגע."
+
+# ---------------------------------------------------------------------------
+# The record action surface: the labels the Action Registry owns, and the
+# questions the page asks before it uses them.
+#
+# A label lives with the action (`source=` in action_registry.py) and is
+# translated at render time, so the template never restates it; the
+# dialog's words belong to the page that asks the question.
+# Written by hand rather than extracted, like the toolbar's strings:
+# this catalog is maintained against the product, not regenerated
+# wholesale.
+#: core/experience/action_registry.py
+msgid "View Original"
+msgstr "הצג מקור"
+
+#: core/experience/action_registry.py
+msgid "Download Original"
+msgstr "הורד מקור"
+
+#: core/experience/action_registry.py
+msgid "Export Extracted Text"
+msgstr "ייצוא הטקסט שחולץ"
+
+#: templates/components/record_actions.html
+msgid "More actions"
+msgstr "פעולות נוספות"
+
+#: templates/file/file_detail.html
+msgid "Actions for this file"
+msgstr "פעולות לקובץ הזה"
+
+#: templates/file/file_detail.html
+msgid "Full Screen"
+msgstr "מסך מלא"
+
+#: templates/file/file_detail.html
+msgid "Delete this file?"
+msgstr "למחוק את הקובץ הזה?"
+
+#: templates/file/file_detail.html
+msgid "This permanently removes the record and everything extracted from it. The original file on disk is not touched."
+msgstr "פעולה זו מסירה לצמיתות את הרשומה ואת כל מה שחולץ ממנה. הקובץ המקורי בדיסק לא נגע."
+
+#: templates/file/file_detail.html
+msgid "Delete file"
+msgstr "מחק קובץ"
+
+#: templates/file/file_detail.html
+msgid "Keep it"
+msgstr "להשאיר"
