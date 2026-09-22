@@ -59,7 +59,209 @@ document.addEventListener('DOMContentLoaded', function() {
     loadFilterOptions();
     loadSearchHistory();
     setupEventListeners();
+    // Restore a search encoded in the URL (refresh / returning to this
+    // tab / shared link) and re-run it so results are never lost.
+    restoreSearchFromUrlAndRun();
+    window.addEventListener('popstate', restoreSearchFromUrlAndRun);
 });
+
+// ====================================================================
+// Search-state persistence (the "search is lost" fix, part 1)
+// ---------------------------------------------------------------------
+// The complete search definition — query, analyst scope, filters,
+// match options, sort and page — is serialized into the page URL after
+// every search (history.replaceState, no history spam) and restored
+// from the URL on load. A refresh, a return to this tab, or a shared
+// link therefore reproduces the exact result list.
+//
+// The same definition object is what "Save search" stores, and the
+// same parameter encoding is mirrored server-side in
+// Api/routes/search.py (_advanced_search_run_url) so saved searches
+// from the management page land here fully restored.
+// ====================================================================
+
+// URL parameters understood by restoreSearchFromUrl(). Keep in sync
+// with _advanced_search_run_url in Api/routes/search.py.
+const SEARCH_URL_PARAMS = ['q', 'scope', 'sort', 'cs', 'ww', 'fz', 'ft',
+    'cat', 'acat', 'src', 'side', 'df', 'dt', 'st', 'page'];
+
+/** The search exactly as the on-screen controls currently define it. */
+function currentSearchDefinition() {
+    return {
+        query: document.getElementById('mainSearchInput')?.value?.trim() || '',
+        scope: searchState.scope,
+        sort_by: document.getElementById('sortBy')?.value || 'relevance',
+        page: searchState.currentPage,
+        options: {
+            case_sensitive: document.getElementById('caseSensitive')?.checked || false,
+            whole_word: document.getElementById('wholeWord')?.checked || false,
+            use_fuzzy: document.getElementById('useFuzzy')?.checked !== false
+        },
+        filters: collectFilters()
+    };
+}
+
+/** Encode a search definition into URL parameters (lossless). */
+function serializeDefinitionToParams(def) {
+    const params = new URLSearchParams();
+    const filters = def.filters || {};
+    const options = def.options || {};
+
+    if (def.query) params.set('q', def.query);
+    if (def.scope && def.scope !== 'uncategorized') params.set('scope', def.scope);
+    if (def.sort_by && def.sort_by !== 'relevance') params.set('sort', def.sort_by);
+    if (options.case_sensitive) params.set('cs', '1');
+    if (options.whole_word) params.set('ww', '1');
+    if (options.use_fuzzy === false) params.set('fz', '0');
+
+    const appendAll = (key, values) =>
+        (values || []).forEach(v => params.append(key, String(v)));
+    appendAll('ft', filters.file_type);
+    appendAll('cat', filters.category_id);
+    appendAll('acat', filters.analyst_category_id);
+    appendAll('src', filters.source_id);
+    appendAll('side', filters.side_id);
+
+    if (filters.date_from) params.set('df', filters.date_from);
+    if (filters.date_to) params.set('dt', filters.date_to);
+
+    const status = Array.isArray(filters.status) ? filters.status : ['Read'];
+    const read = status.includes('Read');
+    const unread = status.includes('Unread');
+    if (read && unread) params.set('st', 'read,unread');
+    else if (!read && unread) params.set('st', 'unread');
+    else if (!read && !unread) params.set('st', 'none');
+
+    if (def.page && def.page > 1) params.set('page', String(def.page));
+    return params;
+}
+
+/** Reflect the current search into the address bar (replace, not push). */
+function persistSearchToUrl() {
+    try {
+        const qs = serializeDefinitionToParams(currentSearchDefinition()).toString();
+        window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+    } catch (e) {
+        console.warn('Could not update the address bar', e);
+    }
+}
+
+/** Multi-select helper: select exactly the given option values (those
+ *  that exist); null/undefined leaves the control untouched. */
+function setMultiSelectValues(selectId, values) {
+    if (values === null || values === undefined) return;
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    const wanted = new Set((values || []).map(v => String(v)));
+    Array.from(select.options).forEach(opt => {
+        opt.selected = wanted.has(opt.value);
+    });
+}
+
+/** Apply a search definition (from the URL or a saved search) to the
+ *  on-screen controls. Absent optional fields keep their defaults. */
+function applyDefinitionToControls(def) {
+    const filters = def.filters || {};
+    const options = def.options || {};
+
+    const mainInput = document.getElementById('mainSearchInput');
+    if (mainInput) {
+        mainInput.value = def.query || '';
+        const clearBtn = document.getElementById('clearSearchBtn');
+        if (clearBtn) clearBtn.style.display = def.query ? 'block' : 'none';
+    }
+    searchState.query = def.query || '';
+
+    if (['uncategorized', 'all', 'categorized'].includes(def.scope)) {
+        searchState.scope = def.scope;
+        const radio = document.querySelector(`input[name="analystScope"][value="${def.scope}"]`);
+        if (radio) radio.checked = true;
+    }
+
+    const sortSelect = document.getElementById('sortBy');
+    if (sortSelect && def.sort_by) sortSelect.value = def.sort_by;
+
+    const caseEl = document.getElementById('caseSensitive');
+    if (caseEl) caseEl.checked = !!options.case_sensitive;
+    const wholeEl = document.getElementById('wholeWord');
+    if (wholeEl) wholeEl.checked = !!options.whole_word;
+    const fuzzyEl = document.getElementById('useFuzzy');
+    if (fuzzyEl) fuzzyEl.checked = options.use_fuzzy !== false;
+
+    setMultiSelectValues('fileType', filters.file_type);
+    setMultiSelectValues('categoriesSelect', filters.category_id);
+    setMultiSelectValues('analystCategoriesFilter', filters.analyst_category_id);
+    setMultiSelectValues('sourcesSelect', filters.source_id);
+    setMultiSelectValues('sidesSelect', filters.side_id);
+
+    const from = document.getElementById('dateFrom');
+    if (from) from.value = filters.date_from || '';
+    const to = document.getElementById('dateTo');
+    if (to) to.value = filters.date_to || '';
+
+    if (Array.isArray(filters.status)) {
+        const readEl = document.getElementById('statusRead');
+        const unreadEl = document.getElementById('statusUnread');
+        if (readEl) readEl.checked = filters.status.includes('Read');
+        if (unreadEl) unreadEl.checked = filters.status.includes('Unread');
+    }
+}
+
+/** Parse a search definition from the current URL. Returns null when no
+ *  search parameters are present. */
+function readDefinitionFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    if (!SEARCH_URL_PARAMS.some(k => params.has(k))) return null;
+
+    const statusParam = params.get('st');
+    let status;
+    if (statusParam === 'none') {
+        status = [];
+    } else if (statusParam) {
+        const parts = statusParam.split(',').map(s => s.trim().toLowerCase());
+        status = [];
+        if (parts.includes('read')) status.push('Read');
+        if (parts.includes('unread')) status.push('Unread');
+    }
+
+    return {
+        query: params.get('q') || '',
+        scope: params.get('scope') || undefined,
+        sort_by: params.get('sort') || undefined,
+        page: Math.max(1, parseInt(params.get('page'), 10) || 1),
+        options: {
+            case_sensitive: params.get('cs') === '1',
+            whole_word: params.get('ww') === '1',
+            use_fuzzy: params.get('fz') !== '0'
+        },
+        filters: {
+            file_type: params.getAll('ft'),
+            category_id: params.getAll('cat').map(v => parseInt(v, 10)).filter(v => !isNaN(v)),
+            analyst_category_id: params.getAll('acat').map(v => parseInt(v, 10)).filter(v => !isNaN(v)),
+            source_id: params.getAll('src').map(v => parseInt(v, 10)).filter(v => !isNaN(v)),
+            side_id: params.getAll('side').map(v => parseInt(v, 10)).filter(v => !isNaN(v)),
+            date_from: params.get('df') || null,
+            date_to: params.get('dt') || null,
+            status: status
+        }
+    };
+}
+
+/** Restore a search from the URL into the controls. True when restored. */
+function restoreSearchFromUrl() {
+    const def = readDefinitionFromUrl();
+    if (!def) return false;
+    applyDefinitionToControls(def);
+    searchState.currentPage = def.page;
+    updateFilterChips();
+    return true;
+}
+
+function restoreSearchFromUrlAndRun() {
+    if (restoreSearchFromUrl()) {
+        executeAdvancedSearch();
+    }
+}
 
 // Read server-provided page data (initial scope, permissions, translations)
 function initializePageData() {
@@ -617,6 +819,10 @@ async function executeAdvancedSearch() {
             searchState.totalResults = 0;
             displayResults([], null);
         }
+
+        // Keep the address bar pointing at exactly this search so a
+        // refresh, a bookmark or a return to this tab restores it.
+        persistSearchToUrl();
         
         // Note: Search history is already saved by the API endpoint
         // This is a backup save (optional, won't cause errors if it fails)
@@ -755,12 +961,15 @@ function displayResults(results, pagination) {
                            title="${escapeAttr(tPage('selectForCategorization', 'Select for manual categorization'))}"
                            aria-label="${escapeAttr(tPage('selectFileForCategorization', 'Select {file} for manual categorization').replace('{file}', result.file_name || 'file'))}">
                 </div>
-                <div class="result-body" onclick="window.location.href='${fileDetailHref(result.id)}'">
+                <div class="result-body" onclick="openResultInNewTab(event, ${result.id})"
+                     title="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}">
                     <div class="result-title-row">
                         <span class="result-file-icon ${typeInfo.css}" title="${escapeAttr(fileType || '')}">
                             <i class="bi ${typeInfo.icon}" aria-hidden="true"></i>
                         </span>
-                        <span class="result-title">${escapeHtml(result.file_name || tPage('untitled', 'Untitled'))}</span>
+                        <a class="result-title result-title-link" href="${fileDetailHref(result.id)}"
+                           target="_blank" rel="noopener"
+                           onclick="event.stopPropagation()">${escapeHtml(result.file_name || tPage('untitled', 'Untitled'))}</a>
                         ${fileType ? `<span class="result-type-chip ${typeInfo.css}">${escapeHtml(fileType)}</span>` : ''}
                         ${result.relevance_score ? `<span class="relevance-badge">${Math.round(result.relevance_score * 100)}%</span>` : ''}
                     </div>
@@ -787,6 +996,20 @@ function displayResults(results, pagination) {
                             ${smartBadges}
                         </div>
                     ` : ''}
+                    <div class="result-hover-actions">
+                        <button type="button" class="result-action-btn result-action-preview"
+                                onclick="showFilePreview(${result.id}); event.stopPropagation();"
+                                title="${escapeAttr(tPage('preview', 'Quick preview (stays on this page)'))}"
+                                aria-label="${escapeAttr(tPage('preview', 'Quick preview (stays on this page)'))}">
+                            <i class="bi bi-eye" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="result-action-btn result-action-open"
+                                onclick="openResultInNewTab(event, ${result.id})"
+                                title="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}"
+                                aria-label="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}">
+                            <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -1115,12 +1338,13 @@ function resetAllFilters() {
     updateFilterChips();
 }
 
-// Feeling lucky (get first result)
+// Feeling lucky (get first result) — opens in a NEW tab so the search
+// page (and its results) stay intact.
 async function feelingLucky() {
     searchState.resultsPerPage = 1;
     await executeAdvancedSearch();
     if (searchState.results.length > 0) {
-        window.location.href = `/file/${searchState.results[0].id}`;
+        window.open(fileDetailHref(searchState.results[0].id), '_blank', 'noopener');
     }
     searchState.resultsPerPage = 20;
 }
@@ -1399,6 +1623,333 @@ function formatFileSize(bytes) {
 
 // Helper function to sanitize filename
 
+// ====================================================================
+// In-page file preview (popup) — inspect a result without leaving the
+// search page; the full file page stays one click away in a new tab.
+// The search page itself is never navigated away from.
+// ====================================================================
+
+const previewModal = { el: null, bodyEl: null, titleEl: null, openBtn: null, currentFileId: null };
+
+function ensurePreviewModal() {
+    if (previewModal.el) return previewModal;
+    const overlay = document.createElement('div');
+    overlay.id = 'searchFilePreviewModal';
+    overlay.className = 'sfp-overlay';
+    overlay.innerHTML = `
+        <div class="sfp-dialog" role="dialog" aria-modal="true"
+             aria-label="${escapeAttr(tPage('preview', 'File preview'))}">
+            <div class="sfp-header">
+                <span class="sfp-title" id="sfpTitle"></span>
+                <div class="sfp-header-actions">
+                    <a class="sfp-open-full" id="sfpOpenFull" href="#" target="_blank" rel="noopener">
+                        <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
+                        <span>${escapeHtml(tPage('openInNewTab', 'Open in new tab'))}</span>
+                    </a>
+                    <button type="button" class="sfp-close" id="sfpClose"
+                            title="${escapeAttr(tPage('closePreview', 'Close preview'))}"
+                            aria-label="${escapeAttr(tPage('closePreview', 'Close preview'))}">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="sfp-body" id="sfpBody"></div>
+        </div>`;
+    document.body.appendChild(overlay);
+    previewModal.el = overlay;
+    previewModal.bodyEl = overlay.querySelector('#sfpBody');
+    previewModal.titleEl = overlay.querySelector('#sfpTitle');
+    previewModal.openBtn = overlay.querySelector('#sfpOpenFull');
+    // Backdrop click closes (mousedown so text-selection drags don't)
+    overlay.addEventListener('mousedown', (e) => {
+        if (e.target === overlay) hideFilePreview();
+    });
+    overlay.querySelector('#sfpClose').addEventListener('click', hideFilePreview);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && previewModal.el.style.display !== 'none') {
+            hideFilePreview();
+        }
+    });
+    return previewModal;
+}
+
+/** Open the popup preview for a search result (no navigation). */
+function showFilePreview(fileId) {
+    const modal = ensurePreviewModal();
+    previewModal.currentFileId = fileId;
+    // The full page opens in a new tab and carries the originating search.
+    modal.openBtn.href = fileDetailHref(fileId);
+    modal.titleEl.textContent = tPage('previewLoading', 'Loading preview…');
+    modal.bodyEl.innerHTML = `
+        <div class="sfp-loading">
+            <div class="loading-spinner" role="status" aria-live="polite"></div>
+            <p>${escapeHtml(tPage('previewLoading', 'Loading preview…'))}</p>
+        </div>`;
+    modal.el.style.display = 'flex';
+    document.body.classList.add('sfp-no-scroll');
+
+    fetch(`/api/preview/${fileId}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            if (previewModal.currentFileId !== fileId) return; // a newer request won
+            renderPreviewPayload(data, fileId);
+        })
+        .catch(error => {
+            if (previewModal.currentFileId !== fileId) return;
+            console.error('Preview failed:', error);
+            previewModal.bodyEl.innerHTML = `
+                <div class="sfp-message">
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                    <p>${escapeHtml(tPage('previewFailed', 'Preview failed'))}: ${escapeHtml(error.message)}</p>
+                    <p class="sfp-message-hint">${escapeHtml(tPage('openFullPageHint', 'Open the file in a new tab to view the full content.'))}</p>
+                </div>`;
+        });
+}
+
+function hideFilePreview() {
+    if (!previewModal.el) return;
+    previewModal.el.style.display = 'none';
+    previewModal.currentFileId = null;
+    previewModal.bodyEl.innerHTML = '';
+    document.body.classList.remove('sfp-no-scroll');
+}
+
+function renderPreviewPayload(data, fileId) {
+    const body = previewModal.bodyEl;
+    const name = data.file_name || tPage('untitled', 'Untitled');
+    previewModal.titleEl.textContent = name;
+    const type = data.preview_type;
+
+    if (type === 'image' && data.data) {
+        // data is a full data: URI produced by the preview service
+        body.innerHTML = `
+            <div class="sfp-image-wrap">
+                <img class="sfp-image" src="${escapeAttr(data.data)}" alt="${escapeAttr(name)}">
+            </div>`;
+    } else if ((type === 'text' || type === 'document' || type === 'pdf') && data.data) {
+        const note = type === 'pdf' && data.page_count
+            ? `<div class="sfp-note">${escapeHtml(tPage('pdfFirstPage', 'First page text'))} · ${data.page_count} ${escapeHtml(tPage('pages', 'pages'))}</div>`
+            : '';
+        // Escape first, then highlight — the highlighter writes <mark> tags.
+        const escaped = escapeHtml(String(data.data));
+        body.innerHTML = `${note}<pre class="sfp-text">${highlightQueryTerms(escaped, searchState.query)}</pre>`;
+    } else if (type === 'unsupported') {
+        body.innerHTML = `
+            <div class="sfp-message">
+                <i class="bi bi-file-earmark-lock" aria-hidden="true"></i>
+                <p>${escapeHtml(data.message || tPage('previewUnavailable', 'Preview is not available for this file.'))}</p>
+                <p class="sfp-message-hint">${escapeHtml(tPage('openFullPageHint', 'Open the file in a new tab to view the full content.'))}</p>
+            </div>`;
+    } else {
+        const detail = data.error || tPage('previewUnavailable', 'Preview is not available for this file.');
+        body.innerHTML = `
+            <div class="sfp-message">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                <p>${escapeHtml(detail)}</p>
+                <p class="sfp-message-hint">${escapeHtml(tPage('openFullPageHint', 'Open the file in a new tab to view the full content.'))}</p>
+            </div>`;
+    }
+}
+
+// ====================================================================
+// Saved searches — store the full search definition (query, filters,
+// scope, options, sort) server-side and re-run it any time without
+// searching again.
+// ====================================================================
+
+let savedSearchesCache = null;
+
+/** Save the current search (query + all filters + scope + options). */
+async function saveCurrentSearch() {
+    const def = currentSearchDefinition();
+    if (!def.query && getActiveFiltersCount() === 0) {
+        Toast.info(tPage('nothingToSave', 'Run a search first, then save it here.'));
+        return;
+    }
+
+    const stamp = new Date().toISOString().split('T')[0];
+    const suggested = def.query || `${tPage('savedSearch', 'Saved search')} ${stamp}`;
+    const name = prompt(tPage('saveSearchPrompt', 'Name this search:'), suggested);
+    if (name === null) return; // cancelled
+    const trimmed = (name.trim() || suggested);
+
+    try {
+        const response = await fetch('/api/search/saved', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': analystCsrftoken()
+            },
+            body: JSON.stringify({
+                name: trimmed,
+                query: def.query,
+                filters: {
+                    ...def.filters,
+                    scope: def.scope,
+                    sort_by: def.sort_by,
+                    options: def.options
+                }
+            })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        savedSearchesCache = null; // re-fetch next time the menu opens
+        Toast.success(tPage('searchSaved', 'Search saved. Find it under Saved searches.'));
+    } catch (error) {
+        console.error('Saving the search failed:', error);
+        Toast.error(tPage('saveFailed', 'Could not save this search.') + ' ' + error.message);
+    }
+}
+
+/** Open/close the saved-searches dropdown (fetches lazily). */
+async function toggleSavedSearchMenu() {
+    const menu = document.getElementById('savedSearchMenu');
+    if (!menu) return;
+    if (menu.style.display === 'block') {
+        menu.style.display = 'none';
+        return;
+    }
+    menu.style.display = 'block';
+    await renderSavedSearchMenu();
+}
+
+// Close the dropdown when clicking anywhere outside it
+document.addEventListener('click', (e) => {
+    const menu = document.getElementById('savedSearchMenu');
+    if (menu && menu.style.display === 'block' &&
+        !menu.contains(e.target) && !e.target.closest('.saved-search-container')) {
+        menu.style.display = 'none';
+    }
+});
+
+async function renderSavedSearchMenu() {
+    const list = document.getElementById('savedSearchMenuList');
+    if (!list) return;
+    list.innerHTML = `<div class="ssm-status">${escapeHtml(tPage('loadingSaved', 'Loading saved searches…'))}</div>`;
+    try {
+        if (!savedSearchesCache) {
+            const response = await fetch('/api/search/saved');
+            const data = await response.json();
+            savedSearchesCache = data.searches || [];
+        }
+        const searches = savedSearchesCache;
+        if (searches.length === 0) {
+            list.innerHTML = `<div class="ssm-status">${escapeHtml(tPage('noSavedSearches', 'No saved searches yet. Run a search and press Save.'))}</div>`;
+            return;
+        }
+        list.innerHTML = searches.map(s => `
+            <div class="ssm-item">
+                <button type="button" class="ssm-run" onclick="applySavedSearchById(${s.id})"
+                        title="${escapeAttr(tPage('runSavedSearch', 'Run this search'))}">
+                    <span class="ssm-name">${escapeHtml(s.name)}</span>
+                    ${s.query ? `<span class="ssm-query">${escapeHtml(s.query)}</span>` : ''}
+                </button>
+                <button type="button" class="ssm-delete" onclick="deleteSavedSearchById(${s.id}, event)"
+                        title="${escapeAttr(tPage('deleteSearch', 'Delete'))}"
+                        aria-label="${escapeAttr(tPage('deleteSearch', 'Delete'))}">
+                    <i class="bi bi-trash" aria-hidden="true"></i>
+                </button>
+            </div>`).join('');
+    } catch (error) {
+        console.error('Loading saved searches failed:', error);
+        list.innerHTML = `<div class="ssm-status">${escapeHtml(tPage('loadSavedFailed', 'Could not load saved searches.'))}</div>`;
+    }
+}
+
+/** Re-run a saved search: restore every control, then search. */
+async function applySavedSearchById(id) {
+    try {
+        // Fetching the single search also marks it used (server-side).
+        const response = await fetch(`/api/search/saved/${id}`);
+        const data = await response.json();
+        if (!response.ok || !data.search) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        applySavedSearch(data.search);
+    } catch (error) {
+        console.error('Applying the saved search failed:', error);
+        Toast.error(tPage('applyFailed', 'Could not run this saved search.'));
+    }
+}
+
+function applySavedSearch(search) {
+    const f = search.filters || {};
+    const def = {
+        query: search.query || '',
+        scope: f.scope || 'uncategorized',
+        sort_by: f.sort_by || 'relevance',
+        page: 1,
+        options: f.options || { case_sensitive: false, whole_word: false, use_fuzzy: true },
+        filters: {
+            file_type: f.file_type || [],
+            category_id: f.category_id || [],
+            analyst_category_id: f.analyst_category_id || [],
+            source_id: f.source_id || [],
+            side_id: f.side_id || [],
+            date_from: f.date_from || null,
+            date_to: f.date_to || null,
+            status: Array.isArray(f.status) ? f.status : undefined
+        }
+    };
+    applyDefinitionToControls(def);
+    searchState.currentPage = 1;
+    // A different search invalidates the previous result selection (FR-1.2)
+    searchState.selectedIds = new Set();
+    updateSelectionBar();
+    updateFilterChips();
+
+    const menu = document.getElementById('savedSearchMenu');
+    if (menu) menu.style.display = 'none';
+
+    executeAdvancedSearch();
+    Toast.success(
+        tPage('searchApplied', 'Saved search applied')
+            .replace('{name}', search.name || '')
+    );
+}
+
+/** Delete a saved search from the dropdown. */
+async function deleteSavedSearchById(id, evt) {
+    if (evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+    }
+    if (!confirm(tPage('deleteSearchConfirm', 'Are you sure you want to delete this saved search?'))) {
+        return;
+    }
+    try {
+        const response = await fetch(`/api/search/saved/${id}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': analystCsrftoken() }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        savedSearchesCache = null;
+        await renderSavedSearchMenu();
+        Toast.success(tPage('searchDeleted', 'Saved search deleted'));
+    } catch (error) {
+        console.error('Deleting the saved search failed:', error);
+        Toast.error(tPage('deleteFailed', 'Could not delete this saved search.'));
+    }
+}
+
+// Open a search result in a NEW tab: the search page keeps its results,
+// query and filters untouched (the core "search is lost" fix).
+function openResultInNewTab(event, fileId) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    window.open(fileDetailHref(fileId), '_blank', 'noopener');
+}
+
 // Expose functions globally
 if (typeof window !== 'undefined') {
     window.executeAdvancedSearch = executeAdvancedSearch;
@@ -1417,5 +1968,13 @@ if (typeof window !== 'undefined') {
     window.clearResultSelection = clearResultSelection;
     window.assignAnalystCategory = assignAnalystCategory;
     window.removeAnalystCategoriesFromSelection = removeAnalystCategoriesFromSelection;
+    // Result opening (new tab / popup preview) and saved searches
+    window.openResultInNewTab = openResultInNewTab;
+    window.showFilePreview = showFilePreview;
+    window.hideFilePreview = hideFilePreview;
+    window.saveCurrentSearch = saveCurrentSearch;
+    window.toggleSavedSearchMenu = toggleSavedSearchMenu;
+    window.applySavedSearchById = applySavedSearchById;
+    window.deleteSavedSearchById = deleteSavedSearchById;
     console.log('Advanced Search functions exposed globally');
 }

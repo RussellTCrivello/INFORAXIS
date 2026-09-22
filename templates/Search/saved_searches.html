@@ -8,7 +8,7 @@
         <i class="bi bi-bookmarks me-2"></i>
         {{ _('Saved Searches') }}
     </h1>
-    <a href="{{ url_for('search_enhanced_page') }}" class="btn btn-primary">
+    <a href="{{ url_for('search_advanced') }}" class="btn btn-primary">
         <i class="bi bi-plus-circle me-2"></i>
         {{ _('New Search') }}
     </a>
@@ -25,7 +25,7 @@
     </div>
     <ul class="tips-list">
         <li>{{ _('Saved Searches stores your frequently used search queries for quick access') }}</li>
-        <li>{{ _('Save a search from the Enhanced Search page using the "Save Search" button') }}</li>
+        <li>{{ _('Save a search from the Advanced Search page using the "Save" button') }}</li>
         <li>{{ _('Run saved searches instantly without re-entering the query') }}</li>
         <li>{{ _('Rename or delete saved searches at any time') }}</li>
     </ul>
@@ -78,7 +78,7 @@
 
             <!-- Actions -->
             <div class="btn-group w-100" role="group">
-                <a class="btn btn-primary" href="/search?q={{ search.query|urlencode }}" title="{{ _('Run this search') }}">
+                <a class="btn btn-primary" href="{{ search.run_url or ('/search/advanced?q=' ~ (search.query|urlencode)) }}" title="{{ _('Run this search on the Advanced Search page with all filters restored') }}">
                     <i class="bi bi-play-fill"></i> {{ _('Run') }}
                 </a>
                 <button class="btn btn-outline-secondary" onclick='renameSavedSearch({{ search.id }}, {{ search.name|tojson }})' title="{{ _('Rename') }}">
@@ -95,10 +95,10 @@
         <div class="stat-card text-center py-5">
             <i class="bi bi-bookmarks display-4 d-block mb-3 text-muted"></i>
             <h5 class="text-muted">{{ _('No Saved Searches') }}</h5>
-            <p class="text-muted mb-4">{{ _('Run a search on the Enhanced Search page and use "Save Search" to bookmark it here.') }}</p>
-            <a href="{{ url_for('search_enhanced_page') }}" class="btn btn-primary">
+            <p class="text-muted mb-4">{{ _('Run a search on the Advanced Search page and use "Save" to bookmark it here.') }}</p>
+            <a href="{{ url_for('search_advanced') }}" class="btn btn-primary">
                 <i class="bi bi-plus-circle me-2"></i>
-                {{ _('Go to Enhanced Search') }}
+                {{ _('Go to Advanced Search') }}
             </a>
         </div>
     </div>
