@@ -175,15 +175,31 @@ class DomainImportService:
         parsed = parser.parse(raw)
         if progress_cb:
             progress_cb({"percent": 80, "current_phase": "Validating"})
-        words = parsed.get("words") or []
-        categories = parsed.get("categories") or []
-        keywords = parsed.get("keywords") or parsed.get("phrases") or []
+        if isinstance(parsed, dict):  # legacy dict shape (defensive)
+            words = parsed.get("words") or []
+            categories = parsed.get("categories") or []
+            keywords = parsed.get("keywords") or parsed.get("phrases") or []
+            return {
+                "data_file": Path(data_file).name,
+                "records_discovered": len(words) + len(categories) + len(keywords),
+                "words": len(words),
+                "categories": len(categories),
+                "keywords": len(keywords),
+                "dry_run": True,
+            }
+        # Current parser contract: a list of Domain objects, each carrying
+        # its Term list; classify terms by shape exactly as the processors do.
+        domains = list(parsed)
+        word_count = sum(
+            1 for d in domains for t in d.terms if t.is_single_word()
+        )
+        phrase_count = sum(1 for d in domains for t in d.terms if t.is_phrase())
         return {
             "data_file": Path(data_file).name,
-            "records_discovered": len(words) + len(categories) + len(keywords),
-            "words": len(words),
-            "categories": len(categories),
-            "keywords": len(keywords),
+            "records_discovered": len(domains) + word_count + phrase_count,
+            "words": word_count,
+            "categories": len(domains),
+            "keywords": phrase_count,
             "dry_run": True,
         }
 

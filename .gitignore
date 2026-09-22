@@ -75,6 +75,16 @@ node_modules/
 
 # Runtime settings store (created on first boot; may hold deployment config)
 data/
+# ...but the apps.importing.data PACKAGE (source code, not datasets) lives in
+# a directory with the same name and must be tracked. Re-include the directory,
+# then keep datasets inside it ignored.
+!apps/importing/data/
+apps/importing/data/*.xlsx
+apps/importing/data/*.csv
+apps/importing/data/*.json
+
+# Vendored static assets (Select2 etc.) must ship with the app despite dist/
+!static/dist/
 
 # --- Runtime artifacts (audit session) ---
 .pgdata/
