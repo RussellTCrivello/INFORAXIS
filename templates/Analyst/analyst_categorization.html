@@ -143,6 +143,7 @@
                         <thead>
                             <tr>
                                 <th>{{ _('File') }}</th>
+                                <th>{{ _('Source / Side') }}</th>
                                 <th>{{ _('Analyst Category') }}</th>
                                 <th>{{ _('Assigned By') }}</th>
                                 <th>{{ _('Assigned At') }}</th>
@@ -152,7 +153,7 @@
                         </thead>
                         <tbody id="assignmentsTableBody">
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">{{ _('Loading…') }}</td>
+                                <td colspan="7" class="text-center text-muted py-4">{{ _('Loading…') }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -258,6 +259,9 @@
         "noAssignments": _('No analyst-categorized files match the current filters.'),
         "pageOf": _('Page {page} of {pages} ({total} assignments)'),
         "never": _('(no query)'),
+        "sourceLabel": _('Source'),
+        "sideLabel": _('Side'),
+        "noOrigin": _('—'),
         "unknownAnalyst": _('unknown'),
         "categoryCreated": _('Analyst category created'),
         "categoryDeleted": _('Analyst category deleted'),

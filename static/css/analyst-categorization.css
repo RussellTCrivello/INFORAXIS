@@ -300,3 +300,36 @@
     .analyst-filter-grow { grid-column: span 1; }
     .analyst-table .file-path { max-width: 140px; }
 }
+
+/* --------------------------------------------------------------------------
+   Origin of classified files (source / side)
+   Each analyst-classified file shows where it came from: the source and
+   the side of its content identity, as soft chips in the analyst accent.
+   -------------------------------------------------------------------------- */
+.assignment-origin-cell {
+    max-width: 14rem;
+}
+
+.assignment-origin {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    margin-inline-end: 0.35rem;
+    margin-block: 0.15rem;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid var(--analyst-accent-border, #c4b5fd);
+    border-radius: var(--radius-pill, 999px);
+    background: var(--analyst-accent-soft, #ede9fe);
+    color: var(--analyst-text, #4c1d95);
+    font-size: 0.74rem;
+    font-weight: 600;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.assignment-origin i {
+    flex: 0 0 auto;
+    opacity: 0.75;
+}

@@ -696,10 +696,14 @@ class AnalystCategoryService:
                 SELECT afc.id, afc.path_id, p.file_name, p.file_path, p.file_type,
                        ac.id, ac.name, ac.color,
                        afc.assigned_by, afc.assigned_by_username,
-                       afc.source_query, afc.assigned_at
+                       afc.source_query, afc.assigned_at,
+                       src.name, sd.name
                 FROM analyst_file_categories afc
                 JOIN analyst_categories ac ON ac.id = afc.category_id
                 LEFT JOIN paths p ON p.id = afc.path_id
+                LEFT JOIN hash_contexts hc ON hc.id = p.context_id
+                LEFT JOIN sources src ON src.id = hc.source_id
+                LEFT JOIN sides sd ON sd.id = hc.side_id
                 {where}
                 ORDER BY afc.assigned_at DESC, afc.id DESC
                 LIMIT %s OFFSET %s
@@ -723,6 +727,10 @@ class AnalystCategoryService:
                     "assigned_by_username": row[9] or "unknown",
                     "source_query": row[10],
                     "assigned_at": row[11].isoformat() if row[11] else None,
+                    # Where the file came from: the source and side of its
+                    # content identity (paths -> hash_contexts -> sources/sides).
+                    "source_name": row[12],
+                    "side_name": row[13],
                 })
             return assignments, total
         except Exception as e:
