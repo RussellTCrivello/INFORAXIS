@@ -246,8 +246,22 @@ export function renderFilesView(files, section, itemName, pagination) {
         html += `<button class="action-btn" onclick="selectAllFiles?.()" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;" title="${translations.selectAllFiles || 'Select All Files'}" aria-label="${translations.selectAllFiles || 'Select All Files'}">${translations.selectAll || 'Select All'}</button>`;
         html += `<button class="action-btn" onclick="deselectAllFiles?.()" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;" title="${translations.deselectAllFiles || 'Deselect All Files'}" aria-label="${translations.deselectAllFiles || 'Deselect All Files'}">${translations.deselectAll || 'Deselect All'}</button>`;
         html += `<button class="action-btn export-btn" onclick="exportSelectedFiles?.()" style="background: #10b981;" title="${translations.exportSelectedFiles || 'Export Selected Files'}" aria-label="${translations.exportSelected || 'Export Selected'}">${translations.exportSelected || 'Export Selected'}</button>`;
+        html += `<button class="action-btn export-btn" onclick="exportSelectedOriginals?.()" style="background: #0ea5e9;" title="${translations.exportOriginalsTitle || 'Download the original source files of the selection as one zip'}" aria-label="${translations.exportOriginals || 'Export Originals'}"><i class="bi bi-file-earmark-zip me-1" aria-hidden="true"></i>${translations.exportOriginals || 'Export Originals'}</button>`;
         html += '</div>';
         html += '</div>';
+
+        // Analyst (manual) categorization of the selection — appears when
+        // files are checked, targets the analyst namespace only (FR-1.4).
+        if (window.appData?.canCategorize) {
+            html += `<div id="analystBulkBar" data-section-context="${escapeAttribute(`${sectionLabel}: ${itemName || ''}`)}"
+                          style="display: none; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; padding: 0.6rem 0.75rem; border: 1px solid #ddd6fe; border-radius: 0.5rem; background: #f5f3ff;">`;
+            html += `<span style="font-size: 0.875rem; color: #4c1d95;"><i class="bi bi-person-check me-1" aria-hidden="true"></i><strong id="analystBulkCount">0</strong> ${translations.selected || 'selected'}</span>`;
+            html += `<select id="analystBulkCategorySelect" class="form-select form-select-sm" style="max-width: 240px;" title="${translations.analystBulkCategoryTitle || 'Analyst-defined categories only (never smart categories)'}"><option value="">${translations.chooseOrCreateCategory || 'Choose analyst category…'}</option></select>`;
+            html += `<input type="text" id="analystBulkNewCategory" class="form-control form-control-sm" style="max-width: 200px;" placeholder="${translations.orNewCategoryName || '…or new category name'}" maxlength="255">`;
+            html += `<button class="action-btn" onclick="assignAnalystCategoriesToSelection?.()" style="background: #7c3aed; color: #ffffff;" title="${translations.categorizeSelectedTitle || 'Assign the analyst category to every selected file'}">${translations.categorize || 'Categorize'}</button>`;
+            html += `<button class="action-btn" onclick="removeAnalystCategoriesFromSelection?.()" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;" title="${translations.removeCategoriesTitle || 'Remove analyst categories from every selected file'}">${translations.removeCategories || 'Remove'}</button>`;
+            html += '</div>';
+        }
 
         const filesList = files.map(file => ({ id: file.id, name: file.name }));
         // Calculate starting number for pagination

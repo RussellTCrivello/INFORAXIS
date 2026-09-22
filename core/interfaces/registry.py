@@ -135,7 +135,8 @@ REGISTRY: Tuple[Interface, ...] = (
         aliases=("files.file_detail", "files.file_content_lazy",
                  "files.file_content_page", "files.file_full_content",
                  "files.file_search_all_pages", "files.file_chart_data",
-                 "files.delete_file", "files.bulk_delete_files"),
+                 "files.delete_file", "files.bulk_delete_files",
+                 "files.bulk_export_files"),
         help_topic="discover/file-library", keyboard_shortcut="g f",
     ),
     _if(

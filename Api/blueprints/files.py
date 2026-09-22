@@ -949,6 +949,128 @@ def file_export(file_id):
 
 
 @limiter.limit(INTERACTIVE_READ_LIMIT)
+@files_bp.route('/files/export', methods=['POST'])
+def bulk_export_files():
+    """Batch export of the selected files as a single ZIP download.
+
+    Two modes (form field ``mode``):
+
+    * ``originals`` - the source files exactly as they sit on disk, the
+      same bytes the per-file download hands out. Files whose original
+      has disappeared are skipped and listed in a ``_not_included.txt``
+      inside the archive.
+    * ``text`` (default) - the extracted text of each file, the same
+      content ``/api/files/<id>/export`` produces, batched into one
+      download instead of one per file.
+
+    ``file_ids`` comes from a form POST (the toolbar builds it) or a JSON
+    body. The endpoint the toolbar has always POSTed to never existed -
+    this implements it for both modes.
+    """
+    import io
+    import zipfile as _zipfile
+    from datetime import datetime as _datetime
+    from flask import send_file
+
+    try:
+        raw_ids = request.form.getlist('file_ids')
+        if not raw_ids:
+            body = request.get_json(silent=True) or {}
+            raw_ids = body.get('file_ids') or []
+        mode = 'originals' if request.values.get('mode') == 'originals' else 'text'
+
+        file_ids = []
+        for value in raw_ids:
+            try:
+                file_ids.append(int(value))
+            except (TypeError, ValueError):
+                continue
+        file_ids = list(dict.fromkeys(file_ids))[:500]  # dedupe, cap
+        if not file_ids:
+            return jsonify({'success': False, 'error': 'No files selected'}), 400
+
+        placeholders = ','.join(['%s'] * len(file_ids))
+        rows = execute_query(
+            f"SELECT id, file_name FROM paths WHERE id IN ({placeholders})",
+            tuple(file_ids),
+            fetch="all",
+        )
+        names = {row[0]: row[1] for row in rows or []}
+
+        zip_buffer = io.BytesIO()
+        included = 0
+        skipped = []
+
+        with _zipfile.ZipFile(zip_buffer, 'w', _zipfile.ZIP_DEFLATED) as zf:
+            used_names = set()
+
+            def _arc_for(file_name, fallback):
+                base = secure_filename(file_name or '') or fallback
+                candidate, counter = base, 2
+                while candidate in used_names:
+                    stem, dot, ext = base.partition('.')
+                    candidate = f"{stem}_{counter}{dot}{ext}" if dot else f"{base}_{counter}"
+                    counter += 1
+                used_names.add(candidate)
+                return candidate
+
+            for fid in file_ids:
+                fname = names.get(fid)
+                if fname is None:
+                    skipped.append((fid, '', 'no such file record'))
+                    continue
+                if mode == 'originals':
+                    from Api.services.original_file import OriginalFileService
+                    info = OriginalFileService.describe(fid)
+                    source_path = info.get('path') or ''
+                    if info.get('available') and source_path and Path(source_path).is_file():
+                        zf.write(source_path, arcname=_arc_for(fname, f'file_{fid}'))
+                        included += 1
+                    else:
+                        skipped.append((fid, fname, info.get('reason') or 'original unavailable'))
+                else:
+                    text = load_text_content(fid)
+                    if text:
+                        if isinstance(text, bytes):
+                            text = text.decode('utf-8', errors='replace')
+                        arc = fname if str(fname or '').lower().endswith('.txt') \
+                            else f"{fname or f'file_{fid}'}.txt"
+                        zf.writestr(_arc_for(arc, f'file_{fid}.txt'), text)
+                        included += 1
+                    else:
+                        skipped.append((fid, fname, 'no extracted text'))
+
+            if skipped:
+                lines = [f"# Not included in this {mode} export",
+                         "# file_id\tfile_name\treason"]
+                lines += [f"{fid}\t{name}\t{reason}" for fid, name, reason in skipped]
+                zf.writestr('_not_included.txt', '\n'.join(lines))
+
+        if included == 0:
+            return jsonify({
+                'success': False,
+                'error': 'None of the selected files could be exported',
+                'skipped': [{'file_id': fid, 'file_name': name, 'reason': reason}
+                            for fid, name, reason in skipped],
+            }), 422
+
+        stamp = _datetime.now().strftime('%Y%m%d_%H%M%S')
+        zip_name = (f"selected_originals_{stamp}.zip" if mode == 'originals'
+                    else f"selected_extracted_text_{stamp}.zip")
+        zip_buffer.seek(0)
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=zip_name,
+        )
+
+    except Exception as e:
+        logger.error(f"Error in bulk export: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+@limiter.limit(INTERACTIVE_READ_LIMIT)
 @files_bp.route('/file/<int:file_id>/content/page')
 def file_content_page(file_id):
     """Get specific content page with pagination info"""

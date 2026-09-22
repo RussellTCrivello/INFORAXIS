@@ -895,6 +895,7 @@
 
 <!-- Page Data - Passed via JSON for external JavaScript -->
 <script type="application/json" id="page-data">{{ {
+    "canCategorize": current_user.is_authenticated and current_user.has_role('admin', 'analyst'),
     "translations": {
         "addSource": _("Add Source"),
         "addSide": _("Add Side"),
@@ -920,6 +921,20 @@
         "deselectAll": _("Deselect All"),
         "exportSelectedFiles": _("Export Selected Files"),
         "exportSelected": _("Export Selected"),
+        "exportOriginals": _("Export Originals"),
+        "exportOriginalsTitle": _("Download the original source files of the selection as one zip"),
+        "selectFilesFirst": _("Select one or more files first"),
+        "chooseOrCreateCategory": _("Choose analyst category…"),
+        "orNewCategoryName": _("…or new category name"),
+        "analystBulkCategoryTitle": _("Analyst-defined categories only (never smart categories)"),
+        "categorizeSelectedTitle": _("Assign the analyst category to every selected file"),
+        "removeCategoriesTitle": _("Remove analyst categories from every selected file"),
+        "categorize": _("Categorize"),
+        "removeCategories": _("Remove"),
+        "assignedToast": _('Assigned "{category}" to {count} file(s)'),
+        "removeBulkConfirm": _("Remove all analyst categories from {count} selected file(s)? They return to uncategorized for analyst scope."),
+        "analystRemoveSuccess": _("Analyst categories removed"),
+        "analystActionError": _("Analyst categorization failed"),
         "selected": _("selected"),
         "noFilesFound": _("No files found"),
         "showing": _("Showing"),

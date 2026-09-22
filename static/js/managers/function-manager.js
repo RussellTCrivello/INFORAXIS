@@ -33,6 +33,7 @@ import * as fileDetails from '../modules/file-operations/file-details.js';
 import * as fileExport from '../modules/file-operations/file-export.js';
 import * as fileNavigation from '../modules/file-operations/file-navigation.js';
 import * as fileSelection from '../modules/file-operations/file-selection.js';
+import * as bulkAnalyst from '../modules/file-operations/bulk-analyst-actions.js';
 import fileManagement from '../modules/file-operations/file-management.js';
 
 // Modal modules
@@ -211,7 +212,12 @@ if (typeof window !== 'undefined') {
     window.selectAllFiles = fileSelection.selectAllFiles;
     window.deselectAllFiles = fileSelection.deselectAllFiles;
     window.exportSelectedFiles = fileSelection.exportSelectedFiles;
+    window.exportSelectedOriginals = fileSelection.exportSelectedOriginals;
     window.filterDisplayedFiles = fileSelection.filterDisplayedFiles;
+    // Bulk analyst categorization of the FMAS selection (analyst namespace only)
+    window.assignAnalystCategoriesToSelection = bulkAnalyst.assignAnalystCategoriesToSelection;
+    window.removeAnalystCategoriesFromSelection = bulkAnalyst.removeAnalystCategoriesFromSelection;
+    window.updateAnalystBulkBar = bulkAnalyst.updateAnalystBulkBar;
     
     // Modal search
     window.performModalSearch = modalSearch.performModalSearch;
