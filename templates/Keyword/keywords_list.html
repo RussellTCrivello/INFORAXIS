@@ -149,22 +149,25 @@
     {% endcall %}
 
     <!-- Action Bar -->
-    {% call action_toolbar(id='keywordsActionBar', label=_('Actions')) %}
+    {% call action_toolbar(id='keywordsActionBar', label=_('Actions'), interface_id=inspector_interface) %}
         {% call action_group(_('Selection:')) %}
-            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()') }}
-            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()') }}
+            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()', interface_id=inspector_interface, action_id='keywords.select_all') }}
+            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()', interface_id=inspector_interface, action_id='keywords.select_none') }}
         {% endcall %}
         {% call action_group(_('Bulk Actions:')) %}
             {{ selection_summary(total_keywords|default(0), _('keywords'), _('keyword')) }}
             {{ bulk_action_button(_('Edit Selected'), icon='bi-pencil', onclick='bulkUpdate()',
-                 tone='outline-warning', id='bulkUpdateBtn', noun=_('keywords')) }}
+                 tone='outline-warning', id='bulkUpdateBtn', noun=_('keywords'),
+                 interface_id=inspector_interface, action_id='keywords.edit_selected') }}
             {{ bulk_action_button(_('Delete Selected'), icon='bi-trash', onclick='bulkDelete()',
-                 tone='outline-danger', id='bulkDeleteBtn', noun=_('keywords')) }}
+                 tone='outline-danger', id='bulkDeleteBtn', noun=_('keywords'),
+                 interface_id=inspector_interface, action_id='keywords.delete_selected') }}
         {% endcall %}
         {% call action_group(_('Actions:')) %}
             {{ action_button(_('Merge Duplicates'), icon='bi-arrow-down-up',
                  onclick='mergeAllDuplicates()', tone='warning',
-                 title=_('Merge all duplicate keywords')) }}
+                 title=_('Merge all duplicate keywords'),
+                 interface_id=inspector_interface, action_id='keywords.merge_duplicates') }}
         {% endcall %}
     {% endcall %}
 {% endcall %}

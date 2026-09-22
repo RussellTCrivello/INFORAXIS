@@ -175,18 +175,18 @@
     </div>
 
     <!-- Action Bar -->
-    {% call action_toolbar(id='sourcesActionBar', label=_('Actions')) %}
+    {% call action_toolbar(id='sourcesActionBar', label=_('Actions'), interface_id=inspector_interface) %}
         {% call action_group(_('Selection:')) %}
-            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()') }}
-            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()') }}
+            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()', interface_id=inspector_interface, action_id='sources.select_all') }}
+            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()', interface_id=inspector_interface, action_id='sources.select_none') }}
         {% endcall %}
         {% call action_group(_('Bulk Actions:')) %}
             {{ selection_summary(total_sources|default(0), _('sources'), _('source')) }}
             {{ bulk_action_button(_('Export Selected'), icon='bi-download',
-                 onclick='bulkExport()', tone='outline-primary', id='bulkExportBtn',
+                 onclick='bulkExport()', tone='outline-primary', id='bulkExportBtn', interface_id=inspector_interface, action_id='sources.export_selected',
                  noun=_('sources')) }}
             {{ bulk_action_button(_('Edit Selected'), icon='bi-pencil',
-                 onclick='bulkUpdate()', tone='outline-warning', id='bulkUpdateBtn',
+                 onclick='bulkUpdate()', tone='outline-warning', id='bulkUpdateBtn', interface_id=inspector_interface, action_id='sources.edit_selected',
                  noun=_('sources')) }}
         {% endcall %}
     {% endcall %}

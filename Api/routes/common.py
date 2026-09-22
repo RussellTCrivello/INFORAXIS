@@ -221,6 +221,12 @@ def register_common_routes(app, babel_instance):
             'current_language': get_locale(),
             'csrf_token': generate_csrf,  # CSRF token function for templates
             'version': app_version,  # Application version
+            # The Screen Inspector, off unless both the installation and this
+            # account say otherwise. Filled in below with the settings and the
+            # registry; the endpoint it reads is guarded on its own, because a
+            # tool nobody renders is not a tool nobody can call.
+            'inspector_enabled': False,
+            'inspector_interface': None,
         }
         
         # Safely inject interface manager - wrap in try-except to prevent cascading errors
@@ -272,6 +278,23 @@ def register_common_routes(app, babel_instance):
             # the mapping has one owner (core/frontend/status_vocabulary.py)
             # and both renderers read it.
             context['status_vocabulary'] = status_vocabulary()
+
+            # The Screen Inspector is offered only when the installation
+            # switched it on and the account is an administrator. The interface
+            # it will inspect is the registry's answer for this request's
+            # endpoint - never parsed from the URL - so the panel can say which
+            # screen it is showing even before anything is selected.
+            try:
+                from core.interfaces import get_interface_for_endpoint
+                context['inspector_interface'] = getattr(
+                    get_interface_for_endpoint(request.endpoint), 'interface_id', None)
+                context['inspector_enabled'] = bool(
+                    current_user_obj and getattr(current_user_obj, 'is_admin', False)
+                    and interface_manager.get('system', 'screen_inspector', False))
+            except Exception as inspector_error:  # pragma: no cover - defensive
+                logger.warning(f"Screen Inspector not enabled: {inspector_error}")
+                context['inspector_enabled'] = False
+                context['inspector_interface'] = None
 
             # `interface_for` is an environment global (see above): components
             # need it, and macros cannot see this context.

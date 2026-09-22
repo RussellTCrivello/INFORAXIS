@@ -23,11 +23,94 @@ from __future__ import annotations
 import logging
 
 from flask import jsonify, request
+from flask_babel import gettext as _
+from flask_babel import get_locale
+
+from core.security.flask_ext import admin_required
 
 logger = logging.getLogger(__name__)
 
 #: How many contracts a list response returns before it says it truncated.
 DEFAULT_LIMIT = 200
+
+
+# ---------------------------------------------------------------------------
+# The Screen Inspector
+# ---------------------------------------------------------------------------
+#: What each row of the panel is called. The panel's words belong to the layer
+#: that has a locale - this one - which is why the model that produces the
+#: values does not carry any.
+def _inspector_labels():
+    labels = {
+        "_title": _("Screen Inspector"),
+        "interface": _("Interface"),
+        "interface_name": _("Interface name"),
+        "component": _("Component"),
+        "action": _("Action"),
+        "role": _("Element"),
+        "scope": _("Scope"),
+        "permission": _("Permission metadata"),
+        "authorization": _("Current authorization"),
+        "state": _("State"),
+        "disabled_reason": _("Disabled reason"),
+        "hidden_reason": _("Hidden reason"),
+        "confirmation": _("Confirmation"),
+        "translation_key": _("Translation key"),
+        "source_text": _("Source text"),
+        "rendered_text": _("Rendered text"),
+        "help": _("Help"),
+        "shortcut": _("Keyboard shortcut"),
+        "binding_kind": _("Binding kind"),
+        "binding_source": _("Binding source"),
+        "binding": _("Binding"),
+        "execution": _("Execution reference"),
+        "selection": _("Selection"),
+        "job": _("Job"),
+        "correlation_id": _("Correlation ID"),
+        "interface_status": _("Screen metadata"),
+        "component_status": _("Component ownership"),
+        "action_status": _("Action metadata"),
+        "translation_status": _("Translation status"),
+        "binding_status": _("Binding status"),
+        "execution_status": _("Execution"),
+    }
+    status_labels = {
+        "resolved": _("Resolved"),
+        "unknown": _("Unknown"),
+        "not_declared": _("Not declared"),
+        "not_applicable": _("Not applicable"),
+        "unavailable": _("Unavailable"),
+        "unresolved": _("Unresolved"),
+        "not_checked": _("Not determined"),
+        "not_built": _("Not built"),
+        "derived": _("Derived from the registry"),
+        "source_language": _("Source language"),
+        "fallback": _("Falls back to English"),
+        "resolved_by_source": _("Translated by source string"),
+        "page_script": _("Page script"),
+        "prepared_in_python": _("Prepared in Python"),
+        "markup": _("Markup"),
+    }
+    # Why an action is not usable, in the vocabulary's own words. The token is
+    # what the product says; this is how a person reads it.
+    reason_labels = {
+        "no_selection": _("Nothing is selected"),
+        "single_selection_required": _("Exactly one record must be selected"),
+        "not_built": _("Not built: no operation exists"),
+        "unavailable": _("Unavailable right now"),
+        "record_archived": _("The record is archived"),
+        "original_missing": _("The original file is not available"),
+        "no_permission": _("Not permitted for this account"),
+        "not_applicable": _("Does not apply to this element"),
+    }
+    problem_labels = {
+        "unknown_action": _("No action is registered with that id"),
+        "no_matching_endpoint": _("The address it carries is not served"),
+        "not_bound": _("No control in the product names this action"),
+        "interface_mismatch": _("The screen does not present this action"),
+        "endpoint_not_named": _("The binding names no endpoint"),
+    }
+    return labels, status_labels, reason_labels, problem_labels
 
 
 def register_experience_routes(app) -> None:
@@ -173,4 +256,72 @@ def register_experience_routes(app) -> None:
             "counts": coverage_counts(),
             "languages": language_coverage(),
             "screens": screen_coverage(interface_id),
+        })
+
+
+    @app.route("/api/experience/inspect", methods=["GET"])
+    @admin_required
+    def experience_inspect():
+        """What the architecture knows about one element of one screen.
+
+        The client says *which* element - the ids it read from the element's
+        own diagnostic attributes, the class list, how many rows are selected,
+        whether the operation it started is still running. The server says what
+        that means, from the registries and the binding scan, and it refuses the
+        questions it cannot answer honestly:
+
+        * a permission is reported as *metadata* - the name the registry gives
+          it - and never as a decision, because the decision belongs to the
+          endpoint that will be called;
+        * an authorisation answer is only shown when the server gave one;
+        * a claim naming an interface or an action nobody registered is reported
+          as a claim, not resolved into something nearby;
+        * an execution reference stays the opaque name it is: no URL is
+          substituted for it, and no filesystem path is ever shown.
+        """
+        from core.experience.inspector import (
+            InspectorError,
+            Selection,
+            inspect,
+            panel,
+        )
+        from core.security.flask_ext import current_user
+
+        selection = Selection.from_request({
+            "interface": request.args.get("interface"),
+            "component": request.args.get("component"),
+            "action": request.args.get("action"),
+            "binding_kind": request.args.get("binding_kind"),
+            "binding_source": request.args.get("binding_source"),
+            "role": request.args.get("role"),
+            "classes": request.args.get("classes"),
+            "text": request.args.get("text"),
+            "selected": request.args.get("selected"),
+            "total": request.args.get("total"),
+            "running": request.args.get("running") in ("1", "true", "yes"),
+            "outcome": request.args.get("outcome"),
+            "job": request.args.get("job"),
+            "correlation_id": request.args.get("correlation_id"),
+        })
+        user = current_user()
+        roles = getattr(user, "roles", ()) if user else ()
+        try:
+            inspection = inspect(
+                selection,
+                endpoint=request.args.get("endpoint"),
+                routes=app.url_map.iter_rules(),
+                locale=str(get_locale() or "en"),
+                roles=roles,
+            )
+        except InspectorError as error:
+            # The refusal is the answer: nothing is resolved by guessing.
+            return jsonify({"success": False, "reason": error.reason,
+                            "error": error.message}), 404
+
+        labels, status_labels, reason_labels, problem_labels = _inspector_labels()
+        return jsonify({
+            "success": True,
+            "inspection": inspection.to_dict(),
+            "panel": panel(inspection, labels, status_labels, reason_labels,
+                           problem_labels),
         })

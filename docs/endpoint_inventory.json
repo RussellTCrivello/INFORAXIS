@@ -1726,6 +1726,18 @@
     "internal": true
   },
   {
+    "endpoint": "experience_inspect",
+    "rule": "/api/experience/inspect",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "experience_api",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "experience_permissions",
     "rule": "/api/experience/permissions",
     "methods": [

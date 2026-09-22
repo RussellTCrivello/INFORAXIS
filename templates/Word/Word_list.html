@@ -162,17 +162,19 @@
        bulk actions; the two selection-scoped ones use it because a scope is
        what they need, and that is all the primitive claims.
     -#}
-    {% call action_toolbar(id='wordsActionBar', label=_('Actions')) %}
+    {% call action_toolbar(id='wordsActionBar', label=_('Actions'), interface_id=inspector_interface) %}
         {% call action_group(_('Selection:')) %}
-            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()') }}
-            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()') }}
+            {{ action_button(_('Select All'), icon='bi-check-square', onclick='selectAll()', interface_id=inspector_interface, action_id='words.select_all') }}
+            {{ action_button(_('Select None'), icon='bi-square', onclick='selectNone()', interface_id=inspector_interface, action_id='words.select_none') }}
         {% endcall %}
         {% call action_group(_('Bulk Actions:')) %}
             {{ selection_summary(total_words|default(0), _('words'), _('word')) }}
             {{ bulk_action_button(_('Edit Selected'), icon='bi-pencil', onclick='bulkUpdate()',
-                 tone='outline-warning', id='bulkUpdateBtn', noun=_('words')) }}
+                 tone='outline-warning', id='bulkUpdateBtn', noun=_('words'),
+                 interface_id=inspector_interface, action_id='words.edit_selected') }}
             {{ bulk_action_button(_('Delete Selected'), icon='bi-trash', onclick='bulkDelete()',
-                 tone='outline-danger', id='bulkDeleteBtn', noun=_('words')) }}
+                 tone='outline-danger', id='bulkDeleteBtn', noun=_('words'),
+                 interface_id=inspector_interface, action_id='words.delete_selected') }}
         {% endcall %}
     {% endcall %}
 </div>

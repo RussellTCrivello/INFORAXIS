@@ -45,8 +45,10 @@
 
 {%- macro record_header(record_id, title, eyebrow=None, subtitle=None,
                         status=None, metadata=(), icon='bi-record-circle',
-                        actions=None) -%}
-<header class="record-header" {% if record_id %}id="{{ record_id }}"{% endif %}>
+                        actions=None, interface_id=None) -%}
+<header class="record-header" {% if record_id %}id="{{ record_id }}"{% endif %}
+        data-inspector-component="record_header" data-inspector-role="record_header"{% if interface_id %}
+        data-inspector-interface="{{ interface_id }}"{% endif %}>
     <div class="record-header-main">
         <div class="record-header-identity">
             {% if eyebrow %}

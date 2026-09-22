@@ -116,6 +116,7 @@ Read from the `{# component: … #}` declaration at the top of each file in `tem
 | `pagination_cursor` | `templates/components/cursor_pagination.html` | `normal`, `filtered` | `cursor_pagination` | Moving through a list that has no page numbers - only "next" and "back" - and saying honestly what is known about how much is left. |
 | `record_actions` | `templates/components/record_actions.html` | `normal`, `loading`, `success`, `error`, `unauthorized` | `record_action_button`, `record_action_surface` | The actions a single record offers. The buttons come from the Action Definition layer - id, label, icon, scope, destructiveness, confirmation key - joined with the screen's own bindings by core/experience/presentation.py, so a page cannot invent an action and two pages cannot render one action two ways. |
 | `record_header` | `templates/components/record_header.html` | `normal`, `empty`, `loading`, `unavailable`, `archived` | `record_header` | The top of a record: what this record is, what state it is in, and the one action that matters most. The same header for a file, a source, a side, a category, an analysis or a report - it knows nothing about what kind of record it is describing. |
+| `screen_inspector` | `templates/components/screen_inspector.html` | `normal`, `loading`, `empty`, `error`, `unavailable` | `inspector_field`, `screen_inspector` | The panel that answers what an element on this screen is: which interface owns it, which component renders it, which action it presents, what scope and permission metadata that action declares, where it is bound, and what it currently is. A diagnostic tool for a developer or an operator, not a configuration editor. |
 | `search_input` | `templates/components/search_input.html` | `normal`, `loading`, `filtered`, `unavailable` | `search_input` | The one search box: label, icon, placeholder, value, clear action, a place for the loading state, and the ARIA that makes it a search box rather than an empty text field. |
 | `sidebar_nav` | `templates/components/sidebar_nav.html` | `normal`, `empty` | — | The product navigation, grouped by domain, rendered from the navigation model the application prepares. |
 | `states` | `templates/components/states.html` | `loading`, `empty`, `filtered`, `success`, `warning`, `error`, `unauthorized`, `unavailable`, `archived` | `state_panel`, `empty_state`, `filtered_state`, `loading_state`, `success_state`, `warning_state`, `error_state`, `unauthorized_state`, `unavailable_state`, `archived_state` | The states a region can be in, in one place, so a page never invents its own wording for "nothing here yet" or its own markup for "this failed". |
@@ -129,18 +130,18 @@ Every state in the vocabulary is answered by at least one component; a state nob
 
 | State | Meaning | Implemented by |
 | --- | --- | --- |
-| `loading` | Work is in progress; the reader is told what is being waited for. | `action_toolbar`, `operations_widget`, `record_actions`, `record_header`, `search_input`, `states`, `table`, `toast` |
-| `empty` | Nothing exists here yet, and the reader is told how to start. | `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `record_header`, `sidebar_nav`, `states`, `table` |
-| `normal` | The ordinary case: content is present and usable. | `analyst_classify`, `page_data`, `breadcrumbs`, `confirm_dialog`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `record_actions`, `record_header`, `search_input`, `sidebar_nav`, `table`, `pagination` |
+| `loading` | Work is in progress; the reader is told what is being waited for. | `action_toolbar`, `operations_widget`, `record_actions`, `record_header`, `screen_inspector`, `search_input`, `states`, `table`, `toast` |
+| `empty` | Nothing exists here yet, and the reader is told how to start. | `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `record_header`, `screen_inspector`, `sidebar_nav`, `states`, `table` |
+| `normal` | The ordinary case: content is present and usable. | `analyst_classify`, `page_data`, `breadcrumbs`, `confirm_dialog`, `pagination_cursor`, `file_nav`, `filter_bar`, `operations_widget`, `page_tips`, `record_actions`, `record_header`, `screen_inspector`, `search_input`, `sidebar_nav`, `table`, `pagination` |
 | `filtered` | Something exists, but not under the filters applied. | `pagination_cursor`, `filter_bar`, `search_input`, `states`, `table`, `pagination` |
 | `selected` | A row or record is chosen; actions that need a choice appear. | `action_toolbar`, `table` |
 | `editing` | A value is being changed, and the change is not saved yet. | `analyst_classify` |
 | `saving` | A change is on its way to the server. | `analyst_classify`, `confirm_dialog` |
 | `success` | The last action worked. | `analyst_classify`, `record_actions`, `states`, `status_badge`, `toast` |
 | `warning` | Something needs attention but is not broken. | `states`, `status_badge`, `toast` |
-| `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `confirm_dialog`, `operations_widget`, `record_actions`, `states`, `status_badge`, `table`, `toast` |
+| `error` | Something failed, with a next step rather than a stack trace. | `analyst_classify`, `confirm_dialog`, `operations_widget`, `record_actions`, `screen_inspector`, `states`, `status_badge`, `table`, `toast` |
 | `unauthorized` | The server refused this for this account. | `analyst_classify`, `confirm_dialog`, `record_actions`, `states` |
-| `unavailable` | It needs something this installation does not have. | `record_header`, `search_input`, `states`, `status_badge`, `toast` |
+| `unavailable` | It needs something this installation does not have. | `record_header`, `screen_inspector`, `search_input`, `states`, `status_badge`, `toast` |
 | `archived` | Kept and readable, but out of the working set. | `record_header`, `states`, `status_badge` |
 
 ### Markup pages still write by hand
@@ -189,8 +190,8 @@ Every class a component renders has exactly one owner. **OWNED** means an INFORA
 
 | Ownership | Classes |
 | --- | --- |
-| OWNED (INFORAXIS) | 67 |
-| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 194 |
+| OWNED (INFORAXIS) | 81 |
+| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 199 |
 | UNKNOWN | 0 |
 
 Third-party stylesheets bundled with the application: `static/css/bootstrap.min.css`, `static/icons/bootstrap-icons.css`.

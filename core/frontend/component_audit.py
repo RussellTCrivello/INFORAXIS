@@ -175,6 +175,11 @@ class Component(NamedTuple):
     classes: List[str]
     notes: str
     macros: List[str]
+    #: The CSS classes the component says it owns but that appear in a
+    #: stylesheet rather than in its own markup footprint - the `css:` line of
+    #: the declaration. A component that declares `css: record-actions` has
+    #: said the class is its own, and the Screen Inspector reads it that way.
+    css: List[str] = []
     #: The presentation states a component accepts, where that differs from
     #: the component-state vocabulary (§63) it is described by. Keeping them
     #: as two fields is what stops "danger" being read as a §63 state.
@@ -220,7 +225,24 @@ def components() -> Dict[str, Component]:
             macros=macros,
             presentation_states=_split(_parse_field(body, "presentation_states")),
         )
+        # `presentation_states` is not part of the tuple's positional order in
+        # every caller, so it is set by replacement rather than position.
+        entry = found[match.group("name")]
+        found[match.group("name")] = entry._replace(
+            css=_split(_parse_field(body, "css")))
     return found
+
+
+def declared_classes(component: Component) -> List[str]:
+    """Every class the component says is its own, from either declaration line."""
+    combined: List[str] = []
+    for name in list(component.classes) + list(component.css):
+        # A `css:` line is prose at the end ("... - defined in static/css/…"),
+        # so the class list is the part before the dash.
+        name = name.split(" - ")[0].strip()
+        if name and name not in combined:
+            combined.append(name)
+    return combined
 
 
 #: The words a hand-written badge shows when it is showing a status. Taken from

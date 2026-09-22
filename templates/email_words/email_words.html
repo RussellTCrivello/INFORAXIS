@@ -128,7 +128,7 @@
            new toolbar capability, the honest outcome would have been to write
            the missing semantic down rather than grow the component.
         -#}
-        {% call action_toolbar(id='emailWordsActionBar', label=_('Actions')) %}
+        {% call action_toolbar(id='emailWordsActionBar', label=_('Actions'), interface_id=inspector_interface) %}
             {% call action_group(_('Actions') ~ ':') %}
                 {{ action_button(_('Apply Filters'), icon='bi-funnel', submit=True, tone='primary') }}
                 {{ action_button(_('Reset'), icon='bi-arrow-counterclockwise',

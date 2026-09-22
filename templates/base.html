@@ -215,6 +215,14 @@
         toast. The page supplies what each action does; this supplies how it
         is asked for, and nothing else. -#}
     <script src="{{ url_for('static', filename='js/modules/core/record-actions.js') }}?v=20260922a" defer></script>
+    {#- The Screen Inspector: a read-only panel that says which registry entry,
+        component, action and binding owns an element. Rendered and loaded only
+        when the installation switched it on and this account may use it; the
+        endpoint it reads is guarded on its own, because a hidden tool is not a
+        secured one. -#}
+    {% if inspector_enabled %}
+    <script src="{{ url_for('static', filename='js/modules/core/screen-inspector.js') }}?v=20260923a" defer></script>
+    {% endif %}
 </head>
 
 <body data-page-type="{% block page_type %}default{% endblock %}"
@@ -555,6 +563,22 @@
     <!-- Global Modal Fix - Ensures proper modal behavior and interaction -->
     <script type="module" src="{{ url_for('static', filename='js/modules/core/modal-fix.js') }}" defer></script>
     
+    {#- The Screen Inspector, when the installation turned it on for an account
+        that may use it. -#}
+    {% if inspector_enabled %}
+    {% from 'components/screen_inspector.html' import screen_inspector %}
+    {{ screen_inspector(enabled=True, interface_id=inspector_interface) }}
+    <script type="module">
+        // Deferred scripts run before DOMContentLoaded, so the runtime is there;
+        // `init()` is idempotent, which is what lets a page module call it too.
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.ScreenInspector) {
+                window.ScreenInspector.init();
+            }
+        });
+    </script>
+    {% endif %}
+
     {#- One live region for the whole application: an action that finished
         says so in one place, whatever page it happened on. -#}
     {% from 'components/toast.html' import toast_region %}

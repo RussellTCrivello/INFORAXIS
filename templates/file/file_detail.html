@@ -79,8 +79,10 @@
                             {'label': _('Source'), 'value': file[9] if file|length > 9 else _('Unknown')},
                             {'label': _('Side'), 'value': file[10] if file|length > 10 else _('Unknown')},
                         ],
+                        interface_id=inspector_interface,
                         actions=record_action_surface(
                             record_actions, surface_id='fileRecordActions',
+                            interface_id=inspector_interface,
                             label=_('Actions for this file'))) }}
                     {#
                        Full screen and print are viewer controls, not record

@@ -43,11 +43,18 @@
        });
 #}
 
-{% macro action_toolbar(extra_class=None, label=None, id=None) %}
+{% macro action_toolbar(extra_class=None, label=None, id=None, interface_id=None) %}
+{#- `interface_id` is diagnostic metadata, and only that: which screen this bar
+    belongs to, so the Screen Inspector can trace a control back to the registry
+    it came from. It decides nothing, no runtime reads it, and a page that omits
+    it gets exactly the bar it got before. -#}
 <div class="action-bar{{ ' ' ~ extra_class if extra_class }}" role="toolbar"
      {% if id %}id="{{ id }}"{% endif %}
      {% if label %}aria-label="{{ label }}"{% endif %}
      data-action-toolbar data-selected-count="0"
+     data-inspector-component="action_toolbar"{% if interface_id %}
+
+     data-inspector-interface="{{ interface_id }}"{% endif %}
      data-text-select-first="{{ _('Select {noun} first') }}"
      data-text-selected="{{ _('{count} {noun} selected') }}"
      data-text-all-selected="{{ _('{count} of {total} {noun} selected') }}">
@@ -69,7 +76,8 @@
 {% macro action_button(label, icon=None, onclick=None, href=None, tone=None,
                        id=None, disabled=False, disabled_reason=None,
                        loading=False, submit=False, title=None,
-                       extra_class=None, bulk=False, noun=None) %}
+                       extra_class=None, bulk=False, noun=None,
+                       interface_id=None, action_id=None) %}
 {#- A single action. The page owns what it does; this renders how it is
     invoked - a handler, a link, or the form it sits in. -#}
 {%- set class_name = 'btn-action' ~ (' btn-' ~ tone if tone) ~ (' ' ~ extra_class if extra_class) -%}
@@ -83,6 +91,9 @@
 {%- else -%}
     {%- set accessible_name = title or label -%}
 {%- endif -%}
+{#- The action this control presents, in the registry's own vocabulary. The page
+    supplies it: the component renders actions, it does not discover them. -#}
+{%- set inspector -%}{% if interface_id %} data-inspector-interface="{{ interface_id }}"{% endif %}{% if action_id %} data-inspector-action="{{ action_id }}"{% endif %}{% if action_id or interface_id %} data-inspector-component="action_toolbar" data-inspector-role="control"{% endif %}{% endset -%}
 {%- set body -%}
 {%- if loading %}<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>{% endif -%}
 {%- if icon and not loading %}<i class="bi {{ icon }}" aria-hidden="true"></i> {% endif -%}
@@ -91,14 +102,14 @@
 {%- if href and not disabled -%}
 <a class="{{ class_name }}" href="{{ href }}"
    {% if id %}id="{{ id }}"{% endif %}
-   {% if bulk %}data-bulk-action data-action-label="{{ label }}"{% endif %}
+   {% if bulk %}data-bulk-action data-action-label="{{ label }}"{% endif %}{{ inspector }}
    aria-label="{{ accessible_name }}" title="{{ hint }}">
     {{ body }}
 </a>
 {%- else -%}
 <button type="{{ 'submit' if submit else 'button' }}" class="{{ class_name }}"
         {% if id %}id="{{ id }}"{% endif %}
-        {% if onclick and not disabled %}onclick="{{ onclick }}"{% endif %}
+        {% if onclick and not disabled %}onclick="{{ onclick }}"{% endif %}{{ inspector }}
         {% if loading %}aria-busy="true"{% endif %}
         {% if disabled %}disabled aria-disabled="true"{% endif %}
         {% if bulk %}data-bulk-action data-action-label="{{ label }}"{% endif %}
@@ -111,13 +122,15 @@
 
 
 {% macro bulk_action_button(label, icon=None, onclick=None, tone=None,
-                            id=None, extra_class=None, noun=None) %}
+                            id=None, extra_class=None, noun=None,
+                            interface_id=None, action_id=None) %}
 {#- An action that affects the selection. It renders the state that is known
     at render time - nothing is selected - and the runtime takes it from
     there. There is no `scope` argument: the runtime owns scope, and one
     thing must have one owner. -#}
 {{ action_button(label, icon=icon, tone=tone, id=id, disabled=True,
-                 extra_class=extra_class, bulk=True, noun=noun) }}
+                 extra_class=extra_class, bulk=True, noun=noun,
+                 interface_id=interface_id, action_id=action_id) }}
 {% endmacro %}
 
 
