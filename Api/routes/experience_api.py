@@ -83,6 +83,81 @@ def register_experience_routes(app) -> None:
                 hardcoded_source_strings(interface_id)),
         })
 
+    @app.route("/api/experience/actions", methods=["GET"])
+    def experience_actions():
+        """The Action Registry, as data.
+
+        The catalog behind the Action Toolbar, the Record Action Surface and
+        the Screen Inspector. It reports what each action declares - scope,
+        permission, confirmation, the operation that owns it - and counts what
+        is still missing (an action shown on a screen that no service owns yet).
+        Reading it is safe; nothing here performs an action, and no route here
+        can: an execution reference is an opaque name, never a URL.
+        """
+        from core.experience.action_registry import counts, to_json
+
+        interface_id = request.args.get("interface")
+        scope = request.args.get("scope")
+        items = to_json()
+        if interface_id:
+            items = [item for item in items if interface_id in item["interfaces"]]
+        if scope:
+            items = [item for item in items if item["scope"] == scope]
+        limit = min(int(request.args.get("limit", DEFAULT_LIMIT)), 500)
+        return jsonify({
+            "success": True,
+            "counts": counts(),
+            "total": len(items),
+            "returned": min(len(items), limit),
+            "truncated": len(items) > limit,
+            "actions": items[:limit],
+        })
+
+    @app.route("/api/experience/actions/<action_id>", methods=["GET"])
+    def experience_action(action_id: str):
+        """One action, or a clear answer that nothing registers it."""
+        from core.experience.action_registry import action
+
+        item = action(action_id)
+        if item is None:
+            return jsonify({
+                "success": False,
+                "error": "No action is registered with that id",
+                "action_id": action_id,
+            }), 404
+        return jsonify({"success": True, "action": item.to_dict()})
+
+    @app.route("/api/experience/permissions", methods=["GET"])
+    def experience_permissions():
+        """The permission vocabulary, with the actions that name each one.
+
+        A vocabulary, not an authority: the server authorises every request
+        itself, and this endpoint only reports which domain an action belongs
+        to so an administrator can read the catalog.
+        """
+        from core.experience.action_registry import registered
+        from core.experience.permissions import ACTION_PERMISSIONS, PERMISSION_NOTES
+
+        used = {}
+        for item in registered():
+            used.setdefault(item.permission, []).append(item.action_id)
+        return jsonify({
+            "success": True,
+            "note": ("Names for visibility only. The server authorises every "
+                     "request independently; naming a permission grants "
+                     "nothing."),
+            "permissions": [
+                {"permission": name, "description": PERMISSION_NOTES.get(name, ""),
+                 "actions": sorted(used.get(name, []))}
+                for name in ACTION_PERMISSIONS],
+            # Declared for actions the catalog does not carry yet (the
+            # taxonomy, search and export families). Reported rather than
+            # hidden, because a vocabulary that silently runs ahead of the
+            # product is how a permission ends up meaning two things.
+            "reserved": sorted(name for name in ACTION_PERMISSIONS
+                               if name not in used),
+        })
+
     @app.route("/api/experience/coverage", methods=["GET"])
     def experience_coverage():
         """Translation coverage, per language and per screen."""
