@@ -66,22 +66,27 @@ def seeded_files(pg_db):
             )
             source_id = cur.fetchone()[0]
             cur.execute(
-                "INSERT INTO hashs (hash, side_id, source_id)"
-                " VALUES (%s, %s, %s) RETURNING id",
-                (f"analyst-test-hash-alpha-{_UNIQUE}", side_id, source_id),
+                "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                (f"analyst-test-hash-alpha-{_UNIQUE}",),
             )
             hash_id = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                " VALUES (%s, %s, %s) RETURNING id",
+                (hash_id, source_id, side_id),
+            )
+            context_id = cur.fetchone()[0]
 
             path_ids = {}
             for name in (_ALPHA, _BETA):
                 cur.execute(
                     """
                     INSERT INTO paths (file_name, file_path, file_size, file_type,
-                                       file_status, file_date, date_creation, hash_id)
+                                       file_status, file_date, date_creation, context_id)
                     VALUES (%s, %s, 100, 'txt', 'Read', CURRENT_DATE, CURRENT_DATE, %s)
                     RETURNING id
                     """,
-                    (name, f"/analyst-test/{name}", hash_id),
+                    (name, f"/analyst-test/{name}", context_id),
                 )
                 path_ids[name] = cur.fetchone()[0]
 
@@ -98,9 +103,9 @@ def seeded_files(pg_db):
                 (word_id, smart_category_id),
             )
             cur.execute(
-                "INSERT INTO words_paths (path_id, word_id, word_count, position_indexer)"
+                "INSERT INTO words_hashs (hash_id, word_id, word_count, position_indexer)"
                 " VALUES (%s, %s, 1, ''::bytea)",
-                (path_ids[_ALPHA], word_id),
+                (hash_id, word_id),
             )
         conn.commit()
     finally:
@@ -298,7 +303,11 @@ def test_analyst_assignment_never_touches_smart_taxonomy(admin_client, app, pg_d
                 cur.execute("SELECT COUNT(*) FROM words_categorys")
                 wcs = cur.fetchone()[0]
                 cur.execute(
-                    "SELECT COUNT(*) FROM words_paths WHERE path_id = %s",
+                    "SELECT COUNT(*) FROM words_hashs"
+                    " WHERE hash_id = ("
+                    "   SELECT c.hash_id FROM paths p"
+                    "   JOIN hash_contexts c ON c.id = p.context_id"
+                    "   WHERE p.id = %s)",
                     (seeded_files["alpha_id"],),
                 )
                 wp = cur.fetchone()[0]

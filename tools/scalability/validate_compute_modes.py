@@ -208,25 +208,31 @@ def _read_fingerprints(pgdata: Path) -> dict:
         cur = conn.cursor()
         cur.execute("""
             SELECT p.file_path, h.hash, p.file_type, p.file_status,
-                   (SELECT count(*) FROM contents x WHERE x.path_id = p.id),
-                   (SELECT count(*) FROM contents_raw cr0 WHERE cr0.path_id = p.id),
-                   (SELECT count(*) FROM words_paths wp WHERE wp.path_id = p.id),
-                   (SELECT count(*) FROM titles_content t WHERE t.path_id = p.id),
+                   (SELECT count(*) FROM contents x
+                      WHERE x.hash_id = (SELECT hc2.hash_id FROM hash_contexts hc2 WHERE hc2.id = p.context_id)),
+                   (SELECT count(*) FROM contents_raw cr0
+                      WHERE cr0.hash_id = (SELECT hc2.hash_id FROM hash_contexts hc2 WHERE hc2.id = p.context_id)),
+                   (SELECT count(*) FROM words_hashs wp
+                      WHERE wp.hash_id = (SELECT hc2.hash_id FROM hash_contexts hc2 WHERE hc2.id = p.context_id)),
+                   (SELECT count(*) FROM titles_content t
+                      WHERE t.hash_id = (SELECT hc2.hash_id FROM hash_contexts hc2 WHERE hc2.id = p.context_id)),
                    (SELECT COALESCE(sum(cr.char_count), 0)
-                      FROM contents_raw cr WHERE cr.path_id = p.id),
+                      FROM contents_raw cr
+                      WHERE cr.hash_id = (SELECT hc2.hash_id FROM hash_contexts hc2 WHERE hc2.id = p.context_id)),
                    (SELECT md5(string_agg(cr2.content, chr(10) ORDER BY cr2.chunk_seq))
-                      FROM contents_raw cr2 WHERE cr2.path_id = p.id),
+                      FROM contents_raw cr2
+                      WHERE cr2.hash_id = (SELECT hc2.hash_id FROM hash_contexts hc2 WHERE hc2.id = p.context_id)),
                    -- Sorted by word *value*: the multiset is the evidence, the
                    -- insertion-ordered word ids are an implementation detail.
                    (SELECT md5(string_agg(w.word, ',' ORDER BY w.word))
-                      FROM words_paths wp JOIN words w ON w.id = wp.word_id
-                     WHERE wp.path_id = p.id),
+                      FROM words_hashs wp JOIN words w ON w.id = wp.word_id
+                     WHERE wp.hash_id = (SELECT hc2.hash_id FROM hash_contexts hc2 WHERE hc2.id = p.context_id)),
                    -- titles_content.title_data is bytea and, like
                    -- content_data, keyed by word ids; it is compared by row
                    -- count, not by bytes.
                    NULL
               FROM paths p
-              JOIN hashs h ON h.id = p.hash_id
+              JOIN hash_contexts hc ON hc.id = p.context_id JOIN hashs h ON h.id = hc.hash_id
              ORDER BY p.file_path
         """)
         fingerprints = {}

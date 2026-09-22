@@ -55,22 +55,32 @@ class KeywordQueries(BaseQueries):
 
     @staticmethod
     def get_keywords_by_file() -> str:
-        """Get keywords in a file"""
+        """Get keywords in a file (file resolved to canonical content)"""
         return """
             SELECT k.id, k.keyword, k.category_id, kp.word_count
             FROM keywords k
-            JOIN keywords_paths kp ON k.id = kp.keyword_id
-            WHERE kp.path_id = %s
+            JOIN keywords_hashs kp ON k.id = kp.keyword_id
+            WHERE kp.hash_id = (
+                SELECT c.hash_id
+                FROM paths p
+                JOIN hash_contexts c ON c.id = p.context_id
+                WHERE p.id = %s
+            )
             ORDER BY kp.word_count DESC
         """
     @staticmethod
     def get_keyword_frequencies() -> str:
-        """Get keyword frequencies for a file"""
+        """Get keyword frequencies for a file (file resolved to canonical content)"""
         return """
             SELECT k.keyword, kp.word_count
-            FROM keywords_paths kp
+            FROM keywords_hashs kp
             JOIN keywords k ON kp.keyword_id = k.id
-            WHERE kp.path_id = %s
+            WHERE kp.hash_id = (
+                SELECT c.hash_id
+                FROM paths p
+                JOIN hash_contexts c ON c.id = p.context_id
+                WHERE p.id = %s
+            )
             ORDER BY kp.word_count DESC
             LIMIT %s
         """
@@ -97,8 +107,8 @@ class KeywordQueries(BaseQueries):
     
     @staticmethod
     def delete_keyword_paths() -> str:
-        """Delete keyword-path associations"""
-        return "DELETE FROM keywords_paths WHERE keyword_id = %s"
+        """Delete keyword-content associations"""
+        return "DELETE FROM keywords_hashs WHERE keyword_id = %s"
     
     @staticmethod
     def get_all_keywords() -> str:
@@ -107,16 +117,18 @@ class KeywordQueries(BaseQueries):
     
     @staticmethod
     def get_keywords_with_usage() -> str:
-        """Get keywords with usage counts"""
+        """Get keywords with usage counts (usage = stored files)"""
         return """
             SELECT 
                 k.id, 
                 k.keyword,
                 k.category_id,
-                COALESCE(COUNT(kp.path_id), 0) as usage_count,
+                COALESCE(COUNT(DISTINCT p.id), 0) as usage_count,
                 w.word as category_name
             FROM keywords k
-            LEFT JOIN keywords_paths kp ON k.id = kp.keyword_id
+            LEFT JOIN keywords_hashs kp ON k.id = kp.keyword_id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = kp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             LEFT JOIN categorys c ON k.category_id = c.id
             LEFT JOIN words w ON c.word_id = w.id
             WHERE %s IS NULL OR w.word ILIKE %s

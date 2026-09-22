@@ -1,6 +1,6 @@
 """Unit: keyword phrase matching must stay equivalent to the naive scan.
 
-``ContentDBService.process_keywords_for_path`` and
+``ContentDBService.process_keywords_for_content`` and
 ``refresh_keyword_associations`` used to rescan the whole document for every
 keyword (O(document x keywords)), which showed up as CPU saturation during
 large ingests.  The replacement indexes positions by the pattern's first id;

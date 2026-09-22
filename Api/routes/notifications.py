@@ -601,7 +601,8 @@ def register_notification_routes(app):
                     COUNT(DISTINCT p.id) as file_count,
                     MIN(p.id) as primary_file_id
                 FROM hashs h
-                INNER JOIN paths p ON p.hash_id = h.id
+                JOIN hash_contexts hc ON hc.hash_id = h.id
+                JOIN paths p ON p.context_id = hc.id
                 GROUP BY h.hash
                 HAVING COUNT(DISTINCT p.id) > 1
                 ORDER BY file_count DESC
@@ -618,7 +619,7 @@ def register_notification_routes(app):
                 files_query = """
                     SELECT p.id, p.file_name, p.file_path
                     FROM paths p
-                    INNER JOIN hashs h ON p.hash_id = h.id
+                    INNER JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
                     WHERE h.hash = %s
                     ORDER BY p.id ASC
                 """

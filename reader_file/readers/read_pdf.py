@@ -540,12 +540,15 @@ class PDFFileReader(BaseReader):
                 ocr_available = (bool(pytesseract) and _is_tesseract_available()) \
                     or get_ocr_engine() is not None
                 if not ocr_available:
-                    # This is a retryable dependency failure, not a completed
-                    # extraction. Native text pages are still retained below.
+                    # The missing backend is a visible caveat, recorded on the
+                    # document (and per page) as ``ocr_status``. It must NOT
+                    # fail the document up front: whether any content was
+                    # actually lost is decided after the page loop, from the
+                    # pages that could not be read at all (see the
+                    # ``unavailable_pages`` block below). A PDF whose pages all
+                    # carry native text is a completed extraction whether or
+                    # not an OCR backend exists.
                     result["ocr_status"] = "ocr_required_engine_unavailable"
-                    result["extraction_failed"] = True
-                    result["retryable"] = True
-                    result["error"] = "OCR is required for image pages but no OCR engine is available"
                     logger.error(
                         "OCR required but no engine is available for %s; native text layers will be preserved",
                         filepath.name,

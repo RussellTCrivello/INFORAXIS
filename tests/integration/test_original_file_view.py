@@ -86,17 +86,21 @@ def originals(pg_db, tmp_path_factory):
                 " SET name = EXCLUDED.name RETURNING id", (f"{tag}_src", today))
             source_id = cur.fetchone()[0]
             cur.execute(
-                "INSERT INTO hashs (hash, side_id, source_id) VALUES (%s, %s, %s)"
-                " RETURNING id",
-                (hashlib.sha256(tag.encode()).hexdigest(), side_id, source_id))
+                "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                (hashlib.sha256(tag.encode()).hexdigest(),))
             hash_id = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                " VALUES (%s, %s, %s) RETURNING id",
+                (hash_id, source_id, side_id))
+            context_id = cur.fetchone()[0]
 
             def add_path(name, path_value, size):
                 cur.execute(
                     "INSERT INTO paths (file_name, file_path, file_size, file_type,"
-                    " file_status, file_date, date_creation, hash_id)"
+                    " file_status, file_date, date_creation, context_id)"
                     " VALUES (%s, %s, %s, 'FILE', 'Read', %s, %s, %s) RETURNING id",
-                    (name, str(path_value), size, today, today, hash_id))
+                    (name, str(path_value), size, today, today, context_id))
                 return cur.fetchone()[0]
 
             for key, (path, name, blob) in written.items():
@@ -109,10 +113,10 @@ def originals(pg_db, tmp_path_factory):
             # it produced, so the two sides of the comparison both exist.
             extracted = written["plain"][2].decode("utf-8")
             cur.execute(
-                "INSERT INTO contents_raw (path_id, chunk_seq, content, char_count)"
-                " VALUES (%s, 0, %s, %s) ON CONFLICT (path_id, chunk_seq)"
+                "INSERT INTO contents_raw (hash_id, chunk_seq, content, char_count)"
+                " VALUES (%s, 0, %s, %s) ON CONFLICT (hash_id, chunk_seq)"
                 " DO UPDATE SET content = EXCLUDED.content",
-                (ids["plain"], extracted, len(extracted)))
+                (hash_id, extracted, len(extracted)))
     finally:
         conn.commit()
         conn.close()

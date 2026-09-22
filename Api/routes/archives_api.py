@@ -10,6 +10,7 @@ from Api.utils import (
     count_relation_duplicates,
     relation_duplicates_sql,
 )
+from Api.routes.archives import TC_COUNT, TC_EXISTS, TC_NAME_SUBQ, TC_PATH_SUBQ
 from Api.utils.title_similarity import group_similar_titles, find_similar_titles
 from core.sql_safety import validate_identifier, IdentifierError
 import json
@@ -78,19 +79,20 @@ def get_file_filter_conditions():
     if category_id:
         conditions.append("""
             EXISTS (
-                SELECT 1 FROM words_paths wp2 
-                JOIN words_categorys wc ON wp2.word_id = wc.word_id 
-                WHERE wp2.path_id = p.id AND wc.category_id = %s
+                SELECT 1 FROM words_hashs wp2
+                JOIN words_categorys wc ON wp2.word_id = wc.word_id
+                WHERE wp2.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = p.id)
+                AND wc.category_id = %s
             )
         """)
         params.append(category_id)
     
     if source_id:
-        conditions.append("h.source_id = %s")
+        conditions.append("hc.source_id = %s")
         params.append(source_id)
     
     if side_id:
-        conditions.append("h.side_id = %s")
+        conditions.append("hc.side_id = %s")
         params.append(side_id)
     
     return conditions, params
@@ -128,10 +130,10 @@ def api_archives_categories():
             file_count_params = []
             
             if source_id:
-                file_count_where_parts.append("h.source_id = %s")
+                file_count_where_parts.append("hc.source_id = %s")
                 file_count_params.append(source_id)
             if side_id:
-                file_count_where_parts.append("h.side_id = %s")
+                file_count_where_parts.append("hc.side_id = %s")
                 file_count_params.append(side_id)
             if date_from:
                 file_count_where_parts.append("p.file_date >= %s")
@@ -143,19 +145,19 @@ def api_archives_categories():
             file_count_where = "WHERE " + " AND ".join(file_count_where_parts) if file_count_where_parts else ""
             
             file_count_subquery = f"""
-                SELECT wc.category_id, COUNT(DISTINCT wp.path_id) as file_count 
+                SELECT wc.category_id, COUNT(DISTINCT p.id) as file_count 
                 FROM words_categorys wc 
-                LEFT JOIN words_paths wp ON wc.word_id = wp.word_id
-                LEFT JOIN paths p ON wp.path_id = p.id
-                LEFT JOIN hashs h ON p.hash_id = h.id
+                LEFT JOIN words_hashs wp ON wc.word_id = wp.word_id
+                LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id LEFT JOIN paths p ON p.context_id = hc.id
+                
                 {file_count_where}
                 GROUP BY wc.category_id
             """
         else:
             file_count_subquery = """
-                SELECT wc.category_id, COUNT(DISTINCT wp.path_id) as file_count 
+                SELECT wc.category_id, COUNT(DISTINCT p.id) as file_count 
                 FROM words_categorys wc 
-                LEFT JOIN words_paths wp ON wc.word_id = wp.word_id
+                LEFT JOIN words_hashs wp ON wc.word_id = wp.word_id
                 GROUP BY wc.category_id
             """
             file_count_params = []
@@ -227,18 +229,18 @@ def api_archives_categories():
             batch_count_query = f"""
                 SELECT wc.category_id, COUNT(DISTINCT p.id) as file_count
                 FROM words_categorys wc
-                JOIN words_paths wp ON wc.word_id = wp.word_id
-                JOIN paths p ON wp.path_id = p.id
-                LEFT JOIN hashs h ON p.hash_id = h.id
+                JOIN words_hashs wp ON wc.word_id = wp.word_id
+                JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
+                
                 WHERE wc.category_id IN ({placeholders})
             """
             count_params = list(category_ids)
             
             if source_id:
-                batch_count_query += " AND h.source_id = %s"
+                batch_count_query += " AND hc.source_id = %s"
                 count_params.append(source_id)
             if side_id:
-                batch_count_query += " AND h.side_id = %s"
+                batch_count_query += " AND hc.side_id = %s"
                 count_params.append(side_id)
             if date_from:
                 batch_count_query += " AND p.file_date >= %s"
@@ -275,18 +277,18 @@ def api_archives_categories():
                     count_query = """
                         SELECT COUNT(DISTINCT p.id)
                         FROM words_categorys wc
-                        JOIN words_paths wp ON wc.word_id = wp.word_id
-                        JOIN paths p ON wp.path_id = p.id
-                        LEFT JOIN hashs h ON p.hash_id = h.id
+                        JOIN words_hashs wp ON wc.word_id = wp.word_id
+                        JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
+                        
                         WHERE wc.category_id = %s
                     """
                     count_params = [category_id]
                     
                     if source_id:
-                        count_query += " AND h.source_id = %s"
+                        count_query += " AND hc.source_id = %s"
                         count_params.append(source_id)
                     if side_id:
-                        count_query += " AND h.side_id = %s"
+                        count_query += " AND hc.side_id = %s"
                         count_params.append(side_id)
                     if date_from:
                         count_query += " AND p.file_date >= %s"
@@ -342,18 +344,18 @@ def api_archives_categories():
             JOIN words w ON c.word_id = w.id
             WHERE EXISTS (
                 SELECT 1 FROM words_categorys wc
-                JOIN words_paths wp ON wc.word_id = wp.word_id
-                JOIN paths p ON wp.path_id = p.id
-                LEFT JOIN hashs h ON p.hash_id = h.id
+                JOIN words_hashs wp ON wc.word_id = wp.word_id
+                JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
+                
                 WHERE wc.category_id = c.id
         """
         count_params = []
         
         if source_id:
-            count_query += " AND h.source_id = %s"
+            count_query += " AND hc.source_id = %s"
             count_params.append(source_id)
         if side_id:
-            count_query += " AND h.side_id = %s"
+            count_query += " AND hc.side_id = %s"
             count_params.append(side_id)
         if date_from:
             count_query += " AND p.file_date >= %s"
@@ -408,14 +410,14 @@ def api_archives_keywords():
         # Build query with joins for file counts - use INNER JOIN to filter only keywords with files
         # INNER JOIN naturally filters out keywords without any file associations
         joins = [
-            "INNER JOIN keywords_paths kp ON k.id = kp.keyword_id"
+            "INNER JOIN keywords_hashs kp ON k.id = kp.keyword_id"
         ]
         
         select_columns = [
             "k.id",
             "k.category_id",
             "k.keyword",
-            "COUNT(DISTINCT kp.path_id) as file_count"
+            "COUNT(DISTINCT p.id) as file_count"
         ]
         
         filters = {}
@@ -522,7 +524,7 @@ def api_archives_keywords():
         count_query = """
             SELECT COUNT(DISTINCT k.id)
             FROM keywords k
-            INNER JOIN keywords_paths kp ON k.id = kp.keyword_id
+            INNER JOIN keywords_hashs kp ON k.id = kp.keyword_id
         """
         count_params = []
         
@@ -593,18 +595,22 @@ def api_archives_titles():
         sort_by = request.args.get('sort_by', 'id')
         sort_order = request.args.get('sort_order', 'desc').lower()
         
-        # Build query - include file_name as fallback for title
-        joins = [
-            "LEFT JOIN paths p ON tc.path_id = p.id"
-        ]
+        # Build query - include file_name as fallback for title. Titles belong
+        # to canonical content (hash_id); the representative occurrence (first
+        # live path, id order) is exposed for link-compatible DTOs.
+        # NOTE: the subqueries deliberately avoid COUNT()/MIN() - the cursor
+        # paginator's GROUP BY detection scans select_columns for aggregate
+        # tokens and would mangle the grouping otherwise.
+        joins = []
         
         select_columns = [
             "tc.id",
             "tc.title_status",
-            "tc.path_id",
+            f"{TC_PATH_SUBQ} AS path_id",
             "tc.title_data",
-            "p.file_name",
-            "CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END as file_count"
+            "tc.hash_id",
+            f"COALESCE({TC_NAME_SUBQ}, '') AS file_name",
+            f"CASE WHEN {TC_EXISTS} THEN 1 ELSE 0 END AS file_count"
         ]
         
         filters = {'tc.title_status': 'Main'}
@@ -617,7 +623,7 @@ def api_archives_titles():
         _TITLE_SORT_COLUMNS = {
             'id': 'tc.id',
             'title_status': 'tc.title_status',
-            'path_id': 'tc.path_id',
+            'hash_id': 'tc.hash_id',
             'title_data': 'tc.title_data',
             'file_count': 'tc.id',  # calculated field; SQL sorts by id, client re-sorts
         }
@@ -721,6 +727,7 @@ def api_archives_titles():
                 'name_display': title_text[:100],
                 'status': row.get('title_status') or row.get('tc.title_status'),
                 'file_count': row.get('file_count') or 0,
+                'hash_id': row.get('hash_id') or row.get('tc.hash_id'),
                 'path_id': row.get('path_id') or row.get('tc.path_id')
             })
         
@@ -737,7 +744,6 @@ def api_archives_titles():
         count_query = """
             SELECT COUNT(DISTINCT tc.id)
             FROM titles_content tc
-            LEFT JOIN paths p ON tc.path_id = p.id
             WHERE tc.title_status = 'Main'
         """
         count_params = []
@@ -802,17 +808,18 @@ def api_archives_titles_all():
                 'error': 'Limit exceeds maximum of 5000'
             }), 400
         
-        # Build simple query - include file_name
+        # Build simple query - include file_name. Titles belong to canonical
+        # content (hash_id); the representative occurrence (first live path,
+        # id order) is exposed as path_id for link-compatible DTOs.
         query = f"""
             SELECT 
                 tc.id,
                 tc.title_status,
-                tc.path_id,
+                {TC_PATH_SUBQ} AS path_id,
                 tc.title_data,
-                p.file_name,
-                CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END as file_count
+                COALESCE({TC_NAME_SUBQ}, '') AS file_name,
+                {TC_COUNT} AS file_count
             FROM titles_content tc
-            LEFT JOIN paths p ON tc.path_id = p.id
             WHERE tc.title_status = 'Main'
             ORDER BY tc.id DESC
             LIMIT %s
@@ -957,8 +964,8 @@ def api_archives_sources():
         
         # Build query
         joins = [
-            "LEFT JOIN hashs h ON s.id = h.source_id",
-            "LEFT JOIN paths p ON h.id = p.hash_id"
+            "LEFT JOIN hash_contexts hc ON s.id = hc.source_id",
+            "LEFT JOIN paths p ON p.context_id = hc.id"
         ]
         
         select_columns = [
@@ -1012,8 +1019,8 @@ def api_archives_sources():
                 count_query = """
                     SELECT COUNT(DISTINCT p.id)
                     FROM sources s2
-                    JOIN hashs h ON s2.id = h.source_id
-                    JOIN paths p ON h.id = p.hash_id
+                    JOIN hash_contexts hc ON s2.id = hc.source_id
+                    JOIN paths p ON p.context_id = hc.id
                     WHERE s2.id = %s
                 """
                 count_params = [source_id]
@@ -1021,14 +1028,14 @@ def api_archives_sources():
                 if category_id:
                     count_query += """
                         AND EXISTS (
-                            SELECT 1 FROM words_paths wp
+                            SELECT 1 FROM words_hashs wp
                             JOIN words_categorys wc ON wp.word_id = wc.word_id
-                            WHERE wp.path_id = p.id AND wc.category_id = %s
+                            WHERE wp.hash_id = (SELECT hc0.hash_id FROM hash_contexts hc0 WHERE hc0.id = p.context_id) AND wc.category_id = %s
                         )
                     """
                     count_params.append(category_id)
                 if side_id:
-                    count_query += " AND h.side_id = %s"
+                    count_query += " AND hc.side_id = %s"
                     count_params.append(side_id)
                 if date_from:
                     count_query += " AND p.file_date >= %s"
@@ -1077,22 +1084,22 @@ def api_archives_sources():
             FROM sources s
             WHERE EXISTS (
                 SELECT 1 FROM hashs h
-                JOIN paths p ON h.id = p.hash_id
-                WHERE h.source_id = s.id
+                JOIN paths p ON p.context_id = hc.id
+                WHERE hc.source_id = s.id
         """
         count_params = []
         
         if category_id:
             count_query += """
                 AND EXISTS (
-                    SELECT 1 FROM words_paths wp
+                    SELECT 1 FROM words_hashs wp
                     JOIN words_categorys wc ON wp.word_id = wc.word_id
-                    WHERE wp.path_id = p.id AND wc.category_id = %s
+                    WHERE wp.hash_id = (SELECT hc0.hash_id FROM hash_contexts hc0 WHERE hc0.id = p.context_id) AND wc.category_id = %s
                 )
             """
             count_params.append(category_id)
         if side_id:
-            count_query += " AND h.side_id = %s"
+            count_query += " AND hc.side_id = %s"
             count_params.append(side_id)
         if date_from:
             count_query += " AND p.file_date >= %s"
@@ -1150,8 +1157,8 @@ def api_archives_sides():
         
         # Build query
         joins = [
-            "LEFT JOIN hashs h ON si.id = h.side_id",
-            "LEFT JOIN paths p ON h.id = p.hash_id"
+            "LEFT JOIN hash_contexts hc ON si.id = hc.side_id",
+            "LEFT JOIN paths p ON p.context_id = hc.id"
         ]
         
         select_columns = [
@@ -1203,8 +1210,8 @@ def api_archives_sides():
                 count_query = """
                     SELECT COUNT(DISTINCT p.id)
                     FROM sides si2
-                    JOIN hashs h ON si2.id = h.side_id
-                    JOIN paths p ON h.id = p.hash_id
+                    JOIN hash_contexts hc ON si2.id = hc.side_id
+                    JOIN paths p ON p.context_id = hc.id
                     WHERE si2.id = %s
                 """
                 count_params = [side_id]
@@ -1212,14 +1219,14 @@ def api_archives_sides():
                 if category_id:
                     count_query += """
                         AND EXISTS (
-                            SELECT 1 FROM words_paths wp
+                            SELECT 1 FROM words_hashs wp
                             JOIN words_categorys wc ON wp.word_id = wc.word_id
-                            WHERE wp.path_id = p.id AND wc.category_id = %s
+                            WHERE wp.hash_id = (SELECT hc0.hash_id FROM hash_contexts hc0 WHERE hc0.id = p.context_id) AND wc.category_id = %s
                         )
                     """
                     count_params.append(category_id)
                 if source_id:
-                    count_query += " AND h.source_id = %s"
+                    count_query += " AND hc.source_id = %s"
                     count_params.append(source_id)
                 if date_from:
                     count_query += " AND p.file_date >= %s"
@@ -1266,22 +1273,22 @@ def api_archives_sides():
             FROM sides si
             WHERE EXISTS (
                 SELECT 1 FROM hashs h
-                JOIN paths p ON h.id = p.hash_id
-                WHERE h.side_id = si.id
+                JOIN paths p ON p.context_id = hc.id
+                WHERE hc.side_id = si.id
         """
         count_params = []
         
         if category_id:
             count_query += """
                 AND EXISTS (
-                    SELECT 1 FROM words_paths wp
+                    SELECT 1 FROM words_hashs wp
                     JOIN words_categorys wc ON wp.word_id = wc.word_id
-                    WHERE wp.path_id = p.id AND wc.category_id = %s
+                    WHERE wp.hash_id = (SELECT hc0.hash_id FROM hash_contexts hc0 WHERE hc0.id = p.context_id) AND wc.category_id = %s
                 )
             """
             count_params.append(category_id)
         if source_id:
-            count_query += " AND h.source_id = %s"
+            count_query += " AND hc.source_id = %s"
             count_params.append(source_id)
         if date_from:
             count_query += " AND p.file_date >= %s"
@@ -1347,7 +1354,7 @@ def _relation_sort_value(sort_by, row):
         return row[0]
     if sort_by == 'name':
         return row[1]
-    return row[4]
+    return row[3]
 
 
 def _encode_relation_cursor(sort_by, value, row_id):
@@ -1458,8 +1465,8 @@ def api_archives_hashs():
             totals AS (
                 SELECT COUNT(*) AS total_count FROM relations
             )
-            SELECT r.id, r.name, r.side_id, r.source_id, r.file_count,
-                   r.hash_variants, t.total_count
+            SELECT r.id, r.name, r.context_count, r.file_count,
+                   t.total_count
             FROM relations r
             CROSS JOIN totals t
             {where_clause}
@@ -1472,7 +1479,7 @@ def api_archives_hashs():
         has_next = len(rows) > limit
         page_rows = rows[:limit]
         if page_rows:
-            total_estimated = page_rows[0][6] or 0
+            total_estimated = page_rows[0][4] or 0
         else:
             # Empty page (cursor walked off the end): the count still has to
             # describe the section rather than an empty remainder.
@@ -1483,10 +1490,8 @@ def api_archives_hashs():
             relations.append({
                 'id': row[0],
                 'name': row[1] or 'Unknown Hash',
-                'side_id': row[2],
-                'source_id': row[3],
-                'file_count': row[4] or 0,
-                'hash_variants': row[5] or 0,
+                'context_count': row[2] or 0,
+                'file_count': row[3] or 0,
             })
 
         next_cursor = None
@@ -1532,7 +1537,7 @@ def api_archives_addresses():
         # Build query - addresses are stored in words table
         # Use subquery for file_count to avoid GROUP BY issues with cursor pagination
         joins = [
-            "LEFT JOIN (SELECT wp.word_id, COUNT(DISTINCT wp.path_id) as file_count FROM words_paths wp GROUP BY wp.word_id) file_counts ON w.id = file_counts.word_id"
+            "LEFT JOIN (SELECT wp.word_id, COUNT(DISTINCT p.id) as file_count FROM words_hashs wp GROUP BY wp.word_id) file_counts ON w.id = file_counts.word_id"
         ]
         
         select_columns = [
@@ -1611,9 +1616,9 @@ def api_archives_geolocation():
         
         # Build query - files with coordinates
         joins = [
-            "LEFT JOIN hashs h ON p.hash_id = h.id",
-            "LEFT JOIN sources s ON h.source_id = s.id",
-            "LEFT JOIN sides si ON h.side_id = si.id"
+            "LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id",
+            "LEFT JOIN sources s ON hc.source_id = s.id",
+            "LEFT JOIN sides si ON hc.side_id = si.id"
         ]
         
         select_columns = [

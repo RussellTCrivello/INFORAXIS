@@ -79,8 +79,8 @@ def corpus(pg_db, tmp_path_factory):
             cur.execute(
                 "SELECT p.file_name, p.file_status, p.processing_status,"
                 " p.status_detail, p.attempts, p.status_updated_at"
-                " FROM paths p JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id WHERE s.name = %s",
+                " FROM paths p JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id WHERE s.name = %s",
                 (f"{tag}_side",),
             )
             rows = {
@@ -168,8 +168,8 @@ def test_status_is_queryable_for_triage(pg_db, corpus):
             cur.execute(
                 "SELECT processing_status, COUNT(*) FROM paths"
                 " WHERE id IN (SELECT p.id FROM paths p"
-                " JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id"
+                " JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id"
                 " WHERE s.name LIKE %s) GROUP BY processing_status",
                 ("_stat_%_side",),
             )

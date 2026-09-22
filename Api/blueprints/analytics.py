@@ -17,11 +17,11 @@ def build_filter_clause(source_id=None, side_id=None):
     params = []
     
     if source_id:
-        conditions.append("h.source_id = %s")
+        conditions.append("hc.source_id = %s")
         params.append(int(source_id))
     
     if side_id:
-        conditions.append("h.side_id = %s")
+        conditions.append("hc.side_id = %s")
         params.append(int(side_id))
     
     if conditions:
@@ -140,15 +140,15 @@ def api_paths_hierarchical():
                 p.file_status,
                 p.date_creation
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
             WHERE p.file_path IS NOT NULL AND p.file_path != ''
         """
 
         params = []
         if source_filter:
-            query += " AND h.source_id = %s"; params.append(source_filter)
+            query += " AND hc.source_id = %s"; params.append(source_filter)
         if side_filter:
-            query += " AND h.side_id = %s"; params.append(side_filter)
+            query += " AND hc.side_id = %s"; params.append(side_filter)
         if date_from:
             query += " AND p.file_date >= %s"; params.append(date_from)
         if date_to:
@@ -378,8 +378,8 @@ def api_storage_stats():
             SELECT p.id, p.file_name, p.file_type, p.file_size, p.file_path,
                    COALESCE(s.name, 'Unknown') as source_name
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
-            LEFT JOIN sources s ON h.source_id = s.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+            LEFT JOIN sources s ON hc.source_id = s.id
             ORDER BY p.file_size DESC
             LIMIT 20
         """)
@@ -626,9 +626,9 @@ def api_word_frequency():
         limit = min(limit, 200)  # Cap at 200 for performance
         
         word_frequency = db_execute_query("""
-            SELECT w.word, COUNT(DISTINCT wp.path_id) as frequency
+            SELECT w.word, COUNT(DISTINCT wp.hash_id) as frequency
             FROM words w
-            JOIN words_paths wp ON w.id = wp.word_id
+            JOIN words_hashs wp ON w.id = wp.word_id
             GROUP BY w.id, w.word
             ORDER BY frequency DESC
             LIMIT %s
@@ -747,9 +747,9 @@ def api_search_files():
                    COALESCE(s.name, 'Unknown') as source_name,
                    COALESCE(si.name, 'Unknown') as side_name
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
-            LEFT JOIN sources s ON h.source_id = s.id
-            LEFT JOIN sides si ON h.side_id = si.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+            LEFT JOIN sources s ON hc.source_id = s.id
+            LEFT JOIN sides si ON hc.side_id = si.id
             WHERE {where_clause}
             ORDER BY p.date_creation DESC
             LIMIT %s
@@ -791,11 +791,12 @@ def api_content_statistics():
         coverage_stats = db_execute_query("""
             SELECT 
                 COUNT(DISTINCT p.id) as total_files,
-                COUNT(DISTINCT c.path_id) as with_content,
-                COUNT(DISTINCT wp.path_id) as with_words
+                COUNT(DISTINCT CASE WHEN c.id IS NOT NULL THEN p.id END) as with_content,
+                COUNT(DISTINCT CASE WHEN wp.word_id IS NOT NULL THEN p.id END) as with_words
             FROM paths p
-            LEFT JOIN contents c ON p.id = c.path_id
-            LEFT JOIN words_paths wp ON p.id = wp.path_id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id
+            LEFT JOIN contents c ON c.hash_id = hc.hash_id
+            LEFT JOIN words_hashs wp ON wp.hash_id = hc.hash_id
         """, fetch="one")
         
         # Get top categories (limited)
@@ -807,9 +808,11 @@ def api_content_statistics():
         
         # Get top words (limited)
         top_words = db_execute_query("""
-            SELECT w.word, COUNT(DISTINCT wp.path_id) as file_count
+            SELECT w.word, COUNT(DISTINCT p.id) as file_count
             FROM words w
-            JOIN words_paths wp ON w.id = wp.word_id
+            JOIN words_hashs wp ON w.id = wp.word_id
+            JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+            JOIN paths p ON p.context_id = hc.id
             GROUP BY w.id, w.word
             ORDER BY file_count DESC
             LIMIT 30
@@ -881,7 +884,7 @@ def api_path_analytics():
         type_dist = db_execute_query(f"""
             SELECT COALESCE(p.file_type, 'Unknown') as file_type, COUNT(*) as count
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
             WHERE {where_clause}{filter_clause}
             GROUP BY p.file_type
             ORDER BY count DESC
@@ -892,7 +895,7 @@ def api_path_analytics():
         status_dist = db_execute_query(f"""
             SELECT p.file_status, COUNT(*) as count
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
             WHERE {where_clause}{filter_clause}
             AND p.file_status IS NOT NULL
             GROUP BY p.file_status
@@ -903,7 +906,7 @@ def api_path_analytics():
         timeline = db_execute_query(f"""
             SELECT DATE(p.date_creation) as date, COUNT(*) as count
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
             WHERE {where_clause}{filter_clause}
             AND p.date_creation >= CURRENT_DATE - INTERVAL '30 days'
             GROUP BY DATE(p.date_creation)
@@ -974,11 +977,10 @@ def api_path_words():
         params = path_params + filter_params + [limit]
         
         words = db_execute_query(f"""
-            SELECT w.id, w.word, COUNT(DISTINCT wp.path_id) as file_count
+            SELECT w.id, w.word, COUNT(DISTINCT p.id) as file_count
             FROM words w
-            JOIN words_paths wp ON w.id = wp.word_id
-            JOIN paths p ON wp.path_id = p.id
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            JOIN words_hashs wp ON w.id = wp.word_id
+            JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
             WHERE {where_clause}{filter_clause}
             GROUP BY w.id, w.word
             ORDER BY file_count DESC
@@ -1044,9 +1046,9 @@ def api_path_files():
                    COALESCE(s.name, 'Unknown') as source_name,
                    COALESCE(si.name, 'Unknown') as side_name
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
-            LEFT JOIN sources s ON h.source_id = s.id
-            LEFT JOIN sides si ON h.side_id = si.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+            LEFT JOIN sources s ON hc.source_id = s.id
+            LEFT JOIN sides si ON hc.side_id = si.id
             WHERE {where_clause}{filter_clause}
             ORDER BY p.date_creation DESC
             LIMIT %s
@@ -1117,7 +1119,7 @@ def api_path_classifications():
         total_files_result = db_execute_query(f"""
             SELECT COUNT(DISTINCT p.id)
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
             WHERE {where_clause}{filter_clause}
         """, tuple(params), fetch="one")
         total_files = total_files_result if isinstance(total_files_result, int) else (total_files_result[0] if total_files_result and isinstance(total_files_result, tuple) else 0)
@@ -1126,9 +1128,9 @@ def api_path_classifications():
         categorized_result = db_execute_query(f"""
             SELECT COUNT(DISTINCT p.id)
             FROM paths p
-            JOIN keywords_paths kp ON p.id = kp.path_id
+            JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id
             JOIN keywords k ON kp.keyword_id = k.id
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            
             WHERE {where_clause}{filter_clause}
         """, tuple(params), fetch="one")
         categorized_files = categorized_result if isinstance(categorized_result, int) else (categorized_result[0] if categorized_result and isinstance(categorized_result, tuple) else 0)
@@ -1142,11 +1144,11 @@ def api_path_classifications():
                 COUNT(DISTINCT p.id) as file_count,
                 COUNT(DISTINCT kp.keyword_id) as total_keywords
             FROM paths p
-            JOIN keywords_paths kp ON p.id = kp.path_id
+            JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id
             JOIN keywords k ON kp.keyword_id = k.id
             JOIN categorys c ON k.category_id = c.id
             JOIN words w ON c.word_id = w.id
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            
             WHERE {where_clause}{filter_clause}
             GROUP BY c.id, w.word
             ORDER BY file_count DESC
@@ -1228,11 +1230,11 @@ def api_path_category_words_analysis():
                 COUNT(DISTINCT p.id) as file_count,
                 COUNT(DISTINCT wc.word_id) as word_count
             FROM paths p
-            JOIN words_paths wp ON p.id = wp.path_id
+            JOIN words_hashs wp ON wp.hash_id = hc.hash_id
             JOIN words_categorys wc ON wp.word_id = wc.word_id
             JOIN categorys c ON wc.category_id = c.id
             JOIN words w ON c.word_id = w.id
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            
             WHERE {where_clause}{filter_clause}
             GROUP BY c.id, w.word
             ORDER BY file_count DESC
@@ -1242,7 +1244,7 @@ def api_path_category_words_analysis():
         total_files_result = db_execute_query(f"""
             SELECT COUNT(DISTINCT p.id)
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
             WHERE {where_clause}{filter_clause}
         """, tuple(params), fetch="one")
         total_files = total_files_result if isinstance(total_files_result, int) else (total_files_result[0] if total_files_result and isinstance(total_files_result, tuple) else 0)
@@ -1250,9 +1252,9 @@ def api_path_category_words_analysis():
         total_words_result = db_execute_query(f"""
             SELECT COUNT(DISTINCT wc.word_id)
             FROM paths p
-            JOIN words_paths wp ON p.id = wp.path_id
+            JOIN words_hashs wp ON wp.hash_id = hc.hash_id
             JOIN words_categorys wc ON wp.word_id = wc.word_id
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            
             WHERE {where_clause}{filter_clause}
         """, tuple(params), fetch="one")
         total_words = total_words_result if isinstance(total_words_result, int) else (total_words_result[0] if total_words_result and isinstance(total_words_result, tuple) else 0)
@@ -1322,9 +1324,12 @@ def api_path_category_files():
                 FROM paths p
                 WHERE {where_clause}
                 AND NOT EXISTS (
-                    SELECT 1 FROM words_paths wp
+                    SELECT 1 FROM words_hashs wp
                     JOIN words_categorys wc ON wp.word_id = wc.word_id
-                    WHERE wp.path_id = p.id
+                    WHERE wp.hash_id = (
+                        SELECT hc0.hash_id FROM hash_contexts hc0
+                        WHERE hc0.id = p.context_id
+                    )
                 )
                 ORDER BY p.date_creation DESC
                 LIMIT %s
@@ -1338,7 +1343,8 @@ def api_path_category_files():
                 SELECT DISTINCT p.id, p.file_name, p.file_type, p.file_size, 
                        p.file_date, p.file_status, p.date_creation
                 FROM paths p
-                JOIN keywords_paths kp ON p.id = kp.path_id
+                JOIN hash_contexts hc ON hc.id = p.context_id
+                JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id
                 JOIN keywords k ON kp.keyword_id = k.id
                 JOIN categorys c ON k.category_id = c.id
                 JOIN words w ON c.word_id = w.id
@@ -1355,11 +1361,11 @@ def api_path_category_files():
             # Get keywords for this file that belong to the selected category
             keywords = db_execute_query("""
                 SELECT k.id, kp.word_count
-                FROM keywords_paths kp
+                FROM keywords_hashs kp
                 JOIN keywords k ON kp.keyword_id = k.id
                 JOIN categorys c ON k.category_id = c.id
                 JOIN words w ON c.word_id = w.id
-                WHERE kp.path_id = %s
+                WHERE kp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)
                 AND w.word = %s
                 ORDER BY kp.word_count DESC
                 LIMIT 10
@@ -1431,11 +1437,11 @@ def api_path_category_words_detail():
         params = [category_id] + path_params + [limit]
         
         words = db_execute_query(f"""
-            SELECT DISTINCT w.id, w.word, COUNT(DISTINCT wp.path_id) as file_count
+            SELECT DISTINCT w.id, w.word, COUNT(DISTINCT p.id) as file_count
             FROM words w
             JOIN words_categorys wc ON w.id = wc.word_id
-            JOIN words_paths wp ON w.id = wp.word_id
-            JOIN paths p ON wp.path_id = p.id
+            JOIN words_hashs wp ON w.id = wp.word_id
+            JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
             WHERE wc.category_id = %s
             AND {where_clause}
             GROUP BY w.id, w.word
@@ -1490,7 +1496,8 @@ def api_path_word_files():
                    p.file_date, p.file_status, p.date_creation,
                    wp.word_count
             FROM paths p
-            JOIN words_paths wp ON p.id = wp.path_id
+            JOIN hash_contexts hc ON hc.id = p.context_id
+            JOIN words_hashs wp ON wp.hash_id = hc.hash_id
             WHERE wp.word_id = %s
             AND {where_clause}
             ORDER BY wp.word_count DESC
@@ -1513,25 +1520,29 @@ def api_path_word_files():
             if category_id:
                 # Only get words that belong to the specified category
                 file_words_query = f"""
-                    SELECT wp.path_id, w.id, w.word, COUNT(*) as count
-                    FROM words_paths wp
+                    SELECT p.id, w.id, w.word, COUNT(*) as count
+                    FROM words_hashs wp
+                    JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+                    JOIN paths p ON p.context_id = hc.id
                     JOIN words w ON wp.word_id = w.id
                     JOIN words_categorys wc ON w.id = wc.word_id
-                    WHERE wp.path_id IN ({placeholders})
+                    WHERE p.id IN ({placeholders})
                     AND wc.category_id = %s
-                    GROUP BY wp.path_id, w.id, w.word
-                    ORDER BY wp.path_id, count DESC
+                    GROUP BY p.id, w.id, w.word
+                    ORDER BY p.id, count DESC
                 """
                 file_words = db_execute_query(file_words_query, tuple(file_ids + [category_id]))
             else:
                 # Get all words for these files (no category filter)
                 file_words_query = f"""
-                    SELECT wp.path_id, w.id, w.word, COUNT(*) as count
-                    FROM words_paths wp
+                    SELECT p.id, w.id, w.word, COUNT(*) as count
+                    FROM words_hashs wp
+                    JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+                    JOIN paths p ON p.context_id = hc.id
                     JOIN words w ON wp.word_id = w.id
-                    WHERE wp.path_id IN ({placeholders})
-                    GROUP BY wp.path_id, w.id, w.word
-                    ORDER BY wp.path_id, count DESC
+                    WHERE p.id IN ({placeholders})
+                    GROUP BY p.id, w.id, w.word
+                    ORDER BY p.id, count DESC
                 """
                 file_words = db_execute_query(file_words_query, tuple(file_ids))
             

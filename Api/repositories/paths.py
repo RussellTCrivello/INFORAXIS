@@ -36,7 +36,7 @@ class PathsRepository:
         return insert(
             """
             INSERT INTO paths
-            (file_name, file_path, file_size, file_type, file_status, file_date, date_creation, hash_id)
+            (file_name, file_path, file_size, file_type, file_status, file_date, date_creation, context_id)
             VALUES (%s,%s,%s,%s,%s,%s,CURRENT_DATE,%s)
             """,
             (
@@ -46,7 +46,7 @@ class PathsRepository:
                 data.file_type,
                 data.file_status,
                 data.file_date,
-                data.hash_id,
+                data.context_id,
             ),
         )
 
@@ -63,7 +63,7 @@ class PathsRepository:
         """
         return execute_query(
             """
-            SELECT id, file_name, file_path, file_size, file_type, file_status, file_date, date_creation, hash_id
+            SELECT id, file_name, file_path, file_size, file_type, file_status, file_date, date_creation, context_id
             FROM paths WHERE id=%s
             """,
             (path_id,),
@@ -85,7 +85,7 @@ class PathsRepository:
             List of path tuples
         """
         clauses = [
-            "SELECT id, file_name, file_path, file_size, file_type, file_status, file_date, date_creation, hash_id FROM paths WHERE 1=1"
+            "SELECT id, file_name, file_path, file_size, file_type, file_status, file_date, date_creation, context_id FROM paths WHERE 1=1"
         ]
         params: list = []
         if file_type:

@@ -121,8 +121,8 @@ def _ingest(pg_db, tmp_root, side_tag, source_tag):
             cur.execute(
                 "SELECT p.id, p.file_name, p.parent_path_id, p.hierarchy_path,"
                 " p.processing_status, p.extraction_provenance"
-                " FROM paths p JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id WHERE s.name = %s",
+                " FROM paths p JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id WHERE s.name = %s",
                 (side_tag,),
             )
             rows = {}
@@ -256,8 +256,9 @@ def test_attachments_have_their_own_hashes(eml):
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT p.file_name, h.hash FROM paths p"
-                " JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id"
+                " JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN hashs h ON h.id = hc.hash_id"
+                " JOIN sides s ON s.id = hc.side_id"
                 " WHERE s.name = %s AND p.file_name IN"
                 " ('report.pdf','bundle.zip','notes.txt')",
                 (f"{eml['tag']}_side",),

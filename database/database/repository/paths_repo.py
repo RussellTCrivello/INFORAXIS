@@ -13,21 +13,25 @@ class PathsRepository(BaseRepository):
         file_size,
         file_type,
         file_status="Unread",
-        hash_id=None,
+        context_id=None,
         file_date=None,
         date_creation=date.today(),
         coordinates="",
         extraction_provenance=None,
         processing_status="discovered",
         status_detail=None,
-        attempts=0
+        attempts=0,
+        parent_path_id=None,
+        hierarchy_path=None
     ):
         """Insert a new file path and return its ID.
 
         ``extraction_provenance`` is a JSON-serialisable mapping describing how
         each extractor derived its data (engine, version, confidence, whether
         the text is derived rather than authored). ``None`` means the file was
-        ingested before provenance was captured.
+        ingested before provenance was captured. ``parent_path_id`` /
+        ``hierarchy_path`` record the container lineage of extracted
+        occurrences.
         """
         params = (
             file_name,
@@ -36,13 +40,15 @@ class PathsRepository(BaseRepository):
             file_type,
             file_status,
             file_date,
-            hash_id,
+            context_id,
             date_creation,
             coordinates,
             json.dumps(extraction_provenance) if extraction_provenance is not None else None,
             processing_status,
             status_detail,
             attempts,
+            parent_path_id,
+            hierarchy_path,
         )
         # Don't use commit=True in transaction context - let transaction manager handle commits
         # commit parameter is ignored when _connection is set (transaction context)
@@ -173,11 +179,20 @@ class PathsRepository(BaseRepository):
         )
         return row is not None
     
-    def get_path_id_by_hash_id(self, hash_id):
-        """Get path ID by hash ID"""
+    def get_hash_id_for_path(self, path_id):
+        """Resolve an occurrence to its canonical content id."""
         row = self.execute(
-            FileQueries.get_path_id_by_hash_id(),
-            (hash_id,),
+            FileQueries.get_context_hash_by_path(),
+            (path_id,),
+            fetchone=True
+        )
+        return row[0] if row else None
+
+    def get_path_hash_by_id(self, path_id):
+        """The canonical content hash string of a stored occurrence."""
+        row = self.execute(
+            FileQueries.get_path_hash_by_id(),
+            (path_id,),
             fetchone=True
         )
         return row[0] if row else None

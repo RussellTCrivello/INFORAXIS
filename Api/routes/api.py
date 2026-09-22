@@ -764,9 +764,11 @@ def register_api_routes(app):
                 # Use exact match (case-insensitive, no wildcards) to search for entire keyword, especially for multi-word keywords
                 query = f"""
                     SELECT w.id, w.word,
-                           COUNT(DISTINCT wp.path_id) as usage_count
+                           COUNT(DISTINCT p.id) as usage_count
                     FROM words w
-                    LEFT JOIN words_paths wp ON w.id = wp.word_id
+                    LEFT JOIN words_hashs wp ON w.id = wp.word_id
+                    LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+                    LEFT JOIN paths p ON p.context_id = hc.id
                     WHERE w.word ILIKE %s {exclude_clause}
                     GROUP BY w.id, w.word
                     ORDER BY usage_count DESC, w.word ASC
@@ -782,9 +784,11 @@ def register_api_routes(app):
             else:
                 query = f"""
                     SELECT w.id, w.word,
-                           COUNT(DISTINCT wp.path_id) as usage_count
+                           COUNT(DISTINCT p.id) as usage_count
                     FROM words w
-                    LEFT JOIN words_paths wp ON w.id = wp.word_id
+                    LEFT JOIN words_hashs wp ON w.id = wp.word_id
+                    LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+                    LEFT JOIN paths p ON p.context_id = hc.id
                     WHERE 1=1 {exclude_clause}
                     GROUP BY w.id, w.word
                     ORDER BY usage_count DESC, w.word ASC
@@ -840,28 +844,28 @@ def register_api_routes(app):
                     SUM(p.file_size) as total_size,
                     AVG(p.file_size) as avg_size
                 FROM paths p
-                JOIN hashs h ON p.hash_id = h.id
+                JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
             """
             
             if keyword_id:
-                query += " JOIN keywords_paths kp ON p.id = kp.path_id"
+                query += " JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id"
                 where_clauses.append("kp.keyword_id = %s")
                 params.append(keyword_id)
             
             if category_id:
                 query += """
-                    JOIN words_paths wp ON p.id = wp.path_id
+                    JOIN words_hashs wp ON wp.hash_id = hc.hash_id
                     JOIN words_categorys wc ON wp.word_id = wc.word_id
                 """
                 where_clauses.append("wc.category_id = %s")
                 params.append(category_id)
             
             if source_id:
-                where_clauses.append("h.source_id = %s")
+                where_clauses.append("hc.source_id = %s")
                 params.append(source_id)
             
             if side_id:
-                where_clauses.append("h.side_id = %s")
+                where_clauses.append("hc.side_id = %s")
                 params.append(side_id)
             
             if where_clauses:
@@ -910,17 +914,16 @@ def register_api_routes(app):
                 FROM categorys c
                 JOIN words w ON c.word_id = w.id
                 JOIN words_categorys wc ON c.id = wc.category_id
-                JOIN words_paths wp ON wc.word_id = wp.word_id
-                JOIN paths p ON wp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
+                JOIN words_hashs wp ON wc.word_id = wp.word_id
+                JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
             """
             
             if source_id:
-                where_clauses.append("h.source_id = %s")
+                where_clauses.append("hc.source_id = %s")
                 params.append(source_id)
             
             if side_id:
-                where_clauses.append("h.side_id = %s")
+                where_clauses.append("hc.side_id = %s")
                 params.append(side_id)
             
             if where_clauses:
@@ -965,18 +968,17 @@ def register_api_routes(app):
             query = """
                 SELECT 
                     k.id as keyword_id,
-                    COUNT(DISTINCT kp.path_id) as file_count,
+                    COUNT(DISTINCT p.id) as file_count,
                     COUNT(DISTINCT wp.word_id) as word_count,
                     CASE 
                         WHEN COUNT(DISTINCT wp.word_id) > 0 
-                        THEN ROUND(COUNT(DISTINCT kp.path_id)::numeric / NULLIF(COUNT(DISTINCT wp.word_id), 0), 2)
-                        ELSE COUNT(DISTINCT kp.path_id)::numeric
+                        THEN ROUND(COUNT(DISTINCT p.id)::numeric / NULLIF(COUNT(DISTINCT wp.word_id), 0), 2)
+                        ELSE COUNT(DISTINCT p.id)::numeric
                     END as file_density
                 FROM keywords k
-                JOIN keywords_paths kp ON k.id = kp.keyword_id
-                JOIN paths p ON kp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN words_paths wp ON p.id = wp.path_id
+                JOIN keywords_hashs kp ON k.id = kp.keyword_id
+                JOIN hash_contexts hc ON hc.hash_id = kp.hash_id JOIN paths p ON p.context_id = hc.id
+                LEFT JOIN words_hashs wp ON wp.hash_id = hc.hash_id
             """
             
             if category_id:
@@ -987,11 +989,11 @@ def register_api_routes(app):
                 params.append(category_id)
             
             if source_id:
-                where_clauses.append("h.source_id = %s")
+                where_clauses.append("hc.source_id = %s")
                 params.append(source_id)
             
             if side_id:
-                where_clauses.append("h.side_id = %s")
+                where_clauses.append("hc.side_id = %s")
                 params.append(side_id)
             
             if where_clauses:
@@ -1052,12 +1054,12 @@ def register_api_routes(app):
                     ROUND(COUNT(DISTINCT CASE WHEN p.file_status = 'Read' THEN p.id END)::numeric / 
                           NULLIF(COUNT(DISTINCT p.id), 0) * 100, 2) as processing_rate
                 FROM sources s
-                JOIN hashs h ON s.id = h.source_id
-                JOIN paths p ON h.id = p.hash_id
+                JOIN hash_contexts hc ON hc.source_id = s.id
+                JOIN paths p ON p.context_id = hc.id
             """
             
             if keyword_id:
-                query += " JOIN keywords_paths kp ON p.id = kp.path_id"
+                query += " JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id"
                 where_clauses.append("kp.keyword_id = %s")
                 params.append(keyword_id)
             
@@ -1066,7 +1068,7 @@ def register_api_routes(app):
                 params.append(file_type)
             
             if side_id:
-                where_clauses.append("h.side_id = %s")
+                where_clauses.append("hc.side_id = %s")
                 params.append(side_id)
             
             if where_clauses:
@@ -1120,22 +1122,22 @@ def register_api_routes(app):
                     AVG(p.file_size) as avg_size,
                     COUNT(DISTINCT p.file_type) as unique_file_types,
                     COUNT(DISTINCT CASE WHEN p.file_status = 'Read' THEN p.id END) as processed_files,
-                    COUNT(DISTINCT h.source_id) as source_count,
+                    COUNT(DISTINCT hc.source_id) as source_count,
                     ROUND(COUNT(DISTINCT CASE WHEN p.file_status = 'Read' THEN p.id END)::numeric / 
                           NULLIF(COUNT(DISTINCT p.id), 0) * 100, 2) as processing_rate
                 FROM sides si
-                JOIN hashs h ON si.id = h.side_id
-                JOIN paths p ON h.id = p.hash_id
+                JOIN hash_contexts hc ON si.id = hc.side_id
+                JOIN paths p ON p.context_id = hc.id
             """
             
             if keyword_id:
-                query += " JOIN keywords_paths kp ON p.id = kp.path_id"
+                query += " JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id"
                 where_clauses.append("kp.keyword_id = %s")
                 params.append(keyword_id)
             
             if category_id:
                 query += """
-                    JOIN words_paths wp ON p.id = wp.path_id
+                    JOIN words_hashs wp ON wp.hash_id = hc.hash_id
                     JOIN words_categorys wc ON wp.word_id = wc.word_id
                 """
                 where_clauses.append("wc.category_id = %s")
@@ -1189,12 +1191,12 @@ def register_api_routes(app):
                     cw.word as category_name,
                     w.id as word_id,
                     w.word as word_text,
-                    COUNT(DISTINCT wp.path_id) as file_count
+                    COUNT(DISTINCT p.id) as file_count
                 FROM categorys c
                 JOIN words cw ON c.word_id = cw.id
                 JOIN words_categorys wc ON c.id = wc.category_id
                 JOIN words w ON wc.word_id = w.id
-                LEFT JOIN words_paths wp ON w.id = wp.word_id
+                LEFT JOIN words_hashs wp ON w.id = wp.word_id
             """
             
             params = []
@@ -1214,9 +1216,9 @@ def register_api_routes(app):
                 SELECT 
                     w.id as word_id,
                     w.word as word_text,
-                    COUNT(DISTINCT wp.path_id) as file_count
+                    COUNT(DISTINCT p.id) as file_count
                 FROM words w
-                LEFT JOIN words_paths wp ON w.id = wp.word_id
+                LEFT JOIN words_hashs wp ON w.id = wp.word_id
                 WHERE NOT EXISTS (
                     SELECT 1 FROM words_categorys wc WHERE wc.word_id = w.id
                 )
@@ -1312,7 +1314,8 @@ def register_api_routes(app):
                     h.id as hash_id,
                     COUNT(DISTINCT p.id) as file_count
                 FROM hashs h
-                JOIN paths p ON p.hash_id = h.id
+                JOIN hash_contexts hc ON hc.hash_id = h.id
+                JOIN paths p ON p.context_id = hc.id
                 GROUP BY h.id, h.hash
                 HAVING COUNT(DISTINCT p.id) >= %s
                 ORDER BY file_count DESC
@@ -1334,7 +1337,7 @@ def register_api_routes(app):
                     path_ids_query = """
                         SELECT DISTINCT p.id
                         FROM paths p
-                        JOIN hashs h ON p.hash_id = h.id
+                        JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
                         WHERE h.hash = %s
                         ORDER BY p.id
                     """
@@ -1355,9 +1358,9 @@ def register_api_routes(app):
                             COALESCE(s.name, 'Unknown') as source_name,
                             COALESCE(si.name, 'Unknown') as side_name
                         FROM paths p
-                        JOIN hashs h ON p.hash_id = h.id
-                        LEFT JOIN sources s ON h.source_id = s.id
-                        LEFT JOIN sides si ON h.side_id = si.id
+                        JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
+                        LEFT JOIN sources s ON hc.source_id = s.id
+                        LEFT JOIN sides si ON hc.side_id = si.id
                         WHERE p.id IN ({placeholders})
                         ORDER BY p.file_name
                     """
@@ -1394,7 +1397,7 @@ def register_api_routes(app):
             titles_query = """
                 SELECT 
                     tc.id as title_id,
-                    tc.path_id,
+                    p.id,
                     tc.title_data,
                     p.file_name,
                     p.file_path,
@@ -1405,10 +1408,11 @@ def register_api_routes(app):
                     COALESCE(s.name, 'Unknown') as source_name,
                     COALESCE(si.name, 'Unknown') as side_name
                 FROM titles_content tc
-                JOIN paths p ON tc.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                JOIN hash_contexts hc ON hc.hash_id = tc.hash_id
+                JOIN paths p ON p.context_id = hc.id
+                JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE tc.title_status = 'Main'
                 ORDER BY tc.id DESC
                 LIMIT %s
@@ -1549,7 +1553,7 @@ def register_api_routes(app):
         try:
             file_info = execute_query("""
                 SELECT p.id, p.file_name, p.file_path, p.file_size, p.file_type,
-                       p.file_status, p.file_date, p.date_creation, p.hash_id,
+                       p.file_status, p.file_date, p.date_creation, hc.hash_id,
                        COALESCE(s.name, 'Unknown') as source_name, 
                        COALESCE(si.name, 'Unknown') as side_name, 
                        COALESCE(h.hash, '') as hash,
@@ -1558,9 +1562,9 @@ def register_api_routes(app):
                        p.attempts, p.status_updated_at, p.coordinates,
                        p.error_message
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE p.id = %s
             """, (file_id,), fetch="one")
             
@@ -1598,7 +1602,7 @@ def register_api_routes(app):
                 from Api.utils import load_text_title
                 title_result = execute_query("""
                     SELECT id FROM titles_content 
-                    WHERE path_id = %s AND title_status = 'Main' 
+                    WHERE hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s) AND title_status = 'Main' 
                     LIMIT 1
                 """, (file_id,), fetch="one")
                 if title_result:
@@ -1613,7 +1617,7 @@ def register_api_routes(app):
                     from Api.utils.title_similarity import find_similar_titles
                     # Get all titles for comparison (limited to recent ones for performance)
                     all_titles_data = execute_query("""
-                        SELECT tc.id, tc.path_id, tc.title_data
+                        SELECT tc.id, tc.hash_id, tc.title_data
                         FROM titles_content tc
                         WHERE tc.title_status = 'Main' AND tc.id != %s
                         ORDER BY tc.id DESC

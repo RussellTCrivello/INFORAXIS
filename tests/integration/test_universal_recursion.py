@@ -153,8 +153,9 @@ def ingest(pg_db, root, tag):
                 "SELECT p.id, p.file_name, p.parent_path_id, p.hierarchy_path,"
                 " p.processing_status, p.status_detail, p.file_size,"
                 " p.extraction_provenance, h.hash"
-                " FROM paths p JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id WHERE s.name = %s",
+                " FROM paths p JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN hashs h ON h.id = hc.hash_id"
+                " JOIN sides s ON s.id = hc.side_id WHERE s.name = %s",
                 (f"{tag}_side",),
             )
             rows = {}

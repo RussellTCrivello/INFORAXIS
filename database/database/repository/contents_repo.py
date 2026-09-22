@@ -38,7 +38,7 @@ class ContentsRepository(BaseRepository):
     - Referential integrity with the words table
     """
 
-    def store_text_content(self, ids, date, path_id):
+    def store_text_content(self, ids, date, hash_id):
         """
         Store content as symbol pairs format (converted from word IDs).
         All content is stored using the complete symbol pairs format:
@@ -47,7 +47,7 @@ class ContentsRepository(BaseRepository):
         Args:
             ids: List of word IDs (integers) from the words table
             date: Content date
-            path_id: Path ID to associate content with
+            hash_id: Path ID to associate content with
         
         Returns:
             List of content record IDs (one per chunk if content is large)
@@ -75,9 +75,9 @@ class ContentsRepository(BaseRepository):
             ))
         
         # Use store_symbol_pairs to store in Pickle format
-        return self.store_symbol_pairs(symbol_pairs, date, path_id)
+        return self.store_symbol_pairs(symbol_pairs, date, hash_id)
     
-    def load_text_content(self, path_id):
+    def load_text_content(self, hash_id):
         """
         Load the text content of a file for display.
 
@@ -89,13 +89,13 @@ class ContentsRepository(BaseRepository):
         word-join reconstruction.
 
         Args:
-            path_id: Path ID to load content for
+            hash_id: Path ID to load content for
 
         Returns:
             The file's text content (structured when available).
         """
         try:
-            raw = self.load_raw_content(path_id)
+            raw = self.load_raw_content(hash_id)
             if raw is not None:
                 return raw
         except Exception as raw_err:
@@ -104,18 +104,18 @@ class ContentsRepository(BaseRepository):
             # a read path - the caller only wants text to display).
             logger.warning(
                 "Raw content unavailable for path %s, falling back to word "
-                "join: %s", path_id, raw_err,
+                "join: %s", hash_id, raw_err,
             )
 
-        return self._load_word_join_content(path_id)
+        return self._load_word_join_content(hash_id)
 
-    def _load_word_join_content(self, path_id):
+    def _load_word_join_content(self, hash_id):
         """
         Legacy reconstruction: word IDs joined with single spaces.
         Reads Pickle format symbol pairs: [(word_id, punct_before_id, punct_after_id, spacing_id, char_position), ...]
 
         Args:
-            path_id: Path ID to load content for
+            hash_id: Path ID to load content for
 
         Returns:
             Space-separated string of words
@@ -123,7 +123,7 @@ class ContentsRepository(BaseRepository):
         Note: This method loads compressed Pickle symbol pairs, extracts word IDs,
         and looks up the actual words from the words table.
         """
-        rows = self.execute(ContentQueries.load_content(), (path_id,), fetchall=True)
+        rows = self.execute(ContentQueries.load_content(), (hash_id,), fetchall=True)
         if not rows:
             return ""
         
@@ -148,7 +148,7 @@ class ContentsRepository(BaseRepository):
                             all_word_ids.extend(symbol_pairs)
                 except Exception as e:
                     logger.warning(
-                        "Could not decode content chunk for path %s: %s", path_id, e
+                        "Could not decode content chunk for path %s: %s", hash_id, e
                     )
                     continue
 
@@ -171,7 +171,7 @@ class ContentsRepository(BaseRepository):
 
         return " ".join(dictionary.get(i, f"[ID:{i}]") for i in all_word_ids)
 
-    def store_raw_content(self, path_id, text, chunk_size=1024 * 1024):
+    def store_raw_content(self, hash_id, text, chunk_size=1024 * 1024):
         """Store the extractor's structured text verbatim (display fidelity).
 
         Chunked TEXT rows in contents_raw. Called inside the same transaction
@@ -202,28 +202,28 @@ class ContentsRepository(BaseRepository):
         for seq, chunk in enumerate(chunks):
             self.execute(
                 ContentQueries.insert_raw_content(),
-                (path_id, seq, chunk, len(chunk)),
+                (hash_id, seq, chunk, len(chunk)),
             )
         return len(chunks)
 
-    def load_raw_content(self, path_id):
+    def load_raw_content(self, hash_id):
         """Load the raw structured text for a file, or None if not stored."""
-        rows = self.execute(ContentQueries.load_raw_content(), (path_id,), fetchall=True)
+        rows = self.execute(ContentQueries.load_raw_content(), (hash_id,), fetchall=True)
         if not rows:
             return None
         return "".join(row[0] if isinstance(row, (tuple, list)) else row for row in rows)
 
-    def delete_raw_content(self, path_id):
+    def delete_raw_content(self, hash_id):
         """Delete raw content chunks for a file (mirrors delete_content)."""
-        self.execute(ContentQueries.delete_raw_content(), (path_id,))
+        self.execute(ContentQueries.delete_raw_content(), (hash_id,))
     
-    def load_content_word_ids(self, path_id):
+    def load_content_word_ids(self, hash_id):
         """
         Load content and return the raw word IDs (numbers from words table).
         Reads Pickle format symbol pairs: [(word_id, punct_before_id, punct_after_id, spacing_id, char_position), ...]
         
         Args:
-            path_id: Path ID to load content for
+            hash_id: Path ID to load content for
         
         Returns:
             List of word IDs (integers) from the words table
@@ -231,7 +231,7 @@ class ContentsRepository(BaseRepository):
         Note: This method loads compressed Pickle symbol pairs and extracts word IDs
         directly without converting to text.
         """
-        rows = self.execute(ContentQueries.load_content(), (path_id,), fetchall=True)
+        rows = self.execute(ContentQueries.load_content(), (hash_id,), fetchall=True)
         if not rows:
             return []
         
@@ -255,34 +255,34 @@ class ContentsRepository(BaseRepository):
                             all_word_ids.extend(symbol_pairs)
                 except Exception as e:
                     # If decompression/parsing fails, skip this chunk
-                    logger.warning("Error loading content chunk for path %s: %s", path_id, e)
+                    logger.warning("Error loading content chunk for path %s: %s", hash_id, e)
                     continue
         
         return all_word_ids
     
 
     
-    def get_content_chunks(self, path_id, limit):
+    def get_content_chunks(self, hash_id, limit):
         """Return raw content chunks"""
         return self.execute(
             ContentQueries.get_content_chunks(),
-            (path_id, limit)
+            (hash_id, limit)
         )
 
-    def get_content_count(self, path_id):
+    def get_content_count(self, hash_id):
         """Return number of chunks for a file"""
         row = self.execute(
             ContentQueries.get_content_count(),
-            (path_id,),
+            (hash_id,),
             single=True
         )
         return row[0]
 
-    def get_content_stats(self, path_id):
+    def get_content_stats(self, hash_id):
         """Return chunk count and total byte size"""
         row = self.execute(
             ContentQueries.get_content_stats(),
-            (path_id,),
+            (hash_id,),
             single=True
         )
         return {
@@ -290,32 +290,32 @@ class ContentsRepository(BaseRepository):
             "total_bytes": row[1]
         }
 
-    def delete_content(self, path_id):
-        self.delete_raw_content(path_id)
+    def delete_content(self, hash_id):
+        self.delete_raw_content(hash_id)
         """Delete all content for a file"""
         return self.execute(
             ContentQueries.delete_content(),
-            (path_id,)
+            (hash_id,)
         )
     
-    def get_content_with_positions(self, path_id):
+    def get_content_with_positions(self, hash_id):
         """
         Get content word IDs with their positions in the content.
         
         Args:
-            path_id: Path ID to get content for
+            hash_id: Path ID to get content for
         
         Returns:
             List of tuples: (word_id, position) ordered by position
         """
-        word_ids = self.load_content_word_ids(path_id)
+        word_ids = self.load_content_word_ids(hash_id)
         if not word_ids:
             return []
         
-        # Get positions from words_paths table
-        from ..repository.words_paths_repo import WordsPathsRepository
-        words_paths_repo = WordsPathsRepository(self.db)
-        word_positions_map = words_paths_repo.get_word_positions_by_path(path_id)
+        # Get positions from words_hashs table
+        from ..repository.words_hashs_repo import WordsHashsRepository
+        words_hashs_repo = WordsHashsRepository(self.db)
+        word_positions_map = words_hashs_repo.get_word_positions_by_hash(hash_id)
         
         # Build list of (word_id, position) tuples
         result = []
@@ -334,7 +334,7 @@ class ContentsRepository(BaseRepository):
         
         return result
     
-    def store_symbol_pairs(self, symbol_pairs, date, path_id, max_chunk_size=1024*1024):
+    def store_symbol_pairs(self, symbol_pairs, date, hash_id, max_chunk_size=1024*1024):
         """
         Store content as symbol pairs in Pickle format, compressed with zlib.
         If content is very large, it will be divided into several rows in the database.
@@ -348,7 +348,7 @@ class ContentsRepository(BaseRepository):
                 - spacing_id: int - Spacing type (0=none, 1=space, 2=tab, 3=newline)
                 - char_position: int - Spatial position: page_number * 1000000 + y_coord * 1000 + x_coord
             date: Content date
-            path_id: Path ID to associate content with
+            hash_id: Path ID to associate content with
             max_chunk_size: Maximum compressed size per chunk in bytes (default: 1MB)
         
         Returns:
@@ -387,7 +387,7 @@ class ContentsRepository(BaseRepository):
             # only its word index, and the failure would stay invisible in
             # the logs.  Let the transaction owner decide (it rolls back).
             last_id = self.execute(
-                ContentQueries.insert_content(), (compressed, date, path_id), True)
+                ContentQueries.insert_content(), (compressed, date, hash_id), True)
             return [last_id] if last_id else []
         
         # Content is too large, split into chunks
@@ -428,7 +428,7 @@ class ContentsRepository(BaseRepository):
             # than a clean rollback (the caller must not keep ids of content
             # rows whose transaction is going to be discarded).
             last_id = self.execute(
-                ContentQueries.insert_content(), (chunk_compressed, date, path_id), True)
+                ContentQueries.insert_content(), (chunk_compressed, date, hash_id), True)
             if last_id:
                 chunk_ids.append(last_id)
 
@@ -436,19 +436,19 @@ class ContentsRepository(BaseRepository):
         
         return chunk_ids
     
-    def load_symbol_pairs(self, path_id):
+    def load_symbol_pairs(self, hash_id):
         """
         Load content as symbol pairs from compressed Pickle.
         Reads complete symbol pairs: [(word_id, punct_before_id, punct_after_id, spacing_id, char_position), ...]
         
         Args:
-            path_id: Path ID to load content for
+            hash_id: Path ID to load content for
         
         Returns:
             List of symbol pairs, each as:
                 (word_id, punct_before_id, punct_after_id, spacing_id, char_position)
         """
-        rows = self.execute(ContentQueries.load_content(), (path_id,), fetchall=True)
+        rows = self.execute(ContentQueries.load_content(), (hash_id,), fetchall=True)
         if not rows:
             return []
         
@@ -480,7 +480,7 @@ class ContentsRepository(BaseRepository):
                     else:
                         logger.warning("Expected list of symbol pairs, got %s", type(symbol_pairs).__name__)
                 except Exception as e:
-                    logger.warning("Error loading symbol pairs for path %s: %s", path_id, e)
+                    logger.warning("Error loading symbol pairs for path %s: %s", hash_id, e)
                     continue
         
         return all_symbol_pairs

@@ -210,9 +210,9 @@ def test_normal_words_of_the_same_document_are_stored(pg_db, ingested):
             assert word_row, "marker word missing from dictionary"
 
             cur.execute(
-                "SELECT wp.word_count FROM words_paths wp"
+                "SELECT wp.word_count FROM words_hashs wp"
                 " JOIN words w ON w.id = wp.word_id"
-                " WHERE wp.path_id = %s AND w.word = %s",
+                " WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s) AND w.word = %s",
                 (ingested["path_id"], _MARKER.lower()),
             )
             linked = cur.fetchone()
@@ -251,9 +251,9 @@ def test_email_with_inline_payload_stores_and_searches(pg_db, ingested):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT wp.word_count FROM words_paths wp"
+                "SELECT wp.word_count FROM words_hashs wp"
                 " JOIN words w ON w.id = wp.word_id"
-                " WHERE wp.path_id = %s AND w.word = %s",
+                " WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s) AND w.word = %s",
                 (ingested["eml_path_id"], _MARKER.lower()),
             )
             assert cur.fetchone(), "marker word not linked to the e-mail path"

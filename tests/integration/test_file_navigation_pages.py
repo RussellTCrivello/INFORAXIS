@@ -115,38 +115,43 @@ def library(pg_db):
                 )
                 source_id = cur.fetchone()[0]
                 cur.execute(
-                    "INSERT INTO hashs (hash, side_id, source_id)"
-                    " VALUES (%s, %s, %s) RETURNING id",
-                    (f"nav-hash-{label}-{_UNIQUE}", side_id, source_id),
+                    "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                    (f"nav-hash-{label}-{_UNIQUE}",),
                 )
-                return source_id, cur.fetchone()[0]
+                _hash_id = cur.fetchone()[0]
+                cur.execute(
+                    "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                    " VALUES (%s, %s, %s) RETURNING id",
+                    (_hash_id, source_id, side_id),
+                )
+                return source_id, _hash_id, cur.fetchone()[0]
 
-            main_source, main_hash = source("main")
-            other_source, other_hash = source("other")
+            main_source, main_hash, main_ctx = source("main")
+            other_source, other_hash, other_ctx = source("other")
 
             ids = {}
             for label, created in _FILES:
                 cur.execute(
                     """
                     INSERT INTO paths (file_name, file_path, file_size, file_type,
-                                       file_status, file_date, date_creation, hash_id)
+                                       file_status, file_date, date_creation, context_id)
                     VALUES (%s, %s, 2048, '.txt', 'Read', %s, %s, %s)
                     RETURNING id
                     """,
                     (f"nav-{label}-{_UNIQUE}.txt", f"/nav-test/{label}.txt",
-                     created, created, main_hash),
+                     created, created, main_ctx),
                 )
                 ids[label] = cur.fetchone()[0]
 
             cur.execute(
                 """
                 INSERT INTO paths (file_name, file_path, file_size, file_type,
-                                   file_status, file_date, date_creation, hash_id)
+                                   file_status, file_date, date_creation, context_id)
                 VALUES (%s, %s, 2048, '.txt', 'Read', %s, %s, %s)
                 RETURNING id
                 """,
                 (f"nav-outsider-{_UNIQUE}.txt", "/nav-test/outsider.txt",
-                 date(2026, 3, 2), date(2026, 3, 2), other_hash),
+                 date(2026, 3, 2), date(2026, 3, 2), other_ctx),
             )
             ids["outsider"] = cur.fetchone()[0]
 
@@ -167,7 +172,7 @@ def library(pg_db):
     from database.services.contents_db_service import ContentDBService
 
     ContentDBService().contents_repo.store_text_content(
-        word_ids, date.today(), ids["mid"])
+        word_ids, date.today(), main_hash)
 
     return {
         "ids": ids,

@@ -110,7 +110,9 @@ class TestEndToEndWorkflow:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT p.file_name, p.file_size, h.hash FROM paths p"
-                " JOIN hashs h ON h.id = p.hash_id WHERE p.id = %s",
+                " JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN hashs h ON h.id = hc.hash_id"
+                " WHERE p.id = %s",
                 (stored_path_id,),
             )
             row = cur.fetchone()

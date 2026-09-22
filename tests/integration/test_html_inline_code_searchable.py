@@ -79,8 +79,8 @@ def corpus(pg_db, tmp_path_factory):
             cur.execute(
                 "SELECT p.id, p.file_name, p.processing_status,"
                 " p.extraction_provenance"
-                " FROM paths p JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id WHERE s.name = %s",
+                " FROM paths p JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id WHERE s.name = %s",
                 (f"{tag}_side",),
             )
             rows = {name: {"id": pid, "processing_status": status,

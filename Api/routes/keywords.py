@@ -535,10 +535,13 @@ def register_keywords_routes(app):
             
             # Build base query with joins for category info
             base_query = """
-                SELECT k.id, k.keyword, k.category_id, COALESCE(COUNT(kp.path_id), 0) as usage_count,
+                SELECT k.id, k.keyword, k.category_id,
+                       COALESCE(COUNT(DISTINCT p.id), 0) as usage_count,
                        c.word as category_name
                 FROM keywords k
-                LEFT JOIN keywords_paths kp ON k.id = kp.keyword_id
+                LEFT JOIN keywords_hashs kp ON k.id = kp.keyword_id
+                LEFT JOIN hash_contexts hc ON hc.hash_id = kp.hash_id
+                LEFT JOIN paths p ON p.context_id = hc.id
                 LEFT JOIN categorys cat ON k.category_id = cat.id
                 LEFT JOIN words c ON cat.word_id = c.id
             """
@@ -548,9 +551,9 @@ def register_keywords_routes(app):
             params = []
             
             if status_filter == 'active':
-                where_conditions.append("EXISTS (SELECT 1 FROM keywords_paths kp2 WHERE kp2.keyword_id = k.id)")
+                where_conditions.append("EXISTS (SELECT 1 FROM keywords_hashs kp2 WHERE kp2.keyword_id = k.id)")
             elif status_filter == 'unused':
-                where_conditions.append("NOT EXISTS (SELECT 1 FROM keywords_paths kp2 WHERE kp2.keyword_id = k.id)")
+                where_conditions.append("NOT EXISTS (SELECT 1 FROM keywords_hashs kp2 WHERE kp2.keyword_id = k.id)")
             
             if category_filter:
                 where_conditions.append("k.category_id = %s")
@@ -801,7 +804,11 @@ def register_keywords_routes(app):
             keyword_text = load_text_keyword(keyword_id)
             
             usage_count = execute_query("""
-                SELECT COUNT(*) FROM keywords_paths WHERE keyword_id = %s
+                SELECT COUNT(DISTINCT p.id)
+                FROM keywords_hashs kp
+                JOIN hash_contexts hc ON hc.hash_id = kp.hash_id
+                JOIN paths p ON p.context_id = hc.id
+                WHERE kp.keyword_id = %s
             """, (keyword_id,), fetch="one") or 0
             
             return jsonify({
@@ -836,7 +843,7 @@ def register_keywords_routes(app):
             # only true matches.
             if not (word_ids and isinstance(word_ids, list) and len(word_ids) > 0) and not new_text and category_id is None:
                 return jsonify({'success': False, 'error': 'Either word_ids or text is required'}), 400
-            execute_query("DELETE FROM keywords_paths WHERE keyword_id = %s", (keyword_id,), fetch=None)
+            execute_query("DELETE FROM keywords_hashs WHERE keyword_id = %s", (keyword_id,), fetch=None)
             invalidate_query_cache()
 
             # If word_ids provided, use them directly
@@ -953,8 +960,8 @@ def register_keywords_routes(app):
             import gzip
             import zlib
             from database.processors.content_processor import ContentProcessor
-            from database.operations import KeywordOperations
             from database.operations import get_word_operations, get_keyword_operations
+            from database.services.contents_db_service import ContentDBService
             
             # Initialize content processor for keyword extraction
             content_processor = ContentProcessor()
@@ -994,18 +1001,18 @@ def register_keywords_routes(app):
             
             logger.info(f"Loaded {len(keywords_dict)} keywords for matching")
             
-            # Get all paths that have content
-            logger.info("Loading all paths with content from managers.database...")
-            paths_query = "SELECT DISTINCT path_id FROM contents ORDER BY path_id"
-            paths_rows = execute_query(paths_query)
+            # Get all documents (canonical contents) that have extraction
+            logger.info("Loading all extracted contents from managers.database...")
+            contents_query = "SELECT DISTINCT hash_id FROM contents ORDER BY hash_id"
+            contents_rows = execute_query(contents_query)
             
-            if not paths_rows:
+            if not contents_rows:
                 return jsonify({
                     'success': False,
                     'error': 'No files with content found in database'
                 }), 400
             
-            total_files = len(paths_rows)
+            total_files = len(contents_rows)
             logger.info(f"Found {total_files} files to process")
             
             # Process each path
@@ -1013,12 +1020,12 @@ def register_keywords_routes(app):
             new_associations = 0
             errors = 0
             
-            def get_word_ids_from_content(path_id):
+            def get_word_ids_from_content(hash_id):
                 """Extract ordered word IDs from content table"""
                 try:
-                    # Get all content chunks for this path
-                    content_query = "SELECT id, content_data FROM contents WHERE path_id=%s ORDER BY id"
-                    content_rows = execute_query(content_query, (path_id,))
+                    # Get all content chunks for this document
+                    content_query = "SELECT id, content_data FROM contents WHERE hash_id=%s ORDER BY id"
+                    content_rows = execute_query(content_query, (hash_id,))
                     
                     if not content_rows:
                         return []
@@ -1063,22 +1070,23 @@ def register_keywords_routes(app):
                                     # Simple list of word IDs
                                     word_ids_list.extend(chunk_data)
                         except Exception as e:
-                            logger.debug(f"Could not process content chunk {content_id} for path_id {path_id}: {e}")
+                            logger.debug(f"Could not process content chunk {content_id} for hash_id {hash_id}: {e}")
                             continue
                     
                     return word_ids_list
                     
                 except Exception as e:
-                    logger.error(f"Error extracting word IDs from content for path_id {path_id}: {e}")
+                    logger.error(f"Error extracting word IDs from content for hash_id {hash_id}: {e}")
                     import traceback
                     logger.error(traceback.format_exc())
                     return []
             
-            for path_row in paths_rows:
-                path_id = path_row[0]
+            db_service = ContentDBService()
+            for content_row in contents_rows:
+                hash_id = content_row[0]
                 try:
                     # Get ordered word IDs from content
-                    word_ids_list = get_word_ids_from_content(path_id)
+                    word_ids_list = get_word_ids_from_content(hash_id)
                     
                     if not word_ids_list:
                         continue
@@ -1087,14 +1095,13 @@ def register_keywords_routes(app):
                     keyword_counts = content_processor.extract_keywords_fast(word_ids_list, keywords_dict)
                     
                     if keyword_counts:
-                        # Update keywords_paths table using bulk insert
-                        success = keyword_ops.insert_keyword_path_relationships(path_id, keyword_counts)
-                        
-                        if success:
+                        # Update keywords_hashs through the identity layer
+                        try:
+                            db_service.process_keywords_for_content(hash_id, keyword_counts)
                             new_associations += len(keyword_counts)
-                        else:
+                        except Exception as insert_err:
                             errors += 1
-                            logger.warning(f"Failed to insert keyword associations for path_id {path_id}")
+                            logger.warning(f"Failed to insert keyword associations for hash_id {hash_id}: {insert_err}")
                     
                     files_processed += 1
                     
@@ -1254,7 +1261,7 @@ def register_keywords_routes(app):
             
             # Get total usage count before merging
             total_usage_query = """
-                SELECT COUNT(*) FROM keywords_paths
+                SELECT COUNT(*) FROM keywords_hashs
                 WHERE keyword_id IN %s
             """
             all_ids = tuple([keep_keyword_id] + duplicate_ids)
@@ -1269,19 +1276,19 @@ def register_keywords_routes(app):
             for dup_id in duplicate_ids:
                 # Update associations
                 execute_query("""
-                    UPDATE keywords_paths
+                    UPDATE keywords_hashs
                     SET keyword_id = %s
                     WHERE keyword_id = %s
                     AND NOT EXISTS (
-                        SELECT 1 FROM keywords_paths kp2
-                        WHERE kp2.path_id = keywords_paths.path_id
+                        SELECT 1 FROM keywords_hashs kp2
+                        WHERE kp2.hash_id = keywords_hashs.hash_id
                         AND kp2.keyword_id = %s
                     )
                 """, (keep_keyword_id, dup_id, keep_keyword_id), fetch=None)
                 
                 # Delete remaining associations (duplicates)
                 execute_query(
-                    "DELETE FROM keywords_paths WHERE keyword_id = %s",
+                    "DELETE FROM keywords_hashs WHERE keyword_id = %s",
                     (dup_id,),
                     fetch=None
                 )
@@ -1379,19 +1386,19 @@ def register_keywords_routes(app):
                 for dup_id in duplicate_ids:
                     # Update associations (avoid duplicates)
                     execute_query("""
-                        UPDATE keywords_paths
+                        UPDATE keywords_hashs
                         SET keyword_id = %s
                         WHERE keyword_id = %s
                         AND NOT EXISTS (
-                            SELECT 1 FROM keywords_paths kp2
-                            WHERE kp2.path_id = keywords_paths.path_id
+                            SELECT 1 FROM keywords_hashs kp2
+                            WHERE kp2.hash_id = keywords_hashs.hash_id
                             AND kp2.keyword_id = %s
                         )
                     """, (keep_id, dup_id, keep_id), fetch=None)
                     
                     # Delete remaining duplicate associations
                     execute_query(
-                        "DELETE FROM keywords_paths WHERE keyword_id = %s",
+                        "DELETE FROM keywords_hashs WHERE keyword_id = %s",
                         (dup_id,),
                         fetch=None
                     )
@@ -1456,7 +1463,7 @@ def register_keywords_routes(app):
                 
                 # Get usage count
                 usage_result = execute_query(
-                    "SELECT COUNT(*) FROM keywords_paths WHERE keyword_id = %s",
+                    "SELECT COUNT(*) FROM keywords_hashs WHERE keyword_id = %s",
                     (keyword_id,),
                     fetch="one"
                 )
@@ -1557,10 +1564,10 @@ def register_keywords_routes(app):
                     s.name as source_name,
                     si.name as side_name
                 FROM paths p
-                JOIN words_paths wp ON p.id = wp.path_id
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                JOIN words_hashs wp ON wp.hash_id = hc.hash_id
+                
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE wp.word_id = %s
                 ORDER BY wp.word_count DESC, p.file_name ASC
                 LIMIT %s
@@ -1574,7 +1581,7 @@ def register_keywords_routes(app):
             
             # Get total count
             count_result = execute_query(
-                "SELECT COUNT(DISTINCT p.id) FROM paths p JOIN words_paths wp ON p.id = wp.path_id WHERE wp.word_id = %s",
+                "SELECT COUNT(DISTINCT p.id) FROM paths p JOIN words_hashs wp ON wp.hash_id = hc.hash_id WHERE wp.word_id = %s",
                 (word_id,),
                 fetch="one"
             )

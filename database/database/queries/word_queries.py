@@ -74,48 +74,66 @@ class WordQueries(BaseQueries):
     
     @staticmethod
     def get_words_by_file() -> str:
-        """Get words in a file with counts"""
+        """Get words in a file with counts (file resolved to canonical content)"""
         return """
             SELECT w.id, w.word, wp.word_count
             FROM words w
-            JOIN words_paths wp ON w.id = wp.word_id
-            WHERE wp.path_id = %s
+            JOIN words_hashs wp ON w.id = wp.word_id
+            WHERE wp.hash_id = (
+                SELECT c.hash_id
+                FROM paths p
+                JOIN hash_contexts c ON c.id = p.context_id
+                WHERE p.id = %s
+            )
             ORDER BY wp.word_count DESC
             LIMIT %s
         """
     
     @staticmethod
     def get_word_frequencies() -> str:
-        """Get word frequencies for a file"""
+        """Get word frequencies for a file (file resolved to canonical content)"""
         return """
             SELECT w.word, wp.word_count
-            FROM words_paths wp
+            FROM words_hashs wp
             JOIN words w ON wp.word_id = w.id
-            WHERE wp.path_id = %s
+            WHERE wp.hash_id = (
+                SELECT c.hash_id
+                FROM paths p
+                JOIN hash_contexts c ON c.id = p.context_id
+                WHERE p.id = %s
+            )
             ORDER BY wp.word_count DESC
             LIMIT %s
         """
     
     @staticmethod
     def get_word_frequency_total() -> str:
-        """Get total frequency of word across all files"""
-        return "SELECT SUM(word_count) FROM words_paths WHERE word_id = %s"
+        """Get total frequency of word across all canonical contents"""
+        return "SELECT SUM(word_count) FROM words_hashs WHERE word_id = %s"
     
     @staticmethod
     def get_word_usage_count() -> str:
-        """Count files using a word"""
-        return "SELECT COUNT(*) FROM words_paths WHERE word_id = %s"
+        """Count stored files (occurrences) whose content uses a word"""
+        return """
+            SELECT COUNT(DISTINCT p.id)
+            FROM words_hashs wp
+            JOIN hash_contexts c ON c.hash_id = wp.hash_id
+            JOIN paths p ON p.context_id = c.id
+            WHERE wp.word_id = %s
+        """
     
     @staticmethod
     def get_words_with_usage() -> str:
-        """Get words with usage counts (paginated)"""
+        """Get words with usage counts (paginated; usage = stored files)"""
         return """
             SELECT 
                 w.id, 
                 w.word,
-                COALESCE(COUNT(DISTINCT wp.path_id), 0) as usage_count
+                COALESCE(COUNT(DISTINCT p.id), 0) as usage_count
             FROM words w
-            LEFT JOIN words_paths wp ON w.id = wp.word_id
+            LEFT JOIN words_hashs wp ON w.id = wp.word_id
+            LEFT JOIN hash_contexts c ON c.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = c.id
             WHERE w.word ILIKE %s
             GROUP BY w.id, w.word
             ORDER BY usage_count DESC, w.id ASC
@@ -144,10 +162,12 @@ class WordQueries(BaseQueries):
         return """
             SELECT 
                 w.word, 
-                COUNT(wp.path_id) as usage_count,
+                COUNT(DISTINCT p.id) as usage_count,
                 COUNT(*) OVER() as total_count
             FROM words w
-            LEFT JOIN words_paths wp ON w.id = wp.word_id
+            LEFT JOIN words_hashs wp ON w.id = wp.word_id
+            LEFT JOIN hash_contexts c ON c.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = c.id
             WHERE w.word LIKE %s
               AND w.word NOT LIKE %s
               AND LENGTH(w.word) > 5

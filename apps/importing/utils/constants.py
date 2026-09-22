@@ -50,6 +50,6 @@ TABLE_WORDS = 'words'
 TABLE_CATEGORIES = 'categorys'
 TABLE_KEYWORDS = 'keywords'
 TABLE_WORDS_CATEGORIES = 'words_categorys'
-TABLE_KEYWORDS_PATHS = 'keywords_paths'
-TABLE_WORDS_PATHS = 'words_paths'
+TABLE_KEYWORDS_PATHS = 'keywords_hashs'
+TABLE_WORDS_PATHS = 'words_hashs'
 

@@ -260,7 +260,7 @@ class TestPunctuationGap:
         # Its producer exists too and yields the exact tuple shape it consumes.
         assert hasattr(ContentDBService, "extract_symbols_from_text")
         sig = inspect.signature(ContentDBService.create_content_from_symbols)
-        assert list(sig.parameters)[:3] == ["self", "symbols", "path_id"], list(sig.parameters)
+        assert list(sig.parameters)[:3] == ["self", "symbols", "hash_id"], list(sig.parameters)
 
     def test_its_reader_counterpart_is_also_unwired(self):
         """The symbol-pair read path is dead too - the gap is symmetric."""

@@ -173,12 +173,12 @@ def get_repeated_elements(file_id, limit=50):
                 wp.word_count,
                 COUNT(DISTINCT wc.category_id) as category_count,
                 STRING_AGG(DISTINCT w_cat.word, ', ' ORDER BY w_cat.word) as categories
-            FROM words_paths wp
+            FROM words_hashs wp
             JOIN words w ON wp.word_id = w.id
             JOIN words_categorys wc ON w.id = wc.word_id
             JOIN categorys c ON wc.category_id = c.id
             JOIN words w_cat ON c.word_id = w_cat.id
-            WHERE wp.path_id = %s
+            WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)
             GROUP BY w.id, w.word, wp.word_count
             HAVING COUNT(DISTINCT wc.category_id) > 1
             ORDER BY category_count DESC, wp.word_count DESC
@@ -209,8 +209,8 @@ def get_enhanced_content_stats(file_id):
         word_count_result = execute_query("""
             SELECT COUNT(DISTINCT wp.word_id) as unique_words,
                    SUM(wp.word_count) as total_word_occurrences
-            FROM words_paths wp
-            WHERE wp.path_id = %s
+            FROM words_hashs wp
+            WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)
         """, (file_id,), fetch="one")
         
         # Handle tuple result from multi-column query
@@ -571,9 +571,9 @@ def files_list():
             stats_query_base = """
                 SELECT COUNT(*) 
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
             """
             
             def _status_count(status):
@@ -680,14 +680,14 @@ def file_detail(file_id):
     # 🚀 OPTIMIZED: Single query for file info with proper NULL handling
     file_info = execute_query("""
         SELECT p.id, p.file_name, p.file_path, p.file_size, p.file_type,
-               p.file_status, p.file_date, p.date_creation, p.hash_id,
+               p.file_status, p.file_date, p.date_creation, hc.hash_id,
                COALESCE(s.name, 'Unknown') as source_name, 
                COALESCE(si.name, 'Unknown') as side_name, 
                COALESCE(h.hash, '') as hash
         FROM paths p
-        LEFT JOIN hashs h ON p.hash_id = h.id
-        LEFT JOIN sources s ON h.source_id = s.id
-        LEFT JOIN sides si ON h.side_id = si.id
+        LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+        LEFT JOIN sources s ON hc.source_id = s.id
+        LEFT JOIN sides si ON hc.side_id = si.id
         WHERE p.id = %s
     """, (file_id,), fetch="one")
     
@@ -749,7 +749,7 @@ def file_detail(file_id):
     try:
         # Check if content exists first
         content_check = execute_query(
-            "SELECT COUNT(*) FROM contents WHERE path_id = %s",
+            "SELECT COUNT(*) FROM contents WHERE hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)",
             (file_id,),
             fetch="one"
         )
@@ -1500,44 +1500,23 @@ def delete_file(file_id):
         
         # First check if file exists
         file_check = execute_query("""
-            SELECT id, file_name, hash_id FROM paths WHERE id = %s
+            SELECT id, file_name FROM paths WHERE id = %s
         """, (file_id,), fetch="one")
         
         if not file_check:
             return jsonify({'success': False, 'error': 'File not found'}), 404
         
-        file_id_db, file_name, hash_id = file_check
+        file_id_db, file_name = file_check[0], file_check[1]
         
-        # Delete related data in order (respecting foreign key constraints)
-        # 1. Delete from contents table
-        execute_query("DELETE FROM contents WHERE path_id = %s", (file_id,), fetch=None)
-        
-        # 2. Delete from words_paths table
-        execute_query("DELETE FROM words_paths WHERE path_id = %s", (file_id,), fetch=None)
-        
-        # 3. Delete from keywords_paths table
-        execute_query("DELETE FROM keywords_paths WHERE path_id = %s", (file_id,), fetch=None)
-        
-        # 4. Delete from titles_content table
-        execute_query("DELETE FROM titles_content WHERE path_id = %s", (file_id,), fetch=None)
-        
-        # 5. Delete the file record from paths table
-        execute_query("DELETE FROM paths WHERE id = %s", (file_id,), fetch=None)
-        
-        # 6. Check if hash is still being used by other files
-        hash_usage = execute_query("""
-            SELECT COUNT(*) FROM paths WHERE hash_id = %s
-        """, (hash_id,), fetch="one")
-
-        # DB-05 FIX: hash_usage is a row tuple like (0,). The old check
-        # `if hash_usage and hash_usage == 0` compared a tuple to an int and
-        # never fired, leaving orphaned hash rows that made deleted files
-        # permanently non-reingestable. Extract the count properly.
-        hash_refcount = hash_usage[0] if hash_usage else 0
-
-        # If hash is not used by any other files, delete it
-        if hash_refcount == 0:
-            execute_query("DELETE FROM hashs WHERE id = %s", (hash_id,), fetch=None)
+        # Deletion is a content-lifecycle operation (One Content, Many
+        # Contexts): extracted content is SHARED between every occurrence of
+        # the same bytes, so it may only disappear when the last occurrence
+        # goes. One authoritative implementation performs the whole cascade
+        # (occurrence -> context -> content, guarded by real reference
+        # counts) in a single transaction.
+        from database.services.contents_db_service import ContentDBService
+        with ContentDBService()._dedup_session() as dedup:
+            lifecycle = dedup.delete_path(file_id)
         
         try:
             cache = get_query()
@@ -1589,35 +1568,19 @@ def bulk_delete_files():
             try:
                 # Check if file exists
                 file_check = execute_query("""
-                    SELECT id, file_name, hash_id FROM paths WHERE id = %s
+                    SELECT id, file_name FROM paths WHERE id = %s
                 """, (file_id,), fetch="one")
                 
                 if not file_check:
                     errors.append(f"File {file_id} not found")
                     continue
                 
-                file_id_db, file_name, hash_id = file_check
+                file_id_db, file_name = file_check[0], file_check[1]
                 
-                # Delete related data in order (respecting foreign key constraints)
-                execute_query("DELETE FROM contents WHERE path_id = %s", (file_id,), fetch=None)
-                execute_query("DELETE FROM words_paths WHERE path_id = %s", (file_id,), fetch=None)
-                execute_query("DELETE FROM keywords_paths WHERE path_id = %s", (file_id,), fetch=None)
-                execute_query("DELETE FROM titles_content WHERE path_id = %s", (file_id,), fetch=None)
-                execute_query("DELETE FROM paths WHERE id = %s", (file_id,), fetch=None)
-                
-                # Check if hash is still being used
-                hash_usage = execute_query("""
-                    SELECT COUNT(*) FROM paths WHERE hash_id = %s
-                """, (hash_id,), fetch="one")
-
-                # DB-05 (same defect already fixed in delete_file above):
-                # ``hash_usage`` is a 1-tuple like (0,); comparing the tuple to
-                # an int never fired, so bulk deletes left orphaned ``hashs``
-                # rows behind. Extract the count properly.
-                hash_refcount = hash_usage[0] if hash_usage else 0
-
-                if hash_refcount == 0:
-                    execute_query("DELETE FROM hashs WHERE id = %s", (hash_id,), fetch=None)
+                # Same lifecycle as the single delete (see delete_file).
+                from database.services.contents_db_service import ContentDBService
+                with ContentDBService()._dedup_session() as dedup:
+                    dedup.delete_path(file_id)
                 
                 deleted_count += 1
                 logger.info(f"Deleted file: {file_id} ({file_name})")

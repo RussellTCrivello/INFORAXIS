@@ -532,34 +532,30 @@ class StoragePipeline:
                     self.stats['storage_failed'] = self.stats.get('storage_failed', 0) + 1
                     return None
                 
-                # Step 2: Check for duplicates using ContentDBService
-                # Check if hash already exists for this source and side
-                hash_exists = self.db_service.hash_exists(file_hash, source_id)
-                if hash_exists:
-                    # Hash exists - check if it's a duplicate
-                    # Note: We can't easily get the path_id from ContentDBService without additional queries
-                    # For now, we'll use db_hub if available for duplicate checking, otherwise proceed with storage
-                    # (ContentDBService will handle duplicates via database constraints)
-                    if self.db_hub:
-                        is_duplicate, existing_path_id = self.check_duplicate_for_pipeline(file_hash, source_id, side_id)
-                        if is_duplicate:
-                            logger.info(
-                                f"Duplicate file detected (already processed): {file_info.get('name', 'unknown')} "
-                                f"(hash: {file_hash[:16]}..., existing path_id: {existing_path_id})"
-                            )
-                            self.stats['files_duplicates'] += 1
-                            self.stats['files_processed'] += 1
-                            # ``file_path`` is bound later in this method, so the
-                            # outcome key is built from the file info directly.
-                            self._record_store_outcome(
-                                file_info.get('path', ''), 'duplicate'
-                            )
-                            return existing_path_id
-                    else:
-                        # Hash exists but db_hub not available - proceed with storage
-                        # ContentDBService will handle duplicates via database constraints or return existing path_id
-                        logger.debug("Hash exists but cannot check for duplicate path_id (db_hub not available). Proceeding with storage - database will handle duplicates.")
-                        # Continue to storage - don't return None
+                # Step 2: Occurrence-level duplicate check (One Content,
+                # Many Contexts).  Only this exact physical encounter (same
+                # content, same context, same location) is a duplicate to
+                # skip; the same bytes elsewhere are a legitimate new
+                # occurrence and are stored below without duplicating any
+                # canonical content-derived data.
+                is_duplicate, existing_path_id = self.check_duplicate_for_pipeline(
+                    file_hash, source_id, side_id,
+                    file_path=file_info.get('path'),
+                    hierarchy_path=hierarchy_path,
+                )
+                if is_duplicate and existing_path_id:
+                    logger.info(
+                        f"Duplicate occurrence (already recorded): {file_info.get('name', 'unknown')} "
+                        f"(hash: {file_hash[:16]}..., existing path_id: {existing_path_id})"
+                    )
+                    self.stats['files_duplicates'] += 1
+                    self.stats['files_processed'] += 1
+                    # ``file_path`` is bound later in this method, so the
+                    # outcome key is built from the file info directly.
+                    self._record_store_outcome(
+                        file_info.get('path', ''), 'duplicate'
+                    )
+                    return existing_path_id
                 
                 # Step 3: Prepare file metadata for storage
                 # Extract file information
@@ -800,7 +796,9 @@ class StoragePipeline:
                         processing_status=processing_status,
                         status_detail=status_detail,
                         attempts=1,
-                        raw_text=raw_display_text
+                        raw_text=raw_display_text,
+                        parent_path_id=parent_path_id,
+                        hierarchy_path=hierarchy_path,
                     )
                     
                     # Handle case where storage_result is None
@@ -811,97 +809,37 @@ class StoragePipeline:
                             f"transaction may have failed, attempting fallback storage. "
                             f"File: {file_path[:100] if len(file_path) > 100 else file_path}"
                         )
-                        # Try to store at least basic metadata using fallback method
+                        # Try to store at least basic metadata using the
+                        # identity authority (registration is cheap even when
+                        # full processing failed: the occurrence keeps its
+                        # failed status and error detail).
+                        fallback_path_id = None
                         try:
-                            # First, try to get hash_id if it exists
-                            hash_id = None
-                            try:
-                                # DEFECT-FIX: get_hash_by_value does not exist on
-                                # HashsRepository. get_hash_records(hash_value)
-                                # returns (id, source_id, side_id, has_paths) and
-                                # the indexing below already takes [0], so this is
-                                # a drop-in. Previously the AttributeError was
-                                # caught and logged at DEBUG, so hash_id stayed
-                                # None and this fast path never ran.
-                                hash_row = self.db_service.hashs_repo.get_hash_records(file_hash)
-                                if hash_row:
-                                    hash_id = hash_row[0] if isinstance(hash_row, tuple) else hash_row.get('id') if isinstance(hash_row, dict) else hash_row
-                            except Exception as hash_err:
-                                logger.debug(f"Could not get hash_id for fallback: {hash_err}")
-                            
-                            # Use direct path insertion as fallback
-                            if hash_id:
-                                # DEFECT-FIX: this called paths_repo.insert_path,
-                                # which does not exist on PathsRepository (only
-                                # insert_info_paths does). Being inside an error
-                                # handler it raised AttributeError that the
-                                # enclosing except swallowed, so the recovery path
-                                # silently did nothing and the file vanished with
-                                # no record at all.
-                                fallback_path_id = self.db_service.paths_repo.insert_info_paths(
-                                    file_name=file_name,
-                                    file_path=file_path,
-                                    file_size=file_size,
-                                    file_type=file_type,
-                                    file_status='Unread',
-                                    file_date=file_date,
-                                    hash_id=hash_id,
-                                    coordinates=None,
-                                    processing_status='failed',
-                                    status_detail=(
+                            registration = self.db_service.register_occurrence(
+                                hash_value=file_hash,
+                                source_id=source_id,
+                                side_id=side_id,
+                                path_row={
+                                    "file_name": file_name,
+                                    "file_path": file_path,
+                                    "file_size": file_size,
+                                    "file_type": file_type,
+                                    "file_status": "Unread",
+                                    "file_date": file_date,
+                                    "date_creation": date.today(),
+                                    "coordinates": None,
+                                    "processing_status": "failed",
+                                    "status_detail": (
                                         'full processing failed; minimal record '
                                         'created by the storage fallback path'
                                     ),
-                                    attempts=1
-                                )
-                            else:
-                                # Try without hash_id (may fail but worth trying)
-                                logger.warning("Attempting fallback storage without hash_id")
-                                # Create minimal hash first
-                                try:
-                                    # DEFECT-FIX: insert_hash does not exist on
-                                    # HashsRepository either; the method is
-                                    # insert_info_hashs. Same silent-swallow
-                                    # consequence as the paths call above.
-                                    hash_id = self.db_service.hashs_repo.insert_info_hashs(
-                                        hash_value=file_hash,
-                                        source_id=source_id,
-                                        side_id=side_id
-                                    )
-                                    if hash_id:
-                                        fallback_path_id = self.db_service.paths_repo.insert_info_paths(
-                                            file_name=file_name,
-                                            file_path=file_path,
-                                            file_size=file_size,
-                                            file_type=file_type,
-                                            file_status='Unread',
-                                            file_date=file_date,
-                                            hash_id=hash_id,
-                                            coordinates=None,
-                                            processing_status='failed',
-                                            status_detail=(
-                                                'full processing failed; minimal '
-                                                'record created by the storage '
-                                                'fallback path'
-                                            ),
-                                            attempts=1
-                                        )
-                                    else:
-                                        fallback_path_id = None
-                                except Exception as hash_create_err:
-                                    logger.error(f"Failed to create hash for fallback: {hash_create_err}")
-                                    fallback_path_id = None
-                            
-                            if fallback_path_id:
-                                logger.warning(
-                                    f"✅ Stored file using fallback method (Path ID: {fallback_path_id}) - "
-                                    f"full processing failed but metadata saved. File: {file_name}"
-                                )
-                                self.stats['files_stored'] += 1
-                                self.stats['files_processed'] += 1
-                                return fallback_path_id
-                            else:
-                                logger.error(f"Fallback path insertion returned None for file: {file_name}")
+                                    "attempts": 1,
+                                    "parent_path_id": parent_path_id,
+                                    "hierarchy_path": hierarchy_path,
+                                },
+                            )
+                            fallback_path_id = registration.get("path_id")
+                            hash_id = registration.get("hash_id")
                         except Exception as fallback_error:
                             logger.error(
                                 f"Fallback storage failed for file '{file_name}': {fallback_error}. "
@@ -909,7 +847,18 @@ class StoragePipeline:
                             )
                             import traceback
                             logger.debug(f"Fallback error traceback: {traceback.format_exc()}")
-                        
+
+                        if fallback_path_id:
+                            logger.warning(
+                                f"✅ Stored file using fallback method (Path ID: {fallback_path_id}) - "
+                                f"full processing failed but metadata saved. File: {file_name}"
+                            )
+                            self.stats['files_stored'] += 1
+                            self.stats['files_processed'] += 1
+                            return fallback_path_id
+                        else:
+                            logger.error(f"Fallback path insertion returned None for file: {file_name}")
+
                         # If fallback also fails, increment retry count and try again
                         if retry_count < max_retries:
                             retry_count += 1
@@ -1253,43 +1202,30 @@ class StoragePipeline:
         self.stats['files_failed'] += 1
         return None
     
-    def check_duplicate_for_pipeline(self, file_hash: str, source_id: Optional[int] = None, side_id: Optional[int] = None) -> Tuple[bool, Optional[int]]:
+    def check_duplicate_for_pipeline(
+        self,
+        file_hash: str,
+        source_id: Optional[int] = None,
+        side_id: Optional[int] = None,
+        file_path: Optional[str] = None,
+        hierarchy_path: Optional[str] = None,
+    ) -> Tuple[bool, Optional[int]]:
+        """Occurrence-level duplicate check via the identity authority.
+
+        ``DeduplicationService.check_duplicate``: with a location (file_path
+        or hierarchy_path) only this exact physical encounter is a
+        duplicate; without one the check answers "is this content already
+        present in this context?".
         """
-        Check if file hash already exists.
-        
-        Uses ContentDBService for hash checking, with fallback to db_hub if available.
-        """
-        # Source and side IDs are MANDATORY - must be explicitly provided
         if source_id is None or side_id is None:
-            logger.error("source_id and side_id are MANDATORY for hash checking - no defaults allowed")
+            logger.error("source_id and side_id are MANDATORY for identity checks - no defaults allowed")
             return False, None
-        
-        # Try using ContentDBService first
-        try:
-            hash_exists = self.db_service.hash_exists(file_hash, source_id)
-            if hash_exists:
-                # Hash exists, check for duplicate path using hashs_repo
-                try:
-                    path_id = self.db_service.hashs_repo.check_duplicate(file_hash, source_id, side_id)
-                    if path_id:
-                        return True, path_id
-                    # Hash exists but no path_id found - might be from different side
-                    return True, None
-                except Exception as repo_error:
-                    logger.warning(f"Error checking duplicate with hashs_repo: {repo_error}")
-                    return True, None  # Hash exists but can't determine path_id
-            return False, None
-        except Exception as e:
-            logger.warning(f"Error checking hash with ContentDBService: {e}")
-            # Try direct hashs_repo access as fallback
-            try:
-                if self.db_service.hashs_repo.hash_exists(file_hash, source_id, side_id):
-                    path_id = self.db_service.hashs_repo.check_duplicate(file_hash, source_id, side_id)
-                    return True, path_id if path_id else None
-            except Exception as repo_error:
-                logger.warning(f"Fallback hash check also failed: {repo_error}")
-            return False, None
-    
+
+        return self.db_service.check_duplicate(
+            file_hash, source_id, side_id,
+            file_path=file_path, hierarchy_path=hierarchy_path,
+        )
+
     #: Separator for the human-readable hierarchy chain (archive::child::grandchild).
     #: Processing states this pipeline can determine truthfully.
     #:
@@ -1475,13 +1411,9 @@ class StoragePipeline:
                 or os.path.basename(str((child.get("Metadata") or {}).get("path", "")))
                 or "unknown"
             )
-            # Build the chain from the ROW's own name, not the archive member's.
-            # Identical bytes under two names collapse onto one paths row, so
-            # writing the member name left the row self-contradictory: observed
-            # as file_name='duplicate_a.txt' with
-            # hierarchy_path='dup.zip::duplicate_b.txt', whichever member was
-            # linked last. Deriving it from the stored name makes the two
-            # consistent by construction and idempotent under repeats.
+            # Build the chain from the ROW's own name, not the archive member's,
+            # so a row's file_name and hierarchy_path can never contradict each
+            # other (consistent by construction and idempotent under repeats).
             stored_name = self._file_name_of(child_id) or child_name
             child_hierarchy = (
                 f"{parent_hierarchy}{self.HIERARCHY_SEPARATOR}{stored_name}"
@@ -1491,7 +1423,6 @@ class StoragePipeline:
                 self.db_service.paths_repo.update_lineage(
                     child_id, parent_path_id, child_hierarchy
                 )
-                linked += 1
             except Exception as exc:
                 logger.warning(
                     f"[LINEAGE] Could not link child path_id={child_id} to "
@@ -1499,9 +1430,40 @@ class StoragePipeline:
                 )
                 continue
 
-            # Recurse so nested containers keep the full chain.
+            # Occurrence reconciliation (One Content, Many Contexts): the
+            # hierarchy chain is the stable identity of an in-container
+            # member.  A re-imported container re-extracts its members to new
+            # temporary paths, so the repeat is only recognisable here - if
+            # this context already recorded that member, collapse the repeat
+            # onto the earlier row (keeping its processing history).  Two
+            # members with identical bytes but different names have different
+            # chains and both are kept: they are two occurrences.
+            effective_child_id = child_id
+            try:
+                with self.db_service._dedup_session() as dedup:
+                    reconciliation = dedup.reconcile_occurrence(
+                        child_id, child_hierarchy
+                    )
+                if reconciliation.get("removed"):
+                    effective_child_id = reconciliation["kept_path_id"]
+                    logger.info(
+                        f"[LINEAGE] Repeat occurrence collapsed: "
+                        f"'{child_hierarchy}' kept path_id={effective_child_id}"
+                    )
+                else:
+                    linked += 1
+            except Exception as exc:
+                logger.warning(
+                    f"[LINEAGE] Occurrence reconciliation failed for "
+                    f"path_id={child_id}: {exc}"
+                )
+                linked += 1
+
+            # Recurse so nested containers keep the full chain.  Descendants
+            # attach to the surviving row so a repeat import can never leave
+            # them parented to a removed row.
             linked += self._link_extracted_children(
-                child.get("Content"), child_id, child_hierarchy
+                child.get("Content"), effective_child_id, child_hierarchy
             )
 
         if linked:
@@ -2748,21 +2710,16 @@ class StoragePipeline:
             if not path_info:
                 return None
             
-            # Convert path_info to dict if it's a tuple/row
+            # Convert path_info to dict if it's a tuple/row.
+            # FileQueries.get_file_by_id shape:
+            # (id, file_name, file_path, file_size, file_type, file_status,
+            #  file_date, date_creation, hash_id, source_id, side_id,
+            #  source_name, side_name)
             if isinstance(path_info, tuple):
-                # Assume standard path table structure: (id, file_name, file_path, file_size, file_type, file_status, file_date, hash_id, source_id, side_id, ...)
-                path_info = {
-                    'id': path_info[0] if len(path_info) > 0 else None,
-                    'file_name': path_info[1] if len(path_info) > 1 else None,
-                    'file_path': path_info[2] if len(path_info) > 2 else None,
-                    'file_size': path_info[3] if len(path_info) > 3 else None,
-                    'file_type': path_info[4] if len(path_info) > 4 else None,
-                    'file_status': path_info[5] if len(path_info) > 5 else None,
-                    'file_date': path_info[6] if len(path_info) > 6 else None,
-                    'hash_id': path_info[7] if len(path_info) > 7 else None,
-                    'source_id': path_info[8] if len(path_info) > 8 else None,
-                    'side_id': path_info[9] if len(path_info) > 9 else None,
-                }
+                keys = ('id', 'file_name', 'file_path', 'file_size', 'file_type',
+                        'file_status', 'file_date', 'date_creation', 'hash_id',
+                        'source_id', 'side_id', 'source_name', 'side_name')
+                path_info = dict(zip(keys, path_info))
             elif not isinstance(path_info, dict):
                 # If it's some other type, try to convert
                 logger.warning(f"Unexpected path_info type: {type(path_info)}, attempting to convert")
@@ -2770,12 +2727,11 @@ class StoragePipeline:
                 if not path_info:
                     return None
             
-            # Get hash information
+            # Canonical content identity of the occurrence (hash string).
             hash_id = path_info.get('hash_id')
             hash_value = None
-            if hash_id:
-                # Use ContentDBService hashs_repo instead of db_hub.hash_operations
-                hash_value = self.db_service.hashs_repo.get_hash_by_id(hash_id) if self.db_service else None
+            if self.db_service:
+                hash_value = self.db_service.paths_repo.get_path_hash_by_id(path_id)
             
             # Check if content was stored using ContentDBService
             content_exists = False

@@ -11,7 +11,7 @@ class PathCreate:
     file_type: str
     file_status: str = "Unread"
     file_date: Optional[date] = None
-    hash_id: int = 0
+    context_id: int = 0
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "PathCreate":
@@ -30,7 +30,7 @@ class PathCreate:
         file_type = str(data.get("file_type", "")).strip()
         file_status = str(data.get("file_status", "Unread"))
         file_date_val = data.get("file_date")
-        hash_id = int(data.get("hash_id", 0))
+        context_id = int(data.get("context_id", 0))
 
         if not file_name or not file_path or not file_type:
             raise ValueError("file_name, file_path, and file_type are required")
@@ -38,8 +38,8 @@ class PathCreate:
             raise ValueError("file_size must be >= 0")
         if file_status not in ("Read", "Unread"):
             raise ValueError("file_status must be 'Read' or 'Unread'")
-        if hash_id <= 0:
-            raise ValueError("hash_id must be a positive integer")
+        if context_id <= 0:
+            raise ValueError("context_id must be a positive integer")
 
         # Accept ISO date string or date object or None
         parsed_date: Optional[date] = None
@@ -61,7 +61,7 @@ class PathCreate:
             file_type=file_type,
             file_status=file_status,
             file_date=parsed_date,
-            hash_id=hash_id,
+            context_id=context_id,
         )
 
 
@@ -75,6 +75,6 @@ class PathOut:
     file_status: str
     file_date: Optional[date]
     date_creation: date
-    hash_id: int
+    context_id: int
 
 

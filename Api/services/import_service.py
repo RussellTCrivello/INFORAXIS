@@ -217,8 +217,8 @@ class ImportService:
     ALLOWED_TABLES = frozenset(
         {
             "words", "punctuation", "categorys", "words_categorys", "sides",
-            "sources", "hashs", "paths", "contents", "titles_content",
-            "keywords", "words_paths", "keywords_paths", "alerts",
+            "sources", "hashs", "hash_contexts", "paths", "contents", "contents_raw",
+            "titles_content", "keywords", "words_hashs", "keywords_hashs", "alerts",
         }
     )
     MAX_BACKUP_ROWS_PER_TABLE = 500_000

@@ -687,10 +687,11 @@ def select_classification(id_content=0):
             w_category.word AS item_classf,
             w.word AS word,
             wc.word_count AS counts
-        FROM sources s
-        JOIN hashs ha ON ha.source_id = s.id
-        JOIN paths pa ON pa.hash_id = ha.id
-        JOIN words_paths wc ON wc.path_id = pa.id
+        FROM paths pa
+        JOIN hash_contexts ha ON ha.id = pa.context_id
+        JOIN hashs hh ON hh.id = ha.hash_id
+        JOIN sources s ON s.id = ha.source_id
+        JOIN words_hashs wc ON wc.hash_id = hh.id
         JOIN words w ON w.id = wc.word_id
         JOIN words_categorys wi ON wi.word_id = w.id
         JOIN categorys i ON i.id = wi.category_id
@@ -732,7 +733,7 @@ def get_content_stats(file_id=None):
                 COUNT(*) as chunk_count,
                 SUM(LENGTH(content_data)) as total_size
             FROM contents
-            WHERE path_id = %s
+            WHERE hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)
         """
         result = execute_query(query, (file_id,), fetch="one")
         if result and isinstance(result, tuple) and len(result) >= 2:
@@ -824,12 +825,12 @@ def get_optimized_category_files(category_id, limit=100, offset=0, source_filter
         
         # Add source filter
         if source_filter:
-            where_conditions.append("h.source_id = %s")
+            where_conditions.append("hc.source_id = %s")
             params.append(source_filter)
         
         # Add side filter  
         if side_filter:
-            where_conditions.append("h.side_id = %s")
+            where_conditions.append("hc.side_id = %s")
             params.append(side_filter)
         
         # Add date filters
@@ -854,11 +855,12 @@ def get_optimized_category_files(category_id, limit=100, offset=0, source_filter
                 COALESCE(s.name, 'Unknown') as source_name,
                 COALESCE(si.name, 'Unknown') as side_name
             FROM paths p
-            JOIN words_paths wp ON wp.path_id = p.id
+            JOIN hash_contexts hc ON p.context_id = hc.id
+            JOIN words_hashs wp ON wp.hash_id = hc.hash_id
             JOIN words_categorys wc ON wc.word_id = wp.word_id
-            LEFT JOIN hashs h ON p.hash_id = h.id
-            LEFT JOIN sources s ON h.source_id = s.id
-            LEFT JOIN sides si ON h.side_id = si.id
+            
+            LEFT JOIN sources s ON hc.source_id = s.id
+            LEFT JOIN sides si ON hc.side_id = si.id
             WHERE {where_clause}
             GROUP BY p.id, p.file_name, p.file_type, p.file_date, p.date_creation, s.name, si.name
             ORDER BY relevance DESC
@@ -919,9 +921,10 @@ def get_optimized_search_results(query, file_type=None, source_id=None, side_id=
                 # Search in content words
                 search_conditions.append("""
                     EXISTS (
-                        SELECT 1 FROM words_paths wp 
-                        JOIN words w ON wp.word_id = w.id 
-                        WHERE wp.path_id = p.id AND w.word ILIKE %s
+                        SELECT 1 FROM words_hashs wp
+                        JOIN words w ON wp.word_id = w.id
+                        WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = p.id)
+                        AND w.word ILIKE %s
                     )
                 """)
                 params.append(term_pattern)
@@ -937,12 +940,12 @@ def get_optimized_search_results(query, file_type=None, source_id=None, side_id=
         
         # Source filter
         if source_id:
-            where_conditions.append("h.source_id = %s")
+            where_conditions.append("hc.source_id = %s")
             params.append(source_id)
         
         # Side filter
         if side_id:
-            where_conditions.append("h.side_id = %s")
+            where_conditions.append("hc.side_id = %s")
             params.append(side_id)
         
         # Date filters
@@ -956,7 +959,7 @@ def get_optimized_search_results(query, file_type=None, source_id=None, side_id=
         
         # Category filter
         if category_id:
-            where_conditions.append("EXISTS (SELECT 1 FROM words_paths wp2 JOIN words_categorys wc ON wp2.word_id = wc.word_id WHERE wp2.path_id = p.id AND wc.category_id = %s)")
+            where_conditions.append("EXISTS (SELECT 1 FROM words_hashs wp2 JOIN words_categorys wc ON wp2.word_id = wc.word_id WHERE wp2.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = p.id) AND wc.category_id = %s)")
             params.append(category_id)
 
         # Analyst-categorization scope filter (FR-2.x) - filters strictly on
@@ -984,9 +987,9 @@ def get_optimized_search_results(query, file_type=None, source_id=None, side_id=
                             CASE 
                                 WHEN p.file_name ILIKE '%%' || term || '%%' THEN 2.0
                                 WHEN EXISTS (
-                                    SELECT 1 FROM words_paths wp
+                                    SELECT 1 FROM words_hashs wp
                                     JOIN words w ON wp.word_id = w.id
-                                    WHERE wp.path_id = p.id
+                                    WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = p.id)
                                     AND w.word ILIKE '%%' || term || '%%'
                                 ) THEN 1.0
                                 ELSE 0.0
@@ -1000,9 +1003,9 @@ def get_optimized_search_results(query, file_type=None, source_id=None, side_id=
             SELECT DISTINCT p.id, p.file_name, p.file_type, p.file_date,
                    s.name as source_name, si.name as side_name, p.file_status{relevance_select}
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
-            LEFT JOIN sources s ON h.source_id = s.id
-            LEFT JOIN sides si ON h.side_id = si.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+            LEFT JOIN sources s ON hc.source_id = s.id
+            LEFT JOIN sides si ON hc.side_id = si.id
             WHERE {where_clause}
             ORDER BY {relevance_order}
             LIMIT %s
@@ -1038,9 +1041,9 @@ def get_word_frequencies(file_id, limit=50):
     try:
         query = """
             SELECT w.word, wp.word_count
-            FROM words_paths wp
+            FROM words_hashs wp
             JOIN words w ON w.id = wp.word_id
-            WHERE wp.path_id = %s
+            WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)
             ORDER BY wp.word_count DESC
             LIMIT %s
         """
@@ -1066,9 +1069,9 @@ def get_keyword_frequencies_db(file_id, limit=50):
     try:
         query = """
             SELECT k.keyword, kp.word_count
-            FROM keywords_paths kp
+            FROM keywords_hashs kp
             JOIN keywords k ON k.id = kp.keyword_id
-            WHERE kp.path_id = %s
+            WHERE kp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)
             ORDER BY kp.word_count DESC
             LIMIT %s
         """
@@ -1094,8 +1097,8 @@ def get_file_word_count(file_id):
     try:
         query = """
             SELECT SUM(wp.word_count)
-            FROM words_paths wp
-            WHERE wp.path_id = %s
+            FROM words_hashs wp
+            WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)
         """
         result = execute_query(query, (file_id,), fetch="one")
         if result and isinstance(result, tuple):
@@ -1120,7 +1123,7 @@ def get_content_count(file_id):
         query = """
             SELECT COUNT(*)
             FROM contents
-            WHERE path_id = %s
+            WHERE hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s)
         """
         result = execute_query(query, (file_id,), fetch="one")
         if result and isinstance(result, tuple):
@@ -1148,7 +1151,8 @@ def get_categories_by_file(file_id):
                 w.word as name,
                 COUNT(DISTINCT wp.word_id) as word_count
             FROM paths p
-            JOIN words_paths wp ON wp.path_id = p.id
+            JOIN hash_contexts hc ON p.context_id = hc.id
+            JOIN words_hashs wp ON wp.hash_id = hc.hash_id
             JOIN words_categorys wc ON wc.word_id = wp.word_id
             JOIN categorys c ON c.id = wc.category_id
             JOIN words w ON w.id = c.word_id
@@ -1278,8 +1282,9 @@ def get_categories_with_stats(limit: int = 100) -> list:
             FROM categorys c
             JOIN words w ON c.word_id = w.id
             LEFT JOIN words_categorys wc ON wc.category_id = c.id
-            LEFT JOIN words_paths wp ON wp.word_id = wc.word_id
-            LEFT JOIN paths p ON p.id = wp.path_id
+            LEFT JOIN words_hashs wp ON wp.word_id = wc.word_id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             GROUP BY c.id, w.word
             ORDER BY file_count DESC, w.word
             LIMIT %s
@@ -1343,10 +1348,12 @@ def get_words_by_category(category_id: int, limit: int = 100) -> list:
     """
     try:
         query = """
-            SELECT DISTINCT w.id, w.word, COUNT(DISTINCT wp.path_id) as usage_count
+            SELECT DISTINCT w.id, w.word, COUNT(DISTINCT p.id) as usage_count
             FROM words_categorys wc
             JOIN words w ON w.id = wc.word_id
-            LEFT JOIN words_paths wp ON wp.word_id = w.id
+            LEFT JOIN words_hashs wp ON wp.word_id = w.id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             WHERE wc.category_id = %s
             GROUP BY w.id, w.word
             ORDER BY usage_count DESC, w.word
@@ -1459,9 +1466,11 @@ def get_words_with_usage(
         
         # Build query
         query = f"""
-            SELECT w.id, w.word, COUNT(DISTINCT wp.path_id) as usage_count
+            SELECT w.id, w.word, COUNT(DISTINCT p.id) as usage_count
             FROM words w
-            LEFT JOIN words_paths wp ON wp.word_id = w.id
+            LEFT JOIN words_hashs wp ON wp.word_id = w.id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             {where_sql}
             GROUP BY w.id, w.word
             ORDER BY {sort_by} {sort_order.upper()}, w.word
@@ -1508,9 +1517,11 @@ def get_word_detail(word_id: int) -> dict:
     """
     try:
         query = """
-            SELECT w.id, w.word, COUNT(DISTINCT wp.path_id) as usage_count
+            SELECT w.id, w.word, COUNT(DISTINCT p.id) as usage_count
             FROM words w
-            LEFT JOIN words_paths wp ON wp.word_id = w.id
+            LEFT JOIN words_hashs wp ON wp.word_id = w.id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             WHERE w.id = %s
             GROUP BY w.id, w.word
         """
@@ -1614,9 +1625,11 @@ def get_words_usage_by_ids(word_ids: list) -> dict:
         
         placeholders = ','.join(['%s'] * len(word_ids))
         query = f"""
-            SELECT w.id, COUNT(DISTINCT wp.path_id) as usage_count
+            SELECT w.id, COUNT(DISTINCT p.id) as usage_count
             FROM words w
-            LEFT JOIN words_paths wp ON wp.word_id = w.id
+            LEFT JOIN words_hashs wp ON wp.word_id = w.id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             WHERE w.id IN ({placeholders})
             GROUP BY w.id
         """
@@ -1701,9 +1714,11 @@ def get_keywords_with_usage(
             offset = (page - 1) * per_page
             
             query = """
-                SELECT k.id, k.category_id, k.keyword, COUNT(DISTINCT kp.path_id) as usage_count
+                SELECT k.id, k.category_id, k.keyword, COUNT(DISTINCT p.id) as usage_count
                 FROM keywords k
-                LEFT JOIN keywords_paths kp ON kp.keyword_id = k.id
+                LEFT JOIN keywords_hashs kp ON kp.keyword_id = k.id
+                LEFT JOIN hash_contexts hc ON hc.hash_id = kp.hash_id
+                LEFT JOIN paths p ON p.context_id = hc.id
                 GROUP BY k.id, k.category_id, k.keyword
                 ORDER BY usage_count DESC, k.id
                 LIMIT %s OFFSET %s
@@ -1727,9 +1742,11 @@ def get_keywords_with_usage(
         # First, get all keywords with usage counts (without pagination)
         # We'll filter by text and then paginate
         base_query = """
-            SELECT k.id, k.category_id, k.keyword, COUNT(DISTINCT kp.path_id) as usage_count
+            SELECT k.id, k.category_id, k.keyword, COUNT(DISTINCT p.id) as usage_count
             FROM keywords k
-            LEFT JOIN keywords_paths kp ON kp.keyword_id = k.id
+            LEFT JOIN keywords_hashs kp ON kp.keyword_id = k.id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = kp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             GROUP BY k.id, k.category_id, k.keyword
         """
         
@@ -1828,8 +1845,8 @@ def db_delete_keyword(keyword_id: int) -> bool:
         True if successful, False otherwise
     """
     try:
-        # Delete from keywords_paths first (foreign key constraint)
-        execute_query("DELETE FROM keywords_paths WHERE keyword_id = %s", (keyword_id,), fetch=None)
+        # Delete from keywords_hashs first (foreign key constraint)
+        execute_query("DELETE FROM keywords_hashs WHERE keyword_id = %s", (keyword_id,), fetch=None)
         # Then delete the keyword
         execute_query("DELETE FROM keywords WHERE id = %s", (keyword_id,), fetch=None)
         return True
@@ -1840,10 +1857,12 @@ def db_delete_keyword(keyword_id: int) -> bool:
 
 # ==================== ARCHIVE FUNCTIONS ====================
 
-#: HAVING clause that decides what a "relation" IS: a content hash that ties
-#: more than one artifact together. Two shapes qualify - several stored paths
-#: share the hash (duplicates), or the same hash is stored under another
-#: source/side pair (a variant of the same content in another collection).
+#: HAVING clause that decides what a "relation" IS, in the identity model:
+#: one canonical content row (``hashs``, unique per hash) that ties more than
+#: one artifact together. Two shapes qualify - several contexts hold the
+#: content (the same content in different source/side collections; previously
+#: a "variant" was a second ``hashs`` row) or several occurrences (stored
+#: paths) exist across those contexts.
 #:
 #: This definition is shared by the sidebar count, the initial page render and
 #: the paginated API on purpose. When they disagree, the UI shows a count and
@@ -1851,24 +1870,24 @@ def db_delete_keyword(keyword_id: int) -> bool:
 #: HAVING while the list fetched a page of ``hashs`` in id order and dropped
 #: every non-duplicate afterwards, so a page could be empty while the total
 #: said there were relations.
-RELATION_DUPLICATE_HAVING = "COUNT(DISTINCT p.id) > 1 OR COUNT(DISTINCT h2.id) > 0"
-
-#: Join predicate that finds the same hash under a different source/side.
-#: ``IS DISTINCT FROM`` (not ``!=``) keeps NULL-valued columns comparable
-#: instead of silently dropping every row they take part in.
-RELATION_VARIANT_JOIN = (
-    "LEFT JOIN hashs h2 ON h2.hash = h.hash"
-    " AND (h2.source_id IS DISTINCT FROM h.source_id"
-    "      OR h2.side_id IS DISTINCT FROM h.side_id)"
-)
+RELATION_DUPLICATE_HAVING = "COUNT(DISTINCT p.id) > 1 OR COUNT(DISTINCT hc.id) > 1"
 
 
 def relation_duplicates_sql(search: str = None):
-    """SQL for the duplicate-content relations, one row per stored hash.
+    """SQL for the duplicate-content relations, one row per canonical content.
+
+    A "relation" is a canonical content row (``hashs``) that ties more than
+    one artifact together: several contexts (the same content in different
+    source/side collections) or several occurrences (stored paths). In the
+    identity model ``hashs`` is unique per hash, so "the same content under
+    another source/side" is a second ``hash_contexts`` row, not a second
+    content row.
 
     Returns ``(sql, params)``. The statement is a plain SELECT (no ORDER BY /
     LIMIT) so callers wrap it in a derived table to sort, limit, or count it -
-    the duplicate filter stays identical everywhere.
+    the duplicate filter stays identical everywhere. Columns: ``id`` (hashs
+    row), ``name`` (hash value), ``context_count``, ``file_count`` (number of
+    occurrences = stored paths across all contexts).
 
     Args:
         search: optional case-insensitive substring of the hash value.
@@ -1882,15 +1901,13 @@ def relation_duplicates_sql(search: str = None):
     sql = f"""
         SELECT h.id AS id,
                h.hash AS name,
-               h.side_id AS side_id,
-               h.source_id AS source_id,
-               COUNT(DISTINCT p.id) AS file_count,
-               COUNT(DISTINCT h2.id) AS hash_variants
+               COUNT(DISTINCT hc.id) AS context_count,
+               COUNT(DISTINCT p.id) AS file_count
         FROM hashs h
-        LEFT JOIN paths p ON p.hash_id = h.id
-        {RELATION_VARIANT_JOIN}
+        LEFT JOIN hash_contexts hc ON hc.hash_id = h.id
+        LEFT JOIN paths p ON p.context_id = hc.id
         {where}
-        GROUP BY h.id, h.hash, h.side_id, h.source_id
+        GROUP BY h.id, h.hash
         HAVING {RELATION_DUPLICATE_HAVING}
     """
     return sql, params
@@ -1929,7 +1946,7 @@ def get_archive_statistics() -> dict:
         result = execute_query("""
             SELECT COUNT(DISTINCT w.id) 
             FROM words w
-            INNER JOIN words_paths wp ON w.id = wp.word_id
+            INNER JOIN words_hashs wp ON w.id = wp.word_id
         """, fetch="one")
         stats['total_words'] = result[0] if result else 0
         
@@ -1937,7 +1954,7 @@ def get_archive_statistics() -> dict:
         result = execute_query("""
             SELECT COUNT(DISTINCT k.id) 
             FROM keywords k
-            INNER JOIN keywords_paths kp ON k.id = kp.keyword_id
+            INNER JOIN keywords_hashs kp ON k.id = kp.keyword_id
         """, fetch="one")
         stats['total_keywords'] = result[0] if result else 0
         
@@ -1946,7 +1963,7 @@ def get_archive_statistics() -> dict:
             SELECT COUNT(DISTINCT c.id) 
             FROM categorys c
             INNER JOIN words_categorys wc ON c.id = wc.category_id
-            INNER JOIN words_paths wp ON wc.word_id = wp.word_id
+            INNER JOIN words_hashs wp ON wc.word_id = wp.word_id
         """, fetch="one")
         stats['total_categories'] = result[0] if result else 0
         
@@ -1954,7 +1971,8 @@ def get_archive_statistics() -> dict:
         result = execute_query("""
             SELECT COUNT(DISTINCT tc.id) 
             FROM titles_content tc
-            INNER JOIN paths p ON tc.path_id = p.id
+            INNER JOIN hash_contexts hc ON hc.hash_id = tc.hash_id
+            INNER JOIN paths p ON p.context_id = hc.id
             WHERE tc.title_status = 'Main'
         """, fetch="one")
         stats['total_titles'] = result[0] if result else 0
@@ -1963,8 +1981,8 @@ def get_archive_statistics() -> dict:
         result = execute_query("""
             SELECT COUNT(DISTINCT s.id) 
             FROM sources s
-            INNER JOIN hashs h ON s.id = h.source_id
-            INNER JOIN paths p ON h.id = p.hash_id
+            INNER JOIN hash_contexts hc ON s.id = hc.source_id
+            INNER JOIN paths p ON p.context_id = hc.id
         """, fetch="one")
         stats['total_sources'] = result[0] if result else 0
         
@@ -1972,8 +1990,8 @@ def get_archive_statistics() -> dict:
         result = execute_query("""
             SELECT COUNT(DISTINCT si.id) 
             FROM sides si
-            INNER JOIN hashs h ON si.id = h.side_id
-            INNER JOIN paths p ON h.id = p.hash_id
+            INNER JOIN hash_contexts hc ON si.id = hc.side_id
+            INNER JOIN paths p ON p.context_id = hc.id
         """, fetch="one")
         stats['total_sides'] = result[0] if result else 0
         
@@ -2028,8 +2046,8 @@ def get_source_with_stats(source_id: int) -> dict:
                 COUNT(DISTINCT p.file_type) as file_types,
                 COALESCE(SUM(p.file_size), 0) as total_size
             FROM paths p
-            JOIN hashs h ON h.id = p.hash_id
-            WHERE h.source_id = %s
+            JOIN hash_contexts hc ON hc.id = p.context_id JOIN hashs h ON h.id = hc.hash_id
+            WHERE hc.source_id = %s
         """, (source_id,), fetch="one")
         
         # Add statistics to source dict
@@ -2116,9 +2134,9 @@ def search_files_by_word(word: str, page: int = 1, per_page: int = 10, analyst_s
             # Search in content words
             search_conditions.append("""
                 EXISTS (
-                    SELECT 1 FROM words_paths wp
+                    SELECT 1 FROM words_hashs wp
                     JOIN words w ON wp.word_id = w.id
-                    WHERE wp.path_id = p.id
+                    WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = p.id)
                     AND w.word ILIKE %s
                 )
             """)
@@ -2138,7 +2156,7 @@ def search_files_by_word(word: str, page: int = 1, per_page: int = 10, analyst_s
         relevance_parts = []
         for term in search_terms:
             relevance_parts.append("CASE WHEN p.file_name ILIKE %s THEN 2.0 ELSE 0.0 END")
-            relevance_parts.append("CASE WHEN EXISTS (SELECT 1 FROM words_paths wp JOIN words w ON wp.word_id = w.id WHERE wp.path_id = p.id AND w.word ILIKE %s) THEN 1.0 ELSE 0.0 END")
+            relevance_parts.append("CASE WHEN EXISTS (SELECT 1 FROM words_hashs wp JOIN words w ON wp.word_id = w.id WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = p.id) AND w.word ILIKE %s) THEN 1.0 ELSE 0.0 END")
         relevance_expr = ' + '.join(relevance_parts) if relevance_parts else '0'
         
         query = f"""
@@ -2147,13 +2165,13 @@ def search_files_by_word(word: str, page: int = 1, per_page: int = 10, analyst_s
                 p.file_date, p.date_creation,
                 COALESCE(s.name, 'Unknown') as source_name,
                 COALESCE(si.name, 'Unknown') as side_name,
-                h.source_id, h.side_id,
+                hc.source_id, hc.side_id,
                 -- Google-like relevance score: sum matches for each search term
                 ({relevance_expr}) as relevance_score
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
-            LEFT JOIN sources s ON h.source_id = s.id
-            LEFT JOIN sides si ON h.side_id = si.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+            LEFT JOIN sources s ON hc.source_id = s.id
+            LEFT JOIN sides si ON hc.side_id = si.id
             WHERE {where_clause}
             ORDER BY relevance_score DESC, p.file_name
             LIMIT %s OFFSET %s
@@ -2162,7 +2180,7 @@ def search_files_by_word(word: str, page: int = 1, per_page: int = 10, analyst_s
         count_query = f"""
             SELECT COUNT(DISTINCT p.id)
             FROM paths p
-            LEFT JOIN hashs h ON p.hash_id = h.id
+            LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
             WHERE {where_clause}
         """
         

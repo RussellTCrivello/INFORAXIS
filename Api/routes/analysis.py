@@ -75,10 +75,10 @@ def register_analysis_routes(app):
                        COALESCE(s.name, 'Unknown') as source_name,
                        COALESCE(si.name, 'Unknown') as side_name
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
-                LEFT JOIN contents c ON c.path_id = p.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
+                LEFT JOIN contents c ON c.hash_id = hc.hash_id
                 WHERE c.id IS NULL
                 ORDER BY p.date_creation DESC
                 LIMIT 100
@@ -91,9 +91,9 @@ def register_analysis_routes(app):
                        COALESCE(si.name, 'Unknown') as side_name,
                        p.error_message, p.file_path, p.file_status
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE (p.error_message IS NOT NULL AND p.error_message != '')
                    OR (p.file_status = 'Unread' AND p.date_creation < CURRENT_DATE - INTERVAL '1 day')
                 ORDER BY p.date_creation DESC
@@ -152,12 +152,12 @@ def register_analysis_routes(app):
         try:
             # Get file information from database
             file_info = execute_query("""
-                SELECT p.file_path, p.file_name, h.source_id, h.side_id,
+                SELECT p.file_path, p.file_name, hc.source_id, hc.side_id,
                        s.name as source_name, si.name as side_name
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE p.id = %s
             """, (file_id,), fetch="one")
             

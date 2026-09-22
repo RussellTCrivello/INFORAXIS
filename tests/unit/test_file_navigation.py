@@ -59,7 +59,7 @@ def test_search_filters_on_the_file_name():
 
 def test_source_and_side_are_integers():
     filters = build_library_filters({"source": "7", "side": "9"})
-    assert filters.where_parts == ("h.source_id = %s", "h.side_id = %s")
+    assert filters.where_parts == ("hc.source_id = %s", "hc.side_id = %s")
     assert filters.params == (7, 9)
     assert filters.context_dict() == {"source": "7", "side": "9"}
 
@@ -146,8 +146,8 @@ def test_filters_combine_in_a_stable_order():
     })
     assert filters.where_parts == (
         "p.file_name ILIKE %s",
-        "h.source_id = %s",
-        "h.side_id = %s",
+        "hc.source_id = %s",
+        "hc.side_id = %s",
         "p.file_status = %s",
         "p.file_type = %s",
         "p.file_date >= %s",

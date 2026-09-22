@@ -333,18 +333,15 @@ def app(pg_db):
     # unless a filesystem marker exists and the critical tables are present.
     # pg_db bootstraps the tables, so only the marker is missing - which made
     # every authenticated fixture fail with 302 and blocked the API surface
-    # from being tested at all. Mark it for the duration of the session and
-    # remove it afterwards so no state leaks into the repository.
+    # from being tested at all. Mark it and leave it: the file is gitignored,
+    # the gate's table check stays authoritative per database, and unlinking
+    # it at teardown raced parallel xdist workers whose sessions outlived
+    # ours (their in-flight requests 302'ed to /setup mid-suite).
     from core.initialization import INIT_MARKER_FILE, mark_system_initialized
 
-    marker_existed = INIT_MARKER_FILE.exists()
-    if not marker_existed:
-        mark_system_initialized()
+    mark_system_initialized()
 
     yield flask_app
-
-    if not marker_existed and INIT_MARKER_FILE.exists():
-        INIT_MARKER_FILE.unlink()
 
 
 @pytest.fixture()

@@ -811,9 +811,9 @@ class Database:
         # Default list of all tables in the system
         if table_names is None:
             table_names = [
-                'words', 'categorys', 'words_categorys', 'words_paths',
-                'keywords_paths', 'keywords', 'contents', 'titles_content',
-                'sides', 'sources', 'hashs', 'paths',
+                'words', 'categorys', 'words_categorys', 'words_hashs',
+                'keywords_hashs', 'keywords', 'contents', 'titles_content',
+                'sides', 'sources', 'hashs', 'hash_contexts', 'paths',
                 'punctuation', 'alerts'
             ]
         

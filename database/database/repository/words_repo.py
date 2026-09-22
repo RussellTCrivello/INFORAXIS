@@ -336,9 +336,9 @@ class WordsRepository(BaseRepository):
         
         # Build ORDER BY clause dynamically
         if sort_by == 'word':
-            order_by = f"ORDER BY w.word {sort_order}, COUNT(wp.path_id) DESC"
+            order_by = f"ORDER BY w.word {sort_order}, COUNT(DISTINCT p.id) DESC"
         else:  # sort_by == 'usage_count'
-            order_by = f"ORDER BY COUNT(wp.path_id) {sort_order}, w.word ASC"
+            order_by = f"ORDER BY COUNT(DISTINCT p.id) {sort_order}, w.word ASC"
         
         # Build complete query with dynamic ORDER BY
         base_query = WordQueries.get_email_words()

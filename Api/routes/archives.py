@@ -15,6 +15,36 @@ from core.security.rate_limit import INTERACTIVE_READ_LIMIT, limiter
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Title archive SQL fragments (One Content, Many Contexts).
+#
+# ``titles_content`` belongs to canonical content (``hash_id``) since
+# migration m0011, but the archive UI is occurrence-oriented: file_count
+# counts the LIVE occurrences (paths) of the title's content across its
+# contexts, and every title is surfaced through a representative occurrence
+# (its first live path, in id order) so pre-existing links keep working.
+#
+# The subqueries deliberately avoid COUNT()/MIN() where they are used as
+# cursor-paginator select columns: the paginator's GROUP BY detection scans
+# select_columns for aggregate tokens and would mangle the grouping otherwise
+# (hence ORDER BY ... LIMIT 1 and EXISTS instead). TC_COUNT - the only
+# fragment containing COUNT(*) - is for queries executed directly.
+_TC_TITLE_PATHS = (
+    " FROM hash_contexts tchc"
+    " JOIN paths tchp ON tchp.context_id = tchc.id"
+    " WHERE tchc.hash_id = tc.hash_id"
+)
+#: Number of live occurrences (stored paths) of the title's content.
+TC_COUNT = f"(SELECT COUNT(*){_TC_TITLE_PATHS})"
+#: Representative occurrence of the title's content (first live path id).
+TC_PATH_SUBQ = f"(SELECT tchp.id{_TC_TITLE_PATHS} ORDER BY tchp.id LIMIT 1)"
+#: File name of the representative occurrence.
+TC_NAME_SUBQ = (
+    f"(SELECT tchp.file_name{_TC_TITLE_PATHS} ORDER BY tchp.id LIMIT 1)"
+)
+#: Whether the title's content has any live occurrence at all.
+TC_EXISTS = f"EXISTS (SELECT 1{_TC_TITLE_PATHS})"
+
 
 def register_archives_routes(app):
     """Register archives routes with the Flask app"""
@@ -39,9 +69,9 @@ def register_archives_routes(app):
 
             keywords_data = execute_query("""
                 SELECT k.id, k.category_id, k.keyword,
-                       COUNT(DISTINCT kp.path_id) as file_count
+                       COUNT(DISTINCT p.id) as file_count
                 FROM keywords k
-                LEFT JOIN keywords_paths kp ON k.id = kp.keyword_id
+                LEFT JOIN keywords_hashs kp ON k.id = kp.keyword_id
                 GROUP BY k.id, k.category_id, k.keyword
                 ORDER BY file_count DESC, k.id ASC
                 LIMIT 100
@@ -94,11 +124,12 @@ def register_archives_routes(app):
             logger.info(f"✅ Loaded {len(keywords)} keywords from database (query returned {len(keywords_data or [])} rows)")
             
 
-            titles_data = execute_query("""
-                SELECT tc.id, tc.title_status, tc.path_id, tc.title_data,
-                       CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END as file_count
+            # Titles belong to canonical content (hash_id); file_count counts
+            # the live occurrences (paths) of that content across contexts.
+            titles_data = execute_query(f"""
+                SELECT tc.id, tc.title_status, tc.hash_id, tc.title_data,
+                       {TC_COUNT} as file_count
                 FROM titles_content tc
-                LEFT JOIN paths p ON tc.path_id = p.id
                 WHERE tc.title_status = 'Main'
                 ORDER BY tc.id DESC
                 LIMIT 100
@@ -168,8 +199,8 @@ def register_archives_routes(app):
                 SELECT s.id, s.name, s.job, s.country, s.city,
                        COUNT(DISTINCT p.id) as file_count
                 FROM sources s
-                LEFT JOIN hashs h ON s.id = h.source_id
-                LEFT JOIN paths p ON h.id = p.hash_id
+                LEFT JOIN hash_contexts hc ON s.id = hc.source_id
+                LEFT JOIN paths p ON p.context_id = hc.id
                 GROUP BY s.id, s.name, s.job, s.country, s.city
                 ORDER BY file_count DESC, s.name ASC
                 LIMIT 100
@@ -191,8 +222,8 @@ def register_archives_routes(app):
                 SELECT si.id, si.name, si.importance,
                        COUNT(DISTINCT p.id) as file_count
                 FROM sides si
-                LEFT JOIN hashs h ON si.id = h.side_id
-                LEFT JOIN paths p ON h.id = p.hash_id
+                LEFT JOIN hash_contexts hc ON si.id = hc.side_id
+                LEFT JOIN paths p ON p.context_id = hc.id
                 GROUP BY si.id, si.name, si.importance
                 ORDER BY si.importance DESC, si.name ASC
                 LIMIT 100
@@ -212,7 +243,7 @@ def register_archives_routes(app):
             # sidebar count use (``relation_duplicates_sql``).
             relations_sql, _ = relation_duplicates_sql()
             hashs_data = execute_query(f"""
-                SELECT id, name, side_id, source_id, file_count, hash_variants
+                SELECT id, name, context_count, file_count
                 FROM ({relations_sql}) AS relations
                 ORDER BY file_count DESC, id ASC
                 LIMIT 100
@@ -223,9 +254,8 @@ def register_archives_routes(app):
                 hashs.append({
                     'id': row[0],
                     'name': row[1] or 'Unknown Hash',
-                    'side_id': row[2],
-                    'source_id': row[3],
-                    'file_count': row[4] or 0
+                    'context_count': row[2] or 0,
+                    'file_count': row[3] or 0
                 })
             
             stats = get_archive_statistics()
@@ -297,8 +327,8 @@ def register_archives_routes(app):
                         FROM categorys c
                         JOIN words w ON c.word_id = w.id
                         LEFT JOIN words_categorys wc ON c.id = wc.category_id
-                        LEFT JOIN words_paths wp ON wc.word_id = wp.word_id
-                        LEFT JOIN paths p ON wp.path_id = p.id
+                        LEFT JOIN words_hashs wp ON wc.word_id = wp.word_id
+                        LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id LEFT JOIN paths p ON p.context_id = hc.id
                         WHERE w.word ILIKE %s
                         GROUP BY c.id, w.word
                         ORDER BY file_count DESC, w.word ASC
@@ -312,8 +342,8 @@ def register_archives_routes(app):
                         FROM categorys c
                         JOIN words w ON c.word_id = w.id
                         LEFT JOIN words_categorys wc ON c.id = wc.category_id
-                        LEFT JOIN words_paths wp ON wc.word_id = wp.word_id
-                        LEFT JOIN paths p ON wp.path_id = p.id
+                        LEFT JOIN words_hashs wp ON wc.word_id = wp.word_id
+                        LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id LEFT JOIN paths p ON p.context_id = hc.id
                         GROUP BY c.id, w.word
                         ORDER BY file_count DESC, w.word ASC
                         LIMIT 100
@@ -334,9 +364,9 @@ def register_archives_routes(app):
                 # Even with search, we limit results for reasonable performance
                 query = """
                     SELECT k.id, k.category_id,
-                           COUNT(DISTINCT kp.path_id) as file_count
+                           COUNT(DISTINCT p.id) as file_count
                     FROM keywords k
-                    LEFT JOIN keywords_paths kp ON k.id = kp.keyword_id
+                    LEFT JOIN keywords_hashs kp ON k.id = kp.keyword_id
                     GROUP BY k.id, k.category_id
                     ORDER BY file_count DESC, k.id ASC
                     LIMIT 500
@@ -358,11 +388,10 @@ def register_archives_routes(app):
                         })
             
             elif section == 'titles':
-                query = """
-                    SELECT tc.id, tc.title_status, tc.path_id,
-                           CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END as file_count
+                query = f"""
+                    SELECT tc.id, tc.title_status, tc.hash_id,
+                           {TC_COUNT} as file_count
                     FROM titles_content tc
-                    LEFT JOIN paths p ON tc.path_id = p.id
                     WHERE tc.title_status = 'Main'
                     ORDER BY tc.id DESC
                     LIMIT 100
@@ -386,8 +415,8 @@ def register_archives_routes(app):
                         SELECT s.id, s.name, s.job, s.country, s.city,
                                COUNT(DISTINCT p.id) as file_count
                         FROM sources s
-                        LEFT JOIN hashs h ON s.id = h.source_id
-                        LEFT JOIN paths p ON h.id = p.hash_id
+                        LEFT JOIN hash_contexts hc ON s.id = hc.source_id
+                        LEFT JOIN paths p ON p.context_id = hc.id
                         WHERE s.name ILIKE %s OR s.job ILIKE %s OR s.country ILIKE %s
                         GROUP BY s.id, s.name, s.job, s.country, s.city
                         ORDER BY file_count DESC, s.name ASC
@@ -400,8 +429,8 @@ def register_archives_routes(app):
                         SELECT s.id, s.name, s.job, s.country, s.city,
                                COUNT(DISTINCT p.id) as file_count
                         FROM sources s
-                        LEFT JOIN hashs h ON s.id = h.source_id
-                        LEFT JOIN paths p ON h.id = p.hash_id
+                        LEFT JOIN hash_contexts hc ON s.id = hc.source_id
+                        LEFT JOIN paths p ON p.context_id = hc.id
                         GROUP BY s.id, s.name, s.job, s.country, s.city
                         ORDER BY file_count DESC, s.name ASC
                         LIMIT 100
@@ -423,8 +452,8 @@ def register_archives_routes(app):
                         SELECT si.id, si.name, si.importance,
                                COUNT(DISTINCT p.id) as file_count
                         FROM sides si
-                        LEFT JOIN hashs h ON si.id = h.side_id
-                        LEFT JOIN paths p ON h.id = p.hash_id
+                        LEFT JOIN hash_contexts hc ON si.id = hc.side_id
+                        LEFT JOIN paths p ON p.context_id = hc.id
                         WHERE si.name ILIKE %s
                         GROUP BY si.id, si.name, si.importance
                         ORDER BY si.importance DESC, si.name ASC
@@ -436,8 +465,8 @@ def register_archives_routes(app):
                         SELECT si.id, si.name, si.importance,
                                COUNT(DISTINCT p.id) as file_count
                         FROM sides si
-                        LEFT JOIN hashs h ON si.id = h.side_id
-                        LEFT JOIN paths p ON h.id = p.hash_id
+                        LEFT JOIN hash_contexts hc ON si.id = hc.side_id
+                        LEFT JOIN paths p ON p.context_id = hc.id
                         GROUP BY si.id, si.name, si.importance
                         ORDER BY si.importance DESC, si.name ASC
                         LIMIT 100
@@ -459,7 +488,7 @@ def register_archives_routes(app):
                 relations_sql, relations_params = relation_duplicates_sql(
                     search_query or None)
                 query = f"""
-                    SELECT id, name, side_id, source_id, file_count, hash_variants
+                    SELECT id, name, context_count, file_count
                     FROM ({relations_sql}) AS relations
                     ORDER BY file_count DESC, id ASC
                     LIMIT 100
@@ -472,8 +501,8 @@ def register_archives_routes(app):
                         'id': row[0],
                         'name': row[1] or 'Unknown Hash',
                         'category': 'Hash',
-                        'details': f'{row[4] or 0} files',
-                        'file_count': row[4] or 0
+                        'details': f'{row[3] or 0} files',
+                        'file_count': row[3] or 0
                     })
             
             return jsonify({'success': True, 'results': results})
@@ -522,11 +551,11 @@ def register_archives_routes(app):
                 query_params = [item_id]
                 
                 if source_id:
-                    where_clause += " AND h.source_id = %s"
+                    where_clause += " AND hc.source_id = %s"
                     query_params.append(source_id)
                 
                 if side_id:
-                    where_clause += " AND h.side_id = %s"
+                    where_clause += " AND hc.side_id = %s"
                     query_params.append(side_id)
                 
                 # Get total count - must match the files query structure exactly
@@ -534,9 +563,9 @@ def register_archives_routes(app):
                 count_query = f"""
                     SELECT COUNT(DISTINCT p.id)
                     FROM paths p
-                    JOIN words_paths wp ON wp.path_id = p.id
+                    JOIN words_hashs wp ON wp.hash_id = hc.hash_id
                     JOIN words_categorys wc ON wc.word_id = wp.word_id
-                    LEFT JOIN hashs h ON p.hash_id = h.id
+                    
                     WHERE {where_clause}
                 """
                 count_result = execute_query(count_query, tuple(query_params), fetch="one")
@@ -553,9 +582,9 @@ def register_archives_routes(app):
                         FROM (
                             SELECT DISTINCT p.id, p.file_size
                             FROM paths p
-                            JOIN words_paths wp ON wp.path_id = p.id
+                            JOIN words_hashs wp ON wp.hash_id = hc.hash_id
                             JOIN words_categorys wc ON wc.word_id = wp.word_id
-                            LEFT JOIN hashs h ON p.hash_id = h.id
+                            
                             WHERE {where_clause}
                         ) AS distinct_files
                     """
@@ -573,11 +602,11 @@ def register_archives_routes(app):
                         COALESCE(s.name, 'Unknown') as source_name,
                         COALESCE(si.name, 'Unknown') as side_name
                     FROM paths p
-                    JOIN words_paths wp ON wp.path_id = p.id
+                    JOIN words_hashs wp ON wp.hash_id = hc.hash_id
                     JOIN words_categorys wc ON wc.word_id = wp.word_id
-                    LEFT JOIN hashs h ON p.hash_id = h.id
-                    LEFT JOIN sources s ON h.source_id = s.id
-                    LEFT JOIN sides si ON h.side_id = si.id
+                    
+                    LEFT JOIN sources s ON hc.source_id = s.id
+                    LEFT JOIN sides si ON hc.side_id = si.id
                     WHERE {where_clause}
                     ORDER BY p.file_date DESC NULLS LAST, p.id DESC
                     LIMIT %s OFFSET %s
@@ -605,19 +634,19 @@ def register_archives_routes(app):
                 query_params = [item_id]
                 
                 if source_id:
-                    where_clause += " AND h.source_id = %s"
+                    where_clause += " AND hc.source_id = %s"
                     query_params.append(source_id)
                 
                 if side_id:
-                    where_clause += " AND h.side_id = %s"
+                    where_clause += " AND hc.side_id = %s"
                     query_params.append(side_id)
                 
                 # Get total count - must match the files query structure exactly
                 count_query = f"""
                     SELECT COUNT(DISTINCT p.id)
                     FROM paths p
-                    JOIN keywords_paths kp ON kp.path_id = p.id
-                    LEFT JOIN hashs h ON p.hash_id = h.id
+                    JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id
+                    
                     WHERE {where_clause}
                 """
                 count_result = execute_query(count_query, tuple(query_params), fetch="one")
@@ -634,8 +663,8 @@ def register_archives_routes(app):
                         FROM (
                             SELECT DISTINCT p.id, p.file_size
                             FROM paths p
-                            JOIN keywords_paths kp ON kp.path_id = p.id
-                            LEFT JOIN hashs h ON p.hash_id = h.id
+                            JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id
+                            
                             WHERE {where_clause}
                         ) AS distinct_files
                     """
@@ -653,10 +682,10 @@ def register_archives_routes(app):
                         COALESCE(s.name, 'Unknown') as source_name,
                         COALESCE(si.name, 'Unknown') as side_name
                     FROM paths p
-                    JOIN keywords_paths kp ON kp.path_id = p.id
-                    LEFT JOIN hashs h ON p.hash_id = h.id
-                    LEFT JOIN sources s ON h.source_id = s.id
-                    LEFT JOIN sides si ON h.side_id = si.id
+                    JOIN keywords_hashs kp ON kp.hash_id = hc.hash_id
+                    
+                    LEFT JOIN sources s ON hc.source_id = s.id
+                    LEFT JOIN sides si ON hc.side_id = si.id
                     WHERE {where_clause}
                     ORDER BY p.file_date DESC NULLS LAST, p.id DESC
                     LIMIT %s OFFSET %s
@@ -679,11 +708,14 @@ def register_archives_routes(app):
                     })
             
             elif section == 'titles':
-                # Titles are linked directly to paths via path_id
+                # Titles belong to canonical content (hash_id); the files of a
+                # title are the live occurrences of that content, reached
+                # through its contexts.
                 count_result = execute_query("""
                     SELECT COUNT(*), COALESCE(SUM(p.file_size), 0)
                     FROM titles_content tc
-                    JOIN paths p ON tc.path_id = p.id
+                    JOIN hash_contexts hc ON hc.hash_id = tc.hash_id
+                    JOIN paths p ON p.context_id = hc.id
                     WHERE tc.id = %s
                 """, (item_id,), fetch="one")
                 
@@ -701,10 +733,10 @@ def register_archives_routes(app):
                         COALESCE(s.name, 'Unknown') as source_name,
                         COALESCE(si.name, 'Unknown') as side_name
                     FROM titles_content tc
-                    JOIN paths p ON tc.path_id = p.id
-                    LEFT JOIN hashs h ON p.hash_id = h.id
-                    LEFT JOIN sources s ON h.source_id = s.id
-                    LEFT JOIN sides si ON h.side_id = si.id
+                    JOIN hash_contexts hc ON hc.hash_id = tc.hash_id
+                    JOIN paths p ON p.context_id = hc.id
+                    LEFT JOIN sources s ON hc.source_id = s.id
+                    LEFT JOIN sides si ON hc.side_id = si.id
                     WHERE tc.id = %s
                     ORDER BY p.file_date DESC
                     LIMIT %s OFFSET %s
@@ -730,8 +762,8 @@ def register_archives_routes(app):
                 count_result = execute_query("""
                     SELECT COUNT(DISTINCT p.id), COALESCE(SUM(p.file_size), 0)
                     FROM paths p
-                    JOIN hashs h ON p.hash_id = h.id
-                    WHERE h.source_id = %s
+                    JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
+                    WHERE hc.source_id = %s
                 """, (item_id,), fetch="one")
                 
                 logger.info(f"Count result for source_id={item_id}: {count_result}")
@@ -755,10 +787,10 @@ def register_archives_routes(app):
                         COALESCE(s.name, 'Unknown') as source_name,
                         COALESCE(si.name, 'Unknown') as side_name
                     FROM paths p
-                    JOIN hashs h ON p.hash_id = h.id
-                    LEFT JOIN sources s ON h.source_id = s.id
-                    LEFT JOIN sides si ON h.side_id = si.id
-                    WHERE h.source_id = %s
+                    JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
+                    LEFT JOIN sources s ON hc.source_id = s.id
+                    LEFT JOIN sides si ON hc.side_id = si.id
+                    WHERE hc.source_id = %s
                     ORDER BY p.file_date DESC
                     LIMIT %s OFFSET %s
                 """, (item_id, limit, offset), fetch="all")
@@ -784,8 +816,8 @@ def register_archives_routes(app):
                 count_result = execute_query("""
                     SELECT COUNT(DISTINCT p.id), COALESCE(SUM(p.file_size), 0)
                     FROM paths p
-                    JOIN hashs h ON p.hash_id = h.id
-                    WHERE h.side_id = %s
+                    JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
+                    WHERE hc.side_id = %s
                 """, (item_id,), fetch="one")
                 
                 if count_result:
@@ -802,10 +834,10 @@ def register_archives_routes(app):
                         COALESCE(s.name, 'Unknown') as source_name,
                         COALESCE(si.name, 'Unknown') as side_name
                     FROM paths p
-                    JOIN hashs h ON p.hash_id = h.id
-                    LEFT JOIN sources s ON h.source_id = s.id
-                    LEFT JOIN sides si ON h.side_id = si.id
-                    WHERE h.side_id = %s
+                    JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
+                    LEFT JOIN sources s ON hc.source_id = s.id
+                    LEFT JOIN sides si ON hc.side_id = si.id
+                    WHERE hc.side_id = %s
                     ORDER BY p.file_date DESC
                     LIMIT %s OFFSET %s
                 """, (item_id, limit, offset), fetch="all")
@@ -840,7 +872,7 @@ def register_archives_routes(app):
                         count_result = execute_query("""
                             SELECT COUNT(DISTINCT p.id), COALESCE(SUM(p.file_size), 0)
                             FROM paths p
-                            JOIN hashs h ON p.hash_id = h.id
+                            JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
                             WHERE h.hash = %s
                         """, (hash_value,), fetch="one")
                         
@@ -859,9 +891,9 @@ def register_archives_routes(app):
                                 COALESCE(s.name, 'Unknown') as source_name,
                                 COALESCE(si.name, 'Unknown') as side_name
                             FROM paths p
-                            JOIN hashs h ON p.hash_id = h.id
-                            LEFT JOIN sources s ON h.source_id = s.id
-                            LEFT JOIN sides si ON h.side_id = si.id
+                            JOIN hash_contexts hc ON p.context_id = hc.id JOIN hashs h ON hc.hash_id = h.id
+                            LEFT JOIN sources s ON hc.source_id = s.id
+                            LEFT JOIN sides si ON hc.side_id = si.id
                             WHERE h.hash = %s
                             ORDER BY p.file_date DESC
                             LIMIT %s OFFSET %s
@@ -889,7 +921,7 @@ def register_archives_routes(app):
                 count_result = execute_query("""
                     SELECT COUNT(DISTINCT p.id), COALESCE(SUM(p.file_size), 0)
                     FROM paths p
-                    JOIN words_paths wp ON wp.path_id = p.id
+                    JOIN words_hashs wp ON wp.hash_id = hc.hash_id
                     WHERE wp.word_id = %s
                 """, (item_id,), fetch="one")
                 
@@ -910,10 +942,10 @@ def register_archives_routes(app):
                         COALESCE(s.name, 'Unknown') as source_name,
                         COALESCE(si.name, 'Unknown') as side_name
                     FROM paths p
-                    JOIN words_paths wp ON wp.path_id = p.id
-                    LEFT JOIN hashs h ON p.hash_id = h.id
-                    LEFT JOIN sources s ON h.source_id = s.id
-                    LEFT JOIN sides si ON h.side_id = si.id
+                    JOIN words_hashs wp ON wp.hash_id = hc.hash_id
+                    
+                    LEFT JOIN sources s ON hc.source_id = s.id
+                    LEFT JOIN sides si ON hc.side_id = si.id
                     WHERE wp.word_id = %s
                     ORDER BY p.file_date DESC
                     LIMIT %s OFFSET %s
@@ -988,10 +1020,10 @@ def register_archives_routes(app):
                 FROM categorys c
                 JOIN words w ON c.word_id = w.id
                 JOIN words_categorys wc ON c.id = wc.category_id
-                JOIN words_paths wp ON wc.word_id = wp.word_id
-                JOIN paths p ON wp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                WHERE h.source_id = %s
+                JOIN words_hashs wp ON wc.word_id = wp.word_id
+                JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
+                
+                WHERE hc.source_id = %s
                 GROUP BY c.id, w.word
                 ORDER BY file_count DESC, w.word ASC
                 LIMIT %s OFFSET %s
@@ -1007,10 +1039,10 @@ def register_archives_routes(app):
                 SELECT COUNT(DISTINCT c.id)
                 FROM categorys c
                 JOIN words_categorys wc ON c.id = wc.category_id
-                JOIN words_paths wp ON wc.word_id = wp.word_id
-                JOIN paths p ON wp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                WHERE h.source_id = %s
+                JOIN words_hashs wp ON wc.word_id = wp.word_id
+                JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
+                
+                WHERE hc.source_id = %s
             """
             try:
                 total_categories_result = execute_query(total_categories_query, (source_id,), fetch="one")
@@ -1030,12 +1062,12 @@ def register_archives_routes(app):
             # Get keywords for this source
             keywords_query = """
                 SELECT DISTINCT k.id, k.category_id, k.keyword,
-                       COUNT(DISTINCT kp.path_id) as file_count
+                       COUNT(DISTINCT p.id) as file_count
                 FROM keywords k
-                JOIN keywords_paths kp ON k.id = kp.keyword_id
-                JOIN paths p ON kp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                WHERE h.source_id = %s
+                JOIN keywords_hashs kp ON k.id = kp.keyword_id
+                JOIN hash_contexts hc ON hc.hash_id = kp.hash_id JOIN paths p ON p.context_id = hc.id
+                
+                WHERE hc.source_id = %s
                 GROUP BY k.id, k.category_id, k.keyword
                 ORDER BY file_count DESC, k.id ASC
                 LIMIT %s OFFSET %s
@@ -1050,10 +1082,10 @@ def register_archives_routes(app):
             total_keywords_query = """
                 SELECT COUNT(DISTINCT k.id)
                 FROM keywords k
-                JOIN keywords_paths kp ON k.id = kp.keyword_id
-                JOIN paths p ON kp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                WHERE h.source_id = %s
+                JOIN keywords_hashs kp ON k.id = kp.keyword_id
+                JOIN hash_contexts hc ON hc.hash_id = kp.hash_id JOIN paths p ON p.context_id = hc.id
+                
+                WHERE hc.source_id = %s
             """
             try:
                 total_keywords_result = execute_query(total_keywords_query, (source_id,), fetch="one")
@@ -1144,10 +1176,10 @@ def register_archives_routes(app):
                 FROM categorys c
                 JOIN words w ON c.word_id = w.id
                 JOIN words_categorys wc ON c.id = wc.category_id
-                JOIN words_paths wp ON wc.word_id = wp.word_id
-                JOIN paths p ON wp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                WHERE h.side_id = %s
+                JOIN words_hashs wp ON wc.word_id = wp.word_id
+                JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
+                
+                WHERE hc.side_id = %s
                 GROUP BY c.id, w.word
                 ORDER BY file_count DESC, w.word ASC
                 LIMIT %s OFFSET %s
@@ -1163,10 +1195,10 @@ def register_archives_routes(app):
                 SELECT COUNT(DISTINCT c.id)
                 FROM categorys c
                 JOIN words_categorys wc ON c.id = wc.category_id
-                JOIN words_paths wp ON wc.word_id = wp.word_id
-                JOIN paths p ON wp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                WHERE h.side_id = %s
+                JOIN words_hashs wp ON wc.word_id = wp.word_id
+                JOIN hash_contexts hc ON hc.hash_id = wp.hash_id JOIN paths p ON p.context_id = hc.id
+                
+                WHERE hc.side_id = %s
             """
             try:
                 total_categories_result = execute_query(total_categories_query, (side_id,), fetch="one")
@@ -1186,12 +1218,12 @@ def register_archives_routes(app):
             # Get keywords for this side
             keywords_query = """
                 SELECT DISTINCT k.id, k.category_id, k.keyword,
-                       COUNT(DISTINCT kp.path_id) as file_count
+                       COUNT(DISTINCT p.id) as file_count
                 FROM keywords k
-                JOIN keywords_paths kp ON k.id = kp.keyword_id
-                JOIN paths p ON kp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                WHERE h.side_id = %s
+                JOIN keywords_hashs kp ON k.id = kp.keyword_id
+                JOIN hash_contexts hc ON hc.hash_id = kp.hash_id JOIN paths p ON p.context_id = hc.id
+                
+                WHERE hc.side_id = %s
                 GROUP BY k.id, k.category_id, k.keyword
                 ORDER BY file_count DESC, k.id ASC
                 LIMIT %s OFFSET %s
@@ -1206,10 +1238,10 @@ def register_archives_routes(app):
             total_keywords_query = """
                 SELECT COUNT(DISTINCT k.id)
                 FROM keywords k
-                JOIN keywords_paths kp ON k.id = kp.keyword_id
-                JOIN paths p ON kp.path_id = p.id
-                JOIN hashs h ON p.hash_id = h.id
-                WHERE h.side_id = %s
+                JOIN keywords_hashs kp ON k.id = kp.keyword_id
+                JOIN hash_contexts hc ON hc.hash_id = kp.hash_id JOIN paths p ON p.context_id = hc.id
+                
+                WHERE hc.side_id = %s
             """
             try:
                 total_keywords_result = execute_query(total_keywords_query, (side_id,), fetch="one")

@@ -22,10 +22,9 @@ from database.database.repository.paths_repo import PathsRepository
 from database.database.repository.keywords_repo import KeywordsRepository
 from database.database.repository.categorys_repo import CategorysRepository
 from database.database.repository.sides_repo import SidesRepository
-from database.database.repository.words_paths_repo import WordsPathsRepository
-from database.database.repository.keywords_paths_repo import KeywordsPathsRepository
+from database.database.repository.words_hashs_repo import WordsHashsRepository
+from database.database.repository.keywords_hashs_repo import KeywordsHashsRepository
 from database.database.repository.words_categorys_repo import WordsCategorysRepository
-from database.database.repository.hashs_repo import HashsRepository
 from database.database.repository.titles_content_repo import TitlesContentRepository
 from database.database.repository.punctuation_repo import PunctuationRepository
 from database.database.repository.alerts_repo import AlertsRepository
@@ -677,8 +676,9 @@ def get_category_statistics_detailed_query():
             FROM categorys c
             JOIN words w ON c.word_id = w.id
             LEFT JOIN words_categorys wc ON wc.category_id = c.id
-            LEFT JOIN words_paths wp ON wp.word_id = wc.word_id
-            LEFT JOIN paths p ON p.id = wp.path_id
+            LEFT JOIN words_hashs wp ON wp.word_id = wc.word_id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             GROUP BY c.id, w.word
             ORDER BY file_count DESC, w.word ASC
         """
@@ -1019,8 +1019,10 @@ def get_keyword_stats(keyword_id):
         
         # Get usage count (number of files using this keyword)
         usage_query = """
-            SELECT COUNT(DISTINCT kp.path_id)
-            FROM keywords_paths kp
+            SELECT COUNT(DISTINCT p.id)
+            FROM keywords_hashs kp
+            JOIN hash_contexts hc ON hc.hash_id = kp.hash_id
+            JOIN paths p ON p.context_id = hc.id
             WHERE kp.keyword_id = %s
         """
         usage_result = db_service.keywords_repo.execute(
@@ -1033,8 +1035,9 @@ def get_keyword_stats(keyword_id):
         # Get file types count (distinct file extensions)
         file_types_query = """
             SELECT COUNT(DISTINCT LOWER(SUBSTRING(p.file_name FROM '\.([^.]+)$')))
-            FROM keywords_paths kp
-            JOIN paths p ON kp.path_id = p.id
+            FROM keywords_hashs kp
+            JOIN hash_contexts hc ON hc.hash_id = kp.hash_id
+            JOIN paths p ON p.context_id = hc.id
             WHERE kp.keyword_id = %s
         """
         file_types_result = db_service.keywords_repo.execute(
@@ -1047,8 +1050,9 @@ def get_keyword_stats(keyword_id):
         # Get last used date (most recent file date)
         last_used_query = """
             SELECT MAX(p.file_date)
-            FROM keywords_paths kp
-            JOIN paths p ON kp.path_id = p.id
+            FROM keywords_hashs kp
+            JOIN hash_contexts hc ON hc.hash_id = kp.hash_id
+            JOIN paths p ON p.context_id = hc.id
             WHERE kp.keyword_id = %s
         """
         last_used_result = db_service.keywords_repo.execute(
@@ -1095,10 +1099,9 @@ __all__ = [
     'KeywordsRepository',
     'CategorysRepository',
     'SidesRepository',
-    'WordsPathsRepository',
-    'KeywordsPathsRepository',
+    'WordsHashsRepository',
+    'KeywordsHashsRepository',
     'WordsCategorysRepository',
-    'HashsRepository',
     'TitlesContentRepository',
     'PunctuationRepository',
     'AlertsRepository',

@@ -28,8 +28,8 @@ def register_sides_routes(app):
             # Build filters
             filters = {}
             joins = [
-                'LEFT JOIN hashs h ON si.id = h.side_id',
-                'LEFT JOIN paths p ON h.id = p.hash_id'
+                'LEFT JOIN hash_contexts hc ON si.id = hc.side_id',
+                'LEFT JOIN paths p ON p.context_id = hc.id'
             ]
             
             if search:
@@ -42,7 +42,7 @@ def register_sides_routes(app):
             select_columns = [
                 'si.id', 'si.name', 'si.importance', 'si.date_creation',
                 'COUNT(DISTINCT p.id) as doc_count',
-                'COUNT(DISTINCT h.source_id) as source_count'
+                'COUNT(DISTINCT hc.source_id) as source_count'
             ]
             
             result = paginator.get_page(
@@ -132,11 +132,11 @@ def register_sides_routes(app):
             side_data = execute_query("""
                 SELECT si.id, si.name, si.importance, si.date_creation,
                        COUNT(DISTINCT p.id) as doc_count,
-                       COUNT(DISTINCT h.source_id) as source_count,
+                       COUNT(DISTINCT hc.source_id) as source_count,
                        COALESCE(SUM(p.file_size), 0) as total_size
                 FROM sides si
-                LEFT JOIN hashs h ON si.id = h.side_id
-                LEFT JOIN paths p ON h.id = p.hash_id
+                LEFT JOIN hash_contexts hc ON si.id = hc.side_id
+                LEFT JOIN paths p ON p.context_id = hc.id
                 WHERE si.id = %s
                 GROUP BY si.id, si.name, si.importance, si.date_creation
             """, (side_id,), fetch="one")
@@ -165,11 +165,11 @@ def register_sides_routes(app):
             side_data = execute_query("""
                 SELECT si.id, si.name, si.importance, si.date_creation,
                        COUNT(DISTINCT p.id) as doc_count,
-                       COUNT(DISTINCT h.source_id) as source_count,
+                       COUNT(DISTINCT hc.source_id) as source_count,
                        COALESCE(SUM(p.file_size), 0) as total_size
                 FROM sides si
-                LEFT JOIN hashs h ON si.id = h.side_id
-                LEFT JOIN paths p ON h.id = p.hash_id
+                LEFT JOIN hash_contexts hc ON si.id = hc.side_id
+                LEFT JOIN paths p ON p.context_id = hc.id
                 WHERE si.id = %s
                 GROUP BY si.id, si.name, si.importance, si.date_creation
             """, (side_id,), fetch="one")

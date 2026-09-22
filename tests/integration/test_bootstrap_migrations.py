@@ -39,8 +39,8 @@ class TestBootstrap:
     def test_required_tables_exist(self, db_conn):
         expected = {
             "words", "punctuation", "categorys", "words_categorys", "sides",
-            "sources", "hashs", "paths", "contents", "titles_content",
-            "keywords", "words_paths", "keywords_paths", "alerts",
+            "sources", "hashs", "hash_contexts", "paths", "contents", "contents_raw",
+            "titles_content", "keywords", "words_hashs", "keywords_hashs", "alerts",
             "users", "sessions", "audit_log", "schema_migrations",
         }
         with db_conn.cursor() as cur:
@@ -54,14 +54,21 @@ class TestBootstrap:
 
     def test_required_indexes_exist(self, db_conn):
         """DB-06: the performance indexes exist after bootstrap."""
+        # Content-identity schema (m0011): content-keyed uniques and the
+        # context/lineage lookups. The old path-keyed and (hash,source,side)
+        # names are gone by design.
         expected = {
-            "idx_words_paths_path_id",
-            "idx_words_paths_word_id",
-            "idx_paths_hash_id",
+            "hashs_hash_key",
+            "uq_hash_contexts_identity",
+            "uq_words_hashs_hash_word",
+            "uq_keywords_hashs_hash_keyword",
+            "uq_contents_raw_hash_chunk",
+            "idx_words_hashs_word_id",
+            "idx_paths_context_id",
             "idx_paths_file_name",
             "idx_paths_file_path",
-            "idx_titles_content_path_id",
-            "idx_hashs_hash_source_side",
+            "idx_paths_parent_path_id",
+            "idx_titles_content_hash_id",
         }
         with db_conn.cursor() as cur:
             cur.execute("SELECT indexname FROM pg_indexes WHERE schemaname = 'public'")

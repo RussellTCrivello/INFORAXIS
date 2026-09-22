@@ -1,22 +1,28 @@
 """Unit: every repository method the pipeline calls must actually exist.
 
-This closes a whole defect class, not just the two instances found. Two calls in
-storage_pipeline's error-recovery fallback named methods that do not exist:
+This closes a whole defect class, not just the instances found. Calls into
+``db_service.<repo>.<method>`` named methods that do not exist (the
+error-recovery fallback in storage_pipeline called ``insert_path``/``insert_hash``;
+the phantom names raised AttributeError inside an ``except`` handler and the
+recovery silently did nothing).
 
-    self.db_service.paths_repo.insert_path(...)     # PathsRepository has no insert_path
-    self.db_service.hashs_repo.insert_hash(...)     # HashsRepository has no insert_hash
+Static verification is the right tool here: the fallback only runs after a
+storage failure, and when it is reached the failure is swallowed. Resolving
+attribute names against the real classes catches every instance, including
+ones not yet written.
 
-The real methods are insert_info_paths and insert_info_hashs. Because both sat
-inside an ``except`` handler, the resulting AttributeError was swallowed by the
-enclosing handler, so the recovery path silently did nothing: a file whose full
-processing failed left no record at all. ``hasattr`` confirmed neither name
-existed, on the repository or on its base class.
+After the content-identity evolution (HASH = content identity, HASH+SOURCE+SIDE
+= context identity, PATH = occurrence) the authoritative surface is:
 
-Static verification is the right tool here. The fallback only runs after a
-storage failure, so an integration test would have to manufacture that failure
-to reach it - and the defect is invisible when it is reached, because the
-exception is swallowed. Resolving the attribute names against the real classes
-catches every instance, including ones not yet written.
+    ContentDBService.resolve_hash_id / resolve_context_id /
+    register_occurrence / hash_exists / check_duplicate
+    PathsRepository.insert_info_paths(context_id=...)
+    WordsHashsRepository / KeywordsHashsRepository   (content-keyed index)
+
+The retired surface (competing identity implementations) is pinned as ABSENT
+below: hashs_repo / words_paths_repo / keywords_paths_repo / create_hash /
+create_path / link_words_to_path / process_keywords_for_path /
+get_path_id_by_hash_id must never reappear.
 """
 
 import ast
@@ -102,7 +108,8 @@ def _calls_into_repos(path):
 def test_repo_map_was_actually_discovered():
     """Guard the guard: if the map came back empty the test proves nothing."""
     assert REPO_ATTRS, "no repository attributes discovered from __init__"
-    assert "paths_repo" in REPO_ATTRS and "hashs_repo" in REPO_ATTRS, sorted(REPO_ATTRS)
+    assert "paths_repo" in REPO_ATTRS and "words_hashs_repo" in REPO_ATTRS, sorted(REPO_ATTRS)
+    assert "keywords_hashs_repo" in REPO_ATTRS, sorted(REPO_ATTRS)
 
 
 def test_every_repository_class_resolves():
@@ -135,26 +142,55 @@ def test_no_phantom_repository_methods(path):
     )
 
 
-def test_the_two_known_broken_names_are_fixed():
-    """Pins the specific instances that were found, by name."""
-    from database.database.repository.hashs_repo import HashsRepository
+def test_the_retired_identity_surface_is_gone():
+    """The old per-path identity modules were competing implementations.
+
+    One authoritative implementation per concern (dedup = DeduplicationService;
+    registration = ContentDBService.register_occurrence). The retired names
+    must never reappear in the service or the repositories.
+    """
+    import importlib
+
     from database.database.repository.paths_repo import PathsRepository
 
     assert hasattr(PathsRepository, "insert_info_paths")
-    assert hasattr(HashsRepository, "insert_info_hashs")
     assert not hasattr(PathsRepository, "insert_path"), (
         "insert_path has appeared; callers must use insert_info_paths"
     )
-    assert not hasattr(HashsRepository, "insert_hash"), (
-        "insert_hash has appeared; callers must use insert_info_hashs"
-    )
+
+    for retired in (
+        "database.database.repository.hashs_repo",
+        "database.database.repository.words_paths_repo",
+        "database.database.repository.keywords_paths_repo",
+        "database.database.queries.hash_queries",
+        "database.database.queries.word_path_queries",
+        "database.database.queries.keyword_path_queries",
+    ):
+        try:
+            importlib.import_module(retired)
+        except ModuleNotFoundError:
+            pass
+        else:
+            raise AssertionError(f"{retired} has reappeared; it is a competing identity implementation")
+
+    service = ContentDBService.__new__(ContentDBService)  # no connection needed
+    for retired in ("create_hash", "create_path", "get_path_id_by_hash_id",
+                    "link_words_to_path", "process_keywords_for_path",
+                    "hashs_repo", "words_paths_repo", "keywords_paths_repo"):
+        assert not hasattr(service, retired), retired
+    for live in ("resolve_hash_id", "resolve_context_id", "register_occurrence",
+                 "hash_exists", "check_duplicate"):
+        assert hasattr(ContentDBService, live), live
 
 
 def test_no_source_file_calls_the_phantom_names():
     """Textual sweep, because an AST walk alone cannot prove absence in strings."""
     for path in SCANNED_FILES:
         text = path.read_text()
-        for phantom in ("paths_repo.insert_path(", "hashs_repo.insert_hash("):
+        for phantom in ("paths_repo.insert_path(", "hashs_repo.insert_hash(",
+                        ".hashs_repo.", "words_paths_repo", "keywords_paths_repo",
+                        "create_hash(", "link_words_to_path",
+                        "process_keywords_for_path", "get_path_id_by_hash_id"):
             occurrences = [
                 i + 1 for i, line in enumerate(text.splitlines())
                 if phantom in line and not line.strip().startswith("#")
@@ -169,12 +205,17 @@ def test_insert_info_paths_accepts_the_status_columns():
     params = inspect.signature(PathsRepository.insert_info_paths).parameters
     for name in ("processing_status", "status_detail", "attempts",
                  "file_name", "file_path", "file_size", "file_type",
-                 "file_status", "file_date", "hash_id", "coordinates"):
+                 "file_status", "file_date", "context_id", "coordinates",
+                 "parent_path_id", "hierarchy_path"):
         assert name in params, (name, list(params))
+    assert "hash_id" not in params, (
+        "paths rows identify their CONTEXT (context_id); content identity lives "
+        "on hash_contexts -> hashs"
+    )
 
 
-def test_insert_info_hashs_signature_matches_the_call():
-    from database.database.repository.hashs_repo import HashsRepository
-
-    params = inspect.signature(HashsRepository.insert_info_hashs).parameters
-    assert list(params) == ["self", "hash_value", "source_id", "side_id"], list(params)
+def test_register_occurrence_signature_matches_the_call():
+    """The single registration entry point: content + context + occurrence."""
+    params = inspect.signature(ContentDBService.register_occurrence).parameters
+    for name in ("hash_value", "source_id", "side_id", "path_row", "commit"):
+        assert name in params, (name, list(params))
