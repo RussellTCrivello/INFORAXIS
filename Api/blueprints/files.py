@@ -205,7 +205,8 @@ def get_enhanced_content_stats(file_id):
         # Get basic content stats
         basic_stats = get_content_stats(file_id)
         
-        # Get word count from words_paths table
+        # Get word count from the hash-keyed word occurrences table
+        # (words_paths was renamed words_hashs by the content-identity migration)
         word_count_result = execute_query("""
             SELECT COUNT(DISTINCT wp.word_id) as unique_words,
                    SUM(wp.word_count) as total_word_occurrences

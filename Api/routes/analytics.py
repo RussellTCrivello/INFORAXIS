@@ -29,14 +29,18 @@ def register_analytics_routes(app):
         # even before JS loads.
         try:
             from Api.utils import execute_query
+            # Content identity (m0011): paths -> hash_contexts -> contents is
+            # keyed by hash (contents.path_id no longer exists). COUNT(DISTINCT
+            # p.id) keeps chunk-level contents rows from multiplying files.
             row = execute_query("""
                 SELECT
-                    COUNT(*) AS total_files,
-                    COUNT(*) FILTER (WHERE c.id IS NOT NULL) AS analyzed_files,
+                    COUNT(DISTINCT p.id) AS total_files,
+                    COUNT(DISTINCT p.id) FILTER (WHERE c.id IS NOT NULL) AS analyzed_files,
                     (SELECT COUNT(DISTINCT w.id) FROM words w
                      JOIN categorys cat ON cat.word_id = w.id) AS total_categories
                 FROM paths p
-                LEFT JOIN contents c ON c.path_id = p.id
+                LEFT JOIN hash_contexts hc ON hc.id = p.context_id
+                LEFT JOIN contents c ON c.hash_id = hc.hash_id
             """, fetch="one")
             total_files = int(row[0] or 0) if row else 0
             analyzed_files = int(row[1] or 0) if row else 0

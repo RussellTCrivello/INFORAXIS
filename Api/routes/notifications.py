@@ -693,11 +693,13 @@ def register_notification_routes(app):
             future_analyzer = FutureEventsAnalyzer()
             today = date.today()
             
-            # Get all files with content
+            # Get all files with content (m0011: contents is keyed by hash,
+            # reached through the path's content identity context)
             files_query = """
                 SELECT DISTINCT p.id, p.file_name, p.file_path, c.id as content_id
                 FROM paths p
-                INNER JOIN contents c ON c.path_id = p.id
+                JOIN hash_contexts hc ON hc.id = p.context_id
+                INNER JOIN contents c ON c.hash_id = hc.hash_id
                 WHERE p.file_status = 'Read'
                 ORDER BY p.id DESC
                 LIMIT 5000
