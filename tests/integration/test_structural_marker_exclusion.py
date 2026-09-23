@@ -14,14 +14,14 @@ Since the display phase, the verbatim text (with markers) is stored in
 * DISPLAY text (unchanged) - markers kept, viewers and in-document search
   work on exactly what the user sees;
 * INDEX text (new) - markers stripped before word tokenization, so
-  words_paths (search + classification + analysis) sees only real content;
+  words_hashs (search + classification + analysis) sees only real content;
 * search snippet matching skips pure structural lines and matches labelled
   lines (From:/Subject:) on their VALUE.
 
 Proven here end to end on the real pipeline + database:
 
 1. Marker words (sheet, rows, columns, slide, style, ...) are absent from
-   the word index (words_paths) of ingested files.
+   the word index (words_hashs) of ingested files.
 2. Full-text search for label words does not return the files; real content
    (cell values, slide text, email subject/sender) still does.
 3. Search line snippets never come from structural marker lines.
@@ -178,9 +178,9 @@ def test_marker_words_absent_from_word_index(pg_db, ingested):
             for suffix, path_id in ingested.items():
                 cur.execute(
                     """
-                    SELECT w.word FROM words_paths wp
+                    SELECT w.word FROM words_hashs wp
                     JOIN words w ON wp.word_id = w.id
-                    WHERE wp.path_id = %s AND w.word = ANY(%s)
+                    WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s) AND w.word = ANY(%s)
                     """,
                     (path_id, list(_LABEL_WORDS)),
                 )
@@ -320,9 +320,9 @@ def test_word_count_reflects_content_only(pg_db, ingested):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT COALESCE(SUM(wp.word_count), 0) FROM words_paths wp
+                SELECT COALESCE(SUM(wp.word_count), 0) FROM words_hashs wp
                 JOIN words w ON wp.word_id = w.id
-                WHERE wp.path_id = %s AND w.word IN ('rows', 'columns', 'sheet')
+                WHERE wp.hash_id = (SELECT c2.hash_id FROM paths p2 JOIN hash_contexts c2 ON c2.id = p2.context_id WHERE p2.id = %s) AND w.word IN ('rows', 'columns', 'sheet')
                 """,
                 (ingested["xlsx"],),
             )

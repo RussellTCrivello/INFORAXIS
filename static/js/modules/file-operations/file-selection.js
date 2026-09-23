@@ -30,27 +30,33 @@ export function deselectAllFiles() {
 }
 
 /**
- * Export selected files
+ * Export selected files — ONE zip download of the extracted text of every
+ * selected file. (This used to fire one download per file with a 100 ms
+ * stagger; with a 50-file selection that meant fifty downloads.)
  */
 export async function exportSelectedFiles() {
     // Support both .file-checkbox and .file-select-checkbox for compatibility
     const selectedCheckboxes = document.querySelectorAll('.file-checkbox:checked, .file-select-checkbox:checked, .file-row-item input[type="checkbox"]:checked');
     const fileIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
-    
+
     if (fileIds.length === 0) {
         const notificationSystem = await import('../ui/notifications.js');
         const { translations } = await import('../core/config.js');
         notificationSystem.default.warning(translations.pleaseSelectAtLeastOneFileToExport || 'Please select at least one file to export');
         return;
     }
-    
-    // Export each file individually (like old implementation)
-    const { exportFile } = await import('./file-export.js');
-    fileIds.forEach((fileId, index) => {
-        setTimeout(() => {
-            exportFile(fileId);
-        }, index * 100); // Stagger downloads slightly
-    });
+
+    const { exportSelectedFiles: exportBulkZip } = await import('./bulk-analyst-actions.js');
+    exportBulkZip();
+}
+
+/**
+ * Export the ORIGINAL source files of the selection as one zip download
+ * (see bulk-analyst-actions.js).
+ */
+export async function exportSelectedOriginals() {
+    const { exportSelectedOriginals: exportOriginalsZip } = await import('./bulk-analyst-actions.js');
+    exportOriginalsZip();
 }
 
 /**

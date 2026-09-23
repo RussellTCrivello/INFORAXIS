@@ -5,6 +5,7 @@
 
 import { buildPattern, highlight, clearHighlights, getMarks, setCurrentMatch, findMatchesInText }
     from '../modules/content-highlighter.js';
+import { initOriginalContentTab } from '../modules/original-content-tab.js';
 
 // --- State ---
 let translations = {};
@@ -70,6 +71,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize all functionality
     initializeReader();
+    // Extracted/Original tabs — the original file renders in place, where
+    // the extracted text is (same pop-up viewer the analysis uses).
+    initOriginalContentTab(fileId);
 });
 
 // --- Utilities ---

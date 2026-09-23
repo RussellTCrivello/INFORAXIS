@@ -61,7 +61,7 @@ def api_get_path(path_id: int):
         "file_status": dto.file_status,
         "file_date": dto.file_date.isoformat() if dto.file_date else None,
         "date_creation": dto.date_creation.isoformat() if dto.date_creation else None,
-        "hash_id": dto.hash_id,
+        "context_id": dto.context_id,
     })
 
 
@@ -96,7 +96,7 @@ def api_list_paths():
             "file_status": str(r[5]),
             "file_date": r[6].isoformat() if r[6] else None,
             "date_creation": r[7].isoformat() if r[7] else None,
-            "hash_id": r[8],
+            "context_id": r[8],
         }
         for r in (rows or [])
     ])

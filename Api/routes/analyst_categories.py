@@ -393,6 +393,7 @@ def register_analyst_category_routes(app):
             writer = csv.writer(output)
             writer.writerow([
                 "assignment_id", "file_id", "file_name", "file_path", "file_type",
+                "source", "side",
                 "analyst_category", "analyst_category_id", "assigned_by",
                 "assigned_at", "originating_search_query",
             ])
@@ -400,7 +401,10 @@ def register_analyst_category_routes(app):
                 writer.writerow([
                     _csv_safe(row["id"]), _csv_safe(row["path_id"]),
                     _csv_safe(row["file_name"]), _csv_safe(row["file_path"]),
-                    _csv_safe(row["file_type"]), _csv_safe(row["category_name"]),
+                    _csv_safe(row["file_type"]),
+                    _csv_safe(row.get("source_name") or ""),
+                    _csv_safe(row.get("side_name") or ""),
+                    _csv_safe(row["category_name"]),
                     _csv_safe(row["category_id"]), _csv_safe(row["assigned_by_username"]),
                     _csv_safe(row["assigned_at"]), _csv_safe(row["source_query"] or ""),
                 ])

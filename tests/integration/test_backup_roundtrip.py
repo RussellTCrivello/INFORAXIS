@@ -46,7 +46,7 @@ def _counts():
     try:
         cur = conn.cursor()
         out = {}
-        for t in ("words", "words_paths", "hashs", "contents", "paths",
+        for t in ("words", "words_hashs", "hashs", "contents", "paths",
                   "sources", "sides", "titles_content"):
             cur.execute(f"SELECT count(*) FROM {t}")
             out[t] = cur.fetchone()[0]

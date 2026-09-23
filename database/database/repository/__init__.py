@@ -6,12 +6,12 @@
 # from .best_repo import BaseRepository
 # from .sources_repo import SourcesRepository
 # from .sides_repo import SidesRepository
-# from .hashs_repo import HashsRepository
+# from .words_hashs_repo import WordsHashsRepository
 # from .paths_repo import PathsRepository
 # from .words_repo import WordsRepository
-# from .words_paths_repo import WordsPathsRepository
+# from .words_hashs_repo import WordsHashsRepository
 # from .keywords_repo import KeywordsRepository
-# from .keywords_paths_repo import KeywordsPathsRepository
+# from .keywords_hashs_repo import KeywordsHashsRepository
 # from .paths_repo import PathsRepository
 # from .categorys_repo import CategoryQueries
 # from .words_categorys_repo import WordsCategorysRepository
@@ -24,10 +24,10 @@
 #     'BaseRepository',
 #     'SourcesRepository',
 #     'SidesRepository',
-#     'HashsRepository',
+#     'WordsHashsRepository',
 #     'PathsRepository',
 #     'WordsRepository',
-#     'WordPathQueries',
+#     'WordsHashsRepository',
 #     'WordsPathsRepository',
 #     'KeywordsRepository',
 #     'CategoryQueries',

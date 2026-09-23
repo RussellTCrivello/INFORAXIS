@@ -112,8 +112,8 @@ def provenance(pg_db, ingested):
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT p.file_name, p.extraction_provenance FROM paths p"
-                " JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id WHERE s.name = %s",
+                " JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id WHERE s.name = %s",
                 (f"{ingested}_side",),
             )
             return dict(cur.fetchall())
@@ -172,8 +172,8 @@ def test_provenance_is_queryable_not_just_stored(pg_db, ingested):
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT p.file_name FROM paths p"
-                " JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id"
+                " JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id"
                 " WHERE s.name = %s"
                 " AND p.extraction_provenance->'ocr'->>'derived' = 'true'"
                 " ORDER BY p.file_name",
@@ -212,8 +212,8 @@ def test_provenance_row_matches_the_file_it_describes(pg_db, ingested):
             cur.execute(
                 "SELECT p.extraction_provenance->'ocr'->>'derived',"
                 " p.extraction_provenance->'ocr'->>'engine'"
-                " FROM paths p JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id"
+                " FROM paths p JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id"
                 " WHERE s.name = %s AND p.file_name = 'scan.png'",
                 (f"{ingested}_side",),
             )

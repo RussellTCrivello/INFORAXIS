@@ -490,21 +490,25 @@ class TestTheRecordPageRendersThem:
                     (f"surface-test-source-{marker}",))
                 source_id = cur.fetchone()[0]
                 cur.execute(
-                    "INSERT INTO hashs (hash, side_id, source_id)"
-                    " VALUES (%s, %s, %s) RETURNING id",
-                    (f"surface-test-hash-{marker}", side_id, source_id))
+                    "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                    (f"surface-test-hash-{marker}",))
                 hash_id = cur.fetchone()[0]
+                cur.execute(
+                    "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                    " VALUES (%s, %s, %s) RETURNING id",
+                    (hash_id, source_id, side_id))
+                context_id = cur.fetchone()[0]
                 cur.execute(
                     """
                     INSERT INTO paths (file_name, file_path, file_size,
                                        file_type, file_status, file_date,
-                                       date_creation, hash_id)
+                                       date_creation, context_id)
                     VALUES (%s, %s, 2048, 'txt', 'Read', CURRENT_DATE,
                             CURRENT_DATE, %s)
                     RETURNING id
                     """,
                     (f"surface-test-{marker}.txt",
-                     f"/surface-test/missing-{marker}.txt", hash_id))
+                     f"/surface-test/missing-{marker}.txt", context_id))
                 file_id = cur.fetchone()[0]
             conn.commit()
         finally:

@@ -317,13 +317,13 @@ def _db_facts(db_cfg):
         cur.execute("SELECT sum(pg_relation_size(indexrelid)) "
                     "FROM pg_stat_user_indexes")
         facts["index_size_bytes"] = cur.fetchone()[0] or 0
-        cur.execute("SELECT count(*) FROM paths p LEFT JOIN hashs h ON "
-                    "p.hash_id = h.id WHERE h.id IS NULL")
-        facts["paths_without_hash_row"] = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM paths p LEFT JOIN hash_contexts hc ON "
+                    "p.context_id = hc.id WHERE hc.id IS NULL")
+        facts["paths_without_context_row"] = cur.fetchone()[0]
         # Referential integrity of the content index.
-        cur.execute("SELECT count(*) FROM contents c LEFT JOIN paths p ON "
-                    "c.path_id = p.id WHERE p.id IS NULL")
-        facts["contents_without_path_row"] = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM contents c LEFT JOIN hashs h ON "
+                    "c.hash_id = h.id WHERE h.id IS NULL")
+        facts["contents_without_hash_row"] = cur.fetchone()[0]
         conn.close()
     except Exception as exc:
         facts["error"] = f"{type(exc).__name__}: {exc}"

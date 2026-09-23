@@ -122,17 +122,25 @@ class TestDeleteReingest:
             cur.execute("SELECT COUNT(*) FROM paths WHERE id = %s", (path_id,))
             assert cur.fetchone()[0] == 1
 
-        # 2. delete (with hash lifecycle management)
+        # 2. delete (content lifecycle: occurrence -> context -> content)
         result = dedup.delete_path(path_id)
-        assert result == {"path_deleted": True, "hash_deleted": True}
+        assert result == {
+            "path_deleted": True,
+            "context_deleted": True,
+            "hash_deleted": True,
+        }
 
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM paths WHERE id = %s", (path_id,))
             assert cur.fetchone()[0] == 0
             cur.execute(
-                "SELECT COUNT(*) FROM hashs WHERE hash = %s AND source_id = %s AND side_id = %s",
+                "SELECT COUNT(*) FROM hash_contexts"
+                " WHERE hash_id = (SELECT id FROM hashs WHERE hash = %s)"
+                " AND source_id = %s AND side_id = %s",
                 (content_hash, source_id, side_id),
             )
+            assert cur.fetchone()[0] == 0, "orphaned context row must be cleaned on delete"
+            cur.execute("SELECT COUNT(*) FROM hashs WHERE hash = %s", (content_hash,))
             assert cur.fetchone()[0] == 0, "orphaned hash row must be cleaned on delete"
 
         # 3. re-ingest the identical file - must succeed (DB-05 acceptance)
@@ -160,21 +168,28 @@ class TestDeleteReingest:
         content_hash = hash_file(f1)
 
         r1 = dedup.register_content(content_hash, source_id, side_id, path_row(f1))
-        # same content, different file path: still same hash; register second path
+        # Same content, different file path in the same context: a second
+        # legitimate occurrence. Its identity is the shared context.
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO paths (file_name, file_path, file_size, file_type,"
-                " file_date, date_creation, hash_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                " file_date, date_creation, context_id)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (f2.name, str(f2), f2.stat().st_size, "txt",
-                 datetime.date.today(), datetime.date.today(), r1["hash_id"]),
+                 datetime.date.today(), datetime.date.today(), r1["context_id"]),
             )
             second_path_id = cur.fetchone()[0]
             conn.commit()
 
-        # Delete one path: hash must survive (still referenced).
-        dedup.delete_path(r1["path_id"])
+        # Delete one occurrence: shared content and context must survive.
+        lifecycle = dedup.delete_path(r1["path_id"])
+        assert lifecycle["path_deleted"] is True
+        assert lifecycle["context_deleted"] is False
+        assert lifecycle["hash_deleted"] is False
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM hashs WHERE id = %s", (r1["hash_id"],))
+            assert cur.fetchone()[0] == 1
+            cur.execute("SELECT COUNT(*) FROM hash_contexts WHERE id = %s", (r1["context_id"],))
             assert cur.fetchone()[0] == 1
             cur.execute("SELECT COUNT(*) FROM paths WHERE id = %s", (second_path_id,))
             assert cur.fetchone()[0] == 1
@@ -190,10 +205,25 @@ class TestDeleteReingest:
             cur.execute("DELETE FROM paths WHERE id = %s", (reg["path_id"],))
             conn.commit()
 
+        # Layered identity: the empty CONTEXT is orphaned now, but the
+        # CANONICAL CONTENT is not - it still has that context. The repair
+        # cascades context-first, and only then does the content become an
+        # orphan. (The old model had no context layer, so the hash orphaned
+        # immediately; the assertion below pins the new order.)
+        orphan_contexts = dedup.cleanup_orphaned_contexts(dry_run=True)
+        assert orphan_contexts >= 1
+        assert dedup.cleanup_orphaned_hashes(dry_run=True) == 0, (
+            "the content is not an orphan while its (empty) context exists"
+        )
+        removed_contexts = dedup.cleanup_orphaned_contexts(dry_run=False)
+        assert removed_contexts >= 1
+        # Now the content has no context left: it is an orphan and removable.
         orphans = dedup.cleanup_orphaned_hashes(dry_run=True)
         assert orphans >= 1
         removed = dedup.cleanup_orphaned_hashes(dry_run=False)
         assert removed >= 1
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM hashs WHERE id = %s", (reg["hash_id"],))
+            assert cur.fetchone()[0] == 0
+            cur.execute("SELECT COUNT(*) FROM hash_contexts WHERE id = %s", (reg["context_id"],))
             assert cur.fetchone()[0] == 0

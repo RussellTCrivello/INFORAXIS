@@ -22,6 +22,9 @@ from Api.services.analyst_categories import AnalystCategoryService
 from Api.routes.analyst_categories import resolve_request_scope
 import logging
 from datetime import datetime
+from typing import Any, Dict, Optional
+from urllib.parse import urlencode
+
 from core.errors import client_error
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,69 @@ def _current_user_id():
     or cleaned up for, a user.
     """
     return session.get('auth_user_id')
+
+
+def _advanced_search_run_url(query: str, filters: Optional[dict]) -> str:
+    """Build a /search/advanced URL that restores a full search definition.
+
+    The Advanced Search page persists its complete state (query, analyst
+    scope, filters, match options, sort, page) in the URL and re-runs the
+    search on load (static/js/pages/search-advanced-page.js —
+    readDefinitionFromUrl). Saved searches store exactly that definition
+    (the page saves ``query`` plus ``filters`` including ``scope``,
+    ``sort_by`` and ``options``), so encoding it here makes "Run" on the
+    Saved Searches management page land on the advanced page with every
+    filter restored — not just the query string.
+
+    Keep the parameter names in sync with SEARCH_URL_PARAMS /
+    serializeDefinitionToParams in the page script.
+    """
+    f = filters if isinstance(filters, dict) else {}
+    params: Dict[str, Any] = {}
+
+    if query:
+        params['q'] = query
+    if f.get('scope') and f['scope'] != 'uncategorized':
+        params['scope'] = f['scope']
+    if f.get('sort_by') and f['sort_by'] != 'relevance':
+        params['sort'] = f['sort_by']
+    options = f.get('options') if isinstance(f.get('options'), dict) else {}
+    if options.get('case_sensitive'):
+        params['cs'] = '1'
+    if options.get('whole_word'):
+        params['ww'] = '1'
+    if options.get('use_fuzzy') is False:
+        params['fz'] = '0'
+
+    def _ids(key: str) -> list:
+        values = f.get(key) or []
+        if not isinstance(values, list):
+            values = [values]
+        return [str(v) for v in values if v is not None and str(v) != '']
+
+    for key, param in (('file_type', 'ft'), ('category_id', 'cat'),
+                       ('analyst_category_id', 'acat'), ('source_id', 'src'),
+                       ('side_id', 'side')):
+        if _ids(key):
+            params[param] = _ids(key)
+
+    if f.get('date_from'):
+        params['df'] = f['date_from']
+    if f.get('date_to'):
+        params['dt'] = f['date_to']
+
+    status = f.get('status') if isinstance(f.get('status'), list) else ['Read']
+    read = 'Read' in status
+    unread = 'Unread' in status
+    if read and unread:
+        params['st'] = 'read,unread'
+    elif unread:
+        params['st'] = 'unread'
+    elif not read:
+        params['st'] = 'none'
+
+    query_string = urlencode(params, doseq=True)
+    return '/search/advanced' + (f'?{query_string}' if query_string else '')
 
 
 def register_search_routes(app):
@@ -116,6 +182,12 @@ def register_search_routes(app):
         been live; this renders the management view over the same service.
         """
         searches = SavedSearchesService.get_saved_searches(user_id=_current_user_id()) or []
+        # "Run" restores the FULL definition on the Advanced Search page
+        # (query + scope + filters + options), not just the query string.
+        for entry in searches:
+            if isinstance(entry, dict):
+                entry['run_url'] = _advanced_search_run_url(
+                    entry.get('query') or '', entry.get('filters'))
         return render_template('Search/saved_searches.html', saved_searches=searches)
 
     @app.route('/search/advanced')

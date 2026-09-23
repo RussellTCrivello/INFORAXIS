@@ -135,7 +135,8 @@ REGISTRY: Tuple[Interface, ...] = (
         aliases=("files.file_detail", "files.file_content_lazy",
                  "files.file_content_page", "files.file_full_content",
                  "files.file_search_all_pages", "files.file_chart_data",
-                 "files.delete_file", "files.bulk_delete_files"),
+                 "files.delete_file", "files.bulk_delete_files",
+                 "files.bulk_export_files"),
         help_topic="discover/file-library", keyboard_shortcut="g f",
     ),
     _if(
@@ -251,6 +252,7 @@ REGISTRY: Tuple[Interface, ...] = (
         "as a job.",
         Domain.ANALYZE, "analysis_batch", "bi-lightning-charge",
         dependencies=("file_library",),
+        aliases=("analysis_batch_process",),
         settings=("processing.use_threading", "processing.max_workers",
                   "processing.auto_process_uploads"),
         help_topic="analyze/batch", keyboard_shortcut="g b",

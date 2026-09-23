@@ -63,22 +63,40 @@ def seeded(pg_db):
             )
             source_id = cur.fetchone()[0]
             cur.execute(
-                "INSERT INTO hashs (hash, side_id, source_id)"
-                " VALUES (%s, %s, %s) RETURNING id",
-                (f"content-search-hash-{_UNIQUE}", side_id, source_id),
+                "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                (f"content-search-hash-{_UNIQUE}",),
             )
             hash_id = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                " VALUES (%s, %s, %s) RETURNING id",
+                (hash_id, source_id, side_id),
+            )
+            context_id = cur.fetchone()[0]
+            # Beta carries different text, i.e. a different canonical
+            # content: its own hash and context in the same (source, side).
+            cur.execute(
+                "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                (f"content-search-hash-b-{_UNIQUE}",),
+            )
+            beta_hash_id = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                " VALUES (%s, %s, %s) RETURNING id",
+                (beta_hash_id, source_id, side_id),
+            )
+            beta_context_id = cur.fetchone()[0]
 
             path_ids = {}
-            for name in (_ALPHA, _BETA):
+            for name, ctx in ((_ALPHA, context_id), (_BETA, beta_context_id)):
                 cur.execute(
                     """
                     INSERT INTO paths (file_name, file_path, file_size, file_type,
-                                       file_status, file_date, date_creation, hash_id)
+                                       file_status, file_date, date_creation, context_id)
                     VALUES (%s, %s, 100, 'txt', 'Read', CURRENT_DATE, CURRENT_DATE, %s)
                     RETURNING id
                     """,
-                    (name, f"/content-search-test/{name}", hash_id),
+                    (name, f"/content-search-test/{name}", ctx),
                 )
                 path_ids[name] = cur.fetchone()[0]
 
@@ -101,9 +119,9 @@ def seeded(pg_db):
 
     svc = ContentDBService()
     svc.contents_repo.store_text_content(
-        [word_ids[w] for w in _ALPHA_WORDS], date.today(), path_ids[_ALPHA])
+        [word_ids[w] for w in _ALPHA_WORDS], date.today(), hash_id)
     svc.contents_repo.store_text_content(
-        [word_ids[w] for w in _BETA_WORDS], date.today(), path_ids[_BETA])
+        [word_ids[w] for w in _BETA_WORDS], date.today(), beta_hash_id)
 
     return {
         "alpha_id": path_ids[_ALPHA],

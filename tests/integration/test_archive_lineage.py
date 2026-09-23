@@ -99,8 +99,8 @@ def lineage(pg_db, tmp_path, engine_or_skip):
             cur.execute(
                 "SELECT p.id, p.file_name, p.parent_path_id, p.hierarchy_path,"
                 " p.extraction_provenance FROM paths p"
-                " JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id WHERE s.name = %s",
+                " JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id WHERE s.name = %s",
                 (f"{tag}_side",),
             )
             rows = {

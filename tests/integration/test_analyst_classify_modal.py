@@ -62,19 +62,24 @@ def page_file(pg_db):
             )
             source_id = cur.fetchone()[0]
             cur.execute(
-                "INSERT INTO hashs (hash, side_id, source_id) VALUES (%s, %s, %s)"
-                " RETURNING id",
-                (f"modal-analyst-hash-{_UNIQUE}", side_id, source_id),
+                "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                (f"modal-analyst-hash-{_UNIQUE}",),
             )
             hash_id = cur.fetchone()[0]
             cur.execute(
+                "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                " VALUES (%s, %s, %s) RETURNING id",
+                (hash_id, source_id, side_id),
+            )
+            context_id = cur.fetchone()[0]
+            cur.execute(
                 """
                 INSERT INTO paths (file_name, file_path, file_size, file_type,
-                                   file_status, file_date, date_creation, hash_id)
+                                   file_status, file_date, date_creation, context_id)
                 VALUES (%s, %s, 4096, '.txt', 'Read', CURRENT_DATE, CURRENT_DATE, %s)
                 RETURNING id
                 """,
-                (f"modal-analyst-{_UNIQUE}.txt", f"/modal-test/{_UNIQUE}.txt", hash_id),
+                (f"modal-analyst-{_UNIQUE}.txt", f"/modal-test/{_UNIQUE}.txt", context_id),
             )
             path_id = cur.fetchone()[0]
         conn.commit()

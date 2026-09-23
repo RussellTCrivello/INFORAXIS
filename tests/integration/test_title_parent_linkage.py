@@ -84,38 +84,46 @@ def two_paths(conn):
             (f"_p02_src_{today}", today),
         )
         source_id = cur.fetchone()[0]
-        ids = []
+        # Identity-model seed: one canonical content (hashs), one context
+        # (hash_contexts), one occurrence (paths) per file.
+        pairs = []
         for name in ("container.zip", "child.pdf"):
             cur.execute(
-                "INSERT INTO hashs (hash, side_id, source_id) VALUES (%s, %s, %s)"
-                " RETURNING id",
-                (unique_hash(name), side_id, source_id),
+                "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                (unique_hash(name),),
             )
             hash_id = cur.fetchone()[0]
             cur.execute(
-                "INSERT INTO paths (file_name, file_path, file_size, file_type,"
-                " file_status, file_date, date_creation, hash_id)"
-                " VALUES (%s, %s, 10, 'FILE', 'Unread', %s, %s, %s) RETURNING id",
-                (name, f"/tmp/{name}", today, today, hash_id),
+                "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                " VALUES (%s, %s, %s) RETURNING id",
+                (hash_id, source_id, side_id),
             )
-            ids.append(cur.fetchone()[0])
+            context_id = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO paths (file_name, file_path, file_size, file_type,"
+                " file_status, file_date, date_creation, context_id)"
+                " VALUES (%s, %s, 10, 'FILE', 'Unread', %s, %s, %s) RETURNING id",
+                (name, f"/tmp/{name}", today, today, context_id),
+            )
+            pairs.append((cur.fetchone()[0], hash_id))
     conn.commit()
-    return ids
+    return pairs
 
 
-def insert_title(conn, word_ids, path_id, title_status="Main", parent=None):
+def insert_title(conn, word_ids, hash_id, title_status="Main", parent=None):
     from database.database.repository.titles_content_repo import TitlesContentRepository
 
     # BaseRepository(db, connection=None): passing the connection puts the repo
     # in transaction context so it uses our connection rather than opening one.
+    # Titles belong to canonical content (hash_id) since migration m0011.
     repo = TitlesContentRepository(None, connection=conn)
-    return repo.insert_titles_content(word_ids, path_id, title_status, parent)
+    return repo.insert_titles_content(word_ids, hash_id, title_status, parent)
 
 
 def read_title(conn, title_id):
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, title_status, title_content_id, path_id"
+            "SELECT id, title_status, title_content_id, hash_id"
             " FROM titles_content WHERE id = %s",
             (title_id,),
         )
@@ -124,9 +132,9 @@ def read_title(conn, title_id):
 
 def test_parent_linkage_is_persisted(conn, two_paths):
     """The regression: a supplied parent used to be silently discarded."""
-    archive_path_id, child_path_id = two_paths
-    parent_id = insert_title(conn, [1, 2, 3], archive_path_id, "Main")
-    child_id = insert_title(conn, [4, 5], child_path_id, "Branch", parent_id)
+    (archive_path_id, archive_hash_id), (child_path_id, child_hash_id) = two_paths
+    parent_id = insert_title(conn, [1, 2, 3], archive_hash_id, "Main")
+    child_id = insert_title(conn, [4, 5], child_hash_id, "Branch", parent_id)
     conn.commit()
 
     row = read_title(conn, child_id)
@@ -140,9 +148,9 @@ def test_parent_linkage_is_persisted(conn, two_paths):
 
 def test_linkage_is_retrievable_from_the_child(conn, two_paths):
     """Lineage must be queryable, not merely written."""
-    archive_path_id, child_path_id = two_paths
-    parent_id = insert_title(conn, [1], archive_path_id, "Main")
-    child_id = insert_title(conn, [2], child_path_id, "Branch", parent_id)
+    (archive_path_id, archive_hash_id), (child_path_id, child_hash_id) = two_paths
+    parent_id = insert_title(conn, [1], archive_hash_id, "Main")
+    child_id = insert_title(conn, [2], child_hash_id, "Branch", parent_id)
     conn.commit()
 
     with conn.cursor() as cur:
@@ -150,7 +158,8 @@ def test_linkage_is_retrievable_from_the_child(conn, two_paths):
             "SELECT c.id, p_parent.file_name, c.title_status"
             " FROM titles_content c"
             " JOIN titles_content parent ON parent.id = c.title_content_id"
-            " JOIN paths p_parent ON p_parent.id = parent.path_id"
+            " JOIN hash_contexts hc_parent ON hc_parent.hash_id = parent.hash_id"
+            " JOIN paths p_parent ON p_parent.context_id = hc_parent.id"
             " WHERE c.id = %s",
             (child_id,),
         )
@@ -163,8 +172,8 @@ def test_linkage_is_retrievable_from_the_child(conn, two_paths):
 
 def test_omitting_a_parent_still_works(conn, two_paths):
     """Backwards compatibility: existing callers pass no parent."""
-    archive_path_id, _ = two_paths
-    title_id = insert_title(conn, [7, 8], archive_path_id)
+    (_archive_path_id, archive_hash_id), _ = two_paths
+    title_id = insert_title(conn, [7, 8], archive_hash_id)
     conn.commit()
 
     row = read_title(conn, title_id)
@@ -176,9 +185,9 @@ def test_foreign_key_still_enforced(conn, two_paths):
     """Writing the column must not bypass its self-referencing constraint."""
     from database.exceptions import QueryError
 
-    _, child_path_id = two_paths
+    _, (_child_path_id, child_hash_id) = two_paths
     # The repository wraps driver errors, so accept either the raw psycopg2
     # error or the project's QueryError - what matters is that it propagates.
     with pytest.raises((psycopg2.Error, QueryError)):
-        insert_title(conn, [9], child_path_id, "Branch", parent=999_999)
+        insert_title(conn, [9], child_hash_id, "Branch", parent=999_999)
     conn.rollback()

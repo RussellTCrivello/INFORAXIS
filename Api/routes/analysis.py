@@ -12,6 +12,7 @@ from Api.services.analysis_stats import (
 import logging
 
 from core.errors import client_error
+from core.security import login_required
 import os
 from datetime import datetime
 
@@ -65,6 +66,85 @@ def get_recent_jobs(execute_query, limit: int = 5):
 def register_analysis_routes(app):
     """Register analysis routes with the Flask app"""
     
+    @app.route('/analysis/batch/process', methods=['POST'])
+    @login_required
+    def analysis_batch_process():
+        """Process the selected files through the real ingestion pipeline.
+
+        The batch page queues files that have no content yet (or that failed
+        earlier); each one is re-run through the same single-file entry point
+        the upload path uses. Under the content-identity model this is
+        idempotent: a file whose content is already stored resolves to its
+        existing occurrence instead of duplicating anything.
+        """
+        try:
+            data = request.get_json(silent=True) or {}
+            file_ids = data.get('file_ids')
+            if not isinstance(file_ids, list) or not file_ids:
+                return jsonify({'success': False,
+                                'error': 'file_ids (non-empty list) is required'}), 400
+            try:
+                file_ids = [int(fid) for fid in file_ids][:200]
+            except (TypeError, ValueError):
+                return jsonify({'success': False,
+                                'error': 'file_ids must be integers'}), 400
+
+            from pipeline.integrated_reader import IntegratedFileReader
+
+            rows = execute_query("""
+                SELECT p.id, p.file_path, p.file_name,
+                       COALESCE(s.name, '') AS source_name,
+                       COALESCE(si.name, '') AS side_name
+                FROM paths p
+                JOIN hash_contexts hc ON hc.id = p.context_id
+                LEFT JOIN sources s ON s.id = hc.source_id
+                LEFT JOIN sides si ON si.id = hc.side_id
+                WHERE p.id = ANY(%s)
+            """, (file_ids,), fetch="all") or []
+            by_id = {row[0]: row for row in rows}
+
+            results = []
+            succeeded = 0
+            with IntegratedFileReader(max_workers=1, enable_storage=True) as reader:
+                for fid in file_ids:
+                    row = by_id.get(fid)
+                    if not row:
+                        results.append({'file_id': fid, 'status': 'error',
+                                        'error': 'File not found'})
+                        continue
+                    _, file_path, file_name, source_name, side_name = list(row)[:5]
+                    try:
+                        reader.storage_source = source_name
+                        reader.storage_side = side_name
+                        outcome = reader.process_single_file(file_path) or {}
+                        path_id = outcome.get('database_path_id')
+                        ok = bool(path_id)
+                        results.append({
+                            'file_id': fid,
+                            'path_id': path_id,
+                            'status': 'success' if ok else 'error',
+                            'duplicate': bool(outcome.get('duplicate')),
+                        })
+                        if ok:
+                            succeeded += 1
+                    except Exception as exc:
+                        logger.error("Batch analysis: processing %s (%s) failed: %s",
+                                     fid, file_name, exc, exc_info=True)
+                        results.append({'file_id': fid, 'status': 'error',
+                                        'error': 'Processing failed'})
+
+            return jsonify({
+                'success': True,
+                'results': results,
+                'processed': len(results),
+                'succeeded': succeeded,
+                'failed': len(results) - succeeded,
+            })
+        except Exception as e:
+            logger.error(f"Error in batch analysis processing: {e}", exc_info=True)
+            return client_error(e, subsystem='Api.routes.analysis',
+                                success_key='success', status=500)
+    
     @app.route('/analysis/batch')
     def analysis_batch():
         """Batch Analysis page"""
@@ -75,10 +155,10 @@ def register_analysis_routes(app):
                        COALESCE(s.name, 'Unknown') as source_name,
                        COALESCE(si.name, 'Unknown') as side_name
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
-                LEFT JOIN contents c ON c.path_id = p.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
+                LEFT JOIN contents c ON c.hash_id = hc.hash_id
                 WHERE c.id IS NULL
                 ORDER BY p.date_creation DESC
                 LIMIT 100
@@ -91,9 +171,9 @@ def register_analysis_routes(app):
                        COALESCE(si.name, 'Unknown') as side_name,
                        p.error_message, p.file_path, p.file_status
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE (p.error_message IS NOT NULL AND p.error_message != '')
                    OR (p.file_status = 'Unread' AND p.date_creation < CURRENT_DATE - INTERVAL '1 day')
                 ORDER BY p.date_creation DESC
@@ -152,12 +232,12 @@ def register_analysis_routes(app):
         try:
             # Get file information from database
             file_info = execute_query("""
-                SELECT p.file_path, p.file_name, h.source_id, h.side_id,
+                SELECT p.file_path, p.file_name, hc.source_id, hc.side_id,
                        s.name as source_name, si.name as side_name
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE p.id = %s
             """, (file_id,), fetch="one")
             

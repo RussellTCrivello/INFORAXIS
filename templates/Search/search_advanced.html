@@ -136,6 +136,22 @@
         </div>
 
         <div class="search-toolbar-side">
+            <!-- Saved searches: re-run any stored search with one click -->
+            <div class="saved-search-container">
+                <button type="button" class="btn btn-saved-searches" id="savedSearchBtn"
+                        onclick="toggleSavedSearchMenu()"
+                        title="{{ _('Saved searches') }}"
+                        aria-haspopup="true" aria-expanded="false">
+                    <i class="bi bi-bookmarks me-1" aria-hidden="true"></i>{{ _('Saved') }}
+                </button>
+                <div class="saved-search-menu" id="savedSearchMenu" style="display: none;">
+                    <div class="ssm-header">
+                        <span><i class="bi bi-bookmarks me-1" aria-hidden="true"></i>{{ _('Saved searches') }}</span>
+                        <a href="{{ url_for('saved_searches_page') }}">{{ _('Manage all') }}</a>
+                    </div>
+                    <div class="ssm-list" id="savedSearchMenuList"><!-- populated by JS --></div>
+                </div>
+            </div>
             <button type="button" class="btn btn-lucky" onclick="feelingLucky()" title="{{ _('I\'m Feeling Lucky') }}">
                 <i class="bi bi-stars me-1" aria-hidden="true"></i>{{ _('Lucky') }}
             </button>
@@ -357,7 +373,13 @@
             <span class="results-time" id="searchTime"></span>
         </div>
         <div class="results-actions">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="saveSearchBtn"
+                    onclick="saveCurrentSearch()"
+                    title="{{ _('Save this search so you can re-run it any time') }}">
+                <i class="bi bi-bookmark-plus me-1" aria-hidden="true"></i>{{ _('Save') }}
+            </button>
             <select class="form-select form-select-sm results-sort" id="sortBy" onchange="sortResults()" aria-label="{{ _('Sort') }}">
+
                 <option value="relevance">{{ _('Sort: Relevance') }}</option>
                 <option value="date">{{ _('Date (Newest)') }}</option>
                 <option value="date_old">{{ _('Date (Oldest)') }}</option>
@@ -464,7 +486,33 @@
         "selectForCategorization": _('Select for manual categorization'),
         "selectFileForCategorization": _('Select {file} for manual categorization'),
         "removeAllConfirm": _('Remove all analyst categories from {count} selected file(s)? They will return to "uncategorized" for analyst search scope. Smart categories are not affected.'),
-        "assignedToast": _('Assigned "{category}" to {count} file(s)')
+        "assignedToast": _('Assigned "{category}" to {count} file(s)'),
+        "openInNewTab": _('Open in new tab'),
+        "preview": _('Quick preview (stays on this page)'),
+        "closePreview": _('Close preview'),
+        "previewLoading": _('Loading preview…'),
+        "previewFailed": _('Preview failed'),
+        "previewUnavailable": _('Preview is not available for this file.'),
+        "openFullPageHint": _('Open the file in a new tab to view the full content.'),
+        "pdfFirstPage": _('First page text'),
+        "pages": _('pages'),
+        "savedSearches": _('Saved searches'),
+        "savedSearch": _('Saved search'),
+        "manageAll": _('Manage all'),
+        "saveSearchPrompt": _('Name this search:'),
+        "searchSaved": _('Search saved. Find it under Saved searches.'),
+        "saveFailed": _('Could not save this search.'),
+        "nothingToSave": _('Run a search first, then save it here.'),
+        "loadingSaved": _('Loading saved searches…'),
+        "loadSavedFailed": _('Could not load saved searches.'),
+        "noSavedSearches": _('No saved searches yet. Run a search and press Save.'),
+        "runSavedSearch": _('Run this search'),
+        "searchApplied": _('Saved search applied'),
+        "applyFailed": _('Could not run this saved search.'),
+        "deleteSearch": _('Delete'),
+        "deleteSearchConfirm": _('Are you sure you want to delete this saved search?'),
+        "searchDeleted": _('Saved search deleted'),
+        "deleteFailed": _('Could not delete this saved search.')
     },
     "initialScope": analyst_scope,
     "canCategorize": current_user.is_authenticated and current_user.has_role('admin', 'analyst')

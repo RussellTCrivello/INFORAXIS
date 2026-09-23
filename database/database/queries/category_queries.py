@@ -47,14 +47,19 @@ class CategoryQueries(BaseQueries):
     
     @staticmethod
     def get_categories_by_file() -> str:
-        """Get categories for a file"""
+        """Get categories for a file (file resolved to canonical content)"""
         return """
             SELECT DISTINCT c.id, w.word as name, COUNT(DISTINCT wc.word_id) as word_count
             FROM categorys c
             JOIN words w ON c.word_id = w.id
             LEFT JOIN words_categorys wc ON c.id = wc.category_id
-            LEFT JOIN words_paths wp ON wc.word_id = wp.word_id
-            WHERE wp.path_id = %s
+            LEFT JOIN words_hashs wp ON wc.word_id = wp.word_id
+            WHERE wp.hash_id = (
+                SELECT hc.hash_id
+                FROM paths p
+                JOIN hash_contexts hc ON hc.id = p.context_id
+                WHERE p.id = %s
+            )
             GROUP BY c.id, w.word
         """
     
@@ -67,8 +72,9 @@ class CategoryQueries(BaseQueries):
             FROM categorys c
             JOIN words w ON c.word_id = w.id
             LEFT JOIN words_categorys wc ON c.id = wc.category_id
-            LEFT JOIN words_paths wp ON wc.word_id = wp.word_id
-            LEFT JOIN paths p ON wp.path_id = p.id
+            LEFT JOIN words_hashs wp ON wc.word_id = wp.word_id
+            LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             WHERE %s IS NULL OR w.word ILIKE %s
             GROUP BY c.id, w.word
             ORDER BY file_count DESC, w.word ASC
@@ -89,9 +95,11 @@ class CategoryQueries(BaseQueries):
             LEFT JOIN (
                 SELECT 
                     wc.category_id,
-                    COUNT(DISTINCT wp.path_id) as file_count
+                    COUNT(DISTINCT p.id) as file_count
                 FROM words_categorys wc
-                LEFT JOIN words_paths wp ON wc.word_id = wp.word_id
+                LEFT JOIN words_hashs wp ON wc.word_id = wp.word_id
+                LEFT JOIN hash_contexts hc ON hc.hash_id = wp.hash_id
+                LEFT JOIN paths p ON p.context_id = hc.id
                 GROUP BY wc.category_id
             ) file_counts ON c.id = file_counts.category_id
             LEFT JOIN (

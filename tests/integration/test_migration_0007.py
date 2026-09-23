@@ -21,9 +21,10 @@ from database.migrations import m0007_provenance_hierarchy_status as m0007  # no
 
 pytestmark = pytest.mark.integration
 
-#: Session-wide, not per-fixture: hashs is UNIQUE (hash, source_id, side_id) and
-#: the database is shared across tests in a session, so a per-test counter makes
-#: two tests that use the same default label collide.
+#: Session-wide, not per-fixture: hash_contexts is
+#: UNIQUE (hash_id, source_id, side_id) and the database is shared across tests
+#: in a session, so a per-test counter makes two tests that use the same
+#: default label collide.
 _SEQ = itertools.count()
 
 
@@ -76,16 +77,21 @@ def make_path(conn):
                 f"{label}:{next(_SEQ)}".encode()
             ).hexdigest()
             cur.execute(
-                "INSERT INTO hashs (hash, side_id, source_id)"
-                " VALUES (%s, %s, %s) RETURNING id",
-                (digest, side_id, source_id),
+                "INSERT INTO hashs (hash) VALUES (%s) RETURNING id",
+                (digest,),
             )
             hash_id = cur.fetchone()[0]
             cur.execute(
+                "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                " VALUES (%s, %s, %s) RETURNING id",
+                (hash_id, source_id, side_id),
+            )
+            context_id = cur.fetchone()[0]
+            cur.execute(
                 "INSERT INTO paths (file_name, file_path, file_size, file_type,"
-                " file_status, file_date, date_creation, hash_id, parent_path_id)"
+                " file_status, file_date, date_creation, context_id, parent_path_id)"
                 " VALUES (%s, %s, 10, 'FILE', %s, %s, %s, %s, %s) RETURNING id",
-                (label, f"/tmp/{label}", file_status, today, today, hash_id, parent_id),
+                (label, f"/tmp/{label}", file_status, today, today, context_id, parent_id),
             )
             path_id = cur.fetchone()[0]
         conn.commit()

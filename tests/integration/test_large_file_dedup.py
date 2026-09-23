@@ -94,7 +94,7 @@ def store(pipeline, path: Path, source_name, side_name):
 
 
 def test_identical_large_files_share_one_content_identity(
-    pg_db, conn, source_side, tmp_path, force_deferred_hashing
+    pg_db, conn, source_side, tmp_path, force_deferred_hashing, monkeypatch
 ):
     from pipeline.storage_pipeline import StoragePipeline
 
@@ -109,36 +109,54 @@ def test_identical_large_files_share_one_content_identity(
     # Sanity: the files are byte-identical and above the (lowered) threshold.
     assert hash_file(str(first)) == hash_file(str(second))
 
+    # Count extraction writes: identical bytes must be extracted once.
+    from database.services.contents_db_service import ContentDBService
+
+    extraction_calls = {"create_content": 0}
+    _orig_create = ContentDBService.create_content
+
+    def _counting_create(self, *args, **kwargs):
+        extraction_calls["create_content"] += 1
+        return _orig_create(self, *args, **kwargs)
+
+    monkeypatch.setattr(ContentDBService, "create_content", _counting_create)
+
     pipeline = StoragePipeline()
     first_id = store(pipeline, first, source_name, side_name)
     second_id = store(pipeline, second, source_name, side_name)
     assert first_id, "first file was not stored"
     assert second_id, "second file was not stored"
 
-    # Documented dedup semantics (DB-04): a duplicate does not create a second
-    # record, it resolves to the existing one.
-    assert second_id == first_id, (
-        f"identical content was stored twice (paths {first_id} and {second_id})"
+    # Identity semantics (One Content, Many Contexts): identical bytes at two
+    # different physical locations are two OCCURRENCES of one canonical
+    # content. The provenance of each encounter is preserved; the content is
+    # extracted once and shared.
+    assert second_id != first_id, (
+        f"two encounters of the same bytes were collapsed (path {first_id})"
     )
 
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT h.hash, COUNT(p.id) AS copies
+            SELECT h.hash, COUNT(p.id) AS occurrences
             FROM hashs h
-            JOIN paths p ON p.hash_id = h.id
-            WHERE h.source_id = %s AND h.side_id = %s
+            JOIN hash_contexts hc ON hc.hash_id = h.id JOIN paths p ON p.context_id = hc.id
+            WHERE hc.source_id = %s AND hc.side_id = %s
             GROUP BY h.hash
             """,
             (source_id, side_id),
         )
         rows = cur.fetchall()
 
-    # Exactly one content identity for the whole source/side.
+    # Exactly one content identity for the whole source/side, two occurrences.
     assert len(rows) == 1, f"expected one identity, got {rows}"
-    stored_hash, _copies = rows[0]
+    stored_hash, occurrences = rows[0]
+    assert occurrences == 2, occurrences
     assert stored_hash == hash_file(str(first)), (
         "the stored identity must be the real content hash, "
         "not a path/mtime-derived value"
     )
     assert is_valid_digest(stored_hash)
+
+    # Extraction runs once: the second occurrence reuses the shared content.
+    assert extraction_calls["create_content"] == 1, extraction_calls

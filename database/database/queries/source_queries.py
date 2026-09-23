@@ -76,7 +76,12 @@ class SourceQueries(BaseQueries):
     @staticmethod
     def check_source_usage() -> str:
         """Check if source is used by any files"""
-        return "SELECT COUNT(*) FROM hashs WHERE source_id = %s"
+        return """
+            SELECT COUNT(DISTINCT p.id)
+            FROM paths p
+            JOIN hash_contexts hc ON hc.id = p.context_id
+            WHERE hc.source_id = %s
+        """
     
     @staticmethod
     def get_source_with_stats() -> str:
@@ -90,8 +95,8 @@ class SourceQueries(BaseQueries):
                    SUM(p.file_size) as total_size,
                    w.word as category_name
             FROM sources s
-            LEFT JOIN hashs h ON s.id = h.source_id
-            LEFT JOIN paths p ON h.id = p.hash_id
+            LEFT JOIN hash_contexts hc ON s.id = hc.source_id
+            LEFT JOIN paths p ON p.context_id = hc.id
             LEFT JOIN categorys c ON s.category_id = c.id
             LEFT JOIN words w ON c.word_id = w.id
             WHERE s.id = %s

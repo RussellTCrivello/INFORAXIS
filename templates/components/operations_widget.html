@@ -33,7 +33,7 @@
 (function () {
   const T_ACTIVE = {{ _('active')|tojson }};
   const T_NO_OPS = {{ _('No operations yet - start an ingestion.')|tojson }};
-  const badge = (s) => window.InforaxisStatus.badge(s);
+  const badge = (s) => (window.InforaxisStatus ? window.InforaxisStatus.badge(s) : '<span class="badge bg-secondary">' + String(s == null ? '' : s) + '</span>');
   async function refreshOps() {
     try {
       const sum = await fetch('/api/jobs/summary').then(r => r.json());

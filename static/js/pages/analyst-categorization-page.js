@@ -90,7 +90,7 @@ async function loadAssignments(page = 1) {
     analystState.page = page;
     const body = document.getElementById('assignmentsTableBody');
     if (!body) return;
-    body.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">${escapeHtmlText(analystT('loading', 'Loading…'))}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">${escapeHtmlText(analystT('loading', 'Loading…'))}</td></tr>`;
 
     try {
         const qs = analystQuery({
@@ -114,7 +114,7 @@ async function loadAssignments(page = 1) {
         }
 
         if (!data.assignments || data.assignments.length === 0) {
-            body.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">${
+            body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">${
                 escapeHtmlText(analystT('noAssignments', 'No analyst-categorized files match the current filters.'))
             }</td></tr>`;
             renderPagination();
@@ -126,6 +126,17 @@ async function loadAssignments(page = 1) {
                 <td>
                     <a class="file-link" href="/file/${row.path_id}">${escapeHtmlText(row.file_name)}</a>
                     ${row.file_path ? `<span class="file-path" title="${escapeAttr(row.file_path)}">${escapeHtmlText(row.file_path)}</span>` : ''}
+                </td>
+                <td class="assignment-origin-cell">
+                    ${row.source_name
+                        ? `<span class="assignment-origin" title="${escapeAttr(analystT('sourceLabel', 'Source'))}"><i class="bi bi-building me-1"></i>${escapeHtmlText(row.source_name)}</span>`
+                        : ''}
+                    ${row.side_name
+                        ? `<span class="assignment-origin" title="${escapeAttr(analystT('sideLabel', 'Side'))}"><i class="bi bi-diagram-3 me-1"></i>${escapeHtmlText(row.side_name)}</span>`
+                        : ''}
+                    ${!row.source_name && !row.side_name
+                        ? `<span class="text-muted small">${escapeHtmlText(analystT('noOrigin', '—'))}</span>`
+                        : ''}
                 </td>
                 <td><span class="badge analyst-category-badge"><i class="bi bi-person-fill me-1"></i>${escapeHtmlText(row.category_name)}</span></td>
                 <td>${escapeHtmlText(row.assigned_by_username || analystT('unknownAnalyst', 'unknown'))}</td>
@@ -147,7 +158,7 @@ async function loadAssignments(page = 1) {
         renderPagination();
     } catch (error) {
         console.error('Failed to load analyst assignments:', error);
-        body.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">${escapeHtmlText(analystT('failedToLoadAssignments', 'Failed to load assignments'))}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">${escapeHtmlText(analystT('failedToLoadAssignments', 'Failed to load assignments'))}</td></tr>`;
     }
 }
 

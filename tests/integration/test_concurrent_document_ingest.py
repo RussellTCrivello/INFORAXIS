@@ -18,7 +18,7 @@ connection - visible as
 
 followed by ``Hash ID N does not exist (transaction may have been rolled
 back)`` and foreign key violations (``fk_contents_raw_path``,
-``words_paths_word_id_fkey``, ...) for the documents that lost the race.
+``words_hashs_word_id_fkey``, ...) for the documents that lost the race.
 
 These tests drive concurrent ingestion through the shared service and through
 the real reader, then verify the database contents - not merely that no
@@ -185,37 +185,43 @@ def test_concurrent_storage_through_shared_service(pg_db, tenant):
                 path_id = result["path_id"]
 
                 cur.execute(
-                    "SELECT file_name, hash_id FROM paths WHERE id = %s", (path_id,)
+                    "SELECT p.file_name, hc.hash_id FROM paths p"
+                    " JOIN hash_contexts hc ON hc.id = p.context_id WHERE p.id = %s",
+                    (path_id,),
                 )
                 row = cur.fetchone()
                 assert row, f"path row {path_id} missing for document {index}"
                 assert row[0] == payload["file_name"]
 
                 cur.execute(
-                    "SELECT COUNT(*) FROM contents WHERE path_id = %s", (path_id,)
+                    "SELECT COUNT(*) FROM contents WHERE hash_id = %s",
+                    (result["hash_id"],),
                 )
                 assert cur.fetchone()[0] > 0, (
                     f"document {index} has no content rows (words lost)"
                 )
 
                 cur.execute(
-                    "SELECT COUNT(*) FROM contents_raw WHERE path_id = %s", (path_id,)
+                    "SELECT COUNT(*) FROM contents_raw WHERE hash_id = %s",
+                    (result["hash_id"],),
                 )
                 assert cur.fetchone()[0] > 0, (
                     f"document {index} has no raw display text"
                 )
 
                 cur.execute(
-                    "SELECT COUNT(*) FROM words_paths WHERE path_id = %s", (path_id,)
+                    "SELECT COUNT(*) FROM words_hashs WHERE hash_id = %s",
+                    (result["hash_id"],),
                 )
-                words_paths_rows = cur.fetchone()[0]
-                assert words_paths_rows > 0, (
+                words_hashs_rows = cur.fetchone()[0]
+                assert words_hashs_rows > 0, (
                     f"document {index} is stored but not searchable "
-                    f"(no words_paths rows)"
+                    f"(no words_hashs rows)"
                 )
 
                 cur.execute(
-                    "SELECT COUNT(*) FROM titles_content WHERE path_id = %s", (path_id,)
+                    "SELECT COUNT(*) FROM titles_content WHERE hash_id = %s",
+                    (result["hash_id"],),
                 )
                 assert cur.fetchone()[0] > 0, f"document {index} has no title row"
 
@@ -248,12 +254,12 @@ def test_failed_document_does_not_leave_stale_rows(pg_db, tenant, monkeypatch):
     payload = _document(999)
     service = ContentDBService()
 
-    original_link = ContentDBService.link_words_to_path
+    original_link = ContentDBService.link_words_to_content
 
-    def failing_link(self, path_id, content_ids):
+    def failing_link(self, hash_id, content_ids):
         raise RuntimeError("injected failure while linking words")
 
-    monkeypatch.setattr(ContentDBService, "link_words_to_path", failing_link)
+    monkeypatch.setattr(ContentDBService, "link_words_to_content", failing_link)
     with pytest.raises(RuntimeError, match="injected failure"):
         service.process_full_document(
             hash_value=payload["hash_value"],
@@ -268,7 +274,7 @@ def test_failed_document_does_not_leave_stale_rows(pg_db, tenant, monkeypatch):
             content_words=payload["content_words"],
             attempts=1,
         )
-    monkeypatch.setattr(ContentDBService, "link_words_to_path", original_link)
+    monkeypatch.setattr(ContentDBService, "link_words_to_content", original_link)
 
     conn = _pg_connect(pg_db)
     try:
@@ -347,8 +353,9 @@ def test_batch_of_files_through_reader_is_fully_stored(pg_db, tenant, tmp_path):
                 name = _document(1000 + index, words=80)["file_name"]
                 cur.execute(
                     "SELECT p.id,"
-                    " (SELECT COUNT(*) FROM words_paths wp WHERE wp.path_id = p.id),"
-                    " (SELECT COUNT(*) FROM contents c WHERE c.path_id = p.id)"
+                    " (SELECT COUNT(*) FROM words_hashs wp WHERE wp.hash_id = (SELECT hc0.hash_id FROM hash_contexts hc0 WHERE hc0.id = p.context_id)),"
+                    " (SELECT COUNT(*) FROM contents c WHERE c.hash_id ="
+                    " (SELECT hc1.hash_id FROM hash_contexts hc1 WHERE hc1.id = p.context_id))"
                     " FROM paths p WHERE p.file_name = %s",
                     (name,),
                 )
@@ -377,7 +384,8 @@ def test_aborted_transaction_is_reported_not_silently_rolled_back(pg_db, tenant)
 
     with pytest.raises(TransactionAbortedError):
         with service.transaction():
-            service.create_hash(hash_value, tenant["source_id"], tenant["side_id"])
+            # A valid read (unknown occurrence id -> None) before the abort...
+            service.resolve_hash_id(999_999_999)
             # First failure aborts the transaction...
             with pytest.raises(TransactionAbortedError):
                 service.words_repo.execute("SELECT 1/0")
@@ -404,7 +412,7 @@ def test_optional_step_failure_does_not_lose_the_document(pg_db, tenant, monkeyp
     from database.database.repository.contents_repo import ContentsRepository
     from database.services.contents_db_service import ContentDBService
 
-    def failing_raw_store(self, path_id, text, chunk_size=1024 * 1024):
+    def failing_raw_store(self, hash_id, text, chunk_size=1024 * 1024):
         raise RuntimeError("injected raw-text failure")
 
     monkeypatch.setattr(ContentsRepository, "store_raw_content", failing_raw_store)
@@ -433,8 +441,10 @@ def test_optional_step_failure_does_not_lose_the_document(pg_db, tenant, monkeyp
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT (SELECT COUNT(*) FROM contents WHERE path_id = p.id),"
-                " (SELECT COUNT(*) FROM words_paths WHERE path_id = p.id)"
+                "SELECT (SELECT COUNT(*) FROM contents WHERE hash_id ="
+                " (SELECT hc0.hash_id FROM hash_contexts hc0 WHERE hc0.id = p.context_id)),"
+                " (SELECT COUNT(*) FROM words_hashs WHERE hash_id ="
+                " (SELECT hc0.hash_id FROM hash_contexts hc0 WHERE hc0.id = p.context_id))"
                 " FROM paths p WHERE p.file_name = %s",
                 (payload["file_name"],),
             )

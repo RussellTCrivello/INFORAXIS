@@ -134,8 +134,8 @@ def test_failed_derived_step_marks_the_row_partial(pg_db, tenant, monkeypatch):
             )
             status, detail = cur.fetchone()
             cur.execute(
-                "SELECT count(*) FROM words_paths WHERE path_id = %s",
-                (degraded["path_id"],),
+                "SELECT count(*) FROM words_hashs WHERE hash_id = %s",
+                (degraded["hash_id"],),
             )
             word_links = cur.fetchone()[0]
     finally:

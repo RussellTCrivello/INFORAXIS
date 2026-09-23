@@ -173,9 +173,9 @@ def test_both_files_are_indexed_as_words(ingested, pg_db):
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT p.file_name, p.file_status, COUNT(wp.word_id) "
-                "FROM paths p JOIN hashs h ON h.id = p.hash_id "
-                "JOIN sides s ON s.id = h.side_id "
-                "LEFT JOIN words_paths wp ON wp.path_id = p.id "
+                "FROM paths p JOIN hash_contexts hc ON hc.id = p.context_id "
+                "JOIN sides s ON s.id = hc.side_id "
+                "LEFT JOIN words_hashs wp ON wp.hash_id = (SELECT hc0.hash_id FROM hash_contexts hc0 WHERE hc0.id = p.context_id) "
                 "WHERE s.name = %s GROUP BY p.id ORDER BY p.file_name",
                 (side_name,),
             )

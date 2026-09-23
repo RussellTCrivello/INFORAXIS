@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Optional, Dict, Tuple
+from typing import Any, List, Optional, Dict, Tuple
 from contextlib import contextmanager
 import re
 import logging
@@ -38,10 +38,10 @@ from database.database.repository.paths_repo import PathsRepository
 from database.database.repository.keywords_repo import KeywordsRepository
 from database.database.repository.categorys_repo import CategorysRepository
 from database.database.repository.sides_repo import SidesRepository
-from database.database.repository.words_paths_repo import WordsPathsRepository
-from database.database.repository.keywords_paths_repo import KeywordsPathsRepository
+from database.database.repository.words_hashs_repo import WordsHashsRepository
+from database.database.repository.keywords_hashs_repo import KeywordsHashsRepository
 from database.database.repository.words_categorys_repo import WordsCategorysRepository
-from database.database.repository.hashs_repo import HashsRepository
+from database.services.dedup_service import DeduplicationService
 from database.database.repository.titles_content_repo import TitlesContentRepository
 from database.database.repository.punctuation_repo import PunctuationRepository
 from database.database.repository.alerts_repo import AlertsRepository
@@ -114,6 +114,49 @@ def _keyword_occurrence_counts(sequence, patterns):
     return counts
 
 
+class _SharedDedupSession:
+    """Yields a DeduplicationService bound to an existing transaction."""
+
+    def __init__(self, dedup):
+        self._dedup = dedup
+
+    def __enter__(self):
+        return self._dedup
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _OwnDedupSession:
+    """Runs identity work on its own short-lived pooled connection."""
+
+    def __init__(self, db):
+        self._db = db
+        self._conn = None
+
+    def __enter__(self):
+        self._conn = self._db.connect()
+        return DeduplicationService(lambda: self._conn)
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            if self._conn is not None:
+                if exc_type is None:
+                    self._conn.commit()
+                else:
+                    self._conn.rollback()
+        finally:
+            if self._conn is not None:
+                try:
+                    self._db.putconn(self._conn)
+                except Exception:
+                    try:
+                        self._conn.close()
+                    except Exception:
+                        pass
+        return False
+
+
 class ContentDBService:
 
     def __init__(self, db: Optional[Database] = None):
@@ -146,8 +189,8 @@ class ContentDBService:
 
         Usage:
             with service.transaction():
-                service.create_hash(...)
-                service.create_path(...)
+                service.register_occurrence(..., commit=False)
+                service.create_content(words, hash_id)
                 # All operations commit together or rollback on error
         """
         scope = self._scope
@@ -210,18 +253,51 @@ class ContentDBService:
         self._scope = TransactionScope(name="contents_db_service")
         self.sources_repo = SourcesRepository(self.db, scope=self._scope)
         self.sides_repo = SidesRepository(self.db, scope=self._scope)
-        self.hashs_repo = HashsRepository(self.db, scope=self._scope)
         self.paths_repo = PathsRepository(self.db, scope=self._scope)
         self.words_repo = WordsRepository(self.db, scope=self._scope)
         self.contents_repo = ContentsRepository(self.db, scope=self._scope)
         self.words_categorys_repo = WordsCategorysRepository(self.db, scope=self._scope)
         self.categorys_repo = CategorysRepository(self.db, scope=self._scope)
         self.keywords_repo = KeywordsRepository(self.db, scope=self._scope)
-        self.keywords_paths_repo = KeywordsPathsRepository(self.db, scope=self._scope)
-        self.words_paths_repo = WordsPathsRepository(self.db, scope=self._scope)
+        self.keywords_hashs_repo = KeywordsHashsRepository(self.db, scope=self._scope)
+        self.words_hashs_repo = WordsHashsRepository(self.db, scope=self._scope)
         self.titles_content_repo = TitlesContentRepository(self.db, scope=self._scope)
         self.punctuation_repo = PunctuationRepository(self.db, scope=self._scope)
         self.alerts_repo = AlertsRepository(self.db, scope=self._scope)
+
+    # ------------------------------------------------------------------
+    # Identity access (One Content, Many Contexts)
+    # ------------------------------------------------------------------
+
+    def _dedup_session(self):
+        """Context manager yielding the identity authority.
+
+        Inside a service transaction it shares the transaction's connection
+        (``commit=False`` semantics: the outer unit of work owns commit).
+        Outside one it opens a short-lived pooled connection and commits its
+        own work.
+        """
+        conn = self._scope.current
+        if conn is not None:
+            return _SharedDedupSession(DeduplicationService(lambda: conn))
+        return _OwnDedupSession(self.db)
+
+    def resolve_hash_id(self, path_id: int) -> Optional[int]:
+        """Resolve an occurrence (path) to its canonical content id.
+
+        Content-derived data is keyed by canonical content (hash_id); every
+        path-addressed read goes through this single resolution so the two id
+        spaces can never be confused.
+        """
+        return _as_id(self.paths_repo.get_hash_id_for_path(path_id))
+
+    def resolve_context_id(self, path_id: int) -> Optional[int]:
+        """Resolve an occurrence (path) to its context id."""
+        row = self.paths_repo.execute(
+            "SELECT context_id FROM paths WHERE id = %s",
+            (path_id,), fetchone=True,
+        )
+        return _as_id(row)
 
     # def categories(self):
     #     result = self.categorys_repo.select_categorys_word_id()
@@ -323,88 +399,44 @@ class ContentDBService:
     # HASH OPERATIONS
     # ============================================================
 
-    def create_hash(
+    def register_occurrence(
         self,
         hash_value: str,
         source_id: int,
-        side_id: int
-    ) -> Optional[int]:
-     
-        # Check if hash already exists for this source and side
-        existing_id = self.hashs_repo.check_duplicate(hash_value, source_id, side_id)
-        if existing_id:
-            return None  # Return None for duplicates as expected by tests
-        
-        # Insert hash - let exceptions propagate so transaction can rollback
-        try:
-            hash_id = self.hashs_repo.insert_info_hashs(hash_value, source_id, side_id)
-            
-            # Validate hash_id was actually created
-            if not hash_id:
-                logger.error(f"Hash insert returned None or 0")
-                raise ValueError(f"Hash insert failed: returned {hash_id}")
-            
-            # Normalize hash_id
-            if isinstance(hash_id, tuple):
-                hash_id = hash_id[0] if len(hash_id) > 0 else None
-            
-            if not hash_id or hash_id <= 0:
-                logger.error(f"Hash insert returned invalid ID: {hash_id}")
-                raise ValueError(f"Hash insert failed: returned invalid ID {hash_id}")
-            
-            return hash_id
-        except (psycopg2.errors.ForeignKeyViolation, psycopg2.errors.IntegrityError) as fk_err:
-            logger.error(f"Foreign key violation creating hash (source_id={source_id}, side_id={side_id} may not exist): {fk_err}")
-            raise
-        except Exception as e:
-            # Check if it's a wrapped foreign key violation
-            error_str = str(e).lower()
-            if 'foreign key' in error_str or 'violates foreign key constraint' in error_str:
-                logger.error(f"Foreign key violation creating hash: {e}")
-                raise
-            raise
+        side_id: int,
+        path_row: Dict[str, Any],
+        commit: bool = True,
+    ) -> Dict[str, Any]:
+        """Register content identity + context identity + one occurrence.
+
+        The single registration path: ``DeduplicationService.register_content``
+        (One Content, Many Contexts).  See that service for the layered
+        duplicate semantics.
+        """
+        with self._dedup_session() as dedup:
+            return dedup.register_content(
+                hash_value, source_id, side_id, path_row, commit=commit
+            )
 
     def hash_exists(self, hash_value: str, source_id: int) -> bool:
-        """Check if hash exists for given source."""
-        return self.hashs_repo.check_hash_exists_for_source(hash_value, source_id)
+        """Check if the content has any live occurrence for the source."""
+        with self._dedup_session() as dedup:
+            return dedup.hash_exists_with_live_path(hash_value, source_id)
 
-    # ============================================================
-    # PATH OPERATIONS
-    # ============================================================
-
-    def create_path(
+    def check_duplicate(
         self,
-        file_name: str,
-        file_path: str,
-        file_size: int,
-        file_type: str,
-        file_status: str,
-        file_date: date,
-        hash_id: int,
-        coordinates: Optional[str] = None,
-        extraction_provenance: Optional[dict] = None,
-        processing_status: str = "discovered",
-        status_detail: Optional[str] = None,
-        attempts: int = 0
-    ) -> int:
-        # Note: Parameter order matches the params tuple in insert_info_paths, not the method signature
-        # params tuple order: file_name, file_path, file_size, file_type, file_status, file_date, hash_id, date_creation, coordinates
-        return self.paths_repo.insert_info_paths(
-            file_name, file_path, file_size, file_type,
-            file_status=file_status,
-            hash_id=hash_id,
-            file_date=file_date,
-            date_creation=date.today(),
-            coordinates=coordinates or "",
-            extraction_provenance=extraction_provenance,
-            processing_status=processing_status,
-            status_detail=status_detail,
-            attempts=attempts
-        )
-    
-    def get_path_id_by_hash_id(self, hash_id: int) -> Optional[int]:
-        """Get path ID by hash ID"""
-        return self.paths_repo.get_path_id_by_hash_id(hash_id)
+        hash_value: str,
+        source_id: int,
+        side_id: int,
+        file_path: Optional[str] = None,
+        hierarchy_path: Optional[str] = None,
+    ):
+        """Layered duplicate check; see DeduplicationService.check_duplicate."""
+        with self._dedup_session() as dedup:
+            return dedup.check_duplicate(
+                hash_value, source_id, side_id,
+                file_path=file_path, hierarchy_path=hierarchy_path,
+            )
 
     # ============================================================
     # SPACING MAPPING
@@ -466,7 +498,7 @@ class ContentDBService:
     def create_content(
         self,
         words: List[str],
-        path_id: int,
+        hash_id: int,
         content_date: Optional[date] = None
     ) -> List[int]:
         """
@@ -479,7 +511,7 @@ class ContentDBService:
 
         Args:
             words: List of word strings
-            path_id: Path ID to associate content with
+            hash_id: Canonical content id to associate content with
             content_date: Optional date mentioned in content (None if no date mentioned)
 
         Returns:
@@ -496,7 +528,7 @@ class ContentDBService:
         # Do not default to today's date
         if words and len(words) > 100000:
             logger.info(
-                "Processing large word list (%s words) for path_id %s",
+                "Processing large word list (%s words) for hash_id %s",
                 f"{len(words):,}", path_id,
             )
 
@@ -511,7 +543,7 @@ class ContentDBService:
         word_ids = self.words_repo.select_content_ids_by_words(words)
 
         # 3. Store content as compressed symbol pairs.
-        self.contents_repo.store_text_content(word_ids, content_date, path_id)
+        self.contents_repo.store_text_content(word_ids, content_date, hash_id)
 
         return word_ids
 
@@ -528,7 +560,8 @@ class ContentDBService:
         Note: Content consists of numbers (word IDs) from the words table.
         This method returns the raw word IDs without converting to text.
         """
-        return self.contents_repo.load_content_word_ids(path_id)
+        hash_id = self.resolve_hash_id(path_id)
+        return self.contents_repo.load_content_word_ids(hash_id) if hash_id else []
     
     def get_content_as_text(self, path_id: int) -> str:
         """
@@ -543,7 +576,8 @@ class ContentDBService:
         Note: This method retrieves word IDs from content and converts
         them to actual words by looking them up in the words table.
         """
-        return self.contents_repo.load_text_content(path_id)
+        hash_id = self.resolve_hash_id(path_id)
+        return self.contents_repo.load_text_content(hash_id) if hash_id is not None else ""
     
     def get_content_as_array(self, path_id: int) -> List[Dict[str, any]]:
         """
@@ -635,7 +669,7 @@ class ContentDBService:
     def create_content_from_symbols(
         self,
         symbols: List[Tuple[str, str, str, str, int, int, int]],
-        path_id: int,
+        hash_id: int,
         content_date: Optional[date] = None
     ) -> List[Tuple[int, Optional[int], Optional[int], int, int]]:
         """
@@ -644,7 +678,7 @@ class ContentDBService:
         Args:
             symbols: List of symbol tuples, each as:
                 (word, punct_before, punct_after, space, page_number, y_coord, x_coord)
-            path_id: Path ID to associate content with
+            hash_id: Canonical content id to associate content with
             content_date: Optional date mentioned in content (None if no date mentioned)
         
         Returns:
@@ -705,7 +739,7 @@ class ContentDBService:
             ))
         
         # Store symbol pairs
-        self.contents_repo.store_symbol_pairs(symbol_pairs, content_date, path_id)
+        self.contents_repo.store_symbol_pairs(symbol_pairs, content_date, hash_id)
         
         return symbol_pairs
     
@@ -870,7 +904,8 @@ class ContentDBService:
         Returns:
             List of symbol pairs: (word_id, punct_before_id, punct_after_id, spacing_id, char_position)
         """
-        return self.contents_repo.load_symbol_pairs(path_id)
+        hash_id = self.resolve_hash_id(path_id)
+        return self.contents_repo.load_symbol_pairs(hash_id) if hash_id else []
     
     def reconstruct_text_from_symbols(self, path_id: int) -> str:
         """
@@ -1003,7 +1038,7 @@ class ContentDBService:
     # WORD-PATH RELATIONSHIP
     # ============================================================
 
-    def link_words_to_path(self, path_id: int, content_ids: List[int]) -> int:
+    def link_words_to_content(self, hash_id: int, content_ids: List[int]) -> int:
         # Build position tracking
         word_positions: Dict[int, List[int]] = {}
         
@@ -1024,11 +1059,11 @@ class ContentDBService:
 
         # Prepare bulk data
         bulk_data = [
-            (path_id, word_id, len(positions), pack_int_list(positions))
+            (hash_id, word_id, len(positions), pack_int_list(positions))
             for word_id, positions in word_positions.items()
         ]
         # print(bulk_data)
-        result = self.words_paths_repo.bulk_insert_words_paths(bulk_data)
+        result = self.words_hashs_repo.bulk_insert_words_hashs(bulk_data)
         # Return number of words linked (or True if no explicit return)
         return len(bulk_data) if result is None else result
 
@@ -1036,7 +1071,7 @@ class ContentDBService:
     # KEYWORD-PATH RELATIONSHIP
     # ============================================================
 
-    def process_keywords_for_path(self, path_id: int, content_ids: List[int]) -> bool:
+    def process_keywords_for_content(self, hash_id: int, content_ids: List[int]) -> bool:
         """Link the document to the keywords it contains.
 
         Returns True when at least one keyword matched.  Failures propagate:
@@ -1053,7 +1088,7 @@ class ContentDBService:
 
             # Insert keyword-path relationships
             if keyword_count:
-                self.keywords_paths_repo.bulk_insert_keywords_paths(path_id, keyword_count)
+                self.keywords_hashs_repo.bulk_insert_keywords_hashs(hash_id, keyword_count)
                 return True
 
             return False
@@ -1091,19 +1126,19 @@ class ContentDBService:
                     decoded[int(keyword_id)] = pattern
                     candidate_words.update(pattern)
             if not decoded:
-                return {"paths_checked": 0, "associations_added": 0}
+                return {"contents_checked": 0, "associations_added": 0}
 
             # Only paths containing at least one term can match. This avoids
             # rescanning every document when a keyword is added.
             placeholders = ",".join(["%s"] * len(candidate_words))
-            candidate_rows = self.words_paths_repo.execute(
-                f"SELECT DISTINCT path_id FROM words_paths WHERE word_id IN ({placeholders})",
+            candidate_rows = self.words_hashs_repo.execute(
+                f"SELECT DISTINCT hash_id FROM words_hashs WHERE word_id IN ({placeholders})",
                 tuple(candidate_words), fetchall=True,
             )
             added = 0
             checked = 0
-            for (path_id,) in candidate_rows or []:
-                positions = self.words_paths_repo.get_word_positions_by_path(path_id)
+            for (hash_id,) in candidate_rows or []:
+                positions = self.words_hashs_repo.get_word_positions_by_hash(hash_id)
                 if not positions:
                     continue
                 max_position = max((max(v) for v in positions.values() if v), default=-1)
@@ -1114,10 +1149,10 @@ class ContentDBService:
                             sequence[index] = word_id
                 matches = _keyword_occurrence_counts(sequence, decoded)
                 if matches:
-                    self.keywords_paths_repo.bulk_insert_keywords_paths(path_id, matches)
+                    self.keywords_hashs_repo.bulk_insert_keywords_hashs(hash_id, matches)
                     added += len(matches)
                 checked += 1
-            return {"paths_checked": checked, "associations_added": added}
+            return {"contents_checked": checked, "associations_added": added}
         except Exception:
             logger.exception("Failed to refresh keyword associations")
             raise
@@ -1129,7 +1164,7 @@ class ContentDBService:
     def create_title_content(
         self,
         title_words: List[str],
-        path_id: int,
+        hash_id: int,
         title_status: str = "Main",
         parent_title_id: Optional[int] = None
         ) -> List[int]:
@@ -1138,7 +1173,7 @@ class ContentDBService:
         # If transaction was aborted, the bulk_insert_words or insert_titles_content will fail
         # with InFailedSqlTransaction, which we'll catch and handle properly
         # This prevents "Path ID does not exist" errors when the transaction is actually aborted
-        # We trust that path_id exists since it was just created in the same transaction
+        # We trust that hash_id exists since it was just created in the same transaction
         
         # Bulk insert words
         word_tuples = [(w,) for w in title_words]
@@ -1149,7 +1184,7 @@ class ContentDBService:
 
         # Insert title content
         self.titles_content_repo.insert_titles_content(
-            word_ids, path_id, title_status, parent_title_id
+            word_ids, hash_id, title_status, parent_title_id
         )
 
         return word_ids
@@ -1184,30 +1219,42 @@ class ContentDBService:
         processing_status: str = "discovered",
         status_detail: Optional[str] = None,
         attempts: int = 0,
-        raw_text: Optional[str] = None
+        raw_text: Optional[str] = None,
+        parent_path_id: Optional[int] = None,
+        hierarchy_path: Optional[str] = None,
     ) -> Dict[str, any]:
         """
-        Process a complete document with all steps in a single transaction.
-        All operations are atomic - either all succeed or all rollback.
-        
+        Store one occurrence of a document in a single transaction.
+
+        One Content, Many Contexts (migration m0011):
+
+        1. Identity - canonical content (hash), context (hash + source +
+           side) and the physical occurrence (path row) are registered
+           through ``DeduplicationService``.  A repeat *occurrence* resolves
+           to its existing row; a repeat *content hash* in a new context gets
+           a new occurrence WITHOUT duplicating anything content-derived.
+        2. Process or reuse - when the canonical content already carries an
+           extraction, steps 4-8 are skipped entirely (no re-extraction, no
+           duplicated index rows).  They run only the first time a content
+           hash is seen.
+        3. Content-derived writes (extraction, display text, word index,
+           keyword index, titles) are keyed by canonical content id.
+
         Args:
-            hash_value: Document hash
-            source_id: Source ID
-            side_id: Side ID
-            file_name: File name
-            file_path: File path
-            file_size: File size
-            file_type: File type
-            file_status: File status ('Read' if content exists, 'Unread' otherwise)
-            file_date: File creation date (from file system, not metadata)
-            content_words: List of content words
-            title_words: Optional list of title words
-            coordinates: Optional GPS coordinates string (from images or elsewhere)
-            content_date: Optional date mentioned in content (None if no date mentioned)
-        
+            hash_value: Content hash (SHA-256 of the bytes)
+            source_id / side_id: context of this occurrence
+            file_name / file_path: provenance of this occurrence
+            parent_path_id / hierarchy_path: container lineage (optional);
+                ``hierarchy_path`` identifies in-container occurrences
+            content_words / title_words / raw_text: extraction results (used
+                only when the canonical extraction is not reused)
+
         Returns:
             Dictionary with success status and operation results
-        
+            (``hash_id``, ``context_id``, ``path_id``, ``content_ids``,
+            ``title_ids``, ``duplicate``, ``content_reused``, ``warnings``,
+            ``error``).
+
         Note:
             - file_date stores the file's creation date, not any other date
             - file_status is 'Read' if file contains content, otherwise 'Unread'
@@ -1221,9 +1268,12 @@ class ContentDBService:
         result = {
             'success': False,
             'hash_id': None,
+            'context_id': None,
             'path_id': None,
             'content_ids': None,
             'title_ids': None,
+            'duplicate': False,
+            'content_reused': False,
             'warnings': [],
             'error': None
         }
@@ -1251,90 +1301,74 @@ class ContentDBService:
         if title_words:
             title_words = [w for w in title_words if not word_exceeds_db_limit(w)]
 
+        path_row = {
+            "file_name": file_name,
+            "file_path": file_path,
+            "file_size": file_size,
+            "file_type": file_type,
+            "file_status": file_status,
+            "file_date": file_date,
+            "date_creation": date.today(),
+            "coordinates": coordinates,
+            "extraction_provenance": extraction_provenance,
+            "processing_status": processing_status,
+            "status_detail": status_detail,
+            "attempts": attempts,
+            "parent_path_id": parent_path_id,
+            "hierarchy_path": hierarchy_path,
+        }
+
         try:
-            # One transaction per document: hash, path, content, word index
+            # One transaction per document: identity, extraction, word index
             # and title commit together or not at all.  Optional/derived
             # steps (raw display text, keywords, title) are contained in
             # savepoints so their failure cannot discard the document or
             # poison the transaction for later statements.
             with self.transaction():
-                # 1. Duplicate detection -----------------------------------
-                # A hash that already has a stored path means the file was
-                # ingested before; report the existing ids instead of
-                # creating a second copy.
-                existing = self._find_stored_document(hash_value, source_id, side_id)
-                if existing is not None:
-                    hash_id, path_id = existing
+                # 1-3. Identity: canonical content, context, occurrence.
+                registration = self.register_occurrence(
+                    hash_value, source_id, side_id, path_row, commit=False
+                )
+                hash_id = registration["hash_id"]
+                context_id = registration["context_id"]
+                path_id = registration["path_id"]
+                result.update(
+                    hash_id=hash_id, context_id=context_id, path_id=path_id,
+                )
+
+                if registration["duplicate"]:
+                    # The exact physical encounter is already recorded:
+                    # report the existing occurrence, write nothing new.
                     result.update(
-                        hash_id=hash_id,
-                        path_id=path_id,
                         success=True,
+                        duplicate=True,
+                        content_reused=True,
                         error="Duplicate file - already processed",
                     )
                     logger.info(
-                        "Duplicate file detected: hash=%s..., existing path_id=%s",
+                        "Duplicate occurrence: hash=%s..., existing path_id=%s",
                         hash_value[:16], path_id,
                     )
                     return result
 
-                # 2. Hash ---------------------------------------------------
-                hash_id = _as_id(self.create_hash(hash_value, source_id, side_id))
-                if not hash_id:
-                    # ``create_hash`` returns None when the hash already
-                    # exists but has no path yet (e.g. a previous attempt was
-                    # rolled back): reuse the existing dictionary row.  The
-                    # lookup asks for the *hash* id explicitly - the duplicate
-                    # helper returns a path id, which is a different id space.
-                    hash_id = _as_id(
-                        self.hashs_repo.get_hash_id_by_value(
-                            hash_value, source_id, side_id
-                        )
+                # 4. Process or reuse: canonical extraction is content-derived
+                # and exists once per content hash - never once per context.
+                if registration["extraction_exists"]:
+                    result.update(success=True, content_reused=True)
+                    logger.info(
+                        "Reusing canonical extraction for %s "
+                        "(hash=%s..., new occurrence path_id=%s)",
+                        file_name, hash_value[:16], path_id,
                     )
-                    if hash_id:
-                        logger.info(
-                            "Reusing existing hash_id=%s (no path stored yet) for %s",
-                            hash_id, file_name,
-                        )
-                if not hash_id or hash_id <= 0:
-                    raise QueryError(
-                        f"Could not create or resolve a hash record for "
-                        f"{file_name} (hash={hash_value[:16]}...)"
-                    )
+                    return result
 
-                # The hash must be visible to this transaction before the
-                # dependent path row is inserted; a missing row here means
-                # the transaction was rolled back underneath us.
-                if not self.hashs_repo.get_hash_by_id(hash_id):
-                    raise QueryError(
-                        f"Hash ID {hash_id} does not exist (transaction may "
-                        f"have been rolled back) for file: {file_name}"
-                    )
-                result['hash_id'] = hash_id
-
-                # 3. Path ---------------------------------------------------
-                path_id = _as_id(self.create_path(
-                    file_name, file_path, file_size, file_type,
-                    file_status, file_date, hash_id,
-                    coordinates=coordinates,
-                    extraction_provenance=extraction_provenance,
-                    processing_status=processing_status,
-                    status_detail=status_detail,
-                    attempts=attempts
-                ))
-                if not path_id or path_id <= 0:
-                    raise QueryError(
-                        f"Failed to create path record (returned: {path_id}) "
-                        f"for file: {file_name}"
-                    )
-                result['path_id'] = path_id
-
-                # 4. Content (word dictionary + compressed symbol pairs) -----
+                # 5. Content (word dictionary + compressed symbol pairs) -----
                 content_ids = self.create_content(
-                    content_words, path_id, content_date=content_date
+                    content_words, hash_id, content_date=content_date
                 )
                 result['content_ids'] = content_ids
 
-                # 5. Raw display text (optional) -----------------------------
+                # 6. Raw display text (optional) -----------------------------
                 # Kept in the same transaction as the word store so the two
                 # never diverge, but contained in a savepoint: the word-join
                 # reconstruction still displays the document if the raw text
@@ -1342,7 +1376,7 @@ class ContentDBService:
                 if raw_text:
                     try:
                         with self.savepoint():
-                            self.contents_repo.store_raw_content(path_id, raw_text)
+                            self.contents_repo.store_raw_content(hash_id, raw_text)
                     except TransactionAbortedError:
                         raise
                     except Exception as raw_err:
@@ -1350,11 +1384,11 @@ class ContentDBService:
                             result, 'raw_text', raw_err, file_name, path_id
                         )
 
-                # 6. Word index (core) ---------------------------------------
-                # words_paths powers search; a failure here would leave the
+                # 7. Word index (core) ---------------------------------------
+                # words_hashs powers search; a failure here would leave the
                 # document stored but unsearchable, so it must roll back.
                 if content_ids:
-                    self.link_words_to_path(path_id, content_ids)
+                    self.link_words_to_content(hash_id, content_ids)
                 else:
                     reason = status_detail or processing_status
                     if _empty_content_is_recorded(processing_status, status_detail):
@@ -1370,11 +1404,11 @@ class ContentDBService:
                             file_name, path_id, reason,
                         )
 
-                # 7. Keyword index (derived) ---------------------------------
+                # 8. Keyword index (derived) ---------------------------------
                 if content_ids:
                     try:
                         with self.savepoint():
-                            self.process_keywords_for_path(path_id, content_ids)
+                            self.process_keywords_for_content(hash_id, content_ids)
                     except TransactionAbortedError:
                         raise
                     except Exception as kw_err:
@@ -1382,12 +1416,12 @@ class ContentDBService:
                             result, 'keywords', kw_err, file_name, path_id
                         )
 
-                # 8. Title (derived) -----------------------------------------
+                # 9. Title (derived) -----------------------------------------
                 if title_words:
                     try:
                         with self.savepoint():
                             result['title_ids'] = self.create_title_content(
-                                title_words, path_id
+                                title_words, hash_id
                             )
                     except TransactionAbortedError:
                         raise
@@ -1398,8 +1432,8 @@ class ContentDBService:
 
                 result['success'] = True
                 logger.info(
-                    "Document processed successfully: path_id=%s, hash_id=%s",
-                    path_id, hash_id,
+                    "Document processed successfully: path_id=%s, hash_id=%s, context_id=%s",
+                    path_id, hash_id, context_id,
                 )
                 return result
 
@@ -1413,19 +1447,6 @@ class ContentDBService:
                 file_name, type(e).__name__, e, exc_info=True,
             )
             raise
-
-    def _find_stored_document(self, hash_value, source_id, side_id):
-        """Return ``(hash_id, path_id)`` when this file is already stored.
-
-        Both ids are read from the same row (paths and hashs are independent
-        id spaces, so they can never be derived from one another).
-
-        ``None`` means no path exists for the hash, so the caller should
-        continue with the normal ingest (the hash row alone, without a path,
-        is not a stored document - it can be left over from a rolled-back
-        attempt and is reused rather than duplicated).
-        """
-        return self.hashs_repo.get_duplicate_document(hash_value, source_id, side_id)
 
     def _note_optional_failure(self, result, step, error, file_name, path_id):
         """Record a contained failure of a derived-data step.

@@ -6,12 +6,12 @@
 # from .base_queries import BaseQueries
 # from .source_queries import SourceQueries
 # from .side_queries import SideQueries
-# from .hash_queries import HashQueries
+# from .word_hash_queries import WordHashQueries
 # from .path_queries import PathQueries
 # from .word_queries import WordQueries
-# from .word_path_queries import WordPathQueries
+# from .word_hash_queries import WordHashQueries
 # from .keyword_queries import KeywordQueries
-# from .keyword_path_queries import KeywordPathQueries
+# from .keyword_hash_queries import KeywordHashQueries
 # from .category_queries import CategoryQueries
 # from .word_category_queries import WordCategoryQueries
 # from .content_queries import ContentQueries
@@ -23,12 +23,12 @@
 #     'BaseQueries',
 #     'SourceQueries',
 #     'SideQueries',
-#     'HashQueries',
+#     'WordHashQueries',
 #     'PathQueries',
 #     'WordQueries',
-#     'WordPathQueries',
+#     'WordHashQueries',
 #     'KeywordQueries',
-#     'KeywordPathQueries',
+#     'KeywordHashQueries',
 #     'CategoryQueries',
 #     'WordCategoryQueries',
 #     'ContentQueries',

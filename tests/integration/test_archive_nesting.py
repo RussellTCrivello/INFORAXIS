@@ -116,8 +116,8 @@ def corpus(pg_db, tmp_path_factory, engine_or_skip):
             cur.execute(
                 "SELECT p.id, p.file_name, p.parent_path_id, p.hierarchy_path,"
                 " p.processing_status, p.extraction_provenance"
-                " FROM paths p JOIN hashs h ON h.id = p.hash_id"
-                " JOIN sides s ON s.id = h.side_id WHERE s.name = %s",
+                " FROM paths p JOIN hash_contexts hc ON hc.id = p.context_id"
+                " JOIN sides s ON s.id = hc.side_id WHERE s.name = %s",
                 (f"{tag}_side",),
             )
             rows = {}
@@ -194,8 +194,10 @@ def test_chain_is_reconstructible_by_recursive_query(corpus):
     finally:
         conn.close()
     assert levels[0] == ["outer.zip"]
-    # Duplicate members collapse onto one row, so only one of the two appears.
-    assert sorted(levels[1]) == ["duplicate_a.txt", "inner.zip"], levels
+    # Two members with identical bytes but different names are two OCCURRENCES
+    # (different in-container locations): both are kept, each with its own
+    # provenance. Only a re-encounter of the same member collapses.
+    assert sorted(levels[1]) == ["duplicate_a.txt", "duplicate_b.txt", "inner.zip"], levels
     assert sorted(levels[2]) == ["notes.txt", "report.pdf", "scan.png"], levels
 
 
@@ -232,15 +234,16 @@ def test_every_level_reports_a_terminal_processing_status(corpus):
 
 
 # ----------------------------------------------------------- duplicates
-def test_duplicate_children_collapse_to_one_consistent_row(corpus):
-    """Records what deduplication actually does, and pins its invariant.
+def test_identical_bytes_under_two_names_are_two_occurrences(corpus):
+    """One content, many occurrences: deduplicate content, preserve context.
 
-    duplicate_a.txt and duplicate_b.txt hold identical bytes. Dedup identity is
-    (content_hash, source_id, side_id), so the second member resolves onto the
-    first member's paths row and gets no row of its own - the archive held two
-    members and the database records one. That is the documented dedup design,
-    not a regression, but it is a real information loss and it is asserted here
-    so a change in either direction is a visible decision rather than a drift.
+    duplicate_a.txt and duplicate_b.txt hold identical bytes but occupy two
+    different locations inside outer.zip. Identity is
+    (content, context, occurrence): the shared bytes are ONE canonical content
+    in ONE context, and each named member is a distinct occurrence with its own
+    row and its own provenance. The archive held two members and the database
+    records two members. Only a re-import of the *same* member (same chain)
+    collapses onto the earlier row.
 
     The invariant that must hold either way: a row's file_name and its
     hierarchy_path must agree. Before this was fixed the linker wrote the
@@ -250,15 +253,10 @@ def test_duplicate_children_collapse_to_one_consistent_row(corpus):
     last won, and the two columns contradicted each other.
     """
     outer = one(corpus, "outer.zip")
-    stored = [n for n in ("duplicate_a.txt", "duplicate_b.txt") if n in corpus["rows"]]
-    assert len(stored) == 1, f"expected exactly one duplicate row, got {stored}"
-
-    row = corpus["rows"][stored[0]][0]
-    assert row["parent_path_id"] == outer["id"], row
-    assert row["hierarchy_path"] == f"outer.zip::{stored[0]}", row
-    # The invariant, stated independently of which name survived.
-    assert row["hierarchy_path"].endswith(f"::{stored[0]}"), row
-    assert row["hierarchy_path"].split("::")[-1] == stored[0], row
+    for name in ("duplicate_a.txt", "duplicate_b.txt"):
+        row = one(corpus, name)
+        assert row["parent_path_id"] == outer["id"], (name, row)
+        assert row["hierarchy_path"] == f"outer.zip::{name}", (name, row)
 
 
 def test_no_stored_row_contradicts_itself(corpus):
@@ -314,6 +312,6 @@ def test_file_details_on_the_root_lists_the_whole_tree(admin_client, corpus):
     d = resp.get_json()["details"]
     names = sorted(x["name"] for x in d["lineage"]["descendants"])
     assert names == [
-        "duplicate_a.txt", "inner.zip",
+        "duplicate_a.txt", "duplicate_b.txt", "inner.zip",
         "notes.txt", "report.pdf", "scan.png",
     ], names

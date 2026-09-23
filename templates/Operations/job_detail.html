@@ -89,7 +89,7 @@
 (function () {
   const JOB_ID = '{{ job_id }}';
   const csrf = {'X-CSRFToken': '{{ csrf_token() }}'};
-  const badge = (s) => window.InforaxisStatus.badge(s);
+  const badge = (s) => (window.InforaxisStatus ? window.InforaxisStatus.badge(s) : '<span class="badge bg-secondary">' + String(s == null ? '' : s) + '</span>');
   let lastEventId = 0;
   let errorsCache = [], warningsCache = [];
 

@@ -238,9 +238,12 @@ class SearchService:
                     # Search in content words
                     search_conditions.append(f"""
                         EXISTS (
-                            SELECT 1 FROM words_paths wp
+                            SELECT 1 FROM words_hashs wp
                             JOIN words w ON wp.word_id = w.id
-                            WHERE wp.path_id = p.id
+                            WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                             AND w.word ILIKE %s
                         )
                     """)
@@ -267,12 +270,12 @@ class SearchService:
             
             # Source filter
             if source_id:
-                where_conditions.append("h.source_id = %s")
+                where_conditions.append("hc.source_id = %s")
                 params.append(source_id)
             
             # Side filter
             if side_id:
-                where_conditions.append("h.side_id = %s")
+                where_conditions.append("hc.side_id = %s")
                 params.append(side_id)
             
             # Date filters
@@ -288,7 +291,7 @@ class SearchService:
             if category_id:
                 where_conditions.append("""
                     EXISTS (
-                        SELECT 1 FROM words_paths wp2
+                        SELECT 1 FROM words_hashs wp2
                         JOIN words_categorys wc ON wp2.word_id = wc.word_id
                         WHERE wp2.path_id = p.id AND wc.category_id = %s
                     )
@@ -328,9 +331,12 @@ class SearchService:
                                         CASE 
                                             WHEN p.file_name ILIKE '%%' || term || '%%' THEN 2.0
                                             WHEN EXISTS (
-                                                SELECT 1 FROM words_paths wp
+                                                SELECT 1 FROM words_hashs wp
                                                 JOIN words w ON wp.word_id = w.id
-                                                WHERE wp.path_id = p.id
+                                                WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                                 AND w.word ILIKE '%%' || term || '%%'
                                             ) THEN 1.0
                                             ELSE 0.0
@@ -346,7 +352,7 @@ class SearchService:
             count_query = f"""
                 SELECT COUNT(DISTINCT p.id)
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
                 WHERE {where_clause}
             """
             
@@ -368,8 +374,8 @@ class SearchService:
                         p.date_creation,
                         COALESCE(s.name, 'Unknown') as source_name,
                         COALESCE(si.name, 'Unknown') as side_name,
-                        h.source_id,
-                        h.side_id,
+                        hc.source_id,
+                        hc.side_id,
                         CASE
                             WHEN query IS NOT NULL THEN
                                 -- Google-like relevance: count matching search terms
@@ -383,9 +389,12 @@ class SearchService:
                                                 CASE 
                                                     WHEN p.file_name ILIKE '%%' || term || '%%' THEN 2.0
                                                     WHEN EXISTS (
-                                                        SELECT 1 FROM words_paths wp
+                                                        SELECT 1 FROM words_hashs wp
                                                         JOIN words w ON wp.word_id = w.id
-                                                        WHERE wp.path_id = p.id
+                                                        WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                                         AND w.word ILIKE '%%' || term || '%%'
                                                     ) THEN 1.0
                                                     ELSE 0.0
@@ -398,9 +407,9 @@ class SearchService:
                         END as relevance_score,
                         ROW_NUMBER() OVER (PARTITION BY p.id ORDER BY {order_by_window}) as rn
                     FROM paths p
-                    LEFT JOIN hashs h ON p.hash_id = h.id
-                    LEFT JOIN sources s ON h.source_id = s.id
-                    LEFT JOIN sides si ON h.side_id = si.id
+                    LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                    LEFT JOIN sources s ON hc.source_id = s.id
+                    LEFT JOIN sides si ON hc.side_id = si.id
                     CROSS JOIN LATERAL (
                         SELECT %s::text as query
                     ) q
@@ -679,9 +688,12 @@ class SearchService:
                 # Search in content words
                 search_conditions.append("""
                     EXISTS (
-                        SELECT 1 FROM words_paths wp
+                        SELECT 1 FROM words_hashs wp
                         JOIN words w ON wp.word_id = w.id
-                        WHERE wp.path_id = p.id
+                        WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                         AND w.word ILIKE %s
                     )
                 """)
@@ -702,7 +714,7 @@ class SearchService:
             count_query = f"""
                 SELECT COUNT(DISTINCT p.id)
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
                 WHERE {where_clause}
             """
             
@@ -716,7 +728,7 @@ class SearchService:
                     p.file_size, p.file_date, p.file_status, p.date_creation,
                     COALESCE(s.name, 'Unknown') as source_name,
                     COALESCE(si.name, 'Unknown') as side_name,
-                    h.source_id, h.side_id,
+                    hc.source_id, hc.side_id,
                     -- Google-like relevance score
                     COALESCE((
                         SELECT 
@@ -724,9 +736,12 @@ class SearchService:
                                 CASE 
                                     WHEN p.file_name ILIKE '%%' || term || '%%' THEN 2.0
                                     WHEN EXISTS (
-                                        SELECT 1 FROM words_paths wp
+                                        SELECT 1 FROM words_hashs wp
                                         JOIN words w ON wp.word_id = w.id
-                                        WHERE wp.path_id = p.id
+                                        WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                         AND w.word ILIKE '%%' || term || '%%'
                                     ) THEN 1.0
                                     ELSE 0.0
@@ -735,9 +750,9 @@ class SearchService:
                         FROM unnest(string_to_array(%s, ' ')) AS term
                     ), 0) as relevance_score
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE {where_clause}
                 ORDER BY p.id, relevance_score DESC, p.file_date DESC
                 LIMIT %s OFFSET %s
@@ -863,9 +878,12 @@ class SearchService:
                             phrase_conditions.append("p.file_name ILIKE %s")
                             phrase_conditions.append("""
                                 EXISTS (
-                                    SELECT 1 FROM words_paths wp
+                                    SELECT 1 FROM words_hashs wp
                                     JOIN words w ON wp.word_id = w.id
-                                    WHERE wp.path_id = p.id
+                                    WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                     AND w.word ILIKE %s
                                 )
                             """)
@@ -884,9 +902,12 @@ class SearchService:
                                 (
                                     p.file_name ILIKE %s
                                     OR EXISTS (
-                                        SELECT 1 FROM words_paths wp
+                                        SELECT 1 FROM words_hashs wp
                                         JOIN words w ON wp.word_id = w.id
-                                        WHERE wp.path_id = p.id
+                                        WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                         AND w.word ILIKE %s
                                     )
                                 )
@@ -912,9 +933,12 @@ class SearchService:
                                 NOT (
                                     p.file_name ILIKE %s
                                     OR EXISTS (
-                                        SELECT 1 FROM words_paths wp
+                                        SELECT 1 FROM words_hashs wp
                                         JOIN words w ON wp.word_id = w.id
-                                        WHERE wp.path_id = p.id
+                                        WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                         AND w.word ILIKE %s
                                     )
                                 )
@@ -970,9 +994,12 @@ class SearchService:
                                 to_tsvector('english', COALESCE(p.file_name, '')) @@ to_tsquery(%s)
                                 OR p.file_name ILIKE %s
                                 OR EXISTS (
-                                    SELECT 1 FROM words_paths wp
+                                    SELECT 1 FROM words_hashs wp
                                     JOIN words w ON wp.word_id = w.id
-                                    WHERE wp.path_id = p.id
+                                    WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                     AND (
                                         to_tsvector('english', w.word) @@ to_tsquery(%s)
                                         OR w.word ILIKE %s
@@ -998,9 +1025,12 @@ class SearchService:
                                     OR (p.file_name ILIKE ALL(ARRAY[%s]))
                                 )
                                 OR EXISTS (
-                                    SELECT 1 FROM words_paths wp
+                                    SELECT 1 FROM words_hashs wp
                                     JOIN words w ON wp.word_id = w.id
-                                    WHERE wp.path_id = p.id
+                                    WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                     AND (
                                         to_tsvector('english', w.word) @@ to_tsquery(%s)
                                         OR w.word ILIKE ANY(ARRAY[%s])
@@ -1019,9 +1049,12 @@ class SearchService:
                                 (
                                     p.file_name ILIKE ANY(ARRAY[{exp_placeholders}])
                                     OR EXISTS (
-                                        SELECT 1 FROM words_paths wp
+                                        SELECT 1 FROM words_hashs wp
                                         JOIN words w ON wp.word_id = w.id
-                                        WHERE wp.path_id = p.id
+                                        WHERE wp.hash_id = (
+                            SELECT hc0.hash_id FROM hash_contexts hc0
+                            WHERE hc0.id = p.context_id
+                        )
                                         AND w.word ILIKE ANY(ARRAY[{exp_placeholders}])
                                     )
                                 )
@@ -1040,27 +1073,27 @@ class SearchService:
                 # Handle multiple source_ids
                 if source_ids and len(source_ids) > 0:
                     if len(source_ids) == 1:
-                        where_conditions.append("h.source_id = %s")
+                        where_conditions.append("hc.source_id = %s")
                         params.append(source_ids[0])
                     else:
                         placeholders = ','.join(['%s'] * len(source_ids))
-                        where_conditions.append(f"h.source_id IN ({placeholders})")
+                        where_conditions.append(f"hc.source_id IN ({placeholders})")
                         params.extend(source_ids)
                 elif source_id:
-                    where_conditions.append("h.source_id = %s")
+                    where_conditions.append("hc.source_id = %s")
                     params.append(source_id)
                 
                 # Handle multiple side_ids
                 if side_ids and len(side_ids) > 0:
                     if len(side_ids) == 1:
-                        where_conditions.append("h.side_id = %s")
+                        where_conditions.append("hc.side_id = %s")
                         params.append(side_ids[0])
                     else:
                         placeholders = ','.join(['%s'] * len(side_ids))
-                        where_conditions.append(f"h.side_id IN ({placeholders})")
+                        where_conditions.append(f"hc.side_id IN ({placeholders})")
                         params.extend(side_ids)
                 elif side_id:
-                    where_conditions.append("h.side_id = %s")
+                    where_conditions.append("hc.side_id = %s")
                     params.append(side_id)
                 
                 # Handle file_type (can be list or single value)
@@ -1087,7 +1120,7 @@ class SearchService:
                     if len(category_ids) == 1:
                         where_conditions.append("""
                             EXISTS (
-                                SELECT 1 FROM words_paths wp2
+                                SELECT 1 FROM words_hashs wp2
                                 JOIN words_categorys wc ON wp2.word_id = wc.word_id
                                 WHERE wp2.path_id = p.id AND wc.category_id = %s
                             )
@@ -1097,7 +1130,7 @@ class SearchService:
                         placeholders = ','.join(['%s'] * len(category_ids))
                         where_conditions.append(f"""
                             EXISTS (
-                                SELECT 1 FROM words_paths wp2
+                                SELECT 1 FROM words_hashs wp2
                                 JOIN words_categorys wc ON wp2.word_id = wc.word_id
                                 WHERE wp2.path_id = p.id AND wc.category_id IN ({placeholders})
                             )
@@ -1106,7 +1139,7 @@ class SearchService:
                 elif category_id:
                     where_conditions.append("""
                         EXISTS (
-                            SELECT 1 FROM words_paths wp2
+                            SELECT 1 FROM words_hashs wp2
                             JOIN words_categorys wc ON wp2.word_id = wc.word_id
                             WHERE wp2.path_id = p.id AND wc.category_id = %s
                         )
@@ -1141,7 +1174,7 @@ class SearchService:
             count_query = f"""
                 SELECT COUNT(DISTINCT p.id)
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
                 WHERE {where_clause}
             """
             
@@ -1163,12 +1196,12 @@ class SearchService:
                     p.date_creation,
                     COALESCE(s.name, 'Unknown') as source_name,
                     COALESCE(si.name, 'Unknown') as side_name,
-                    h.source_id,
-                    h.side_id
+                    hc.source_id,
+                    hc.side_id
                 FROM paths p
-                LEFT JOIN hashs h ON p.hash_id = h.id
-                LEFT JOIN sources s ON h.source_id = s.id
-                LEFT JOIN sides si ON h.side_id = si.id
+                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                LEFT JOIN sources s ON hc.source_id = s.id
+                LEFT JOIN sides si ON hc.side_id = si.id
                 WHERE {where_clause}
                 LIMIT %s
             """
@@ -1327,7 +1360,7 @@ class SearchService:
                 word_suggestions_query = """
                     SELECT DISTINCT w.word, COUNT(*) as count
                     FROM words w
-                    JOIN words_paths wp ON w.id = wp.word_id
+                    JOIN words_hashs wp ON w.id = wp.word_id
                     WHERE LOWER(w.word) LIKE %s
                     GROUP BY w.word
                     ORDER BY count DESC, w.word

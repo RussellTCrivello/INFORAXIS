@@ -103,9 +103,9 @@ PREVIOUS_ORDER_BY = "p.date_creation ASC NULLS FIRST, p.id ASC"
 
 #: Joins needed by the filter columns (source/side live on the hash record).
 LIBRARY_JOINS = (
-    "LEFT JOIN hashs h ON p.hash_id = h.id",
-    "LEFT JOIN sources s ON h.source_id = s.id",
-    "LEFT JOIN sides si ON h.side_id = si.id",
+    "LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id",
+    "LEFT JOIN sources s ON hc.source_id = s.id",
+    "LEFT JOIN sides si ON hc.side_id = si.id",
 )
 
 
@@ -189,7 +189,7 @@ def build_library_filters(
         params.append(f"%{search}%")
         context.append(("search", search))
 
-    for field_name, column in (("source", "h.source_id"), ("side", "h.side_id")):
+    for field_name, column in (("source", "hc.source_id"), ("side", "hc.side_id")):
         raw = args.get(field_name)
         if raw in (None, ""):
             continue

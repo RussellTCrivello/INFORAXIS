@@ -16,7 +16,7 @@ in isolation:
 ``full_text_search`` caught the IndexError and returned an empty result set,
 so EVERY full-text search silently returned zero results even though content
 was stored and indexed. Measured on a real database before the fix: 5 files
-ingested, 48 words and 76 words_paths rows written, and
+ingested, 48 words and 76 words_hashs rows written, and
 
     QUARTERLYLEDGER -> total=0    RENAMEDREPORT -> total=0
     ARCHIVECHILD    -> total=0    EMEA          -> total=0

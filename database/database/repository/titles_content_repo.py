@@ -15,13 +15,13 @@ class TitlesContentRepository(BaseRepository):
     numbers (word IDs) from the words table.
     """
 
-    def insert_titles_content(self, ids, path_id, title_status = "Main", title_content_id = None):
+    def insert_titles_content(self, ids, hash_id, title_status = "Main", title_content_id = None):
         """
         Insert title content as a list of word IDs from the words table.
         
         Args:
             ids: List of word IDs (integers) from the words table
-            path_id: Path ID to associate title with
+            hash_id: Path ID to associate title with
             title_status: Title status (default: "Main")
             title_content_id: Optional parent title ID
         
@@ -40,19 +40,19 @@ class TitlesContentRepository(BaseRepository):
             # already exist in m0001, so this needs no schema change.
             last_id = self.execute(
                 TitleQueries.insert_title(),
-                (compressed, title_status, title_content_id, path_id),
+                (compressed, title_status, title_content_id, hash_id),
                 True)
             return last_id
         except Exception as e:
             # Re-raise exception instead of just printing - let transaction handler deal with it
             raise
 
-    def Get_titles_content_by_path(self, path_id):
+    def Get_titles_content_by_hash(self, hash_id):
         """
         Get title content by path and convert word IDs to text.
         
         Args:
-            path_id: Path ID to get title content for
+            hash_id: Path ID to get title content for
         
         Returns:
             Space-separated string of title words
@@ -60,7 +60,7 @@ class TitlesContentRepository(BaseRepository):
         Note: Title content consists of numbers (word IDs) from the words table.
         This method retrieves the word IDs and converts them to text.
         """
-        row = self.execute(TitleQueries.select_by_path(), (path_id,), True)
+        row = self.execute(TitleQueries.select_by_hash(), (hash_id,), True)
         if not row:
             return ""
         
@@ -73,12 +73,12 @@ class TitlesContentRepository(BaseRepository):
         dictionary = dict(word_rows) if word_rows else {}  # {id:word,id:word}
         return " ".join(dictionary.get(i, f"[ID:{i}]") for i in ids)
     
-    def get_title_word_ids(self, path_id, title_status="Main"):
+    def get_title_word_ids(self, hash_id, title_status="Main"):
         """
         Get title content as word IDs (numbers from words table).
         
         Args:
-            path_id: Path ID to get title content for
+            hash_id: Path ID to get title content for
             title_status: Title status (default: "Main")
         
         Returns:
@@ -87,7 +87,7 @@ class TitlesContentRepository(BaseRepository):
         Note: Title content consists of numbers (word IDs) from the words table.
         This method returns the IDs directly without converting to text.
         """
-        row = self.execute(TitleQueries.select_by_path(), (path_id,), fetchone=True)
+        row = self.execute(TitleQueries.select_by_hash(), (hash_id,), fetchone=True)
         if not row:
             return []
         
@@ -97,11 +97,11 @@ class TitlesContentRepository(BaseRepository):
         return ids
         
     
-    def check_title_exists(self, path_id, title_status):
+    def check_title_exists(self, hash_id, title_status):
         """Check if a title with given status already exists for a path"""
         row = self.execute(
             TitleQueries.check_title_exists(),
-            (path_id, title_status),
+            (hash_id, title_status),
             fetchone=True
         )
         return row[0] if row else None

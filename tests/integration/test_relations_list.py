@@ -34,9 +34,12 @@ Proven here end to end against a real database:
    ordering and for id ordering.
 4. Search narrows the list and its count together.
 
-A "relation" is one ``hashs`` row that ties more than one artifact together:
-several stored paths share it (duplicate imports), or the same hash value also
-exists under another source/side (the same content in another collection).
+A "relation" is one canonical content row (``hashs`` is unique per hash
+since migration m0011) that ties more than one artifact together: several
+contexts hold the content (the same content in different source/side
+collections - previously each of those was its own ``hashs`` row, now they are
+``hash_contexts`` rows on one content) and/or several occurrences (stored
+paths) exist across those contexts.
 
 The database is shared with the rest of the suite, and other modules seed
 duplicate content of their own. Every seeded hash value therefore carries this
@@ -116,35 +119,51 @@ def archive(pg_db):
             source_id = cur.fetchone()[0]
 
             def add_hash(value, side, source, copies=1):
-                """One hashs row + ``copies`` stored paths pointing at it.
+                """One canonical content row + one context + ``copies`` paths.
 
-                Duplicate content is several ``paths`` rows sharing one
-                ``hashs`` row (``hashs`` is UNIQUE per hash/source/side), so
-                this is how the pipeline stores two identical imports.
+                Identity-model seeding: ``hashs`` is UNIQUE per hash, so the
+                same content in another source/side is a second
+                ``hash_contexts`` row on the SAME content row (the
+                ``ON CONFLICT`` keeps the canonical row single); each context
+                holds its own occurrences (``paths``).
                 """
                 cur.execute(
-                    "INSERT INTO hashs (hash, side_id, source_id) VALUES (%s, %s, %s)"
-                    " RETURNING id",
-                    (value, side, source),
+                    "INSERT INTO hashs (hash) VALUES (%s)"
+                    " ON CONFLICT (hash) DO NOTHING RETURNING id",
+                    (value,),
                 )
-                hash_id = cur.fetchone()[0]
+                row = cur.fetchone()
+                hash_id = row[0] if row else None
+                if hash_id is None:
+                    cur.execute("SELECT id FROM hashs WHERE hash = %s", (value,))
+                    hash_id = cur.fetchone()[0]
+                cur.execute(
+                    "INSERT INTO hash_contexts (hash_id, source_id, side_id)"
+                    " VALUES (%s, %s, %s)"
+                    " ON CONFLICT (hash_id, source_id, side_id) DO NOTHING"
+                    " RETURNING id",
+                    (hash_id, source, side),
+                )
+                context_id = cur.fetchone()[0]
                 for copy in range(copies):
                     cur.execute(
                         "INSERT INTO paths (file_name, file_path, file_size,"
                         " file_type, file_status, file_date, date_creation,"
-                        " hash_id) VALUES (%s, %s, 10, 'FILE', 'Read', %s, %s, %s)"
-                        " RETURNING id",
+                        " context_id) VALUES (%s, %s, 10, 'FILE', 'Read',"
+                        " %s, %s, %s) RETURNING id",
                         (f"{tag}_{hash_id}_{copy}.txt",
                          f"/tmp/{tag}_{hash_id}_{copy}.txt",
-                         today, today, hash_id),
+                         today, today, context_id),
                     )
                 return hash_id
 
-            # Ordinary, single-path hashes first: they occupy the low ids.
+            # Ordinary, single-occurrence content first: they occupy the low
+            # ids and are NOT relations.
             for i in range(_ORDINARY):
                 add_hash(tagged_hash(tag, f"ordinary-{i}"), side_id, source_id)
 
-            # Relations behind them: identical content stored more than once.
+            # Relations behind them: canonical content with more than one
+            # context or more than one occurrence.
             expected = {
                 add_hash(tagged_hash(tag, "relation-three-copies"),
                          side_id, source_id, copies=3): 3,
@@ -154,12 +173,17 @@ def archive(pg_db):
                          side_id, source_id, copies=2): 2,
             }
 
-            # Same content imported from another side: two hash rows share the
-            # value, one stored path each. Both rows are relations (each has a
-            # variant) - this is the definition the count has always used.
+            # Same content imported from another side: ONE canonical content
+            # row, TWO contexts (one path each) -> two occurrences. The old
+            # model stored this as two hash rows; the identity model stores it
+            # as one content row the section must still report.
             cross_side = tagged_hash(tag, "relation-cross-side")
-            expected[add_hash(cross_side, side_id, source_id)] = 1
-            expected[add_hash(cross_side, side2_id, source_id)] = 1
+            first_cross = add_hash(cross_side, side_id, source_id)
+            second_cross = add_hash(cross_side, side2_id, source_id)
+            assert first_cross == second_cross, (
+                "hashs is UNIQUE per hash: both contexts share one content row"
+            )
+            expected[first_cross] = 2
     finally:
         conn.commit()
         conn.close()
@@ -298,9 +322,10 @@ def test_relations_search_narrows_list_and_count(admin_client, archive):
     body = _fetch_page(admin_client, limit=10, search=target)
     listed = [row["id"] for row in body["data"]]
     assert body["total_estimated"] == len(listed), (body["total_estimated"], listed)
-    assert sorted(listed) == sorted(
-        [row_id for row_id in expected
-         if expected[row_id] == 1]), listed
+    # Under the identity model both cross-side contexts share ONE canonical
+    # content row (max(expected)), so the value's search narrows to exactly
+    # that relation.
+    assert listed == [max(expected)], listed
 
     # A substring that no relation hash contains lists nothing - and says so.
     body = _fetch_page(admin_client, limit=10, search="ffffffffffffffffffff")

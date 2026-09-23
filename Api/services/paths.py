@@ -38,7 +38,7 @@ class PathsService:
             file_status=str(row[5]),
             file_date=row[6],
             date_creation=row[7],
-            hash_id=row[8],
+            context_id=row[8],
         )
 
 

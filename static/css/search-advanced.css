@@ -1269,3 +1269,378 @@
         animation-iteration-count: 1;
     }
 }
+
+/* --------------------------------------------------------------------------
+   14. Result opening: new-tab links + hover actions (preview / open)
+   The search page is never navigated away from: the title and the body
+   click open the file in a NEW tab, the eye button opens an in-page
+   popup preview. Hover actions sit top-right inside the result body.
+   -------------------------------------------------------------------------- */
+.result-body {
+    position: relative;
+}
+
+.result-title-link {
+    color: var(--sa-primary-ink, #312e81);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.result-title-link:hover,
+.result-title-link:focus-visible {
+    color: var(--sa-primary, #4f46e5);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--sa-primary, #4f46e5) 35%, transparent);
+    text-underline-offset: 3px;
+}
+
+.result-hover-actions {
+    position: absolute;
+    top: 0.5rem;
+    inset-inline-end: 0.5rem;
+    display: flex;
+    gap: 0.3rem;
+    opacity: 0;
+    transition: opacity var(--motion-fast, 120ms) var(--ease-out, ease-out);
+}
+
+/* Keep actions reachable by keyboard, not only by pointer */
+.result-body:focus-within .result-hover-actions,
+.result-item:hover .result-hover-actions {
+    opacity: 1;
+}
+
+.result-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 0.55rem;
+    background: var(--surface-raised, var(--bg-white, #fff));
+    color: var(--text-light, #64748b);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm, 0 1px 2px rgb(15 23 42 / 0.06));
+    transition: color var(--motion-fast, 120ms) var(--ease-out, ease-out),
+                border-color var(--motion-fast, 120ms) var(--ease-out, ease-out),
+                background var(--motion-fast, 120ms) var(--ease-out, ease-out);
+}
+
+.result-action-btn:hover,
+.result-action-btn:focus-visible {
+    color: var(--sa-primary-ink, #312e81);
+    border-color: var(--sa-primary-border, #c7d2fe);
+    background: var(--sa-primary-softer, #eef2ff);
+}
+
+.result-action-preview:hover,
+.result-action-preview:focus-visible {
+    color: var(--sa-primary, #4f46e5);
+}
+
+/* --------------------------------------------------------------------------
+   15. Saved-searches control + dropdown (toolbar, next to Lucky)
+   -------------------------------------------------------------------------- */
+.saved-search-container {
+    position: relative;
+}
+
+.btn-saved-searches {
+    --bs-btn-color: var(--text-light, #64748b);
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-bg: var(--sa-primary-softer, #eef2ff);
+    --bs-btn-hover-color: var(--sa-primary-ink, #312e81);
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-bg: var(--sa-primary-soft, #e0e7ff);
+    --bs-btn-active-color: var(--sa-primary-ink, #312e81);
+    --bs-btn-active-border-color: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill, 999px);
+    font-size: 0.82rem;
+    padding: 0.35rem 0.9rem;
+}
+
+.saved-search-menu {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    inset-inline-end: 0;
+    z-index: 1060;
+    width: min(22rem, 90vw);
+    background: var(--surface-raised, var(--bg-white, #fff));
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-lg, 0 12px 32px rgb(15 23 42 / 0.14));
+    overflow: hidden;
+}
+
+.ssm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-light, #64748b);
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    background: var(--sa-primary-softer, #eef2ff);
+}
+
+.ssm-header a {
+    color: var(--sa-primary, #4f46e5);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.ssm-header a:hover {
+    text-decoration: underline;
+}
+
+.ssm-list {
+    max-height: 18rem;
+    overflow-y: auto;
+    padding: 0.25rem;
+}
+
+.ssm-status {
+    padding: 1rem 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-light, #64748b);
+    text-align: center;
+}
+
+.ssm-item {
+    display: flex;
+    align-items: stretch;
+    gap: 0.25rem;
+    border-radius: 0.5rem;
+}
+
+.ssm-item:hover {
+    background: var(--sa-primary-softer, #eef2ff);
+}
+
+.ssm-run {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.45rem 0.6rem;
+    background: none;
+    border: 0;
+    border-radius: 0.5rem;
+    text-align: start;
+    cursor: pointer;
+}
+
+.ssm-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color, #0f172a);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ssm-query {
+    font-size: 0.74rem;
+    color: var(--text-light, #64748b);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ssm-delete {
+    flex: 0 0 auto;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    margin-inline-end: 0.35rem;
+    background: none;
+    border: 0;
+    border-radius: 0.45rem;
+    color: var(--text-light, #94a3b8);
+    cursor: pointer;
+}
+
+.ssm-delete:hover,
+.ssm-delete:focus-visible {
+    color: #b91c1c;
+    background: color-mix(in srgb, #ef4444 10%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   16. In-page file preview popup (search results)
+   A self-contained modal: image / text / pdf-first-page / document text,
+   with "Open in new tab" for the full page. Never navigates the search.
+   -------------------------------------------------------------------------- */
+.sfp-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgb(15 23 42 / 0.55);
+    backdrop-filter: blur(2px);
+}
+
+.sfp-dialog {
+    display: flex;
+    flex-direction: column;
+    width: min(60rem, 100%);
+    max-height: min(85vh, 52rem);
+    background: var(--surface-raised, var(--bg-white, #fff));
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 0.9rem;
+    box-shadow: 0 24px 64px rgb(15 23 42 / 0.28);
+    overflow: hidden;
+}
+
+.sfp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    background: var(--sa-primary-softer, #eef2ff);
+}
+
+.sfp-title {
+    min-width: 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--sa-primary-ink, #312e81);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sfp-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
+
+.sfp-open-full {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid var(--sa-primary-border, #c7d2fe);
+    border-radius: var(--radius-pill, 999px);
+    background: var(--surface-raised, var(--bg-white, #fff));
+    color: var(--sa-primary, #4f46e5);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.sfp-open-full:hover,
+.sfp-open-full:focus-visible {
+    background: var(--sa-primary-soft, #e0e7ff);
+    color: var(--sa-primary-ink, #312e81);
+}
+
+.sfp-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: none;
+    color: var(--text-light, #64748b);
+    cursor: pointer;
+}
+
+.sfp-close:hover,
+.sfp-close:focus-visible {
+    background: color-mix(in srgb, #ef4444 10%, transparent);
+    color: #b91c1c;
+}
+
+.sfp-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 1rem;
+}
+
+.sfp-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 12rem;
+    color: var(--text-light, #64748b);
+    font-size: 0.85rem;
+}
+
+.sfp-text {
+    margin: 0;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 0.6rem;
+    background: var(--surface-base, var(--bg-white, #fff));
+    color: var(--text-color, #0f172a);
+    font-size: 0.84rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.sfp-note {
+    margin-bottom: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-light, #64748b);
+}
+
+.sfp-image-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sfp-image {
+    max-width: 100%;
+    max-height: calc(min(85vh, 52rem) - 8rem);
+    border-radius: 0.6rem;
+    box-shadow: var(--shadow-sm, 0 1px 2px rgb(15 23 42 / 0.06));
+}
+
+.sfp-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 10rem;
+    text-align: center;
+    color: var(--text-light, #64748b);
+    font-size: 0.88rem;
+}
+
+.sfp-message i {
+    font-size: 1.6rem;
+    opacity: 0.7;
+}
+
+.sfp-message-hint {
+    font-size: 0.78rem;
+    opacity: 0.85;
+}
+
+body.sfp-no-scroll {
+    overflow: hidden;
+}
