@@ -294,10 +294,10 @@
         <!-- Navigation Bar -->
         <div class="navigation-bar">
             <div class="nav-buttons">
-                <button class="nav-btn" id="navBackBtn" onclick="navigateBack()" title="{{ _('Back') }}" disabled>
+                <button class="nav-btn" id="archiveNavBackBtn" onclick="navigateBack()" title="{{ _('Back') }}" aria-label="{{ _('Back in archive history') }}" disabled>
                     <i class="bi bi-arrow-left"></i>
                 </button>
-                <button class="nav-btn" id="navForwardBtn" onclick="navigateForward()" title="{{ _('Forward') }}" disabled>
+                <button class="nav-btn" id="archiveNavForwardBtn" onclick="navigateForward()" title="{{ _('Forward') }}" aria-label="{{ _('Forward in archive history') }}" disabled>
                     <i class="bi bi-arrow-right"></i>
                 </button>
                 <button class="nav-btn" onclick="navigateToRoot()" title="{{ _('Home') }}">

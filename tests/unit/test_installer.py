@@ -205,3 +205,28 @@ class TestSharedInstallerWriteEnv:
         assert "DB_PASSWORD=testpw" in content
         assert "APP_ADMIN_USERNAME=admin" in content
         assert "MAX_WORKERS=8" in content
+
+    def test_special_credentials_round_trip_without_interpolation(self, tmp_path, monkeypatch):
+        from core.init import _load_dotenv_file
+        from core.installer import write_env_file
+
+        password = 'pa${HOME} # "literal" \\token'
+        config = self._base_config()
+        config["DB_PASSWORD"] = password
+        write_env_file(config, project_root=tmp_path)
+
+        monkeypatch.delenv("DB_PASSWORD", raising=False)
+        _load_dotenv_file(tmp_path)
+        assert os.environ["DB_PASSWORD"] == password
+
+    def test_external_environment_value_keeps_precedence(self, tmp_path, monkeypatch):
+        from core.init import _load_dotenv_file
+        from core.installer import write_env_file
+
+        config = self._base_config()
+        config["DB_PASSWORD"] = "from-file"
+        write_env_file(config, project_root=tmp_path)
+        monkeypatch.setenv("DB_PASSWORD", "from-environment")
+
+        _load_dotenv_file(tmp_path)
+        assert os.environ["DB_PASSWORD"] == "from-environment"

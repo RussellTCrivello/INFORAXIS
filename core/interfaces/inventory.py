@@ -22,7 +22,8 @@ endpoint into exactly one bucket:
 ``REDIRECT``
     A route that only exists to keep an old address working.
 ``API_ENDPOINT``
-    ``/api/...``: a programming surface, not a page.
+    A programming surface, not a page (normally under ``/api/...``; a small
+    explicit set of legacy JSON routes lives outside that prefix).
 
 The classification is deterministic and its exception lists are declared here,
 in the open, so "internal" is a decision somebody made rather than a bucket
@@ -85,6 +86,14 @@ REDIRECT_ENDPOINTS: frozenset = frozenset({
     "files.upload_page",  # /upload -> /operations/input
 })
 
+#: JSON contracts that predate the conventional ``/api`` prefix. Their names
+#: are explicit because method/path heuristics would mislabel these GET
+#: endpoints as human-navigable pages.
+JSON_ENDPOINTS: frozenset = frozenset({
+    "files.get_active_tasks",  # /upload/active-tasks
+    "files.upload_progress",   # /upload/progress/<task_id>
+})
+
 
 @dataclass(frozen=True)
 class EndpointRecord:
@@ -124,7 +133,7 @@ def classify_endpoint(endpoint: str, rule: str, methods: Sequence[str]) -> Endpo
     # Not just "/api" at the front: diagnostics blueprints serve JSON from their
     # own subtree (/concurrency/api/...), and a programming surface is not a
     # page wherever it is mounted.
-    if rule.startswith("/api") or "/api/" in rule:
+    if rule.startswith("/api") or "/api/" in rule or endpoint in JSON_ENDPOINTS:
         return EndpointClass.API_ENDPOINT
     if endpoint in INTERNAL_PAGE_ENDPOINTS:
         return EndpointClass.INTERNAL_PAGE

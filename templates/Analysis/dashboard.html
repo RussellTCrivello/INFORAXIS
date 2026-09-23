@@ -291,6 +291,10 @@
             <i class="bi bi-tag"></i> {{ _('Keywords') }}
         </button>
 
+        <button class="tab-button" onclick="switchTab('paths')">
+            <i class="bi bi-folder2-open"></i> {{ _('Paths') }}
+        </button>
+
         <button class="tab-button" onclick="switchTab('files')">
             <i class="bi bi-file-earmark-text"></i> {{ _('File Reports') }}
         </button>
@@ -413,7 +417,9 @@
     <div class="tab-content" id="tab-search">
         <div class="search-filter-section">
             <div class="search-bar">
+                <label class="visually-hidden" for="searchQuery">{{ _('Search files by keyword, category, or path') }}</label>
                 <input type="text" class="search-input" id="searchQuery" placeholder="{{ _('Search files by keyword, category, or path...') }}">
+                <label class="visually-hidden" for="searchType">{{ _('Filter by file type') }}</label>
                 <select class="search-input" id="searchType" style="flex: 0.3;">
                     <option value="">{{ _('All Types') }}</option>
                 </select>
@@ -550,7 +556,8 @@
     <!-- End Dashboard Content -->
 </div>
 
-<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
+{#- Chart.js (chart.umd.js) is already loaded once in base.html; loading it a
+    second time here cost ~200 KB per visit to the dashboard. -#}
 <script type="application/json" id="dashboard-page-data">{{ {
     "translations": {
         "loading": _('Loading...'),

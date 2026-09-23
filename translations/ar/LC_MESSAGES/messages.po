@@ -3,7 +3,6 @@
 # This file is distributed under the same license as the File Analysis System project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: File Analysis System 2.0.0\n"
@@ -9445,3 +9444,219 @@ msgstr "حذف الملف"
 #: templates/file/file_detail.html
 msgid "Keep it"
 msgstr "الإبقاء عليه"
+
+msgid "INFORAXIS System"
+msgstr "نظام إنفوراكسيس"
+
+msgid "Primary navigation"
+msgstr "التنقل الرئيسي"
+
+msgid "Breadcrumb navigation"
+msgstr "التنقل عبر مسار التصفح"
+
+msgid "Open navigation menu"
+msgstr "افتح قائمة التنقل"
+
+msgid "Close navigation menu"
+msgstr "أغلق قائمة التنقل"
+
+msgid "New password must be at least %(min)s characters."
+msgstr "يجب ألا تقل كلمة المرور الجديدة عن %(min)s حرفًا."
+
+msgid "Minimum %(min)s characters."
+msgstr "الحد الأدنى %(min)s أحرف."
+
+msgid "Source name"
+msgstr "اسم المصدر"
+
+msgid "Job / role"
+msgstr "الوظيفة / الدور"
+
+msgid "Job or role"
+msgstr "الوظيفة أو الدور"
+
+msgid "Importance (0–1)"
+msgstr "الأهمية (0–1)"
+
+msgid "Side name"
+msgstr "اسم الجهة"
+
+msgid "You"
+msgstr "أنت"
+
+msgid "Reset password"
+msgstr "إعادة تعيين كلمة المرور"
+
+msgid "No users found."
+msgstr "لم يتم العثور على مستخدمين."
+
+msgid "Username and password are required."
+msgstr "اسم المستخدم وكلمة المرور مطلوبان."
+
+msgid "Failed to create user."
+msgstr "تعذر إنشاء المستخدم."
+
+msgid "Failed to delete user."
+msgstr "تعذر حذف المستخدم."
+
+msgid "Please try again."
+msgstr "يرجى المحاولة مرة أخرى."
+
+msgid "User updated successfully."
+msgstr "تم تحديث المستخدم بنجاح."
+
+msgid "User deleted successfully."
+msgstr "تم حذف المستخدم بنجاح."
+
+msgid "Select keyword"
+msgstr "حدد كلمة مفتاحية"
+
+msgid "Smart Category"
+msgstr "فئة ذكية"
+
+msgid "Remove filter"
+msgstr "إزالة عامل التصفية"
+
+#: templates/Search/search_advanced.html
+msgid "Saved searches"
+msgstr "عمليات البحث المحفوظة"
+
+#: templates/Search/search_advanced.html
+msgid "Saved"
+msgstr "محفوظ"
+
+#: templates/Search/search_advanced.html
+msgid "Manage all"
+msgstr "إدارة الكل"
+
+#: templates/Search/search_advanced.html
+msgid "Save this search so you can re-run it any time"
+msgstr "احفظ هذا البحث لإعادة تشغيله في أي وقت"
+
+#: templates/Search/search_advanced.html
+msgid "Open in new tab"
+msgstr "فتح في علامة تبويب جديدة"
+
+#: templates/Search/search_advanced.html
+msgid "Quick preview (stays on this page)"
+msgstr "معاينة سريعة (تبقى في هذه الصفحة)"
+
+#: templates/Search/search_advanced.html
+msgid "Close preview"
+msgstr "إغلاق المعاينة"
+
+#: templates/Search/search_advanced.html
+msgid "Loading preview…"
+msgstr "جارٍ تحميل المعاينة…"
+
+#: templates/Search/search_advanced.html
+msgid "Preview is not available for this file."
+msgstr "المعاينة غير متاحة لهذا الملف."
+
+#: templates/Search/search_advanced.html
+msgid "Open the file in a new tab to view the full content."
+msgstr "افتح الملف في علامة تبويب جديدة لعرض المحتوى كاملاً."
+
+#: templates/Search/search_advanced.html
+msgid "First page text"
+msgstr "نص الصفحة الأولى"
+
+#: templates/Search/search_advanced.html
+msgid "pages"
+msgstr "صفحات"
+
+#: templates/Search/search_advanced.html
+msgid "Saved search"
+msgstr "بحث محفوظ"
+
+#: templates/Search/search_advanced.html
+msgid "Name this search:"
+msgstr "سمِّ هذا البحث:"
+
+#: templates/Search/search_advanced.html
+msgid "Search saved. Find it under Saved searches."
+msgstr "تم حفظ البحث. اعثر عليه ضمن عمليات البحث المحفوظة."
+
+#: templates/Search/search_advanced.html
+msgid "Could not save this search."
+msgstr "تعذّر حفظ هذا البحث."
+
+#: templates/Search/search_advanced.html
+msgid "Run a search first, then save it here."
+msgstr "نفّذ بحثاً أولاً ثم احفظه هنا."
+
+#: templates/Search/search_advanced.html
+msgid "Loading saved searches…"
+msgstr "جارٍ تحميل عمليات البحث المحفوظة…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load saved searches."
+msgstr "تعذّر تحميل عمليات البحث المحفوظة."
+
+#: templates/Search/search_advanced.html
+msgid "No saved searches yet. Run a search and press Save."
+msgstr "لا توجد عمليات بحث محفوظة بعد. نفّذ بحثاً ثم اضغط حفظ."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search applied"
+msgstr "تم تطبيق البحث المحفوظ"
+
+#: templates/Search/search_advanced.html
+msgid "Could not run this saved search."
+msgstr "تعذّر تشغيل هذا البحث المحفوظ."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search deleted"
+msgstr "تم حذف البحث المحفوظ"
+
+#: templates/Search/search_advanced.html
+msgid "Could not delete this saved search."
+msgstr "تعذّر حذف هذا البحث المحفوظ."
+
+#: templates/Search/search_enhanced.html
+msgid "Sort results by"
+msgstr "فرز النتائج حسب"
+
+#: templates/Search/search_enhanced.html
+msgid "Sort order"
+msgstr "ترتيب الفرز"
+
+#: templates/Search/search_enhanced.html
+msgid "Clear recent searches"
+msgstr "مسح عمليات البحث الأخيرة"
+
+#: templates/Search/search_enhanced.html
+msgid "No search history"
+msgstr "لا يوجد سجل بحث"
+
+#: templates/Search/search_enhanced.html
+msgid "Save current search"
+msgstr "حفظ البحث الحالي"
+
+#: templates/Search/search_enhanced.html
+msgid "No saved searches"
+msgstr "لا توجد عمليات بحث محفوظة"
+
+#: templates/Search/search_enhanced.html
+msgid "Pagination"
+msgstr "التنقّل بين الصفحات"
+
+#: templates/Search/search_enhanced.html
+msgid "Matching content:"
+msgstr "المحتوى المطابق:"
+
+#: templates/Search/search_enhanced.html
+msgid "Line"
+msgstr "السطر"
+
+#: templates/Search/search_enhanced.html
+msgid "Similar"
+msgstr "مشابه"
+
+#: templates/Search/search_advanced.html
+msgid "Enter a name for this search:"
+msgstr "أدخل اسمًا لهذا البحث:"
+
+#: templates/Search/search_advanced.html
+msgid "Delete this saved search?"
+msgstr "حذف هذا البحث المحفوظ؟"

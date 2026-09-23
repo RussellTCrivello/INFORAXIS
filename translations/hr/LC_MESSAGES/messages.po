@@ -3,7 +3,6 @@
 # This file is distributed under the same license as the File Analysis System project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: File Analysis System 2.0.0\n"
@@ -9685,3 +9684,225 @@ msgstr "Izbriši datoteku"
 #: templates/file/file_detail.html
 msgid "Keep it"
 msgstr "Zadrži"
+
+msgid "INFORAXIS System"
+msgstr "Sustav INFORAXIS"
+
+msgid "Primary navigation"
+msgstr "Glavna navigacija"
+
+msgid "Breadcrumb navigation"
+msgstr "Navigacija putanjom"
+
+msgid "Open navigation menu"
+msgstr "Otvori izbornik navigacije"
+
+msgid "Close navigation menu"
+msgstr "Zatvori izbornik navigacije"
+
+msgid "New password must be at least %(min)s characters."
+msgstr "Nova lozinka mora imati najmanje %(min)s znakova."
+
+msgid "Minimum %(min)s characters."
+msgstr "Najmanje %(min)s znakova."
+
+msgid "Source name"
+msgstr "Naziv izvora"
+
+msgid "Job / role"
+msgstr "Posao / uloga"
+
+msgid "Job or role"
+msgstr "Posao ili uloga"
+
+msgid "Importance (0–1)"
+msgstr "Važnost (0–1)"
+
+msgid "Side name"
+msgstr "Naziv strane"
+
+msgid "Show password"
+msgstr "Prikaži lozinku"
+
+msgid "Hide password"
+msgstr "Sakrij lozinku"
+
+msgid "You"
+msgstr "Vi"
+
+msgid "Reset password"
+msgstr "Ponovno postavi lozinku"
+
+msgid "No users found."
+msgstr "Nema pronađenih korisnika."
+
+msgid "Username and password are required."
+msgstr "Korisničko ime i lozinka su obavezni."
+
+msgid "Failed to create user."
+msgstr "Stvaranje korisnika nije uspjelo."
+
+msgid "Failed to delete user."
+msgstr "Brisanje korisnika nije uspjelo."
+
+msgid "Please try again."
+msgstr "Pokušajte ponovno."
+
+msgid "User updated successfully."
+msgstr "Korisnik je uspješno ažuriran."
+
+msgid "User deleted successfully."
+msgstr "Korisnik je uspješno izbrisan."
+
+msgid "Select keyword"
+msgstr "Odaberi ključnu riječ"
+
+msgid "Smart Category"
+msgstr "Pametna kategorija"
+
+msgid "Remove filter"
+msgstr "Ukloni filtar"
+
+#: templates/Search/search_advanced.html
+msgid "Saved searches"
+msgstr "Spremljene pretrage"
+
+#: templates/Search/search_advanced.html
+msgid "Saved"
+msgstr "Spremljeno"
+
+#: templates/Search/search_advanced.html
+msgid "Manage all"
+msgstr "Upravljaj svime"
+
+#: templates/Search/search_advanced.html
+msgid "Save this search so you can re-run it any time"
+msgstr "Spremite ovu pretragu kako biste je mogli ponoviti kad god želite."
+
+#: templates/Search/search_advanced.html
+msgid "Open in new tab"
+msgstr "Otvori u novoj kartici"
+
+#: templates/Search/search_advanced.html
+msgid "Quick preview (stays on this page)"
+msgstr "Brzi pregled (ostaje na ovoj stranici)"
+
+#: templates/Search/search_advanced.html
+msgid "Close preview"
+msgstr "Zatvori pregled"
+
+#: templates/Search/search_advanced.html
+msgid "Loading preview…"
+msgstr "Učitavanje pregleda…"
+
+#: templates/Search/search_advanced.html
+msgid "Preview is not available for this file."
+msgstr "Pregled nije dostupan za ovu datoteku."
+
+#: templates/Search/search_advanced.html
+msgid "Open the file in a new tab to view the full content."
+msgstr "Otvorite datoteku u novoj kartici za prikaz cijelog sadržaja."
+
+#: templates/Search/search_advanced.html
+msgid "First page text"
+msgstr "Tekst prve stranice"
+
+#: templates/Search/search_advanced.html
+msgid "pages"
+msgstr "stranice"
+
+#: templates/Search/search_advanced.html
+msgid "Saved search"
+msgstr "Spremljena pretraga"
+
+#: templates/Search/search_advanced.html
+msgid "Name this search:"
+msgstr "Naziv ove pretrage:"
+
+#: templates/Search/search_advanced.html
+msgid "Search saved. Find it under Saved searches."
+msgstr "Pretraga je spremljena. Pronađite je pod Spremljene pretrage."
+
+#: templates/Search/search_advanced.html
+msgid "Could not save this search."
+msgstr "Nije moguće spremiti ovu pretragu."
+
+#: templates/Search/search_advanced.html
+msgid "Run a search first, then save it here."
+msgstr "Najprije pokrenite pretragu, a zatim je spremite ovdje."
+
+#: templates/Search/search_advanced.html
+msgid "Loading saved searches…"
+msgstr "Učitavanje spremljenih pretraga…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load saved searches."
+msgstr "Nije moguće učitati spremljene pretrage."
+
+#: templates/Search/search_advanced.html
+msgid "No saved searches yet. Run a search and press Save."
+msgstr "Još nema spremljenih pretraga. Pokrenite pretragu i odaberite Spremi."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search applied"
+msgstr "Spremljena pretraga primijenjena"
+
+#: templates/Search/search_advanced.html
+msgid "Could not run this saved search."
+msgstr "Nije moguće pokrenuti ovu spremljenu pretragu."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search deleted"
+msgstr "Spremljena pretraga izbrisana"
+
+#: templates/Search/search_advanced.html
+msgid "Could not delete this saved search."
+msgstr "Nije moguće izbrisati ovu spremljenu pretragu."
+
+#: templates/Search/search_enhanced.html
+msgid "Sort results by"
+msgstr "Sortiraj rezultate po"
+
+#: templates/Search/search_enhanced.html
+msgid "Sort order"
+msgstr "Redoslijed sortiranja"
+
+#: templates/Search/search_enhanced.html
+msgid "Clear recent searches"
+msgstr "Izbriši nedavna pretraživanja"
+
+#: templates/Search/search_enhanced.html
+msgid "No search history"
+msgstr "Nema povijesti pretraživanja"
+
+#: templates/Search/search_enhanced.html
+msgid "Save current search"
+msgstr "Spremi trenutačnu pretragu"
+
+#: templates/Search/search_enhanced.html
+msgid "No saved searches"
+msgstr "Nema spremljenih pretraga"
+
+#: templates/Search/search_enhanced.html
+msgid "Pagination"
+msgstr "Paginacija"
+
+#: templates/Search/search_enhanced.html
+msgid "Matching content:"
+msgstr "Podudarajući sadržaj:"
+
+#: templates/Search/search_enhanced.html
+msgid "Line"
+msgstr "Redak"
+
+#: templates/Search/search_enhanced.html
+msgid "Similar"
+msgstr "Slično"
+
+#: templates/Search/search_advanced.html
+msgid "Enter a name for this search:"
+msgstr "Unesite naziv za ovo pretraživanje:"
+
+#: templates/Search/search_advanced.html
+msgid "Delete this saved search?"
+msgstr "Izbrisati ovo spremljeno pretraživanje?"

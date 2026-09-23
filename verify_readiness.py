@@ -43,7 +43,7 @@ try:
     if _env_file.exists():
         from dotenv import load_dotenv
 
-        load_dotenv(_env_file, override=False)
+        load_dotenv(_env_file, override=False, interpolate=False)
 except Exception:
     pass  # python-dotenv missing or unreadable .env: checks will report it
 

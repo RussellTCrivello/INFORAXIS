@@ -73,7 +73,10 @@ class LanguageSwitcher {
 
         this.isChanging = true;
         const languageSelect = document.getElementById('sidebarLanguageSelect');
-        const originalValue = languageSelect ? languageSelect.value : null;
+        // The shared shell no longer renders the legacy sidebar selector, so
+        // retain the document's current language as the rollback source.
+        const originalValue = (languageSelect?.value ||
+            document.documentElement.getAttribute('lang') || '').trim();
         const maxRetries = 2;
 
         try {
@@ -345,24 +348,40 @@ class LanguageSwitcher {
      * @param {HTMLElement} selectElement - Select element
      */
     showLoadingState(selectElement) {
-        if (!selectElement) return;
+        if (selectElement) {
+            selectElement.disabled = true;
+            selectElement.style.opacity = '0.6';
+            selectElement.style.cursor = 'wait';
 
-        selectElement.disabled = true;
-        selectElement.style.opacity = '0.6';
-        selectElement.style.cursor = 'wait';
-
-        // Add loading spinner if not exists
-        const container = selectElement.closest('.language-switcher');
-        if (container && !container.querySelector('.language-loading')) {
-            const spinner = document.createElement('div');
-            spinner.className = 'language-loading';
-            spinner.className += ' sidebar-lang-loading';
-            spinner.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i>';
-            spinner.style.cssText = 'position: absolute; inset-inline-end: 0.7rem; top: 50%; transform: translateY(-50%); pointer-events: none; color: inherit;';
-            selectElement.style.position = 'relative';
-            container.style.position = 'relative';
-            container.appendChild(spinner);
+            // Retain support for pages that still expose the native select.
+            const container = selectElement.closest('.language-switcher');
+            if (container && !container.querySelector('.language-loading')) {
+                const spinner = document.createElement('div');
+                spinner.className = 'language-loading';
+                spinner.innerHTML = '<i class="bi bi-arrow-clockwise spin" aria-hidden="true"></i>';
+                spinner.style.cssText = 'position: absolute; inset-inline-end: 0.7rem; top: 50%; transform: translateY(-50%); pointer-events: none; color: inherit;';
+                selectElement.style.position = 'relative';
+                container.style.position = 'relative';
+                container.appendChild(spinner);
+            }
         }
+
+        // The shared shell now has one top-bar language control. Reflect the
+        // in-flight change there too rather than silently doing nothing when
+        // the legacy sidebar select is absent.
+        const topbarButton = document.getElementById('topbarLangBtn');
+        if (topbarButton) {
+            topbarButton.setAttribute('aria-busy', 'true');
+            const icon = topbarButton.querySelector('i');
+            if (icon) {
+                icon.classList.remove('bi-translate');
+                icon.classList.add('bi-arrow-repeat', 'spin');
+            }
+        }
+        document.querySelectorAll('[data-language-switch]').forEach((item) => {
+            item.disabled = true;
+            item.setAttribute('aria-disabled', 'true');
+        });
     }
 
     /**
@@ -377,9 +396,21 @@ class LanguageSwitcher {
         }
 
         const loadingSpinner = document.querySelector('.language-loading');
-        if (loadingSpinner) {
-            loadingSpinner.remove();
+        if (loadingSpinner) loadingSpinner.remove();
+
+        const topbarButton = document.getElementById('topbarLangBtn');
+        if (topbarButton) {
+            topbarButton.removeAttribute('aria-busy');
+            const icon = topbarButton.querySelector('i');
+            if (icon) {
+                icon.classList.remove('bi-arrow-repeat', 'spin');
+                icon.classList.add('bi-translate');
+            }
         }
+        document.querySelectorAll('[data-language-switch]').forEach((item) => {
+            item.disabled = false;
+            item.removeAttribute('aria-disabled');
+        });
     }
 
     /**

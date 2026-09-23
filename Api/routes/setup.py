@@ -27,7 +27,37 @@ setup_bp = Blueprint("setup", __name__)
 _install_lock = threading.Lock()
 
 
+def _text_field(data, key, label, default="", *, required=False, maximum=None, preserve=False):
+    """Read one bounded text value from an untrusted setup JSON object."""
+    value = data.get(key, default)
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be text.")
+    if any(character in value for character in ("\r", "\n", "\0")):
+        raise ValueError(f"{label} cannot contain line breaks or null characters.")
+    result = value if preserve else value.strip()
+    if required and not result.strip():
+        raise ValueError(f"{label} is required.")
+    if maximum is not None and len(result) > maximum:
+        raise ValueError(f"{label} must be no more than {maximum} characters.")
+    return result
+
+
+def _integer_field(data, key, label, default, minimum, maximum):
+    """Parse a JSON integer without accepting booleans or truncating floats."""
+    value = data.get(key, default)
+    if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        raise ValueError(f"{label} must be a whole number.")
+    try:
+        result = int(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"{label} must be a whole number.") from None
+    if not minimum <= result <= maximum:
+        raise ValueError(f"{label} must be between {minimum} and {maximum}.")
+    return result
+
+
 def _is_initialized():
+
     """Authoritative initialization-state check.
 
     The system is considered initialized when the filesystem marker exists
@@ -121,13 +151,27 @@ def system_check():
 @setup_bp.route("/api/setup/test-database", methods=["POST"])
 def test_database():
     from core.installer import test_database_connection
-    data = request.get_json() or {}
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"ok": False, "message": "Request body must be a JSON object."}), 400
+
+    try:
+        port = _integer_field(data, "port", "Database port", 5432, 1, 65535)
+        host = _text_field(data, "host", "Database host", "localhost", required=True, maximum=253)
+        user = _text_field(data, "user", "Database username", "postgres", required=True, maximum=63)
+        database = _text_field(data, "database", "Database name", "analysis", required=True, maximum=63)
+        password = _text_field(data, "password", "Database password", "", required=True,
+                               maximum=1024, preserve=True)
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+
     result = test_database_connection(
-        host=data.get("host", "localhost"),
-        port=int(data.get("port", 5432)),
-        user=data.get("user", "postgres"),
-        password=data.get("password", ""),
-        database=data.get("database", "analysis"),
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
     )
     status = 200 if result.get("ok", True) else 400
     return jsonify(result), status
@@ -154,45 +198,77 @@ def run_installation():
 
     try:
         from core.installer import run_installation as _run
-        data = request.get_json() or {}
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"ok": False, "error": "Request body must be a JSON object."}), 400
 
-        # Validate required fields
-        db_password = data.get("db_password", "")
-        admin_username = data.get("admin_username", "admin").strip()
-        admin_password = data.get("admin_password", "")
-        pw_min = int(data.get("password_min_length", 12))
+        try:
+            db_host = _text_field(data, "db_host", "Database host", "localhost", required=True, maximum=253)
+            db_user = _text_field(data, "db_user", "Database username", "postgres", required=True, maximum=63)
+            db_password = _text_field(data, "db_password", "Database password", "", required=True,
+                                      maximum=1024, preserve=True)
+            db_name = _text_field(data, "db_name", "Database name", "analysis", required=True, maximum=63)
+            admin_username = _text_field(data, "admin_username", "Admin username", "admin",
+                                         required=True, maximum=64)
+            admin_password = _text_field(data, "admin_password", "Admin password", "", required=True,
+                                         maximum=256, preserve=True)
+            environment = _text_field(data, "environment", "Environment", "production", required=True)
+            flask_host = _text_field(data, "flask_host", "Bind address", "0.0.0.0", required=True, maximum=253)
+            log_level = _text_field(data, "log_level", "Log level", "INFO", required=True)
+            ingestion_roots = _text_field(data, "ingestion_roots", "Ingestion roots", "", maximum=4096)
 
-        if not db_password:
-            return jsonify({"ok": False, "error": "Database password is required"}), 400
-        if not admin_password or len(admin_password) < pw_min:
+            db_port = _integer_field(data, "db_port", "Database port", 5432, 1, 65535)
+            flask_port = _integer_field(data, "flask_port", "Web port", 5000, 1, 65535)
+            max_workers = _integer_field(data, "max_workers", "Maximum processing workers", 8, 1, 32)
+            max_failed_logins = _integer_field(data, "max_failed_logins", "Maximum failed logins", 5, 1, 20)
+            lockout_minutes = _integer_field(data, "lockout_minutes", "Lockout duration", 15, 1, 1440)
+            session_hours = _integer_field(data, "session_hours", "Session lifetime", 12, 1, 720)
+            session_idle_hours = _integer_field(data, "session_idle_hours", "Idle timeout", 6, 1, 720)
+            pw_min = _integer_field(data, "password_min_length", "Minimum password length", 12, 8, 128)
+            rate_per_minute = _integer_field(data, "rate_limit_per_minute", "Rate limit per minute", 60, 1, 1000000)
+            rate_per_hour = _integer_field(data, "rate_limit_per_hour", "Rate limit per hour", 600, 1, 1000000)
+            file_processing_timeout = _integer_field(
+                data, "file_processing_timeout", "Processing timeout", 1200, 30, 7200)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+        if len(admin_password) < pw_min:
             return jsonify({"ok": False,
-                            "error": f"Admin password must be at least {pw_min} characters"}), 400
-        if not admin_username:
-            return jsonify({"ok": False, "error": "Admin username is required"}), 400
+                            "error": f"Admin password must be at least {pw_min} characters."}), 400
+        if environment not in {"production", "staging", "development"}:
+            return jsonify({"ok": False, "error": "Environment must be production, staging, or development."}), 400
+        if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+            return jsonify({"ok": False, "error": "Choose a supported log level."}), 400
+        if session_idle_hours > session_hours:
+            return jsonify({"ok": False,
+                            "error": "Idle timeout cannot exceed the session lifetime."}), 400
+        if rate_per_minute > rate_per_hour:
+            return jsonify({"ok": False,
+                            "error": "The per-minute rate limit cannot exceed the per-hour limit."}), 400
 
-        # Map frontend field names → .env key names
+        # Map the validated frontend fields to the installer configuration.
         config = {
-            "DB_HOST": data.get("db_host", "localhost"),
-            "DB_PORT": str(data.get("db_port", 5432)),
-            "DB_USER": data.get("db_user", "postgres"),
+            "DB_HOST": db_host,
+            "DB_PORT": str(db_port),
+            "DB_USER": db_user,
             "DB_PASSWORD": db_password,
-            "DB_NAME": data.get("db_name", "analysis"),
+            "DB_NAME": db_name,
             "APP_ADMIN_USERNAME": admin_username,
             "APP_ADMIN_PASSWORD": admin_password,
-            "FLASK_ENV": data.get("environment", "production"),
-            "FLASK_PORT": str(data.get("flask_port", 5000)),
-            "FLASK_HOST": data.get("flask_host", "0.0.0.0"),
-            "MAX_WORKERS": str(data.get("max_workers", 8)),
-            "LOG_LEVEL": data.get("log_level", "INFO"),
-            "INGESTION_ROOTS": data.get("ingestion_roots", ""),
-            "SECURITY_MAX_FAILED_LOGINS": str(data.get("max_failed_logins", 5)),
-            "SECURITY_LOCKOUT_MINUTES": str(data.get("lockout_minutes", 15)),
-            "SECURITY_SESSION_HOURS": str(data.get("session_hours", 12)),
-            "SECURITY_SESSION_IDLE_HOURS": str(data.get("session_idle_hours", 6)),
+            "FLASK_ENV": environment,
+            "FLASK_PORT": str(flask_port),
+            "FLASK_HOST": flask_host,
+            "MAX_WORKERS": str(max_workers),
+            "LOG_LEVEL": log_level,
+            "INGESTION_ROOTS": ingestion_roots,
+            "SECURITY_MAX_FAILED_LOGINS": str(max_failed_logins),
+            "SECURITY_LOCKOUT_MINUTES": str(lockout_minutes),
+            "SECURITY_SESSION_HOURS": str(session_hours),
+            "SECURITY_SESSION_IDLE_HOURS": str(session_idle_hours),
             "PASSWORD_MIN_LENGTH": str(pw_min),
-            "RATE_LIMIT_PER_MINUTE": str(data.get("rate_limit_per_minute", 60)),
-            "RATE_LIMIT_PER_HOUR": str(data.get("rate_limit_per_hour", 600)),
-            "FILE_PROCESSING_TIMEOUT": str(data.get("file_processing_timeout", 1200)),
+            "RATE_LIMIT_PER_MINUTE": str(rate_per_minute),
+            "RATE_LIMIT_PER_HOUR": str(rate_per_hour),
+            "FILE_PROCESSING_TIMEOUT": str(file_processing_timeout),
         }
 
         result = _run(config)
@@ -225,6 +301,8 @@ def register_setup_routes(app):
         ):
             return None
         if request.path.startswith("/api/setup/") or request.path.startswith("/static/"):
+            return None
+        if request.path == "/api/csrf-token":
             return None
         if request.endpoint in ("_internal_error", "not_found", "favicon"):
             return None

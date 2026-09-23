@@ -222,6 +222,11 @@
 }
 
 .suggestion-item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
     padding: 0.55rem 0.75rem;
     cursor: pointer;
     display: flex;

@@ -1,10 +1,11 @@
+{% set brand_name = user_settings.get('system', 'app_name', 'INFORAXIS System') if user_settings is defined and user_settings else 'INFORAXIS System' %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ current_language|default('en') }}" dir="{% if current_language in ['ar', 'fa', 'he', 'ur'] %}rtl{% else %}ltr{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Installation Wizard — File Analysis</title>
+    <title>{{ _('Installation Wizard') }} — {{ brand_name }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logos/logo_347c1538.png') }}">
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='icons/bootstrap-icons.css') }}" rel="stylesheet">
@@ -674,9 +675,9 @@
     <!-- Header -->
     <header class="wizard-header">
         <div class="brand">
-            <img src="{{ url_for('static', filename='logos/logo_347c1538.png') }}" alt="File Analysis logo" class="brand-logo">
+            <img src="{{ url_for('static', filename='logos/logo_347c1538.png') }}" alt="{{ brand_name }}" class="brand-logo">
             <div class="brand-text">
-                <span class="brand-overline">File Analysis</span>
+                <span class="brand-overline">{{ brand_name }}</span>
                 <h1>Installation Wizard</h1>
             </div>
         </div>
@@ -687,26 +688,26 @@
     <div class="stepper-zone">
         <div class="stepper-meta">
             <span class="sm-label"><i class="bi bi-list-check"></i> Setup progress</span>
-            <span class="sm-count" id="step-counter">Step 1 of 5</span>
+            <span class="sm-count" id="step-counter" aria-live="polite">Step 1 of 5</span>
         </div>
-        <div class="stepper" id="stepper" role="tablist" aria-label="Installation steps">
-            <div class="step-pill active" data-step="1">
+        <div class="stepper" id="stepper" role="list" aria-label="{{ _('Installation steps') }}">
+            <div class="step-pill active" data-step="1" role="listitem" aria-current="step">
                 <span class="num"><i class="bi bi-pc-display-horizontal num-icon"></i><i class="bi bi-check-lg num-check"></i></span>
                 <span class="step-label">System Check</span>
             </div>
-            <div class="step-pill" data-step="2">
+            <div class="step-pill" data-step="2" role="listitem">
                 <span class="num"><i class="bi bi-database num-icon"></i><i class="bi bi-check-lg num-check"></i></span>
                 <span class="step-label">Database</span>
             </div>
-            <div class="step-pill" data-step="3">
+            <div class="step-pill" data-step="3" role="listitem">
                 <span class="num"><i class="bi bi-shield-lock num-icon"></i><i class="bi bi-check-lg num-check"></i></span>
                 <span class="step-label">Admin &amp; Security</span>
             </div>
-            <div class="step-pill" data-step="4">
+            <div class="step-pill" data-step="4" role="listitem">
                 <span class="num"><i class="bi bi-sliders num-icon"></i><i class="bi bi-check-lg num-check"></i></span>
                 <span class="step-label">Settings</span>
             </div>
-            <div class="step-pill" data-step="5">
+            <div class="step-pill" data-step="5" role="listitem">
                 <span class="num"><i class="bi bi-rocket-takeoff num-icon"></i><i class="bi bi-check-lg num-check"></i></span>
                 <span class="step-label">Install</span>
             </div>
@@ -771,7 +772,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-hdd-network"></i></span>
-                            <input type="text" class="form-control" id="db_host" value="localhost">
+                            <input type="text" class="form-control" id="db_host" value="localhost" maxlength="253" required autocomplete="off">
                         </div>
                         <div class="form-text">PostgreSQL server address</div>
                     </div>
@@ -781,7 +782,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-ethernet"></i></span>
-                            <input type="number" class="form-control" id="db_port" value="5432" min="1" max="65535">
+                            <input type="number" class="form-control" id="db_port" value="5432" min="1" max="65535" required>
                         </div>
                         <div class="form-text">Default: 5432</div>
                     </div>
@@ -793,7 +794,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-person-fill"></i></span>
-                            <input type="text" class="form-control" id="db_user" value="postgres">
+                            <input type="text" class="form-control" id="db_user" value="postgres" maxlength="63" required autocomplete="off">
                         </div>
                         <div class="form-text">PostgreSQL superuser</div>
                     </div>
@@ -803,7 +804,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-database-fill"></i></span>
-                            <input type="text" class="form-control" id="db_name" value="analysis">
+                            <input type="text" class="form-control" id="db_name" value="analysis" maxlength="63" required autocomplete="off">
                         </div>
                         <div class="form-text">Created automatically if missing</div>
                     </div>
@@ -814,9 +815,9 @@
                 <div class="field">
                     <div class="field-control">
                         <span class="field-icon"><i class="bi bi-key-fill"></i></span>
-                        <input type="password" class="form-control" id="db_password" placeholder="Enter your PostgreSQL password" autocomplete="new-password">
+                        <input type="password" class="form-control" id="db_password" placeholder="Enter your PostgreSQL password" autocomplete="off" maxlength="1024" required>
                         <span class="field-trail">
-                            <button type="button" class="pw-toggle" data-target="db_password" aria-label="Show password" tabindex="-1"><i class="bi bi-eye"></i></button>
+                            <button type="button" class="pw-toggle" data-target="db_password" aria-label="{{ _('Show password') }}" data-show-label="{{ _('Show password') }}" data-hide-label="{{ _('Hide password') }}" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button>
                         </span>
                     </div>
                     <div class="form-text">The password you set during PostgreSQL installation</div>
@@ -825,7 +826,7 @@
             <button type="button" class="btn-ghost-accent" id="btn-test-db">
                 <i class="bi bi-lightning-charge-fill"></i> Test Connection
             </button>
-            <div class="test-result" id="db-test-result"></div>
+            <div class="test-result" id="db-test-result" role="status" aria-live="polite" aria-atomic="true"></div>
         </div>
 
         <!-- ==================== STEP 3: Admin & Security ==================== -->
@@ -847,7 +848,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-person-badge"></i></span>
-                            <input type="text" class="form-control" id="admin_username" value="admin" maxlength="64">
+                            <input type="text" class="form-control" id="admin_username" value="admin" maxlength="64" required autocomplete="username">
                         </div>
                     </div>
                 </div>
@@ -856,9 +857,9 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-key-fill"></i></span>
-                            <input type="password" class="form-control" id="admin_password" placeholder="Min 12 characters" autocomplete="new-password">
+                            <input type="password" class="form-control" id="admin_password" placeholder="Min 12 characters" autocomplete="new-password" minlength="12" maxlength="256" required>
                             <span class="field-trail">
-                                <button type="button" class="pw-toggle" data-target="admin_password" aria-label="Show password" tabindex="-1"><i class="bi bi-eye"></i></button>
+                                <button type="button" class="pw-toggle" data-target="admin_password" aria-label="{{ _('Show password') }}" data-show-label="{{ _('Show password') }}" data-hide-label="{{ _('Hide password') }}" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button>
                             </span>
                         </div>
                         <div class="pw-bar"><div class="pw-bar-fill" id="pw-strength" style="width:0"></div></div>
@@ -871,9 +872,9 @@
                 <div class="field">
                     <div class="field-control">
                         <span class="field-icon"><i class="bi bi-key"></i></span>
-                        <input type="password" class="form-control" id="admin_password2" placeholder="Re-enter password" autocomplete="new-password">
+                        <input type="password" class="form-control" id="admin_password2" placeholder="Re-enter password" autocomplete="new-password" minlength="12" maxlength="256" required>
                         <span class="field-trail">
-                            <button type="button" class="pw-toggle" data-target="admin_password2" aria-label="Show password" tabindex="-1"><i class="bi bi-eye"></i></button>
+                            <button type="button" class="pw-toggle" data-target="admin_password2" aria-label="{{ _('Show password') }}" data-show-label="{{ _('Show password') }}" data-hide-label="{{ _('Hide password') }}" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button>
                         </span>
                     </div>
                 </div>
@@ -886,7 +887,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-shield-exclamation"></i></span>
-                            <input type="number" class="form-control" id="sec_max_failed" value="5" min="1" max="20">
+                            <input type="number" class="form-control" id="sec_max_failed" value="5" min="1" max="20" required>
                         </div>
                         <div class="form-text">Account locked after this many failures</div>
                     </div>
@@ -896,7 +897,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-lock-fill"></i></span>
-                            <input type="number" class="form-control" id="sec_lockout" value="15" min="1" max="1440">
+                            <input type="number" class="form-control" id="sec_lockout" value="15" min="1" max="1440" required>
                         </div>
                     </div>
                 </div>
@@ -907,7 +908,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-hourglass-split"></i></span>
-                            <input type="number" class="form-control" id="sec_session" value="12" min="1" max="720">
+                            <input type="number" class="form-control" id="sec_session" value="12" min="1" max="720" required>
                         </div>
                     </div>
                 </div>
@@ -916,7 +917,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-clock-history"></i></span>
-                            <input type="number" class="form-control" id="sec_idle" value="6" min="1" max="720">
+                            <input type="number" class="form-control" id="sec_idle" value="6" min="1" max="720" required>
                         </div>
                     </div>
                 </div>
@@ -927,7 +928,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-textarea-t"></i></span>
-                            <input type="number" class="form-control" id="sec_pw_min" value="12" min="8" max="128">
+                            <input type="number" class="form-control" id="sec_pw_min" value="12" min="8" max="128" required>
                         </div>
                     </div>
                 </div>
@@ -936,7 +937,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-speedometer2"></i></span>
-                            <input type="number" class="form-control" id="sec_rate_min" value="60" min="1">
+                            <input type="number" class="form-control" id="sec_rate_min" value="60" min="1" max="1000000" required>
                         </div>
                     </div>
                 </div>
@@ -946,8 +947,9 @@
                 <div class="field" style="max-width:250px">
                     <div class="field-control">
                         <span class="field-icon"><i class="bi bi-activity"></i></span>
-                        <input type="number" class="form-control" id="sec_rate_hour" value="600" min="1">
+                        <input type="number" class="form-control" id="sec_rate_hour" value="600" min="1" max="1000000" required>
                     </div>
+                    <div class="form-text">Must be at least the per-minute limit.</div>
                 </div>
             </div>
         </div>
@@ -965,7 +967,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-globe2"></i></span>
-                            <select class="form-control" id="app_env">
+                            <select class="form-control" id="app_env" required>
                                 <option value="production" selected>Production (recommended)</option>
                                 <option value="staging">Staging</option>
                                 <option value="development">Development</option>
@@ -980,7 +982,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-terminal"></i></span>
-                            <select class="form-control" id="app_loglevel">
+                            <select class="form-control" id="app_loglevel" required>
                                 <option value="INFO" selected>INFO (recommended)</option>
                                 <option value="DEBUG">DEBUG (verbose)</option>
                                 <option value="WARNING">WARNING (quiet)</option>
@@ -997,7 +999,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-plug"></i></span>
-                            <input type="number" class="form-control" id="app_port" value="5000" min="1" max="65535">
+                            <input type="number" class="form-control" id="app_port" value="5000" min="1" max="65535" required>
                         </div>
                         <div class="form-text">Default: 5000</div>
                     </div>
@@ -1007,7 +1009,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-diagram-3"></i></span>
-                            <input type="text" class="form-control" id="app_host" value="0.0.0.0">
+                            <input type="text" class="form-control" id="app_host" value="0.0.0.0" maxlength="253" required>
                         </div>
                         <div class="form-text">0.0.0.0 = all interfaces; 127.0.0.1 = local only</div>
                     </div>
@@ -1019,7 +1021,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-people"></i></span>
-                            <input type="number" class="form-control" id="app_workers" value="8" min="1" max="32">
+                            <input type="number" class="form-control" id="app_workers" value="8" min="1" max="32" required>
                         </div>
                         <div class="form-text">Concurrent file analysis threads</div>
                     </div>
@@ -1029,7 +1031,7 @@
                     <div class="field">
                         <div class="field-control">
                             <span class="field-icon"><i class="bi bi-stopwatch"></i></span>
-                            <input type="number" class="form-control" id="app_timeout" value="1200" min="30" max="7200">
+                            <input type="number" class="form-control" id="app_timeout" value="1200" min="30" max="7200" required>
                         </div>
                         <div class="form-text">Per-file timeout</div>
                     </div>
@@ -1040,7 +1042,7 @@
                 <div class="field">
                     <div class="field-control">
                         <span class="field-icon"><i class="bi bi-folder-symlink"></i></span>
-                        <input type="text" class="form-control" id="app_ingestion" placeholder="C:\data;D:\evidence  or  /data;/srv/inbox">
+                        <input type="text" class="form-control" id="app_ingestion" placeholder="C:\data;D:\evidence  or  /data;/srv/inbox" maxlength="4096">
                     </div>
                     <div class="form-text">Semicolon-separated server directories the app may read. Leave empty for uploads only.</div>
                 </div>
@@ -1054,8 +1056,9 @@
                 <h4>Installing…</h4>
             </div>
             <p class="panel-sub">Setting up your File Analysis system. This takes 15–60 seconds.</p>
-            <div class="install-progress" id="install-progress"></div>
-            <div id="install-result"></div>
+            <div class="install-progress" id="install-progress" role="list"
+                 aria-label="{{ _('Installation progress') }}"></div>
+            <div id="install-result" aria-live="polite" aria-atomic="true"></div>
         </div>
 
         <!-- ==================== Completion (hidden until done) ==================== -->
@@ -1124,10 +1127,32 @@
             const input = document.getElementById(btn.dataset.target);
             const show = input.type === 'password';
             input.type = show ? 'text' : 'password';
-            btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
-            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            btn.innerHTML = show
+                ? '<i class="bi bi-eye-slash" aria-hidden="true"></i>'
+                : '<i class="bi bi-eye" aria-hidden="true"></i>';
+            btn.setAttribute('aria-label', show ? btn.dataset.hideLabel : btn.dataset.showLabel);
+            btn.setAttribute('aria-pressed', show ? 'true' : 'false');
         });
     });
+
+    // Keep the browser's native length validation, the strength hint and the
+    // custom cross-check in step 3 aligned with the password rule the operator
+    // has chosen on this same step.
+    const minPasswordField = document.getElementById('sec_pw_min');
+    function syncPasswordMinimum() {
+        const minLength = Number(minPasswordField.value) || 12;
+        ['admin_password', 'admin_password2'].forEach((id) => {
+            document.getElementById(id).minLength = minLength;
+        });
+        const hint = document.getElementById('pw-hint');
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-shield-lock';
+        icon.setAttribute('aria-hidden', 'true');
+        hint.replaceChildren(icon, document.createTextNode(' Minimum ' + minLength + ' characters'));
+    }
+    minPasswordField.addEventListener('input', syncPasswordMinimum);
+    minPasswordField.addEventListener('change', syncPasswordMinimum);
+    syncPasswordMinimum();
 
     // ── Navigation ──
     function goTo(n) {
@@ -1183,24 +1208,46 @@
 
     // ── Validation ──
     function validateStep(n) {
-        if (n === 2) {
-            if (!document.getElementById('db_password').value) {
-                showDbTest('fail', 'Please enter the database password.');
-                return false;
-            }
+        const panel = document.getElementById('step-' + n);
+        if (!panel) return false;
+
+        // The wizard is not a form, so native required/min/max constraints do
+        // not run on their own. Check them explicitly before changing steps and
+        // let the browser focus and explain the first invalid control.
+        const invalid = Array.from(panel.querySelectorAll('input, select, textarea'))
+            .find((field) => !field.checkValidity());
+        if (invalid) {
+            invalid.reportValidity();
+            return false;
         }
+
         if (n === 3) {
             const pw = document.getElementById('admin_password').value;
             const pw2 = document.getElementById('admin_password2').value;
-            const minLen = parseInt(document.getElementById('sec_pw_min').value) || 12;
-            if (!document.getElementById('admin_username').value.trim()) {
-                showStepError('Admin username is required.'); return false;
+            const minLen = parseInt(document.getElementById('sec_pw_min').value, 10);
+            if (pw !== pw2) {
+                showStepError('Passwords do not match.');
+                document.getElementById('admin_password2').focus();
+                return false;
+            }
+            const idleHours = Number(document.getElementById('sec_idle').value);
+            const sessionHours = Number(document.getElementById('sec_session').value);
+            if (idleHours > sessionHours) {
+                showStepError('Idle timeout cannot exceed the session lifetime.');
+                document.getElementById('sec_idle').focus();
+                return false;
+            }
+            const ratePerMinute = Number(document.getElementById('sec_rate_min').value);
+            const ratePerHour = Number(document.getElementById('sec_rate_hour').value);
+            if (ratePerMinute > ratePerHour) {
+                showStepError('The per-minute rate limit cannot exceed the per-hour rate limit.');
+                document.getElementById('sec_rate_min').focus();
+                return false;
             }
             if (pw.length < minLen) {
-                showStepError('Admin password must be at least ' + minLen + ' characters.'); return false;
-            }
-            if (pw !== pw2) {
-                showStepError('Passwords do not match.'); return false;
+                showStepError('Admin password must be at least ' + minLen + ' characters.');
+                document.getElementById('admin_password').focus();
+                return false;
             }
         }
         return true;
@@ -1208,6 +1255,8 @@
 
     // ── Step 1: System check ──
     async function runSystemCheck() {
+        const alertRegion = document.getElementById('step1-alert');
+        alertRegion.replaceChildren();
         const items = {
             python:    document.getElementById('chk-python'),
             packages:  document.getElementById('chk-packages'),
@@ -1246,9 +1295,10 @@
                     'will succeed. See INSTALL.md for help.</div></div>';
             }
         } catch(e) {
-            document.getElementById('step1-alert').innerHTML =
-                '<div class="alert alert-danger" role="alert">' +
-                '<i class="bi bi-wifi-off"></i><div>Could not reach the server: ' + e.message + '</div></div>';
+            renderInstallAlert(
+                alertRegion, 'danger', 'bi-wifi-off', 'Could not reach the server:',
+                e && e.message ? e.message : 'Please try again.',
+                {{ _('Retry system check')|tojson }}, () => runSystemCheck());
         }
     }
 
@@ -1263,8 +1313,20 @@
     // ── Step 2: Test database ──
     document.getElementById('btn-test-db').addEventListener('click', async () => {
         const btn = document.getElementById('btn-test-db');
+        const result = document.getElementById('db-test-result');
+        result.replaceChildren();
+        result.className = 'test-result';
+        const fields = ['db_host', 'db_port', 'db_user', 'db_name', 'db_password']
+            .map((id) => document.getElementById(id));
+        const invalid = fields.find((field) => !field.checkValidity());
+        if (invalid) {
+            invalid.reportValidity();
+            return;
+        }
+
         btn.disabled = true;
-        btn.innerHTML = '<i class="bi bi-arrow-repeat icon-spin"></i> Testing…';
+        btn.setAttribute('aria-busy', 'true');
+        btn.innerHTML = '<i class="bi bi-arrow-repeat icon-spin" aria-hidden="true"></i> Testing…';
         try {
             const r = await fetch('/api/setup/test-database', {
                 method: 'POST', headers: HEADERS,
@@ -1282,13 +1344,15 @@
                 if (d.database_exists) extra = ` · ${d.table_count} existing tables`;
                 showDbTest('ok', d.message + extra);
             } else {
-                showDbTest('fail', d.message);
+                showDbTest('fail', d.message || 'Database connection failed.');
             }
         } catch(e) {
-            showDbTest('fail', 'Network error: ' + e.message);
+            showDbTest('fail', 'Network error: ' + (e && e.message ? e.message : 'Please try again.'));
+        } finally {
+            btn.disabled = false;
+            btn.removeAttribute('aria-busy');
+            btn.innerHTML = '<i class="bi bi-lightning-charge-fill" aria-hidden="true"></i> Test Connection';
         }
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Test Connection';
     });
 
     function showDbTest(type, msg) {
@@ -1301,9 +1365,10 @@
     // ── Password strength indicator ──
     document.getElementById('admin_password').addEventListener('input', function() {
         const pw = this.value;
+        const minLength = Number(minPasswordField.value) || 12;
         let score = 0;
-        if (pw.length >= 12) score++;
-        if (pw.length >= 16) score++;
+        if (pw.length >= minLength) score++;
+        if (pw.length >= minLength + 4) score++;
         if (/[A-Z]/.test(pw)) score++;
         if (/[0-9]/.test(pw)) score++;
         if (/[^A-Za-z0-9]/.test(pw)) score++;
@@ -1313,37 +1378,67 @@
         bar.style.width = pct + '%';
         bar.style.background = colors[score] || '#e0e0e0';
         const hint = document.getElementById('pw-hint');
-        const label = score < 2 ? 'Weak' : score < 4 ? 'Fair' : 'Strong';
-        const icon = score < 2 ? 'bi-shield-exclamation' : score < 4 ? 'bi-shield-plus' : 'bi-shield-check';
-        hint.innerHTML = '<i class="bi ' + icon + '"></i> ' + label;
+        const label = pw.length === 0 ? 'Minimum ' + minLength + ' characters' :
+            (score < 2 ? 'Weak' : score < 4 ? 'Fair' : 'Strong');
+        const icon = pw.length === 0 ? 'bi-shield-lock' :
+            (score < 2 ? 'bi-shield-exclamation' : score < 4 ? 'bi-shield-plus' : 'bi-shield-check');
+        const iconNode = document.createElement('i');
+        iconNode.className = 'bi ' + icon;
+        iconNode.setAttribute('aria-hidden', 'true');
+        hint.replaceChildren(iconNode, document.createTextNode(' ' + label));
     });
+
+    function renderInstallAlert(target, tone, iconName, heading, message, actionLabel, onAction) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-' + tone;
+        alert.setAttribute('role', tone === 'danger' ? 'alert' : 'status');
+        const icon = document.createElement('i');
+        icon.className = 'bi ' + iconName;
+        icon.setAttribute('aria-hidden', 'true');
+        const content = document.createElement('div');
+        const strong = document.createElement('strong');
+        strong.textContent = heading;
+        content.append(strong, document.createTextNode(' ' + String(message == null ? '' : message)));
+        if (actionLabel && typeof onAction === 'function') {
+            const action = document.createElement('button');
+            action.type = 'button';
+            action.className = 'btn btn-sm btn-outline-secondary mt-2';
+            action.textContent = actionLabel;
+            action.addEventListener('click', onAction);
+            content.appendChild(action);
+        }
+        alert.append(icon, content);
+        target.replaceChildren(alert);
+    }
 
     // ── Step 5: Run installation ──
     async function runInstallation() {
         goTo(5);
+        const installPanel = document.getElementById('step-5');
+        installPanel.setAttribute('aria-busy', 'true');
         const container = document.getElementById('install-progress');
         const resultEl = document.getElementById('install-result');
         container.innerHTML = ''; resultEl.innerHTML = '';
 
+        // These names are the exact phases returned by core.installer. Keep
+        // the visual progress list honest: the service reports database/schema
+        // work and administrator creation as aggregate steps, not substeps.
         const stepNames = [
-            'Write configuration', 'Save database config', 'Create database',
-            'Schema migrations', 'Create administrator', 'Runtime directories', 'Finalize'
+            'Write configuration', 'Database & schema', 'Administrator',
+            'Runtime directories', 'Finalize'
         ];
-        // Leading graphical icon per install phase (presentation only)
         const stepIcons = {
-            'Write configuration':  'bi-file-earmark-code',
-            'Save database config': 'bi-database-gear',
-            'Create database':      'bi-database-add',
-            'Schema migrations':    'bi-arrow-down-up',
-            'Create administrator': 'bi-person-badge',
-            'Runtime directories':  'bi-folder2-open',
-            'Finalize':             'bi-stars'
+            'Write configuration': 'bi-file-earmark-code',
+            'Database & schema':   'bi-database-gear',
+            'Administrator':       'bi-person-badge',
+            'Runtime directories': 'bi-folder2-open',
+            'Finalize':            'bi-stars'
         };
         for (const name of stepNames) {
-            container.innerHTML += '<div class="install-step pending" data-name="' + name + '">' +
-                '<span class="isp-lead"><i class="bi ' + (stepIcons[name] || 'bi-gear') + '"></i></span>' +
+            container.innerHTML += '<div class="install-step pending" data-name="' + name + '" role="listitem">' +
+                '<span class="isp-lead"><i class="bi ' + (stepIcons[name] || 'bi-gear') + '" aria-hidden="true"></i></span>' +
                 '<span class="isp-name">' + name + '</span>' +
-                '<span class="isp-icon"><i class="bi bi-arrow-repeat icon-spin"></i></span></div>';
+                '<span class="isp-icon"><i class="bi bi-arrow-repeat icon-spin" aria-hidden="true"></i></span></div>';
         }
 
         // Animate running state on first item
@@ -1364,6 +1459,7 @@
                 flask_port: document.getElementById('app_port').value,
                 flask_host: document.getElementById('app_host').value,
                 max_workers: document.getElementById('app_workers').value,
+                file_processing_timeout: document.getElementById('app_timeout').value,
                 log_level: document.getElementById('app_loglevel').value,
                 ingestion_roots: document.getElementById('app_ingestion').value,
                 max_failed_logins: document.getElementById('sec_max_failed').value,
@@ -1403,53 +1499,79 @@
                 // Stagger animation
                 await new Promise(resolve => setTimeout(resolve, 200));
             }
+            installPanel.setAttribute('aria-busy', 'false');
 
             if (d.ok) {
-                resultEl.innerHTML = '<div class="alert alert-success" role="alert">' +
-                    '<i class="bi bi-check-circle-fill"></i><div>' +
-                    '<strong>Installation complete!</strong> Redirecting to login…</div></div>';
-                // Clear sensitive fields
+                renderInstallAlert(
+                    resultEl, 'success', 'bi-check-circle-fill',
+                    'Installation complete!', 'Redirecting to login…', null, null);
+                // Do not keep submitted secrets in the live DOM after install.
                 document.getElementById('db_password').value = '';
                 document.getElementById('admin_password').value = '';
                 document.getElementById('admin_password2').value = '';
-                // Show completion
+
                 setTimeout(() => {
-                    document.getElementById('step-5').classList.remove('active');
-                    document.getElementById('step-done').classList.add('active');
-                    btnNext.style.display = 'none';
-                    btnBack.style.display = 'none';
-                    pills.forEach(p => p.classList.add('done'));
-                    document.getElementById('completion-summary').innerHTML =
-                        '<div class="summary-card">' +
-                        '<div class="summary-row"><span class="sr-icon"><i class="bi bi-database-fill-check"></i></span>' +
-                        '<div><span class="sr-label">Database</span><span class="sr-value">Created and migrated</span></div></div>' +
-                        '<div class="summary-row"><span class="sr-icon"><i class="bi bi-person-badge"></i></span>' +
-                        '<div><span class="sr-label">Admin</span><span class="sr-value">' + body.admin_username + '</span></div></div>' +
-                        '<div class="summary-row"><span class="sr-icon"><i class="bi bi-globe2"></i></span>' +
-                        '<div><span class="sr-label">Environment</span><span class="sr-value">' + body.environment + '</span></div></div>' +
-                        '<div class="summary-row"><span class="sr-icon"><i class="bi bi-window-desktop"></i></span>' +
-                        '<div><span class="sr-label">Address</span><span class="sr-value">http://127.0.0.1:' + body.flask_port + '</span></div></div>' +
-                        '</div>' +
-                        '<a href="/" class="cta"><i class="bi bi-box-arrow-in-right"></i> Go to Login</a>';
+                    // Use the same navigation routine as the rest of the
+                    // wizard so the step count, progress rail and aria-current
+                    // all agree that setup is complete.
+                    goTo(TOTAL_STEPS + 1);
+                    const summary = document.createElement('div');
+                    summary.className = 'summary-card';
+                    const addSummaryRow = (iconName, label, value) => {
+                        const row = document.createElement('div');
+                        row.className = 'summary-row';
+                        const iconWrap = document.createElement('span');
+                        iconWrap.className = 'sr-icon';
+                        const icon = document.createElement('i');
+                        icon.className = 'bi ' + iconName;
+                        icon.setAttribute('aria-hidden', 'true');
+                        iconWrap.appendChild(icon);
+                        const copy = document.createElement('div');
+                        const labelNode = document.createElement('span');
+                        labelNode.className = 'sr-label';
+                        labelNode.textContent = label;
+                        const valueNode = document.createElement('span');
+                        valueNode.className = 'sr-value';
+                        valueNode.textContent = String(value == null ? '' : value);
+                        copy.append(labelNode, valueNode);
+                        row.append(iconWrap, copy);
+                        summary.appendChild(row);
+                    };
+                    const configuredPort = Number(body.flask_port);
+                    const visiblePort = Number(window.location.port || 0);
+                    const address = !visiblePort || configuredPort === visiblePort
+                        ? window.location.origin
+                        : window.location.protocol + '//' + window.location.hostname + ':' + configuredPort;
+                    addSummaryRow('bi-database-fill-check', 'Database', 'Created and migrated');
+                    addSummaryRow('bi-person-badge', 'Admin', body.admin_username);
+                    addSummaryRow('bi-globe2', 'Environment', body.environment);
+                    addSummaryRow('bi-window-desktop', 'Address', address);
+
+                    const loginLink = document.createElement('a');
+                    loginLink.href = '/';
+                    loginLink.className = 'cta';
+                    const loginIcon = document.createElement('i');
+                    loginIcon.className = 'bi bi-box-arrow-in-right';
+                    loginIcon.setAttribute('aria-hidden', 'true');
+                    loginLink.append(loginIcon, document.createTextNode(' Go to Login'));
+                    const completion = document.getElementById('completion-summary');
+                    completion.replaceChildren(summary, loginLink);
                     document.getElementById('redirect-note').style.display = '';
                     // Auto-redirect after 5s
                     setTimeout(() => { window.location.href = '/'; }, 5000);
                 }, 1500);
             } else {
-                resultEl.innerHTML = '<div class="alert alert-danger" role="alert">' +
-                    '<i class="bi bi-x-circle-fill"></i><div>' +
-                    '<strong>Installation failed.</strong> ' + (d.error || 'Check the steps above for details.') +
-                    '<br><small>You can fix the issue and <a href="/setup">retry</a>.</small></div></div>';
-                btnBack.style.display = '';
-                btnBack.disabled = false;
+                renderInstallAlert(
+                    resultEl, 'danger', 'bi-x-circle-fill', 'Installation failed.',
+                    d.error || 'Check the step results above for details.',
+                    {{ _('Review settings')|tojson }}, () => goTo(4));
             }
         } catch(e) {
-            resultEl.innerHTML = '<div class="alert alert-danger" role="alert">' +
-                '<i class="bi bi-wifi-off"></i><div>' +
-                '<strong>Network error:</strong> ' + e.message +
-                '<br><small>Fix the issue and <a href="/setup">retry</a>.</small></div></div>';
-            btnBack.style.display = '';
-            btnBack.disabled = false;
+            installPanel.setAttribute('aria-busy', 'false');
+            renderInstallAlert(
+                resultEl, 'danger', 'bi-wifi-off', 'Network error:',
+                e && e.message ? e.message : 'Please try again.',
+                {{ _('Review settings')|tojson }}, () => goTo(4));
         }
     }
 

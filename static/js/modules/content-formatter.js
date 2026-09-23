@@ -1193,86 +1193,61 @@ function renderSheetGrid(sheet) {
  * @returns {string} - Formatted HTML
  */
 function formatImageContent(filePath, content, fileId = null) {
-    if (!filePath && !fileId) return '';
-    
-    // Detect language and direction from OCR text
+    const safeFilePath = typeof filePath === 'string' ? filePath : '';
+    const numericFileId = Number(fileId);
+    const safeFileId = Number.isSafeInteger(numericFileId) && numericFileId > 0
+        ? numericFileId
+        : null;
+    if (!safeFilePath && !safeFileId) return '';
+
+    // Detect language and direction from OCR text.
     const direction = content ? detectTextDirection(content) : 'ltr';
     const lang = content ? detectLanguage(content) : 'en';
-    
-    let html = `<div class="formatted-image-content" dir="${direction}" lang="${lang}">`;
-    
-    // Display image
+    let html = `<div class="formatted-image-content" dir="${escapeAttrText(direction)}" lang="${escapeAttrText(lang)}">`;
     html += '<div class="formatted-image-container">';
-    
-    // Try multiple methods to load the image
-    let imageSrc = '';
-    let imageSrcSet = [];
-    
-    if (filePath) {
-        // Normalize path for use in URL
-        const normalizedPath = filePath.replace(/\\/g, '/');
-        
-        // Method 1: Try file serving endpoint by path (preferred)
-        const serveUrl = `/api/file/serve?path=${encodeURIComponent(filePath)}`;
-        imageSrcSet.push(`"${serveUrl}"`);
-        imageSrc = serveUrl;
-        
-        // Method 2: Try file serving endpoint by ID if available
-        if (fileId) {
-            const fileIdUrl = `/api/file/${fileId}/serve`;
-            imageSrcSet.push(`"${fileIdUrl}"`);
-        }
-        
-        // Method 3: Try direct file path as last resort (may work in some contexts)
-        // For Windows paths, try file:/// protocol
-        if (normalizedPath.match(/^[A-Za-z]:/)) {
-            // Windows absolute path
-            imageSrcSet.push(`"file:///${normalizedPath}"`);
-        } else if (normalizedPath.startsWith('/')) {
-            // Unix absolute path
-            imageSrcSet.push(`"file://${normalizedPath}"`);
-        }
-    } else if (fileId) {
-        // Only file ID available - use ID-based endpoint
-        const fileIdUrl = `/api/file/${fileId}/serve`;
-        imageSrc = fileIdUrl;
-        imageSrcSet.push(`"${fileIdUrl}"`);
+
+    // Only use same-origin application endpoints. Direct file:// fallbacks do
+    // not work for most readers and expose local paths to the browser.
+    const imageSources = [];
+    if (safeFilePath) {
+        imageSources.push(`/api/file/serve?path=${encodeURIComponent(safeFilePath)}`);
     }
-    
-    // Build img tag with data attributes for event handling
-    // Use data attributes instead of inline handlers for better reliability
-    const imageId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    html += `<img id="${imageId}" src="${imageSrc}" alt="Image" class="formatted-image" `;
-    if (imageSrcSet.length > 1) {
-        html += `data-fallback-sources='[${imageSrcSet.join(',')}]' `;
+    if (safeFileId) {
+        const idUrl = `/api/file/${safeFileId}/serve`;
+        if (!imageSources.includes(idUrl)) imageSources.push(idUrl);
     }
-    html += `data-file-id="${fileId || ''}" `;
-    html += `data-file-path="${filePath ? escapeHtml(filePath) : ''}" `;
-    html += `data-current-source-index="0">`;
-    
+    const imageSrc = imageSources[0] || '';
+    const imageId = `img-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    html += `<img id="${escapeAttrText(imageId)}" src="${escapeAttrText(imageSrc)}" alt="Image" class="formatted-image" `;
+    if (imageSources.length > 1) {
+        // JSON-encode first, then quote-escape the complete attribute value.
+        // The load handler parses this with JSON.parse; no raw paths or quotes
+        // are interpolated into an HTML attribute.
+        html += `data-fallback-sources="${escapeAttrText(JSON.stringify(imageSources))}" `;
+    }
+    html += `data-file-id="${safeFileId || ''}" `;
+    html += `data-file-path="${escapeAttrText(safeFilePath)}" `;
+    html += 'data-current-source-index="0">';
+
     html += '<div class="image-load-error" style="display: none; padding: 1rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; color: #6c757d;">';
-    html += '<i class="bi bi-exclamation-triangle me-2"></i><span class="error-message">Loading image...</span>';
+    html += '<i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i><span class="error-message">Loading image...</span>';
     html += '</div>';
     html += '</div>';
-    
-    // Display file path info
-    if (filePath) {
+
+    if (safeFilePath) {
         html += '<div class="formatted-image-path">';
-        html += '<small class="text-muted"><i class="bi bi-folder me-1"></i>Path: <code>' + escapeHtml(filePath) + '</code></small>';
+        html += '<small class="text-muted"><i class="bi bi-folder me-1" aria-hidden="true"></i>Path: <code>' + escapeHtml(safeFilePath) + '</code></small>';
         html += '</div>';
     }
-    
-    // Display extracted text if available
-    if (content && content.trim()) {
+
+    if (typeof content === 'string' && content.trim()) {
         html += '<div class="formatted-image-text">';
         html += '<h5 class="formatted-image-text-title">Extracted Text (OCR):</h5>';
         html += `<pre class="formatted-text">${escapeHtml(content)}</pre>`;
         html += '</div>';
     }
-    
+
     html += '</div>';
-    
-    // Return HTML - event listeners will be attached by the caller after DOM insertion
     return html;
 }
 

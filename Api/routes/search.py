@@ -33,6 +33,35 @@ logger = logging.getLogger(__name__)
 from core.security.rate_limit import limiter
 
 
+def _request_bool(data: Dict[str, Any], key: str, default: bool) -> bool:
+    """Parse JSON booleans and query-string booleans consistently."""
+    value = data.get(key)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _parse_search_statuses(data: Dict[str, Any]) -> Optional[list]:
+    """Return a validated Read/Unread filter, None when it was not supplied."""
+    if 'status' not in data:
+        return None
+    raw = data.get('status')
+    values = raw if isinstance(raw, (list, tuple, set)) else [raw]
+    values = [str(value).strip() for value in values if value is not None and str(value).strip()]
+    if len(values) == 1 and values[0].lower() == 'none':
+        return []
+    normalized = []
+    for value in values:
+        status = value.title()
+        if status not in {'Read', 'Unread'}:
+            raise ValueError("status must contain only 'Read', 'Unread', or 'none'")
+        if status not in normalized:
+            normalized.append(status)
+    return normalized
+
+
 def _current_user_id():
     """AUDIT (API-04): the auth middleware stores the user id under
     ``session['auth_user_id']`` (core/security/flask_ext.py::_SESSION_USER_KEY);
@@ -364,7 +393,14 @@ def register_search_routes(app):
                 analyst_category_ids = request.args.getlist('analyst_category_id')
                 file_type = request.args.getlist('file_type') if request.args.getlist('file_type') else data.get('file_type')
             
-            query = data.get('query', '').strip()
+            raw_query = data.get('query', '')
+            if not isinstance(raw_query, str):
+                return jsonify({'error': 'query must be a string'}), 400
+            query = raw_query.strip()
+            try:
+                file_statuses = _parse_search_statuses(data)
+            except ValueError as status_error:
+                return jsonify({'error': str(status_error)}), 400
             
             # Convert to lists of integers, handle both single and multiple values
             if source_ids:
@@ -420,16 +456,23 @@ def register_search_routes(app):
             
             date_from = data.get('date_from')
             date_to = data.get('date_to')
-            sort_by = data.get('sort_by', 'relevance')
-            sort_order = data.get('sort_order', 'desc')
-            page = int(data.get('page', 1))
-            per_page = min(int(data.get('per_page', 50)), 200)  # Max 200 per page
-            use_fulltext = data.get('use_fulltext', 'true').lower() == 'true'
-            use_advanced = data.get('use_advanced', 'true').lower() == 'true'  # Use advanced algorithms by default
-            use_bm25 = data.get('use_bm25', 'true').lower() == 'true'
-            use_expansion = data.get('use_expansion', 'true').lower() == 'true'
-            use_fuzzy = data.get('use_fuzzy', 'true').lower() == 'true'
-            
+            sort_by = str(data.get('sort_by', 'relevance')).strip().lower()
+            sort_order = str(data.get('sort_order', 'desc')).strip().lower()
+            if sort_by not in {'relevance', 'date', 'name', 'type', 'size'}:
+                return jsonify({'error': 'sort_by must be relevance, date, name, type, or size'}), 400
+            if sort_order not in {'asc', 'desc'}:
+                return jsonify({'error': "sort_order must be 'asc' or 'desc'"}), 400
+            try:
+                page = max(1, int(data.get('page', 1) or 1))
+                per_page = min(max(1, int(data.get('per_page', 50) or 50)), 200)
+            except (TypeError, ValueError):
+                return jsonify({'error': 'page and per_page must be whole numbers'}), 400
+            use_fulltext = _request_bool(data, 'use_fulltext', True)
+            use_advanced = _request_bool(data, 'use_advanced', True)
+            use_bm25 = _request_bool(data, 'use_bm25', True)
+            use_expansion = _request_bool(data, 'use_expansion', True)
+            use_fuzzy = _request_bool(data, 'use_fuzzy', True)
+
             offset = (page - 1) * per_page
 
             # Analyst-categorization search scope (FR-2.x): explicit
@@ -439,8 +482,15 @@ def register_search_routes(app):
             # status - smart categorization is never consulted (FR-2.4).
             analyst_scope = resolve_request_scope()
 
-            # Perform search - use advanced search if enabled
-            if use_advanced and query:
+            has_advanced_filters = any((
+                file_type, source_ids, side_ids, category_ids, analyst_category_ids,
+                date_from, date_to, file_statuses is not None
+            ))
+
+            # Filter-only searches are valid when an explicit filter is
+            # supplied. With neither query nor filters, preserve the empty
+            # response instead of accidentally scanning the whole corpus.
+            if use_advanced and (query or has_advanced_filters):
                 results, total_count = SearchService.advanced_search(
                     query=query,
                     file_type=file_type,
@@ -460,7 +510,8 @@ def register_search_routes(app):
                     use_expansion=use_expansion,
                     use_fuzzy=use_fuzzy,
                     analyst_scope=analyst_scope,
-                    analyst_category_ids=analyst_category_ids if analyst_category_ids else None
+                    analyst_category_ids=analyst_category_ids if analyst_category_ids else None,
+                    file_statuses=file_statuses
                 )
             elif use_fulltext and query:
                 results, total_count = SearchService.full_text_search(
@@ -506,6 +557,7 @@ def register_search_routes(app):
                         'date_from': date_from,
                         'date_to': date_to,
                         'category_id': category_id,
+                        'status': file_statuses,
                         'analyst_scope': analyst_scope
                     },
                     result_count=total_count,
@@ -532,6 +584,7 @@ def register_search_routes(app):
                     'date_from': date_from,
                     'date_to': date_to,
                     'category_id': category_id,
+                    'status': file_statuses,
                     # Analyst-categorization scope actually applied (FR-2.x)
                     'analyst_scope': analyst_scope
                 },
@@ -815,10 +868,11 @@ def register_search_routes(app):
         rows that were never there.
 
         JSON Body:
-        - query, file_type, source_id(s), side_id(s), category_id(s),
-          analyst_category_id(s), date_from, date_to, sort_by, sort_order
-        - scope: 'page' (the page being read), 'filtered' (the whole result
-          set), 'dataset' (everything the filters allow, query dropped)
+        - query, file_type(s), source_id(s), side_id(s), category_id(s),
+          analyst_category_id(s), status, date_from, date_to, sort_by, sort_order
+        - export_scope: 'page' (the page being read), 'filtered' (the whole
+          result set), 'dataset' (everything the filters allow, query dropped)
+        - analyst_scope: the independent analyst-categorization scope
         - page, per_page: required only for scope='page'
         - format: 'csv', 'excel' or 'json'
         - filename: optional stem

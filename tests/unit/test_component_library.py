@@ -501,7 +501,8 @@ class TestAdoption:
         assert counts()["badges_status"] == 0, (
             "a hand-written status badge is back; every one of them now "
             "renders through the component and the vocabulary")
-        assert counts()["badges_chip"] == 68
+        # Current inventory: 70 non-status count/id/method chips remain hand-written.
+        assert counts()["badges_chip"] == 70
 
 
 class TestTheComponentsRenderWhatTheyPromised:

@@ -37,7 +37,7 @@ domains is `docs/DOMAIN_MODEL.md`.
 
 - Interfaces declared: **25**
 - Cross-cutting features (not interfaces): **1**
-- Endpoints owned (canonical routes + aliases): **63**
+- Endpoints owned (canonical routes + aliases): **65**
 - With a keyboard shortcut: **11**
 - With a help topic: **23**
 - Declared domain vocabulary: **12**
@@ -61,13 +61,14 @@ Domains are **declared** in `core/interfaces/domains.py`; a declared domain may 
 | SECURITY | 0 | declared, empty |
 | INTERNAL | 1 | in use |
 
-Declared aliases: **39**, across **11** interfaces. An alias is an endpoint the interface owns but does not navigate to; aliases never become navigation entries.
+Declared aliases: **41**, across **12** interfaces. An alias is an endpoint the interface owns but does not navigate to; aliases never become navigation entries.
 
 | Interface | Aliases |
 | --- | --- |
+| `batch_analysis` | `analysis_batch_process` |
 | `categories` | `category_add`, `category_words` |
 | `concurrency_monitor` | `concurrency.get_async_tasks`, `concurrency.get_metrics`, `concurrency.get_pools`, `concurrency.get_processes`, `concurrency.get_threads` |
-| `file_library` | `files.bulk_delete_files`, `files.delete_file`, `files.file_chart_data`, `files.file_content_lazy`, `files.file_content_page`, `files.file_detail`, `files.file_full_content`, `files.file_search_all_pages` |
+| `file_library` | `files.bulk_delete_files`, `files.bulk_export_files`, `files.delete_file`, `files.file_chart_data`, `files.file_content_lazy`, `files.file_content_page`, `files.file_detail`, `files.file_full_content`, `files.file_search_all_pages` |
 | `input_ingestion` | `files.api_cancel_task`, `files.get_active_tasks`, `files.pause_task`, `files.resume_task`, `files.upload_page`, `files.upload_progress` |
 | `jobs` | `operations_job_detail_page` |
 | `keywords` | `keyword_detail`, `keywords_add` |
@@ -145,9 +146,9 @@ Cross-cutting settings that are **not** features (they belong to an existing int
 <!-- BEGIN GENERATED APPLICATION EVIDENCE -->
 ### 7. Endpoint coverage
 
-- Endpoints in the application's URL map (static excluded): **306**
-- User-facing page endpoints: **49**
-- Owned by an interface: **63**
+- Endpoints in the application's URL map (static excluded): **310**
+- User-facing page endpoints: **47**
+- Owned by an interface: **65**
 - **Unmanaged user-facing endpoints**: **0**
 - Interfaces with a navigable route: **24**
 
@@ -157,19 +158,19 @@ Unmanaged user-facing endpoints: **0** — every page the application serves is 
 
 | Classification | Endpoints |
 | --- | --- |
-| ACTION | 7 |
-| API_ENDPOINT | 232 |
+| ACTION | 9 |
+| API_ENDPOINT | 236 |
 | INTERNAL_PAGE | 1 |
 | REDIRECT | 1 |
 | SYSTEM_ENDPOINT | 16 |
 | TEST_ENDPOINT | 1 |
-| USER_INTERFACE | 48 |
+| USER_INTERFACE | 46 |
 
 By blueprint:
 
 | Blueprint | Endpoints |
 | --- | --- |
-| (app) | 140 |
+| (app) | 143 |
 | analytics | 22 |
 | archives_api | 10 |
 | auth | 12 |
@@ -177,7 +178,7 @@ By blueprint:
 | content_analysis | 6 |
 | cursor_api | 3 |
 | error_dashboard | 4 |
-| files | 20 |
+| files | 21 |
 | health | 1 |
 | import_export | 6 |
 | operations_api | 29 |
@@ -200,7 +201,7 @@ The coverage rule tolerates exactly these, by name — a new page cannot be adde
 
 **TEST_ENDPOINT_PREFIXES** (1): `/_test/`
 
-Endpoints the interface switch does not gate (API, system and infrastructure; authentication and authorization are unchanged): **249**
+Endpoints the interface switch does not gate (API, system and infrastructure; authentication and authorization are unchanged): **253**
 
 ### 10. Rendered navigation
 

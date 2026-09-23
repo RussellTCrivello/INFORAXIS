@@ -44,9 +44,11 @@
 
             var newPassword = newInput.value;
             var confirmPassword = confirmInput.value;
+            var minimumLength = Number(newInput.getAttribute('minlength')) || 12;
 
-            if (!newPassword || newPassword.length < 12) {
-                errorBox.textContent = 'New password must be at least 12 characters.';
+            if (!newPassword || newPassword.length < minimumLength) {
+                errorBox.textContent = newInput.getAttribute('data-minimum-message') ||
+                    ('New password must be at least ' + minimumLength + ' characters.');
                 errorBox.classList.remove('d-none');
                 return;
             }

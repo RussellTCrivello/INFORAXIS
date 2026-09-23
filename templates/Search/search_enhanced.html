@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Enhanced Search') }}{% endblock %}
+{% block page_type %}search-enhanced{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/search-enhanced.css') }}" rel="stylesheet">
@@ -26,7 +27,6 @@
     </div>
     <ul class="tips-list">
         <li>{{ _('Enhanced Search provides intelligent search with auto-complete and suggestions') }}</li>
-        <li>{{ _('Use the comprehensive search option to search across all file content, metadata, and associations') }}</li>
         <li>{{ _('View search history to quickly repeat previous searches') }}</li>
         <li>{{ _('Export search results to various formats for further analysis') }}</li>
     </ul>
@@ -88,20 +88,7 @@
                            placeholder="{{ _('Enter search terms...') }}"
                            autocomplete="off">
                 </div>
-                
-                <!--  NEW: Comprehensive Search Option -->
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="searchAllData" checked>
-                        <label class="form-check-label" for="searchAllData">
-                            <i class="bi bi-database me-1"></i>
-                            <strong>{{ _('Search All Data') }}</strong>
-                            <small class="d-block text-muted" style="font-size: 0.75rem;">
-                                {{ _('Search files, categories, keywords, sources, sides, words, and titles') }}
-                            </small>
-                        </label>
-                    </div>
-                </div>
+
 
                 <!-- Search Scope (FR-2.2): analyst-categorization scope. This
                      select is picked up by global-search.js and sent with
@@ -137,6 +124,7 @@
             <!-- Sort Options -->
             <div class="filter-section">
                 <h6><i class="bi bi-sort-alpha-down me-1"></i>{{ _('Sort By') }}</h6>
+                <label for="sortBy" class="visually-hidden">{{ _('Sort results by') }}</label>
                 <select class="form-select form-select-sm" id="sortBy">
                     <option value="relevance">{{ _('Relevance') }}</option>
                     <option value="date">{{ _('Date') }}</option>
@@ -144,6 +132,7 @@
                     <option value="type">{{ _('Type') }}</option>
                     <option value="size">{{ _('Size') }}</option>
                 </select>
+                <label for="sortOrder" class="visually-hidden">{{ _('Sort order') }}</label>
                 <select class="form-select form-select-sm mt-2" id="sortOrder">
                     <option value="desc">{{ _('Descending') }}</option>
                     <option value="asc">{{ _('Ascending') }}</option>
@@ -155,7 +144,7 @@
                 <h6><i class="bi bi-funnel me-1"></i>{{ _('Filters') }}</h6>
                 
                 <div class="mb-2">
-                    <label class="form-label small">{{ _('File Type') }}</label>
+                    <label class="form-label small" for="filterFileType">{{ _('File Type') }}</label>
                     <select class="form-select form-select-sm search-filter" id="filterFileType">
                         <option value="">{{ _('All Types') }}</option>
                         <option value="pdf">PDF</option>
@@ -168,7 +157,7 @@
                 </div>
 
                 <div class="mb-2">
-                    <label class="form-label small">{{ _('Source') }}</label>
+                    <label class="form-label small" for="filterSourceId">{{ _('Source') }}</label>
                     <select class="form-select form-select-sm search-filter" id="filterSourceId">
                         <option value="">{{ _('All Sources') }}</option>
                         {% for source in sources %}
@@ -178,7 +167,7 @@
                 </div>
 
                 <div class="mb-2">
-                    <label class="form-label small">{{ _('Side') }}</label>
+                    <label class="form-label small" for="filterSideId">{{ _('Side') }}</label>
                     <select class="form-select form-select-sm search-filter" id="filterSideId">
                         <option value="">{{ _('All Sides') }}</option>
                         {% for side in sides %}
@@ -188,17 +177,17 @@
                 </div>
 
                 <div class="mb-2">
-                    <label class="form-label small">{{ _('Date From') }}</label>
+                    <label class="form-label small" for="filterDateFrom">{{ _('Date From') }}</label>
                     <input type="date" class="form-control form-control-sm search-filter" id="filterDateFrom">
                 </div>
 
                 <div class="mb-2">
-                    <label class="form-label small">{{ _('Date To') }}</label>
+                    <label class="form-label small" for="filterDateTo">{{ _('Date To') }}</label>
                     <input type="date" class="form-control form-control-sm search-filter" id="filterDateTo">
                 </div>
 
                 <div class="mb-2">
-                    <label class="form-label small">{{ _('Category') }}</label>
+                    <label class="form-label small" for="filterCategoryId">{{ _('Category') }}</label>
                     <select class="form-select form-select-sm search-filter" id="filterCategoryId">
                         <option value="">{{ _('All Categories') }}</option>
                         {% for category in categories %}
@@ -212,11 +201,12 @@
             <div class="filter-section">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="mb-0"><i class="bi bi-clock-history me-1"></i>{{ _('Recent Searches') }}</h6>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="window.enhancedSearch.clearHistory()">
-                        <i class="bi bi-trash"></i>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="clearSearchHistoryBtn"
+                            aria-label="{{ _('Clear recent searches') }}" title="{{ _('Clear recent searches') }}">
+                        <i class="bi bi-trash" aria-hidden="true"></i>
                     </button>
                 </div>
-                <div id="searchHistory" class="small">
+                <div id="searchHistory" class="small" data-empty-message="{{ _('No search history') }}">
                     <p class="text-muted">{{ _('Loading...') }}</p>
                 </div>
             </div>
@@ -225,11 +215,12 @@
             <div class="filter-section">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="mb-0"><i class="bi bi-bookmark me-1"></i>{{ _('Saved Searches') }}</h6>
-                    <button class="btn btn-sm btn-outline-primary" id="saveSearchBtn">
-                        <i class="bi bi-plus"></i>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="saveSearchBtn"
+                            aria-label="{{ _('Save current search') }}" title="{{ _('Save current search') }}">
+                        <i class="bi bi-plus" aria-hidden="true"></i>
                     </button>
                 </div>
-                <div id="savedSearches" class="small">
+                <div id="savedSearches" class="small" data-empty-message="{{ _('No saved searches') }}">
                     <p class="text-muted">{{ _('Loading...') }}</p>
                 </div>
             </div>
@@ -239,7 +230,7 @@
     <!-- Main Search Results -->
     <div class="col-md-9">
         <div class="stat-card search-results-card">
-            <div id="searchResults">
+            <div id="searchResults" aria-live="polite" aria-atomic="false">
                 <div class="text-center text-muted py-5">
                     <i class="bi bi-search display-4 d-block mb-3"></i>
                     <p>{{ _('Enter a search query to get started') }}</p>
@@ -251,12 +242,12 @@
 </div>
 
 <!-- File Preview Modal -->
-<div class="modal fade" id="filePreviewModal" tabindex="-1">
+<div class="modal fade" id="filePreviewModal" tabindex="-1" aria-labelledby="filePreviewModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">{{ _('File Preview') }}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="filePreviewModalLabel">{{ _('File Preview') }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
             </div>
             <div class="modal-body" id="previewModalBody">
                 <div class="text-center">
@@ -269,11 +260,14 @@
     </div>
 </div>
 
+<script type="application/json" id="searchEnhancedTranslations">{{ {
+    "No search history": _('No search history'),
+    "No saved searches": _('No saved searches'),
+    "Pagination": _('Pagination'),
+    "Matching content:": _('Matching content:'),
+    "Line": _('Line'),
+    "Similar": _('Similar'),
+    "Enter a name for this search:": _('Enter a name for this search:'),
+    "Delete this saved search?": _('Delete this saved search?')
+}|tojson }}</script>
 {% endblock %}
-
-{% block extra_js %}
-<script type="module" src="{{ url_for('static', filename='js/modules/search/global-search.js') }}"></script>
-<!-- Search Enhanced Page JavaScript - External file -->
-<script type="module" src="{{ url_for('static', filename='js/pages/search-enhanced-page.js') }}"></script>
-{% endblock %}
-

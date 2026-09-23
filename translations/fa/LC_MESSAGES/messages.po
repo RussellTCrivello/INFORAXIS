@@ -9578,3 +9578,219 @@ msgstr "حذف فایل"
 #: templates/file/file_detail.html
 msgid "Keep it"
 msgstr "نگهش دار"
+
+msgid "INFORAXIS System"
+msgstr "سامانه اینفوراکسیس"
+
+msgid "Primary navigation"
+msgstr "ناوبری اصلی"
+
+msgid "Breadcrumb navigation"
+msgstr "ناوبری مسیر راهنما"
+
+msgid "Open navigation menu"
+msgstr "باز کردن منوی ناوبری"
+
+msgid "Close navigation menu"
+msgstr "بستن منوی ناوبری"
+
+msgid "New password must be at least %(min)s characters."
+msgstr "رمز عبور جدید باید حداقل %(min)s نویسه داشته باشد."
+
+msgid "Minimum %(min)s characters."
+msgstr "حداقل %(min)s نویسه."
+
+msgid "Source name"
+msgstr "نام منبع"
+
+msgid "Job / role"
+msgstr "شغل / نقش"
+
+msgid "Job or role"
+msgstr "شغل یا نقش"
+
+msgid "Importance (0–1)"
+msgstr "اهمیت (0–1)"
+
+msgid "Side name"
+msgstr "نام طرف"
+
+msgid "You"
+msgstr "شما"
+
+msgid "Reset password"
+msgstr "بازنشانی گذرواژه"
+
+msgid "No users found."
+msgstr "هیچ کاربری یافت نشد."
+
+msgid "Username and password are required."
+msgstr "نام کاربری و گذرواژه الزامی است."
+
+msgid "Failed to create user."
+msgstr "ایجاد کاربر ناموفق بود."
+
+msgid "Failed to delete user."
+msgstr "حذف کاربر ناموفق بود."
+
+msgid "Please try again."
+msgstr "لطفاً دوباره تلاش کنید."
+
+msgid "User updated successfully."
+msgstr "کاربر با موفقیت به‌روزرسانی شد."
+
+msgid "User deleted successfully."
+msgstr "کاربر با موفقیت حذف شد."
+
+msgid "Select keyword"
+msgstr "انتخاب کلیدواژه"
+
+msgid "Smart Category"
+msgstr "دسته‌بندی هوشمند"
+
+msgid "Remove filter"
+msgstr "حذف فیلتر"
+
+#: templates/Search/search_advanced.html
+msgid "Saved searches"
+msgstr "جستجوهای ذخیره‌شده"
+
+#: templates/Search/search_advanced.html
+msgid "Saved"
+msgstr "ذخیره‌شده"
+
+#: templates/Search/search_advanced.html
+msgid "Manage all"
+msgstr "مدیریت همه"
+
+#: templates/Search/search_advanced.html
+msgid "Save this search so you can re-run it any time"
+msgstr "این جستجو را ذخیره کنید تا هر زمان دوباره اجرا کنید."
+
+#: templates/Search/search_advanced.html
+msgid "Open in new tab"
+msgstr "باز کردن در زبانه جدید"
+
+#: templates/Search/search_advanced.html
+msgid "Quick preview (stays on this page)"
+msgstr "پیش‌نمایش سریع (در همین صفحه می‌ماند)"
+
+#: templates/Search/search_advanced.html
+msgid "Close preview"
+msgstr "بستن پیش‌نمایش"
+
+#: templates/Search/search_advanced.html
+msgid "Loading preview…"
+msgstr "در حال بارگذاری پیش‌نمایش…"
+
+#: templates/Search/search_advanced.html
+msgid "Preview is not available for this file."
+msgstr "پیش‌نمایش برای این فایل در دسترس نیست."
+
+#: templates/Search/search_advanced.html
+msgid "Open the file in a new tab to view the full content."
+msgstr "فایل را در زبانه جدید باز کنید تا محتوای کامل را ببینید."
+
+#: templates/Search/search_advanced.html
+msgid "First page text"
+msgstr "متن صفحه نخست"
+
+#: templates/Search/search_advanced.html
+msgid "pages"
+msgstr "صفحه‌ها"
+
+#: templates/Search/search_advanced.html
+msgid "Saved search"
+msgstr "جستجوی ذخیره‌شده"
+
+#: templates/Search/search_advanced.html
+msgid "Name this search:"
+msgstr "نام این جستجو:"
+
+#: templates/Search/search_advanced.html
+msgid "Search saved. Find it under Saved searches."
+msgstr "جستجو ذخیره شد. آن را در «جستجوهای ذخیره‌شده» پیدا کنید."
+
+#: templates/Search/search_advanced.html
+msgid "Could not save this search."
+msgstr "نتوانستیم این جستجو را ذخیره کنیم."
+
+#: templates/Search/search_advanced.html
+msgid "Run a search first, then save it here."
+msgstr "ابتدا جستجو کنید، سپس آن را اینجا ذخیره کنید."
+
+#: templates/Search/search_advanced.html
+msgid "Loading saved searches…"
+msgstr "در حال بارگذاری جستجوهای ذخیره‌شده…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load saved searches."
+msgstr "نتوانستیم جستجوهای ذخیره‌شده را بارگذاری کنیم."
+
+#: templates/Search/search_advanced.html
+msgid "No saved searches yet. Run a search and press Save."
+msgstr "هنوز جستجوی ذخیره‌شده‌ای ندارید. جستجو کنید و «ذخیره» را بزنید."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search applied"
+msgstr "جستجوی ذخیره‌شده اعمال شد"
+
+#: templates/Search/search_advanced.html
+msgid "Could not run this saved search."
+msgstr "نتوانستیم این جستجوی ذخیره‌شده را اجرا کنیم."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search deleted"
+msgstr "جستجوی ذخیره‌شده حذف شد"
+
+#: templates/Search/search_advanced.html
+msgid "Could not delete this saved search."
+msgstr "نتوانستیم این جستجوی ذخیره‌شده را حذف کنیم."
+
+#: templates/Search/search_enhanced.html
+msgid "Sort results by"
+msgstr "مرتب‌سازی نتایج بر اساس"
+
+#: templates/Search/search_enhanced.html
+msgid "Sort order"
+msgstr "ترتیب مرتب‌سازی"
+
+#: templates/Search/search_enhanced.html
+msgid "Clear recent searches"
+msgstr "پاک کردن جستجوهای اخیر"
+
+#: templates/Search/search_enhanced.html
+msgid "No search history"
+msgstr "تاریخچه جستجویی نیست"
+
+#: templates/Search/search_enhanced.html
+msgid "Save current search"
+msgstr "ذخیره جستجوی فعلی"
+
+#: templates/Search/search_enhanced.html
+msgid "No saved searches"
+msgstr "جستجوی ذخیره‌شده‌ای وجود ندارد"
+
+#: templates/Search/search_enhanced.html
+msgid "Pagination"
+msgstr "صفحه‌بندی"
+
+#: templates/Search/search_enhanced.html
+msgid "Matching content:"
+msgstr "محتوای منطبق:"
+
+#: templates/Search/search_enhanced.html
+msgid "Line"
+msgstr "خط"
+
+#: templates/Search/search_enhanced.html
+msgid "Similar"
+msgstr "مشابه"
+
+#: templates/Search/search_advanced.html
+msgid "Enter a name for this search:"
+msgstr "نامی برای این جستجو وارد کنید:"
+
+#: templates/Search/search_advanced.html
+msgid "Delete this saved search?"
+msgstr "این جستجوی ذخیره‌شده حذف شود؟"

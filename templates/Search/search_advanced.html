@@ -2,6 +2,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ _('Advanced Search') }}{% endblock %}
+{% block page_type %}search-advanced{% endblock %}
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/search-advanced.css') }}" rel="stylesheet">
@@ -72,7 +73,8 @@
                    placeholder="{{ _('Search files, content, categories... (supports multiple words, quotes, AND/OR/NOT)') }}"
                    autocomplete="off"
                    spellcheck="false"
-                   aria-label="{{ _('Search files, content, categories... (supports multiple words, quotes, AND/OR/NOT)') }}">
+                   aria-label="{{ _('Search files, content, categories... (supports multiple words, quotes, AND/OR/NOT)') }}"
+                   aria-controls="suggestionsList" aria-expanded="false">
             <button type="button" class="btn-clear-search-main" id="clearSearchBtn" style="display: none;"
                     title="{{ _('Clear') }}" aria-label="{{ _('Clear') }}">
                 <i class="bi bi-x-circle" aria-hidden="true"></i>
@@ -87,9 +89,9 @@
         <div class="search-suggestions-dropdown" id="searchSuggestions">
             <div class="suggestions-header">
                 <i class="bi bi-clock-history me-2" aria-hidden="true"></i>
-                <span>{{ _('Suggestions') }}</span>
+                <span id="suggestionsHeader">{{ _('Suggestions') }}</span>
             </div>
-            <div class="suggestions-list" id="suggestionsList"></div>
+            <div class="suggestions-list" id="suggestionsList" aria-labelledby="suggestionsHeader"></div>
         </div>
     </div>
 
@@ -512,10 +514,20 @@
         "deleteSearch": _('Delete'),
         "deleteSearchConfirm": _('Are you sure you want to delete this saved search?'),
         "searchDeleted": _('Saved search deleted'),
-        "deleteFailed": _('Could not delete this saved search.')
+        "deleteFailed": _('Could not delete this saved search.'),
+        "fileType": _('File Type'),
+        "smartCategory": _('Smart Category'),
+        "analystCategory": _('Analyst Category'),
+        "source": _('Source'),
+        "side": _('Side'),
+        "from": _('From'),
+        "to": _('To'),
+        "status": _('Status'),
+        "analyzed": _('Analyzed'),
+        "pending": _('Pending'),
+        "removeFilter": _('Remove filter')
     },
     "initialScope": analyst_scope,
     "canCategorize": current_user.is_authenticated and current_user.has_role('admin', 'analyst')
 }|tojson }}</script>
-<script type="module" src="{{ url_for('static', filename='js/pages/search-advanced-page.js') }}"></script>
 {% endblock %}

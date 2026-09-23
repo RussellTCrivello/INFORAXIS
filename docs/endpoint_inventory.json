@@ -24,6 +24,18 @@
     "internal": false
   },
   {
+    "endpoint": "analysis_batch_process",
+    "rule": "/analysis/batch/process",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "(app)",
+    "module": "analysis",
+    "classification": "ACTION",
+    "owned_by": "batch_analysis",
+    "internal": false
+  },
+  {
     "endpoint": "analyst_categorization_page",
     "rule": "/analyst/categorization",
     "methods": [
@@ -1377,6 +1389,18 @@
     "internal": false
   },
   {
+    "endpoint": "clear_cache_ui_alias",
+    "rule": "/api/cache/clear",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "(app)",
+    "module": "performance",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "comprehensive_dashboard",
     "rule": "/dashboard/comprehensive",
     "methods": [
@@ -1810,6 +1834,18 @@
     "internal": false
   },
   {
+    "endpoint": "files.bulk_export_files",
+    "rule": "/files/export",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "ACTION",
+    "owned_by": "file_library",
+    "internal": false
+  },
+  {
     "endpoint": "files.delete_file",
     "rule": "/file/<int:file_id>/delete",
     "methods": [
@@ -1926,9 +1962,9 @@
     ],
     "blueprint": "files",
     "module": "files",
-    "classification": "USER_INTERFACE",
+    "classification": "API_ENDPOINT",
     "owned_by": "input_ingestion",
-    "internal": false
+    "internal": true
   },
   {
     "endpoint": "files.original_file_content",
@@ -2022,9 +2058,21 @@
     ],
     "blueprint": "files",
     "module": "files",
-    "classification": "USER_INTERFACE",
+    "classification": "API_ENDPOINT",
     "owned_by": "input_ingestion",
-    "internal": false
+    "internal": true
+  },
+  {
+    "endpoint": "get_cache_stats_ui_alias",
+    "rule": "/api/cache/stats",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "performance",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
   },
   {
     "endpoint": "get_csrf_token",

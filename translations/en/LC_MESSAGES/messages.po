@@ -10544,3 +10544,219 @@ msgstr "Next slide"
 
 msgid "Sheets"
 msgstr "Sheets"
+
+msgid "INFORAXIS System"
+msgstr "INFORAXIS System"
+
+msgid "Primary navigation"
+msgstr "Primary navigation"
+
+msgid "Breadcrumb navigation"
+msgstr "Breadcrumb navigation"
+
+msgid "Open navigation menu"
+msgstr "Open navigation menu"
+
+msgid "Close navigation menu"
+msgstr "Close navigation menu"
+
+msgid "New password must be at least %(min)s characters."
+msgstr "New password must be at least %(min)s characters."
+
+msgid "Minimum %(min)s characters."
+msgstr "Minimum %(min)s characters."
+
+msgid "Source name"
+msgstr "Source name"
+
+msgid "Job / role"
+msgstr "Job / role"
+
+msgid "Job or role"
+msgstr "Job or role"
+
+msgid "Importance (0–1)"
+msgstr "Importance (0–1)"
+
+msgid "Side name"
+msgstr "Side name"
+
+msgid "You"
+msgstr "You"
+
+msgid "Reset password"
+msgstr "Reset password"
+
+msgid "No users found."
+msgstr "No users found."
+
+msgid "Username and password are required."
+msgstr "Username and password are required."
+
+msgid "Failed to create user."
+msgstr "Failed to create user."
+
+msgid "Failed to delete user."
+msgstr "Failed to delete user."
+
+msgid "Please try again."
+msgstr "Please try again."
+
+msgid "User updated successfully."
+msgstr "User updated successfully."
+
+msgid "User deleted successfully."
+msgstr "User deleted successfully."
+
+msgid "Select keyword"
+msgstr "Select keyword"
+
+msgid "Smart Category"
+msgstr "Smart Category"
+
+msgid "Remove filter"
+msgstr "Remove filter"
+
+#: templates/Search/search_advanced.html
+msgid "Saved searches"
+msgstr "Saved searches"
+
+#: templates/Search/search_advanced.html
+msgid "Saved"
+msgstr "Saved"
+
+#: templates/Search/search_advanced.html
+msgid "Manage all"
+msgstr "Manage all"
+
+#: templates/Search/search_advanced.html
+msgid "Save this search so you can re-run it any time"
+msgstr "Save this search so you can re-run it any time"
+
+#: templates/Search/search_advanced.html
+msgid "Open in new tab"
+msgstr "Open in new tab"
+
+#: templates/Search/search_advanced.html
+msgid "Quick preview (stays on this page)"
+msgstr "Quick preview (stays on this page)"
+
+#: templates/Search/search_advanced.html
+msgid "Close preview"
+msgstr "Close preview"
+
+#: templates/Search/search_advanced.html
+msgid "Loading preview…"
+msgstr "Loading preview…"
+
+#: templates/Search/search_advanced.html
+msgid "Preview is not available for this file."
+msgstr "Preview is not available for this file."
+
+#: templates/Search/search_advanced.html
+msgid "Open the file in a new tab to view the full content."
+msgstr "Open the file in a new tab to view the full content."
+
+#: templates/Search/search_advanced.html
+msgid "First page text"
+msgstr "First page text"
+
+#: templates/Search/search_advanced.html
+msgid "pages"
+msgstr "pages"
+
+#: templates/Search/search_advanced.html
+msgid "Saved search"
+msgstr "Saved search"
+
+#: templates/Search/search_advanced.html
+msgid "Name this search:"
+msgstr "Name this search:"
+
+#: templates/Search/search_advanced.html
+msgid "Search saved. Find it under Saved searches."
+msgstr "Search saved. Find it under Saved searches."
+
+#: templates/Search/search_advanced.html
+msgid "Could not save this search."
+msgstr "Could not save this search."
+
+#: templates/Search/search_advanced.html
+msgid "Run a search first, then save it here."
+msgstr "Run a search first, then save it here."
+
+#: templates/Search/search_advanced.html
+msgid "Loading saved searches…"
+msgstr "Loading saved searches…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load saved searches."
+msgstr "Could not load saved searches."
+
+#: templates/Search/search_advanced.html
+msgid "No saved searches yet. Run a search and press Save."
+msgstr "No saved searches yet. Run a search and press Save."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search applied"
+msgstr "Saved search applied"
+
+#: templates/Search/search_advanced.html
+msgid "Could not run this saved search."
+msgstr "Could not run this saved search."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search deleted"
+msgstr "Saved search deleted"
+
+#: templates/Search/search_advanced.html
+msgid "Could not delete this saved search."
+msgstr "Could not delete this saved search."
+
+#: templates/Search/search_enhanced.html
+msgid "Sort results by"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Sort order"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Clear recent searches"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "No search history"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Save current search"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "No saved searches"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Pagination"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Matching content:"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Line"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Similar"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Enter a name for this search:"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Delete this saved search?"
+msgstr ""

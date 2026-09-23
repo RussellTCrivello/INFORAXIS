@@ -26,7 +26,7 @@ from Api.services.search_export import (
     SearchExportRequest,
 )
 
-DEFINITION = {"query": "agreement", "scope": "filtered", "format": "csv"}
+DEFINITION = {"query": "agreement", "export_scope": "filtered", "format": "csv"}
 
 
 class TestTheBrowserCannotSupplyTheRows:
@@ -54,11 +54,33 @@ class TestTheBrowserCannotSupplyTheRows:
 class TestTheRequestModel:
     def test_the_scope_must_be_named(self):
         with pytest.raises(ExportRequestError) as error:
-            search_export.parse(dict(DEFINITION, scope="everything"))
+            search_export.parse(dict(DEFINITION, export_scope="everything"))
         message = str(error.value)
-        assert "Unknown scope" in message
+        assert "Unknown export_scope" in message
         for scope in EXPORT_SCOPES:
             assert scope in message
+
+    def test_analyst_scope_is_not_overloaded_with_export_scope(self):
+        with pytest.raises(ExportRequestError) as error:
+            search_export.parse(dict(DEFINITION, scope="filtered"))
+        assert "Unknown export parameters" in str(error.value)
+
+        request = search_export.parse(dict(
+            DEFINITION,
+            analyst_scope="all",
+            file_type=["pdf", "docx"],
+            status=["Read", "Unread"],
+        ))
+        assert request.scope == "filtered"
+        assert request.analyst_scope == "all"
+        assert request.file_types == ("pdf", "docx")
+        assert request.file_statuses == ("Read", "Unread")
+
+    def test_empty_status_selection_is_distinct_from_no_status_filter(self):
+        assert search_export.parse(DEFINITION).file_statuses is None
+        assert search_export.parse(dict(DEFINITION, status=[])).file_statuses == ()
+        with pytest.raises(ExportRequestError):
+            search_export.parse(dict(DEFINITION, status=["Read", "unknown"]))
 
     def test_the_format_must_be_known(self):
         with pytest.raises(ExportRequestError):
@@ -67,14 +89,14 @@ class TestTheRequestModel:
             assert search_export.parse(dict(DEFINITION, format=export_format))
 
     def test_dataset_scope_drops_the_query_and_keeps_the_filters(self):
-        request = search_export.parse(dict(DEFINITION, scope="dataset",
+        request = search_export.parse(dict(DEFINITION, export_scope="dataset",
                                            source_ids=[7]))
         assert request.bounded_query == ""
         assert request.source_ids == (7,)
         assert request.definition["query"] == ""
 
     def test_page_scope_exports_the_page_being_read(self):
-        request = search_export.parse(dict(DEFINITION, scope="page", page=3,
+        request = search_export.parse(dict(DEFINITION, export_scope="page", page=3,
                                            per_page=25))
         assert request.limit_offset == (25, 50)
         assert request.definition["query"] == "agreement"
@@ -185,12 +207,12 @@ class TestTheServedEndpoint:
 
     def test_an_empty_result_set_is_reported_not_fabricated(self, admin_client):
         response = self._post(admin_client, {"query": "zzz-no-such-term-zzz",
-                                             "scope": "filtered", "format": "csv"})
+                                             "export_scope": "filtered", "format": "csv"})
         assert response.status_code == 400
         assert "no results" in response.get_json()["error"].lower()
 
     def test_an_authenticated_export_comes_back_with_its_own_counts(self, admin_client):
-        response = self._post(admin_client, {"query": "", "scope": "dataset",
+        response = self._post(admin_client, {"query": "", "export_scope": "dataset",
                                              "format": "json"})
         assert response.status_code in (200, 400)
         if response.status_code == 400:
@@ -202,7 +224,7 @@ class TestTheServedEndpoint:
         assert payload is not None
 
     def test_the_csv_header_is_the_published_column_set(self, admin_client):
-        response = self._post(admin_client, {"query": "", "scope": "dataset",
+        response = self._post(admin_client, {"query": "", "export_scope": "dataset",
                                              "format": "csv"})
         if response.status_code == 400:
             pytest.skip("the disposable database has no records to export")
@@ -213,7 +235,7 @@ class TestTheServedEndpoint:
 
     def test_an_unauthenticated_client_gets_nothing(self, client):
         response = client.post("/api/search/export",
-                               json={"query": "", "scope": "dataset"})
+                               json={"query": "", "export_scope": "dataset"})
         assert response.status_code in (302, 401, 403), response.status_code
 
     def test_the_route_no_longer_documents_a_client_payload(self):

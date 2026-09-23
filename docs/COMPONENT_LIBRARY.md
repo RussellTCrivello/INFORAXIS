@@ -160,7 +160,7 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Hand-written filter control | `filter_bar` | 14 templates |
 | Browser confirm() dialog | `confirm_dialog` | 0 templates |
 | Hand-written status badge | `status_badge` | 0 badges, in 0 templates |
-| Hand-written badge chip (count, id, method) | — | 68 badges |
+| Hand-written badge chip (count, id, method) | — | 70 badges |
 | Hand-written action bar | `action_toolbar` | 2 templates |
 
 ### Adoption
@@ -191,7 +191,7 @@ Every class a component renders has exactly one owner. **OWNED** means an INFORA
 | Ownership | Classes |
 | --- | --- |
 | OWNED (INFORAXIS) | 81 |
-| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 199 |
+| THIRD_PARTY (Bootstrap, Bootstrap Icons) | 201 |
 | UNKNOWN | 0 |
 
 Third-party stylesheets bundled with the application: `static/css/bootstrap.min.css`, `static/icons/bootstrap-icons.css`.

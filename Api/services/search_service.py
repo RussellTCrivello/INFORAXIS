@@ -263,10 +263,17 @@ class SearchService:
                 except:
                     tsquery_terms = None
             
-            # File type filter
+            # File type filter (one value or a multi-select list).
             if file_type:
-                where_conditions.append("p.file_type = %s")
-                params.append(file_type)
+                file_types = list(file_type) if isinstance(file_type, (list, tuple)) else [file_type]
+                file_types = [str(value) for value in file_types if value]
+                if len(file_types) == 1:
+                    where_conditions.append("p.file_type = %s")
+                    params.append(file_types[0])
+                elif file_types:
+                    placeholders = ','.join(['%s'] * len(file_types))
+                    where_conditions.append(f"p.file_type IN ({placeholders})")
+                    params.extend(file_types)
             
             # Source filter
             if source_id:
@@ -809,7 +816,8 @@ class SearchService:
         use_expansion: bool = True,
         use_fuzzy: bool = True,
         analyst_scope: Optional[str] = None,
-        analyst_category_ids: Optional[List[int]] = None
+        analyst_category_ids: Optional[List[int]] = None,
+        file_statuses: Optional[List[str]] = None
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Advanced search using Google-like algorithms (BM25, query expansion, fuzzy matching).
@@ -839,6 +847,8 @@ class SearchService:
             analyst_category_ids: Filter by analyst (manual) category IDs -
                 a separate dimension from the smart ``category_ids`` filter
                 (FR-1.4 / FR-3.1).
+            file_statuses: Optional ``Read``/``Unread`` file-status filter.
+                ``None`` leaves status unfiltered; an empty list matches none.
         
         Returns:
             Tuple of (results list, total count)
@@ -1114,6 +1124,18 @@ class SearchService:
                 if date_to:
                     where_conditions.append("p.file_date <= %s")
                     params.append(date_to)
+
+                if file_statuses is not None:
+                    allowed_statuses = {'Read', 'Unread'}
+                    statuses = list(dict.fromkeys(file_statuses))
+                    if any(status not in allowed_statuses for status in statuses):
+                        raise ValueError("file_statuses must contain only 'Read' or 'Unread'")
+                    if not statuses:
+                        where_conditions.append("1=0")
+                    else:
+                        placeholders = ','.join(['%s'] * len(statuses))
+                        where_conditions.append(f"p.file_status IN ({placeholders})")
+                        params.extend(statuses)
                 
                 # Handle multiple category_ids
                 if category_ids and len(category_ids) > 0:

@@ -17,6 +17,9 @@ function fileDetailHref(fileId) {
     return `/file/${fileId}${qs ? '?' + qs : ''}`;
 }
 
+let activeAdvancedSearchController = null;
+let advancedSearchRequestSequence = 0;
+
 const searchState = {
     query: '',
     filters: {
@@ -42,6 +45,7 @@ const searchState = {
     analystCategories: [],
     selectedIds: new Set(),
     results: [],
+    lastDefinition: null,
     currentPage: 1,
     resultsPerPage: 20,
     totalResults: 0,
@@ -50,20 +54,29 @@ const searchState = {
     searchHistory: []
 };
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
+async function initializeSearchAdvancedPage() {
     console.log('Advanced Search page loaded - Google-like implementation');
     initializePageData();
     initializeSearch();
     initializeScopeSelector();
-    loadFilterOptions();
-    loadSearchHistory();
     setupEventListeners();
-    // Restore a search encoded in the URL (refresh / returning to this
-    // tab / shared link) and re-run it so results are never lost.
+
+    // History is independent of filter controls; load it without delaying the
+    // initial search. URL/saved-search restoration must wait until every
+    // asynchronous select has its options, or selected IDs are silently lost.
+    void loadSearchHistory();
+    await loadFilterOptions();
     restoreSearchFromUrlAndRun();
     window.addEventListener('popstate', restoreSearchFromUrlAndRun);
-});
+}
+
+export default function init() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeSearchAdvancedPage, { once: true });
+    } else {
+        initializeSearchAdvancedPage();
+    }
+}
 
 // ====================================================================
 // Search-state persistence (the "search is lost" fix, part 1)
@@ -137,9 +150,9 @@ function serializeDefinitionToParams(def) {
 }
 
 /** Reflect the current search into the address bar (replace, not push). */
-function persistSearchToUrl() {
+function persistSearchToUrl(definition = null) {
     try {
-        const qs = serializeDefinitionToParams(currentSearchDefinition()).toString();
+        const qs = serializeDefinitionToParams(definition || currentSearchDefinition()).toString();
         window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
     } catch (e) {
         console.warn('Could not update the address bar', e);
@@ -187,6 +200,11 @@ function applyDefinitionToControls(def) {
     if (wholeEl) wholeEl.checked = !!options.whole_word;
     const fuzzyEl = document.getElementById('useFuzzy');
     if (fuzzyEl) fuzzyEl.checked = options.use_fuzzy !== false;
+    searchState.options = {
+        caseSensitive: !!options.case_sensitive,
+        wholeWord: !!options.whole_word,
+        useFuzzy: options.use_fuzzy !== false
+    };
 
     setMultiSelectValues('fileType', filters.file_type);
     setMultiSelectValues('categoriesSelect', filters.category_id);
@@ -312,7 +330,6 @@ function initializeSearch() {
     let suggestionTimeout;
     mainInput.addEventListener('input', function(e) {
         const query = e.target.value.trim();
-        searchState.query = query;
         
         // Show/hide clear button
         const clearBtn = document.getElementById('clearSearchBtn');
@@ -377,6 +394,20 @@ function setupEventListeners() {
         const element = document.getElementById(id);
         if (element) {
             element.addEventListener('change', updateFilterChips);
+        }
+    });
+
+    const suggestionsList = document.getElementById('suggestionsList');
+    suggestionsList?.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-suggestion]');
+        if (item && suggestionsList.contains(item)) selectSuggestion(item.dataset.suggestion || '');
+    });
+
+    const filterChips = document.getElementById('filtersChips');
+    filterChips?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-filter-chip]');
+        if (button && filterChips.contains(button)) {
+            removeFilterChip(button.dataset.filterType || '', button.dataset.filterId || '');
         }
     });
 }
@@ -503,20 +534,19 @@ function displaySuggestions(suggestions, query) {
     }
     
     list.innerHTML = suggestions.map(suggestion => `
-        <div class="suggestion-item" onclick="selectSuggestion('${suggestion.replace(/'/g, "\\'")}')">
-            <i class="bi bi-search"></i>
+        <button type="button" class="suggestion-item" data-suggestion="${escapeAttr(suggestion)}">
+            <i class="bi bi-search" aria-hidden="true"></i>
             <span>${highlightMatch(suggestion, query)}</span>
-        </div>
+        </button>
     `).join('');
     
     dropdown.classList.add('active');
+    document.getElementById('mainSearchInput')?.setAttribute('aria-expanded', 'true');
 }
 
-// Highlight match in suggestion
+// Render suggestion text safely while marking query matches.
 function highlightMatch(text, query) {
-    if (!query) return text;
-    const regex = new RegExp(`(${query})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
+    return highlightQueryTerms(text, query);
 }
 
 // Select suggestion
@@ -533,6 +563,7 @@ function hideSuggestions() {
     if (dropdown) {
         dropdown.classList.remove('active');
     }
+    document.getElementById('mainSearchInput')?.setAttribute('aria-expanded', 'false');
 }
 
 // Update filter chips
@@ -543,17 +574,18 @@ function updateFilterChips() {
     const fileTypes = Array.from(document.getElementById('fileType').selectedOptions).map(o => o.value);
     if (fileTypes.length > 0) {
         fileTypes.forEach(type => {
-            if (type) chips.push({ type: 'fileType', label: 'File Type', value: type });
+            if (type) chips.push({ type: 'fileType', label: tPage('fileType', 'File Type'), value: type, id: type });
         });
     }
     
     // Categories (smart taxonomy - separate from analyst categories, FR-1.4)
-    const categories = Array.from(document.getElementById('categoriesSelect').selectedOptions).map(o => o.value);
+    const categoriesSelect = document.getElementById('categoriesSelect');
+    const categories = Array.from(categoriesSelect.selectedOptions).map(o => o.value);
     if (categories.length > 0) {
         categories.forEach(catId => {
-            const option = document.getElementById('categoriesSelect').querySelector(`option[value="${catId}"]`);
+            const option = Array.from(categoriesSelect.options).find(candidate => candidate.value === catId);
             if (option) {
-                chips.push({ type: 'category', label: 'Smart Category', value: option.textContent, id: catId });
+                chips.push({ type: 'category', label: tPage('smartCategory', 'Smart Category'), value: option.textContent, id: catId });
             }
         });
     }
@@ -562,28 +594,30 @@ function updateFilterChips() {
     const analystFilter = document.getElementById('analystCategoriesFilter');
     if (analystFilter) {
         Array.from(analystFilter.selectedOptions).forEach(opt => {
-            chips.push({ type: 'analystCategory', label: 'Analyst Category', value: opt.textContent, id: opt.value });
+            chips.push({ type: 'analystCategory', label: tPage('analystCategory', 'Analyst Category'), value: opt.textContent, id: opt.value });
         });
     }
     
     // Sources
-    const sources = Array.from(document.getElementById('sourcesSelect').selectedOptions).map(o => o.value);
+    const sourcesSelect = document.getElementById('sourcesSelect');
+    const sources = Array.from(sourcesSelect.selectedOptions).map(o => o.value);
     if (sources.length > 0) {
         sources.forEach(sourceId => {
-            const option = document.getElementById('sourcesSelect').querySelector(`option[value="${sourceId}"]`);
+            const option = Array.from(sourcesSelect.options).find(candidate => candidate.value === sourceId);
             if (option) {
-                chips.push({ type: 'source', label: 'Source', value: option.textContent, id: sourceId });
+                chips.push({ type: 'source', label: tPage('source', 'Source'), value: option.textContent, id: sourceId });
             }
         });
     }
     
     // Sides
-    const sides = Array.from(document.getElementById('sidesSelect').selectedOptions).map(o => o.value);
+    const sidesSelect = document.getElementById('sidesSelect');
+    const sides = Array.from(sidesSelect.selectedOptions).map(o => o.value);
     if (sides.length > 0) {
         sides.forEach(sideId => {
-            const option = document.getElementById('sidesSelect').querySelector(`option[value="${sideId}"]`);
+            const option = Array.from(sidesSelect.options).find(candidate => candidate.value === sideId);
             if (option) {
-                chips.push({ type: 'side', label: 'Side', value: option.textContent, id: sideId });
+                chips.push({ type: 'side', label: tPage('side', 'Side'), value: option.textContent, id: sideId });
             }
         });
     }
@@ -592,19 +626,21 @@ function updateFilterChips() {
     const dateFrom = document.getElementById('dateFrom').value;
     const dateTo = document.getElementById('dateTo').value;
     if (dateFrom) {
-        chips.push({ type: 'dateFrom', label: 'From', value: dateFrom });
+        chips.push({ type: 'dateFrom', label: tPage('from', 'From'), value: dateFrom });
     }
     if (dateTo) {
-        chips.push({ type: 'dateTo', label: 'To', value: dateTo });
+        chips.push({ type: 'dateTo', label: tPage('to', 'To'), value: dateTo });
     }
     
     // Status
     const statusRead = document.getElementById('statusRead').checked;
     const statusUnread = document.getElementById('statusUnread').checked;
     if (statusRead && !statusUnread) {
-        chips.push({ type: 'status', label: 'Status', value: 'Analyzed' });
+        // Read is the default status, so it is not shown as an active filter.
     } else if (!statusRead && statusUnread) {
-        chips.push({ type: 'status', label: 'Status', value: 'Pending' });
+        chips.push({ type: 'status', label: tPage('status', 'Status'), value: tPage('pending', 'Pending') });
+    } else if (!statusRead && !statusUnread) {
+        chips.push({ type: 'status', label: tPage('status', 'Status'), value: tPage('noStatusesSelected', 'No statuses selected') });
     }
     
     // Display chips
@@ -630,14 +666,18 @@ function displayFilterChips(chips) {
     }
     
     container.style.display = 'block';
-    chipsEl.innerHTML = chips.map((chip, index) => {
+    chipsEl.innerHTML = chips.map((chip) => {
         const chipClass = chip.priority ? 'filter-chip priority-chip' : 'filter-chip';
+        const type = escapeAttr(chip.type || '');
+        const id = escapeAttr(chip.id == null ? '' : chip.id);
         return `
             <div class="${chipClass}">
-                <span class="chip-label">${chip.label}:</span>
-                <span class="chip-value">${chip.value}</span>
-                <button type="button" class="chip-remove" onclick="removeFilterChip(${index}, '${chip.type}', '${chip.id || ''}', ${chip.priority || false})">
-                    <i class="bi bi-x"></i>
+                <span class="chip-label">${escapeHtml(chip.label)}:</span>
+                <span class="chip-value">${escapeHtml(chip.value)}</span>
+                <button type="button" class="chip-remove" data-remove-filter-chip="true"
+                        data-filter-type="${type}" data-filter-id="${id}"
+                        aria-label="${escapeAttr(tPage('removeFilter', 'Remove filter'))}">
+                    <i class="bi bi-x" aria-hidden="true"></i>
                 </button>
             </div>
         `;
@@ -645,35 +685,35 @@ function displayFilterChips(chips) {
 }
 
 // Remove filter chip
-function removeFilterChip(index, type, id) {
+function removeFilterChip(type, id) {
     {
         // Handle regular filters
         switch (type) {
             case 'fileType':
                 const fileTypeSelect = document.getElementById('fileType');
-                const fileTypeOption = fileTypeSelect.querySelector(`option[value="${id}"]`);
+                const fileTypeOption = Array.from(fileTypeSelect.options).find(option => option.value === String(id));
                 if (fileTypeOption) fileTypeOption.selected = false;
                 break;
             case 'category':
                 const categorySelect = document.getElementById('categoriesSelect');
-                const categoryOption = categorySelect.querySelector(`option[value="${id}"]`);
+                const categoryOption = Array.from(categorySelect.options).find(option => option.value === String(id));
                 if (categoryOption) categoryOption.selected = false;
                 break;
             case 'analystCategory':
                 const analystFilter = document.getElementById('analystCategoriesFilter');
                 if (analystFilter) {
-                    const analystOption = analystFilter.querySelector(`option[value="${id}"]`);
+                    const analystOption = Array.from(analystFilter.options).find(option => option.value === String(id));
                     if (analystOption) analystOption.selected = false;
                 }
                 break;
             case 'source':
                 const sourceSelect = document.getElementById('sourcesSelect');
-                const sourceOption = sourceSelect.querySelector(`option[value="${id}"]`);
+                const sourceOption = Array.from(sourceSelect.options).find(option => option.value === String(id));
                 if (sourceOption) sourceOption.selected = false;
                 break;
             case 'side':
                 const sideSelect = document.getElementById('sidesSelect');
-                const sideOption = sideSelect.querySelector(`option[value="${id}"]`);
+                const sideOption = Array.from(sideSelect.options).find(option => option.value === String(id));
                 if (sideOption) sideOption.selected = false;
                 break;
             case 'dateFrom':
@@ -718,101 +758,131 @@ function toggleFiltersPanel() {
     }
 }
 
+// Map the user-facing sort choices to the API's stable field/direction pair.
+function getAdvancedSortDefinition(choice = document.getElementById('sortBy')?.value || 'relevance') {
+    const sortMap = {
+        relevance: { sort_by: 'relevance', sort_order: 'desc' },
+        date: { sort_by: 'date', sort_order: 'desc' },
+        date_old: { sort_by: 'date', sort_order: 'asc' },
+        name: { sort_by: 'name', sort_order: 'asc' },
+        size: { sort_by: 'size', sort_order: 'desc' },
+    };
+    return sortMap[choice] || sortMap.relevance;
+}
+
 // Execute advanced search
 async function executeAdvancedSearch() {
     const startTime = performance.now();
-    const query = document.getElementById('mainSearchInput').value.trim();
-    
+    const query = document.getElementById('mainSearchInput')?.value.trim() || '';
+    const filters = collectFilters();
+
     if (!query && getActiveFiltersCount() === 0) {
         alert('Please enter a search query or select filters');
         return;
     }
-    
-    // Hide suggestions
-    hideSuggestions();
 
-    // A new search invalidates the previous result selection (FR-1.2)
-    searchState.selectedIds = new Set();
-    updateSelectionBar();
-
-    // Show loading
-    showLoading();
-    
-    // Collect filters. Source/side scoping lives in the advanced-filters
-    // panel (the former "Search Within" block was merged into it).
-    const filters = collectFilters();
-    const sourceIds = filters.source_id;
-    const sideIds = filters.side_id;
-    
-    // Show warning if searching without source/side filter (for large databases)
+    // Confirm before changing selection or entering a loading state. Returning
+    // here must leave the previous results usable, not strand a spinner.
     if (!filters.source_id.length && !filters.side_id.length && !query) {
         const confirmSearch = confirm(tPage('largeSearchConfirm',
             'Searching without a source or side filter may be slow on large datasets. Continue?'));
         if (!confirmSearch) return;
     }
-    
-    // Search options
+
+    hideSuggestions();
+    searchState.query = query;
+
+    // A new search invalidates the previous result selection (FR-1.2).
+    searchState.selectedIds = new Set();
+    updateSelectionBar();
+
+    // Cancel any previous request so a slower response cannot overwrite the
+    // newer query/filter selection.
+    activeAdvancedSearchController?.abort();
+    const controller = new AbortController();
+    activeAdvancedSearchController = controller;
+    const requestSequence = ++advancedSearchRequestSequence;
+    showLoading();
+
     const options = {
-        case_sensitive: document.getElementById('caseSensitive').checked,
-        whole_word: document.getElementById('wholeWord').checked,
-        use_fuzzy: document.getElementById('useFuzzy').checked
+        case_sensitive: document.getElementById('caseSensitive')?.checked || false,
+        whole_word: document.getElementById('wholeWord')?.checked || false,
+        use_fuzzy: document.getElementById('useFuzzy')?.checked !== false
     };
-    
+    searchState.options = {
+        caseSensitive: options.case_sensitive,
+        wholeWord: options.whole_word,
+        useFuzzy: options.use_fuzzy
+    };
+    const sort = getAdvancedSortDefinition();
+    const definition = {
+        query,
+        scope: searchState.scope,
+        sort_by: document.getElementById('sortBy')?.value || 'relevance',
+        page: searchState.currentPage,
+        options,
+        filters
+    };
+
     try {
-        // Use advanced search API
         const params = new URLSearchParams({
-            query: query || '',
-            page: searchState.currentPage,
-            per_page: searchState.resultsPerPage,
+            query,
+            page: String(searchState.currentPage),
+            per_page: String(searchState.resultsPerPage),
             use_advanced: 'true',
+            use_fulltext: 'true',
             use_bm25: 'true',
             use_expansion: 'true',
             use_fuzzy: options.use_fuzzy ? 'true' : 'false',
-            sort_by: document.getElementById('sortBy').value || 'relevance',
-            sort_order: 'desc'
+            sort_by: sort.sort_by,
+            sort_order: sort.sort_order
         });
 
         // Analyst-categorization search scope (FR-2.x). Always sent so the
-        // server can persist the selection in the session (FR-2.3) and apply
-        // the default "uncategorized only" behavior (FR-2.1).
+        // server can persist the selection in the session (FR-2.3).
         params.set('scope', searchState.scope);
 
-        // Add filters
         if (filters.file_type.length > 0) {
             filters.file_type.forEach(type => params.append('file_type', type));
         }
         if (filters.category_id.length > 0) {
-            filters.category_id.forEach(id => params.append('category_id', id));
+            filters.category_id.forEach(id => params.append('category_id', String(id)));
         }
-        // Analyst-category filter - a separate parameter from the smart
-        // category_id filter above (FR-1.4 separation).
         if (filters.analyst_category_id.length > 0) {
-            filters.analyst_category_id.forEach(id => params.append('analyst_category_id', id));
+            filters.analyst_category_id.forEach(id => params.append('analyst_category_id', String(id)));
         }
         if (filters.source_id.length > 0) {
-            filters.source_id.forEach(id => params.append('source_id', id));
+            filters.source_id.forEach(id => params.append('source_id', String(id)));
         }
         if (filters.side_id.length > 0) {
-            filters.side_id.forEach(id => params.append('side_id', id));
+            filters.side_id.forEach(id => params.append('side_id', String(id)));
         }
         if (filters.date_from) params.append('date_from', filters.date_from);
         if (filters.date_to) params.append('date_to', filters.date_to);
-        
-        const response = await fetch(`/api/search?${params.toString()}`);
-        
+
+        // The status checkboxes represent paths.file_status (Read/Unread).
+        // Send an explicit sentinel when both are cleared so the API returns
+        // no statuses rather than silently dropping the filter.
+        if (filters.status.length > 0) {
+            filters.status.forEach(status => params.append('status', status));
+        } else {
+            params.append('status', 'none');
+        }
+
+        const response = await fetch(`/api/search?${params.toString()}`, {
+            signal: controller.signal
+        });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
-        const endTime = performance.now();
-        searchState.searchTime = ((endTime - startTime) / 1000).toFixed(2);
-        
-        // Process results
-        if (data.results && Array.isArray(data.results)) {
+        if (controller.signal.aborted || requestSequence !== advancedSearchRequestSequence) return;
+
+        searchState.searchTime = ((performance.now() - startTime) / 1000).toFixed(2);
+        if (Array.isArray(data.results)) {
             searchState.results = data.results;
-            searchState.totalResults = data.pagination?.total || data.results.length;
+            searchState.totalResults = Number(data.pagination?.total) || data.results.length;
             displayResults(data.results, data.pagination);
         } else {
             searchState.results = [];
@@ -820,25 +890,22 @@ async function executeAdvancedSearch() {
             displayResults([], null);
         }
 
-        // Keep the address bar pointing at exactly this search so a
-        // refresh, a bookmark or a return to this tab restores it.
-        persistSearchToUrl();
-        
-        // Note: Search history is already saved by the API endpoint
-        // This is a backup save (optional, won't cause errors if it fails)
-        if (query) {
-            // Only save if API didn't already save it (check response)
-            // For now, skip to avoid duplicate saves - API already handles it
-            // saveToSearchHistory(query, filters);
-        }
-        
+        // Keep the address bar and exports tied to the exact definition that
+        // produced these rows, not controls the reader may have since edited.
+        searchState.lastDefinition = definition;
+        persistSearchToUrl(definition);
     } catch (error) {
+        if (error.name === 'AbortError' || requestSequence !== advancedSearchRequestSequence) return;
         console.error('Search error:', error);
         alert(tPage('searchError', 'Search error') + ': ' + error.message);
         searchState.results = [];
+        searchState.totalResults = 0;
         displayResults([], null);
     } finally {
-        hideLoading();
+        if (requestSequence === advancedSearchRequestSequence) {
+            activeAdvancedSearchController = null;
+            hideLoading();
+        }
     }
 }
 
@@ -926,6 +993,9 @@ function displayResults(results, pagination) {
     }
     
     container.innerHTML = results.map(result => {
+        if (!result || typeof result !== 'object') return '';
+        const fileId = Number(result.id);
+        if (!Number.isSafeInteger(fileId) || fileId < 1) return '';
         const snippet = result.snippet || result.file_name || '';
         const highlightedSnippet = highlightQueryTerms(snippet, searchState.query);
 
@@ -953,21 +1023,21 @@ function displayResults(results, pagination) {
         ` : '';
 
         return `
-            <div class="result-item ${searchState.selectedIds.has(result.id) ? 'result-selected' : ''}" data-file-id="${result.id}">
+            <div class="result-item ${searchState.selectedIds.has(fileId) ? 'result-selected' : ''}" data-file-id="${fileId}">
                 <div class="result-select" onclick="event.stopPropagation()">
                     <input class="form-check-input result-checkbox" type="checkbox"
-                           ${searchState.selectedIds.has(result.id) ? 'checked' : ''}
-                           onchange="toggleResultSelection(${result.id}, this.checked)"
+                           ${searchState.selectedIds.has(fileId) ? 'checked' : ''}
+                           onchange="toggleResultSelection(${fileId}, this.checked)"
                            title="${escapeAttr(tPage('selectForCategorization', 'Select for manual categorization'))}"
                            aria-label="${escapeAttr(tPage('selectFileForCategorization', 'Select {file} for manual categorization').replace('{file}', result.file_name || 'file'))}">
                 </div>
-                <div class="result-body" onclick="openResultInNewTab(event, ${result.id})"
+                <div class="result-body" onclick="openResultInNewTab(event, ${fileId})"
                      title="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}">
                     <div class="result-title-row">
                         <span class="result-file-icon ${typeInfo.css}" title="${escapeAttr(fileType || '')}">
                             <i class="bi ${typeInfo.icon}" aria-hidden="true"></i>
                         </span>
-                        <a class="result-title result-title-link" href="${fileDetailHref(result.id)}"
+                        <a class="result-title result-title-link" href="${fileDetailHref(fileId)}"
                            target="_blank" rel="noopener"
                            onclick="event.stopPropagation()">${escapeHtml(result.file_name || tPage('untitled', 'Untitled'))}</a>
                         ${fileType ? `<span class="result-type-chip ${typeInfo.css}">${escapeHtml(fileType)}</span>` : ''}
@@ -998,13 +1068,13 @@ function displayResults(results, pagination) {
                     ` : ''}
                     <div class="result-hover-actions">
                         <button type="button" class="result-action-btn result-action-preview"
-                                onclick="showFilePreview(${result.id}); event.stopPropagation();"
+                                onclick="showFilePreview(${fileId}); event.stopPropagation();"
                                 title="${escapeAttr(tPage('preview', 'Quick preview (stays on this page)'))}"
                                 aria-label="${escapeAttr(tPage('preview', 'Quick preview (stays on this page)'))}">
                             <i class="bi bi-eye" aria-hidden="true"></i>
                         </button>
                         <button type="button" class="result-action-btn result-action-open"
-                                onclick="openResultInNewTab(event, ${result.id})"
+                                onclick="openResultInNewTab(event, ${fileId})"
                                 title="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}"
                                 aria-label="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}">
                             <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
@@ -1242,20 +1312,24 @@ function showAnalystToast(message) {
     toast._hideTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
 }
 
-// Highlight query terms in text
+// Escape and highlight query terms without ever treating source text as HTML.
 function highlightQueryTerms(text, query) {
-    if (!query || !text) return text;
-    
-    // Parse query for terms (handle quotes, AND, OR, NOT)
-    const terms = parseQueryTerms(query);
-    
-    let highlighted = text;
-    terms.forEach(term => {
-        const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-        highlighted = highlighted.replace(regex, '<mark>$1</mark>');
-    });
-    
-    return highlighted;
+    const source = String(text == null ? '' : text);
+    const terms = parseQueryTerms(String(query || '')).filter(Boolean);
+    if (!terms.length) return escapeHtml(source);
+
+    const alternatives = [...new Set(terms)]
+        .sort((a, b) => b.length - a.length)
+        .map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const matcher = new RegExp(`(${alternatives.join('|')})`, 'gi');
+    let output = '';
+    let lastIndex = 0;
+    for (const match of source.matchAll(matcher)) {
+        output += escapeHtml(source.slice(lastIndex, match.index));
+        output += `<mark>${escapeHtml(match[0])}</mark>`;
+        lastIndex = match.index + match[0].length;
+    }
+    return output + escapeHtml(source.slice(lastIndex));
 }
 
 // Parse query terms (handle quotes, operators)
@@ -1322,7 +1396,9 @@ function getActiveFiltersCount() {
     count += document.getElementById('sidesSelect').selectedOptions.length;
     if (document.getElementById('dateFrom').value) count++;
     if (document.getElementById('dateTo').value) count++;
-    if (!document.getElementById('statusRead').checked || document.getElementById('statusUnread').checked) count++;
+    // Read-only is the default; both checked means all statuses (no filter).
+    // An explicit unread-only or empty selection remains an active filter.
+    if (!document.getElementById('statusRead').checked) count++;
     return count;
 }
 
@@ -1433,23 +1509,36 @@ async function exportResults(format = 'csv') {
         return;
     }
 
-    // The definition of the query, not its rows. The server re-runs it and
-    // decides what the file contains; the browser never supplies the data.
-    const filters = collectFilters();
+    // The definition that produced the visible rows, not the current controls
+    // and never the browser's result array. The server re-runs this query.
+    const definition = searchState.lastDefinition;
+    if (!definition) {
+        Toast.info(tPage('nothingToExport', 'No results to export.'));
+        return;
+    }
+    const filters = definition.filters || {};
+    const options = definition.options || {};
+    const sort = getAdvancedSortDefinition(definition.sort_by);
     const payload = {
-        query: document.getElementById('mainSearchInput')?.value || '',
-        scope: 'filtered',
-        format: format,
-        // The same sort the screen is showing, read from the same control.
-        sort_by: document.getElementById('sortBy').value || 'relevance',
-        sort_order: 'desc',
-        source_ids: filters.source_id,
-        side_ids: filters.side_id,
-        category_ids: filters.category_id,
-        analyst_category_ids: filters.analyst_category_id,
-        file_type: filters.file_type.length === 1 ? filters.file_type[0] : null,
-        date_from: filters.date_from,
-        date_to: filters.date_to,
+        query: definition.query || '',
+        export_scope: 'filtered',
+        analyst_scope: definition.scope || 'uncategorized',
+        format,
+        sort_by: sort.sort_by,
+        sort_order: sort.sort_order,
+        source_ids: filters.source_id || [],
+        side_ids: filters.side_id || [],
+        category_ids: filters.category_id || [],
+        analyst_category_ids: filters.analyst_category_id || [],
+        file_type: filters.file_type || [],
+        status: filters.status || [],
+        date_from: filters.date_from || null,
+        date_to: filters.date_to || null,
+        use_advanced: true,
+        use_fulltext: true,
+        use_bm25: true,
+        use_expansion: true,
+        use_fuzzy: options.use_fuzzy !== false,
     };
 
     try {
@@ -1497,14 +1586,19 @@ function printResults() {
         return;
     }
     
-    const query = document.getElementById('mainSearchInput')?.value || 'Search Results';
+    const query = searchState.lastDefinition?.query || 'Search Results';
     const printWindow = window.open('', '_blank');
-    
+    if (!printWindow) {
+        Toast.error(tPage('printWindowBlocked', 'Allow pop-ups to print these results.'));
+        return;
+    }
+    const safeQuery = escapeHtml(query);
+
     const printContent = `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Search Results - ${query}</title>
+    <title>Search Results - ${safeQuery}</title>
     <style>
         @media print {
             @page { margin: 1cm; }
@@ -1531,8 +1625,9 @@ function printResults() {
     </style>
 </head>
 <body>
-    <h1>Search Results: ${escapeHtml(query)}</h1>
+    <h1>Search Results: ${safeQuery}</h1>
     <div class="header-info">
+        <p><strong>Results on this page:</strong> ${searchState.results.length.toLocaleString()}</p>
         <p><strong>Total Results:</strong> ${searchState.totalResults.toLocaleString()}</p>
         <p><strong>Search Time:</strong> ${searchState.searchTime} seconds</p>
         <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
@@ -1733,9 +1828,8 @@ function renderPreviewPayload(data, fileId) {
         const note = type === 'pdf' && data.page_count
             ? `<div class="sfp-note">${escapeHtml(tPage('pdfFirstPage', 'First page text'))} · ${data.page_count} ${escapeHtml(tPage('pages', 'pages'))}</div>`
             : '';
-        // Escape first, then highlight — the highlighter writes <mark> tags.
-        const escaped = escapeHtml(String(data.data));
-        body.innerHTML = `${note}<pre class="sfp-text">${highlightQueryTerms(escaped, searchState.query)}</pre>`;
+        // The highlighter escapes source text and emits only its own <mark> tags.
+        body.innerHTML = `${note}<pre class="sfp-text">${highlightQueryTerms(String(data.data), searchState.query)}</pre>`;
     } else if (type === 'unsupported') {
         body.innerHTML = `
             <div class="sfp-message">
@@ -1956,8 +2050,6 @@ if (typeof window !== 'undefined') {
     window.resetAllFilters = resetAllFilters;
     window.clearAllFilters = clearAllFilters;
     window.toggleFiltersPanel = toggleFiltersPanel;
-    window.removeFilterChip = removeFilterChip;
-    window.selectSuggestion = selectSuggestion;
     window.feelingLucky = feelingLucky;
     window.sortResults = sortResults;
     window.exportResults = exportResults;

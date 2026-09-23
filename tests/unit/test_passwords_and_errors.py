@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.security.passwords import hash_password, verify_password
+from core.security.service import AuthError, AuthService
 from core.errors import new_correlation_id, sanitize_message
 
 
@@ -32,6 +33,19 @@ class TestPasswords:
         assert verify_password("x", "not-a-hash") is False
         assert verify_password("x", "") is False
         assert verify_password("", "somesalt$hash") is False
+
+    @pytest.mark.parametrize("configured", ["invalid", "0", "7", "129", "-2"])
+    def test_invalid_minimum_uses_the_secure_default(self, monkeypatch, configured):
+        monkeypatch.setenv("PASSWORD_MIN_LENGTH", configured)
+        with pytest.raises(AuthError, match="12 characters"):
+            AuthService._validate_password_strength("x" * 10)
+        AuthService._validate_password_strength("x" * 12)
+
+    def test_valid_minimum_is_enforced(self, monkeypatch):
+        monkeypatch.setenv("PASSWORD_MIN_LENGTH", "8")
+        AuthService._validate_password_strength("x" * 8)
+        with pytest.raises(AuthError, match="8 characters"):
+            AuthService._validate_password_strength("x" * 7)
 
 
 class TestCorrelationIds:

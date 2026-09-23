@@ -204,13 +204,30 @@
             <div class="ing-inline-form d-none" id="sourceForm">
               <div class="ing-inline-title">{{ _('New source') }}</div>
               <div class="ing-inline-grid">
-                <input id="nsName" class="ing-input" placeholder="{{ _('Name *') }}">
-                <input id="nsJob" class="ing-input" placeholder="{{ _('Job / role *') }}">
-                <input id="nsCountry" class="ing-input" placeholder="{{ _('Country *') }}">
-                <input id="nsCity" class="ing-input" placeholder="{{ _('City') }}">
-                <input id="nsImportance" class="ing-input" type="number" step="0.1" min="0" max="1" value="0.5"
-                       placeholder="{{ _('Importance 0.0-1.0') }}">
-                <input id="nsDesc" class="ing-input" placeholder="{{ _('Description') }}">
+                <div class="ing-option">
+                  <label class="ing-label" for="nsName">{{ _('Name') }} <span aria-hidden="true">*</span></label>
+                  <input id="nsName" class="ing-input" placeholder="{{ _('Source name') }}" required>
+                </div>
+                <div class="ing-option">
+                  <label class="ing-label" for="nsJob">{{ _('Job / role') }} <span aria-hidden="true">*</span></label>
+                  <input id="nsJob" class="ing-input" placeholder="{{ _('Job or role') }}" required>
+                </div>
+                <div class="ing-option">
+                  <label class="ing-label" for="nsCountry">{{ _('Country') }} <span aria-hidden="true">*</span></label>
+                  <input id="nsCountry" class="ing-input" placeholder="{{ _('Country') }}" required>
+                </div>
+                <div class="ing-option">
+                  <label class="ing-label" for="nsCity">{{ _('City') }}</label>
+                  <input id="nsCity" class="ing-input" placeholder="{{ _('City') }}">
+                </div>
+                <div class="ing-option">
+                  <label class="ing-label" for="nsImportance">{{ _('Importance (0–1)') }}</label>
+                  <input id="nsImportance" class="ing-input" type="number" step="0.1" min="0" max="1" value="0.5">
+                </div>
+                <div class="ing-option">
+                  <label class="ing-label" for="nsDesc">{{ _('Description') }}</label>
+                  <input id="nsDesc" class="ing-input" placeholder="{{ _('Description') }}">
+                </div>
               </div>
               <div class="ing-inline-actions">
                 <button type="button" class="ing-primary-btn ing-small" id="btnCreateSource">{{ _('Create source') }}</button>
@@ -235,9 +252,14 @@
             <div class="ing-inline-form d-none" id="sideForm">
               <div class="ing-inline-title">{{ _('New side') }}</div>
               <div class="ing-inline-grid">
-                <input id="nsdName" class="ing-input" placeholder="{{ _('Name *') }}">
-                <input id="nsdImportance" class="ing-input" type="number" step="0.1" min="0" max="1" value="0.5"
-                       placeholder="{{ _('Importance 0.0-1.0') }}">
+                <div class="ing-option">
+                  <label class="ing-label" for="nsdName">{{ _('Name') }} <span aria-hidden="true">*</span></label>
+                  <input id="nsdName" class="ing-input" placeholder="{{ _('Side name') }}" required>
+                </div>
+                <div class="ing-option">
+                  <label class="ing-label" for="nsdImportance">{{ _('Importance (0–1)') }}</label>
+                  <input id="nsdImportance" class="ing-input" type="number" step="0.1" min="0" max="1" value="0.5">
+                </div>
               </div>
               <div class="ing-inline-actions">
                 <button type="button" class="ing-primary-btn ing-small" id="btnCreateSide">{{ _('Create side') }}</button>
