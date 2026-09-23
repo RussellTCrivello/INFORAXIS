@@ -331,6 +331,14 @@ REGISTRY: Tuple[Interface, ...] = (
         help_topic="settings/interfaces",
         kind=InterfaceKind.SECTION,
     ),
+    _if(
+        "translation_manager", "Translation Management",
+        "Review and manage localized strings across every screen.",
+        Domain.SETTINGS, "translations.translation_management_page", "bi-translate",
+        required_role="admin",
+        help_topic="settings/translations",
+        keyboard_shortcut="g t",
+    ),
 
     # -- INTERNAL ---------------------------------------------------------
     _if(

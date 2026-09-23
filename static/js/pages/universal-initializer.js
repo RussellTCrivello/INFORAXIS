@@ -70,6 +70,7 @@ const pageHandlers = {
     'email-words': () => import('./email-words-page.js'),
     'archives': () => import('./archives-page.js'),
     'path-analysis': () => import('./path-analysis-page.js'),
+    'translation-management': () => import('./translation-management-page.js'),
     'default': () => Promise.resolve({ default: () => {} }) // No-op for default
 };
 

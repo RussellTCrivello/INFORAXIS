@@ -9498,3 +9498,171 @@ msgstr "הזן שם עבור חיפוש זה:"
 #: templates/Search/search_advanced.html
 msgid "Delete this saved search?"
 msgstr "למחוק חיפוש שמור זה?"
+
+#: templates/Settings/translation_manager.html:147
+msgid "A translation cannot be blank."
+msgstr "תרגום לא יכול להיות ריק."
+
+#: templates/Settings/translation_manager.html:18
+msgid "Administration"
+msgstr "ניהול"
+
+#: templates/Settings/translation_manager.html:49
+msgid "All screens"
+msgstr "כל המסכים"
+
+#: templates/Settings/translation_manager.html:27
+msgid "Back to Settings"
+msgstr "חזרה להגדרות"
+
+#: templates/Settings/translation_manager.html:80
+msgid "Catalog strings"
+msgstr "מחרוזות בקטלוג"
+
+#: templates/Settings/translation_manager.html:79
+msgid "Catalog summary"
+msgstr "סיכום הקטלוג"
+
+#: templates/Settings/translation_manager.html:148
+msgid "Catalog unavailable"
+msgstr "הקטלוג אינו זמין"
+
+#: templates/Settings/translation_manager.html:149
+msgid "Could not load translations."
+msgstr "לא ניתן לטעון את התרגומים."
+
+#: templates/Settings/translation_manager.html:150
+msgid "Could not save translations."
+msgstr "לא ניתן לשמור את התרגומים."
+
+#: templates/Settings/translation_manager.html:151
+msgid "Custom override"
+msgstr "תרגום מותאם אישית"
+
+#: templates/Settings/translation_manager.html:70 templates/Settings/translation_manager.html:83
+msgid "Custom overrides"
+msgstr "תרגומים מותאמים אישית"
+
+#: templates/Settings/translation_manager.html:152
+msgid "Discard unsaved changes?"
+msgstr "למחוק את השינויים שלא נשמרו?"
+
+#: templates/Settings/translation_manager.html:153
+msgid "Fix blank translations and placeholders before saving."
+msgstr "יש להשלים תרגומים ריקים ולתקן מצייני מקום לפני השמירה."
+
+#: templates/Settings/translation_manager.html:154
+msgid "Keep every named placeholder from the source text."
+msgstr "יש לשמור על כל מצייני המקום בעלי השמות בדיוק כפי שהם מופיעים בטקסט המקור."
+
+#: templates/Settings/translation_manager.html:155
+msgid "Keep named placeholders unchanged."
+msgstr "יש להשאיר את מצייני המקום בעלי השמות ללא שינוי."
+
+#: templates/Settings/translation_manager.html:90 templates/Settings/translation_manager.html:119 templates/Settings/translation_manager.html:156
+msgid "Loading translations…"
+msgstr "התרגומים נטענים…"
+
+#: templates/Settings/translation_manager.html:69 templates/Settings/translation_manager.html:82 templates/Settings/translation_manager.html:158
+msgid "Missing"
+msgstr "חסר"
+
+#: templates/Settings/translation_manager.html:114
+msgid "No strings match these filters"
+msgstr "אין מחרוזות התואמות למסננים האלה."
+
+#: templates/Settings/translation_manager.html:161
+msgid "Reset to catalog translation"
+msgstr "שחזור התרגום מהקטלוג"
+
+#: templates/Settings/translation_manager.html:23
+msgid "Review and edit the localized text used throughout every screen."
+msgstr "סקירה ועריכה של הטקסט המתורגם בכל המסכים."
+
+#: templates/Settings/translation_manager.html:107
+msgid "Row actions"
+msgstr "פעולות שורה"
+
+#: templates/Settings/translation_manager.html:94 templates/Settings/translation_manager.html:126
+msgid "Save changes"
+msgstr "שמירת שינויים"
+
+#: templates/Settings/translation_manager.html:33
+msgid "Saved edits take effect across server-rendered and browser-rendered screens. Reset a row to return to the checked-in catalog translation."
+msgstr "השינויים שנשמרו יחולו במסכים המרונדרים בשרת ובדפדפן. איפוס שורה מחזיר את התרגום שבקטלוג."
+
+#: templates/Settings/translation_manager.html:47
+msgid "Screen or source file"
+msgstr "מסך או קובץ מקור"
+
+#: templates/Settings/translation_manager.html:89
+msgid "Screen translations"
+msgstr "תרגומי מסכים"
+
+#: templates/Settings/translation_manager.html:56
+msgid "Search source, translation, or file"
+msgstr "חיפוש בטקסט המקור, בתרגום או בקובץ"
+
+#: templates/Settings/translation_manager.html:58
+msgid "Search translations"
+msgstr "חיפוש תרגומים"
+
+#: Api/routes/experience_api.py:59 templates/Settings/translation_manager.html:104
+msgid "Source text"
+msgstr "טקסט מקור"
+
+#: templates/Settings/translation_manager.html:39
+msgid "Target language"
+msgstr "שפת היעד"
+
+#: templates/Settings/translation_manager.html:68 templates/Settings/translation_manager.html:81 templates/Settings/translation_manager.html:162
+msgid "Translated"
+msgstr "מתורגם"
+
+#: templates/Settings/translation_manager.html:105
+msgid "Translation"
+msgstr "תרגום"
+
+#: templates/Settings/translation_manager.html:3 templates/Settings/translation_manager.html:21
+msgid "Translation Management"
+msgstr "ניהול תרגומים"
+
+#: templates/Settings/translation_manager.html:130
+msgid "Translation catalog pages"
+msgstr "דפי קטלוג התרגומים"
+
+#: templates/Settings/translation_manager.html:37
+msgid "Translation filters"
+msgstr "מסנני תרגום"
+
+#: templates/Settings/translation_manager.html:163
+msgid "Translation for"
+msgstr "תרגום עבור"
+
+#: Api/routes/experience_api.py:73 templates/Settings/translation_manager.html:65
+msgid "Translation status"
+msgstr "מצב התרגום"
+
+#: templates/Settings/translation_manager.html:164
+msgid "Translations saved successfully."
+msgstr "התרגומים נשמרו בהצלחה."
+
+#: templates/Settings/translation_manager.html:115
+msgid "Try another screen, status, or search phrase."
+msgstr "נסו מסך, מצב או ביטוי חיפוש אחר."
+
+#: templates/Settings/translation_manager.html:165
+msgid "Unassigned source"
+msgstr "מקור לא משויך"
+
+#: templates/Settings/translation_manager.html:166
+msgid "Unsaved changes"
+msgstr "שינויים שלא נשמרו"
+
+#: templates/Settings/translation_manager.html:167
+msgid "Will reset"
+msgstr "התרגום מהקטלוג ישוחזר"
+
+#: templates/Settings/translation_manager.html:157
+msgid "matching strings"
+msgstr "מחרוזות תואמות"

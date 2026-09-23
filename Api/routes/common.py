@@ -444,6 +444,23 @@ def register_common_routes(app, babel_instance):
                 from flask_babel import force_locale
                 # Force locale for this request context
                 g._babel_locale = locale
+
+            # Runtime edits live in the database, but gettext remains the
+            # source of truth for every screen. Overlay only this request's
+            # Babel catalog so server-rendered labels and the public JS catalog
+            # observe the same saved translation.
+            if request.endpoint != 'static':
+                try:
+                    from Api.services.translation_management import apply_runtime_translation_overrides
+                    apply_runtime_translation_overrides(locale)
+                except Exception as override_error:
+                    # Translation persistence must never make an otherwise
+                    # healthy page unavailable (for example during first-run
+                    # setup before migrations have completed).
+                    logger.warning(
+                        "Translation overrides unavailable for %s (%s)",
+                        locale, override_error.__class__.__name__,
+                    )
         
         # Check for settings file changes periodically (every 10th request to avoid overhead)
         # This allows external modifications to settings.json to be picked up

@@ -35,11 +35,11 @@ domains is `docs/DOMAIN_MODEL.md`.
 <!-- BEGIN GENERATED REGISTRY EVIDENCE -->
 ### 1. Registry inventory
 
-- Interfaces declared: **25**
+- Interfaces declared: **26**
 - Cross-cutting features (not interfaces): **1**
-- Endpoints owned (canonical routes + aliases): **65**
-- With a keyboard shortcut: **11**
-- With a help topic: **23**
+- Endpoints owned (canonical routes + aliases): **66**
+- With a keyboard shortcut: **12**
+- With a help topic: **24**
 - Declared domain vocabulary: **12**
 - Domains currently containing interfaces: **10**
 - Declared domains holding no interface yet: **2**
@@ -57,7 +57,7 @@ Domains are **declared** in `core/interfaces/domains.py`; a declared domain may 
 | REPORT | 2 | in use |
 | OPERATE | 2 | in use |
 | ADMINISTRATION | 1 | in use |
-| SETTINGS | 2 | in use |
+| SETTINGS | 3 | in use |
 | SECURITY | 0 | declared, empty |
 | INTERNAL | 1 | in use |
 
@@ -104,8 +104,8 @@ Declared aliases: **41**, across **12** interfaces. An alias is an endpoint the 
 
 ### 5. Lifecycle and migration
 
-- Interfaces by status: **ACTIVE 24, DEPRECATED 1**
-- Interfaces by kind: **INTERNAL 1, PAGE 23, SECTION 1**
+- Interfaces by status: **ACTIVE 25, DEPRECATED 1**
+- Interfaces by kind: **INTERNAL 1, PAGE 24, SECTION 1**
 
 Renames and merges the registry understands (a stored value under an old key reaches the interface that replaced it; the code may not name the old key):
 
@@ -146,11 +146,11 @@ Cross-cutting settings that are **not** features (they belong to an existing int
 <!-- BEGIN GENERATED APPLICATION EVIDENCE -->
 ### 7. Endpoint coverage
 
-- Endpoints in the application's URL map (static excluded): **310**
-- User-facing page endpoints: **47**
-- Owned by an interface: **65**
+- Endpoints in the application's URL map (static excluded): **313**
+- User-facing page endpoints: **48**
+- Owned by an interface: **66**
 - **Unmanaged user-facing endpoints**: **0**
-- Interfaces with a navigable route: **24**
+- Interfaces with a navigable route: **25**
 
 Unmanaged user-facing endpoints: **0** — every page the application serves is owned by exactly one interface.
 
@@ -159,12 +159,12 @@ Unmanaged user-facing endpoints: **0** — every page the application serves is 
 | Classification | Endpoints |
 | --- | --- |
 | ACTION | 9 |
-| API_ENDPOINT | 236 |
+| API_ENDPOINT | 238 |
 | INTERNAL_PAGE | 1 |
 | REDIRECT | 1 |
 | SYSTEM_ENDPOINT | 16 |
 | TEST_ENDPOINT | 1 |
-| USER_INTERFACE | 46 |
+| USER_INTERFACE | 47 |
 
 By blueprint:
 
@@ -187,7 +187,7 @@ By blueprint:
 | preview | 1 |
 | settings_api | 27 |
 | setup | 5 |
-| translations | 4 |
+| translations | 7 |
 
 ### 9. Declared exceptions
 
@@ -201,11 +201,11 @@ The coverage rule tolerates exactly these, by name — a new page cannot be adde
 
 **TEST_ENDPOINT_PREFIXES** (1): `/_test/`
 
-Endpoints the interface switch does not gate (API, system and infrastructure; authentication and authorization are unchanged): **253**
+Endpoints the interface switch does not gate (API, system and infrastructure; authentication and authorization are unchanged): **255**
 
 ### 10. Rendered navigation
 
-`GET /` as an administrator returned 200; the sidebar renders **9 domains** and **23 entries**, all of them from the registry:
+`GET /` as an administrator returned 200; the sidebar renders **9 domains** and **24 entries**, all of them from the registry:
 
 - Work
 - Discover
@@ -217,7 +217,7 @@ Endpoints the interface switch does not gate (API, system and infrastructure; au
 - Administration
 - Settings
 
-Entries, in render order: `index`, `files.files_list`, `search_page`, `sources_list`, `sides_list`, `keywords_list`, `words_list`, `categories_list`, `email_words`, `notifications_page`, `operations_input_page`, `operations_import_page`, `archives_page`, `path_analysis_page`, `analysis_batch`, `analyst_categorization_page`, `file_classification_page`, `comprehensive_dashboard`, `charts_dashboard`, `operations_jobs_page`, `import_export_page`, `users_page`, `settings_page_direct`
+Entries, in render order: `index`, `files.files_list`, `search_page`, `sources_list`, `sides_list`, `keywords_list`, `words_list`, `categories_list`, `email_words`, `notifications_page`, `operations_input_page`, `operations_import_page`, `archives_page`, `path_analysis_page`, `analysis_batch`, `analyst_categorization_page`, `file_classification_page`, `comprehensive_dashboard`, `charts_dashboard`, `operations_jobs_page`, `import_export_page`, `users_page`, `settings_page_direct`, `translations.translation_management_page`
 
 Marked active on this page: `index`
 <!-- END GENERATED APPLICATION EVIDENCE -->

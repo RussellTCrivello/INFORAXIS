@@ -9660,3 +9660,171 @@ msgstr "أدخل اسمًا لهذا البحث:"
 #: templates/Search/search_advanced.html
 msgid "Delete this saved search?"
 msgstr "حذف هذا البحث المحفوظ؟"
+
+#: templates/Settings/translation_manager.html:147
+msgid "A translation cannot be blank."
+msgstr "لا يمكن أن تكون الترجمة فارغة."
+
+#: templates/Settings/translation_manager.html:18
+msgid "Administration"
+msgstr "الإدارة"
+
+#: templates/Settings/translation_manager.html:49
+msgid "All screens"
+msgstr "كل الشاشات"
+
+#: templates/Settings/translation_manager.html:27
+msgid "Back to Settings"
+msgstr "العودة إلى الإعدادات"
+
+#: templates/Settings/translation_manager.html:80
+msgid "Catalog strings"
+msgstr "عبارات الفهرس"
+
+#: templates/Settings/translation_manager.html:79
+msgid "Catalog summary"
+msgstr "ملخص الفهرس"
+
+#: templates/Settings/translation_manager.html:148
+msgid "Catalog unavailable"
+msgstr "الفهرس غير متاح"
+
+#: templates/Settings/translation_manager.html:149
+msgid "Could not load translations."
+msgstr "تعذر تحميل الترجمات."
+
+#: templates/Settings/translation_manager.html:150
+msgid "Could not save translations."
+msgstr "تعذر حفظ الترجمات."
+
+#: templates/Settings/translation_manager.html:151
+msgid "Custom override"
+msgstr "ترجمة مخصصة"
+
+#: templates/Settings/translation_manager.html:70 templates/Settings/translation_manager.html:83
+msgid "Custom overrides"
+msgstr "الترجمات المخصصة"
+
+#: templates/Settings/translation_manager.html:152
+msgid "Discard unsaved changes?"
+msgstr "هل تريد تجاهل التغييرات غير المحفوظة؟"
+
+#: templates/Settings/translation_manager.html:153
+msgid "Fix blank translations and placeholders before saving."
+msgstr "أكمل الترجمات الفارغة وتحقق من العناصر النائبة قبل الحفظ."
+
+#: templates/Settings/translation_manager.html:154
+msgid "Keep every named placeholder from the source text."
+msgstr "احتفظ بجميع العناصر النائبة المسماة كما هي في النص الأصلي."
+
+#: templates/Settings/translation_manager.html:155
+msgid "Keep named placeholders unchanged."
+msgstr "أبقِ العناصر النائبة المسماة دون تغيير."
+
+#: templates/Settings/translation_manager.html:90 templates/Settings/translation_manager.html:119 templates/Settings/translation_manager.html:156
+msgid "Loading translations…"
+msgstr "جارٍ تحميل الترجمات…"
+
+#: templates/Settings/translation_manager.html:69 templates/Settings/translation_manager.html:82 templates/Settings/translation_manager.html:158
+msgid "Missing"
+msgstr "غير مترجم"
+
+#: templates/Settings/translation_manager.html:114
+msgid "No strings match these filters"
+msgstr "لا توجد عبارات تطابق عوامل التصفية هذه."
+
+#: templates/Settings/translation_manager.html:161
+msgid "Reset to catalog translation"
+msgstr "استعادة ترجمة الفهرس"
+
+#: templates/Settings/translation_manager.html:23
+msgid "Review and edit the localized text used throughout every screen."
+msgstr "راجع النصوص المترجمة المستخدمة في كل شاشة وعدّلها."
+
+#: templates/Settings/translation_manager.html:107
+msgid "Row actions"
+msgstr "إجراءات الصف"
+
+#: templates/Settings/translation_manager.html:94 templates/Settings/translation_manager.html:126
+msgid "Save changes"
+msgstr "حفظ التغييرات"
+
+#: templates/Settings/translation_manager.html:33
+msgid "Saved edits take effect across server-rendered and browser-rendered screens. Reset a row to return to the checked-in catalog translation."
+msgstr "تسري التعديلات المحفوظة على الشاشات المعروضة على الخادم والمتصفح. أعد تعيين الصف للعودة إلى ترجمة الفهرس المعتمدة."
+
+#: templates/Settings/translation_manager.html:47
+msgid "Screen or source file"
+msgstr "الشاشة أو الملف المصدر"
+
+#: templates/Settings/translation_manager.html:89
+msgid "Screen translations"
+msgstr "ترجمات الشاشات"
+
+#: templates/Settings/translation_manager.html:56
+msgid "Search source, translation, or file"
+msgstr "ابحث في النص الأصلي أو الترجمة أو الملف"
+
+#: templates/Settings/translation_manager.html:58
+msgid "Search translations"
+msgstr "بحث في الترجمات"
+
+#: Api/routes/experience_api.py:59 templates/Settings/translation_manager.html:104
+msgid "Source text"
+msgstr "النص المصدر"
+
+#: templates/Settings/translation_manager.html:39
+msgid "Target language"
+msgstr "اللغة المستهدفة"
+
+#: templates/Settings/translation_manager.html:68 templates/Settings/translation_manager.html:81 templates/Settings/translation_manager.html:162
+msgid "Translated"
+msgstr "مترجم"
+
+#: templates/Settings/translation_manager.html:105
+msgid "Translation"
+msgstr "الترجمة"
+
+#: templates/Settings/translation_manager.html:3 templates/Settings/translation_manager.html:21
+msgid "Translation Management"
+msgstr "إدارة الترجمات"
+
+#: templates/Settings/translation_manager.html:130
+msgid "Translation catalog pages"
+msgstr "صفحات فهرس الترجمات"
+
+#: templates/Settings/translation_manager.html:37
+msgid "Translation filters"
+msgstr "عوامل تصفية الترجمات"
+
+#: templates/Settings/translation_manager.html:163
+msgid "Translation for"
+msgstr "ترجمة العبارة"
+
+#: Api/routes/experience_api.py:73 templates/Settings/translation_manager.html:65
+msgid "Translation status"
+msgstr "حالة الترجمة"
+
+#: templates/Settings/translation_manager.html:164
+msgid "Translations saved successfully."
+msgstr "حُفظت الترجمات بنجاح."
+
+#: templates/Settings/translation_manager.html:115
+msgid "Try another screen, status, or search phrase."
+msgstr "جرّب اختيار شاشة أو حالة أو عبارة بحث أخرى."
+
+#: templates/Settings/translation_manager.html:165
+msgid "Unassigned source"
+msgstr "مصدر غير معيّن"
+
+#: templates/Settings/translation_manager.html:166
+msgid "Unsaved changes"
+msgstr "تغييرات غير محفوظة"
+
+#: templates/Settings/translation_manager.html:167
+msgid "Will reset"
+msgstr "ستُستعاد ترجمة الفهرس"
+
+#: templates/Settings/translation_manager.html:157
+msgid "matching strings"
+msgstr "عبارات مطابقة"

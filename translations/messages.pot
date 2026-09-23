@@ -264,6 +264,8 @@ msgstr ""
 msgid "Analysis"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:53
+#: templates/Settings/translation_manager.html:60
 #: templates/Analysis/dashboard.html:421 templates/Search/search.html:7
 #: templates/Search/search.html:66 templates/Search/search.html:87
 #: templates/Search/search_advanced.html:43
@@ -908,6 +910,7 @@ msgstr ""
 msgid "Back"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:137
 #: templates/Category/categories_list.html:507
 #: templates/Category/category_words.html:393 templates/base.html:809
 #: templates/components/cursor_pagination.html:37
@@ -918,6 +921,7 @@ msgstr ""
 msgid "Next"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:133
 #: templates/Category/categories_list.html:506
 #: templates/Category/category_words.html:392 templates/base.html:810
 #: templates/components/cursor_pagination.html:28
@@ -948,6 +952,7 @@ msgstr ""
 msgid "Clear"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:75
 #: templates/Category/categories_list.html:39
 #: templates/Category/category_words.html:40
 #: templates/Keyword/keywords_list.html:24
@@ -3428,6 +3433,7 @@ msgstr ""
 msgid "No Content"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:106
 #: templates/Analysis/dashboard.html:590
 #: templates/Keyword/keywords_list.html:133
 #: templates/Keyword/keywords_list.html:262
@@ -4189,6 +4195,7 @@ msgstr ""
 msgid "Visible Categories"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:160
 #: templates/Category/categories_list.html:129
 #: templates/Category/categories_list.html:513
 #: templates/Category/category_words.html:133
@@ -4458,6 +4465,7 @@ msgstr ""
 msgid "Showing"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:159
 #: templates/Category/categories_list.html:515
 #: templates/Category/category_words.html:401
 #: templates/Keyword/keywords_list.html:218
@@ -11066,6 +11074,7 @@ msgstr ""
 msgid "NOT FOUND"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:67
 #: templates/Operations/*:0
 msgid "All statuses"
 msgstr ""
@@ -11993,4 +12002,172 @@ msgstr ""
 
 #: templates/Search/search_advanced.html
 msgid "Delete this saved search?"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:147
+msgid "A translation cannot be blank."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:18
+msgid "Administration"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:49
+msgid "All screens"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:27
+msgid "Back to Settings"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:80
+msgid "Catalog strings"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:79
+msgid "Catalog summary"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:148
+msgid "Catalog unavailable"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:149
+msgid "Could not load translations."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:150
+msgid "Could not save translations."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:151
+msgid "Custom override"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:70 templates/Settings/translation_manager.html:83
+msgid "Custom overrides"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:152
+msgid "Discard unsaved changes?"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:153
+msgid "Fix blank translations and placeholders before saving."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:154
+msgid "Keep every named placeholder from the source text."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:155
+msgid "Keep named placeholders unchanged."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:90 templates/Settings/translation_manager.html:119 templates/Settings/translation_manager.html:156
+msgid "Loading translations…"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:69 templates/Settings/translation_manager.html:82 templates/Settings/translation_manager.html:158
+msgid "Missing"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:114
+msgid "No strings match these filters"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:161
+msgid "Reset to catalog translation"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:23
+msgid "Review and edit the localized text used throughout every screen."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:107
+msgid "Row actions"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:94 templates/Settings/translation_manager.html:126
+msgid "Save changes"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:33
+msgid "Saved edits take effect across server-rendered and browser-rendered screens. Reset a row to return to the checked-in catalog translation."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:47
+msgid "Screen or source file"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:89
+msgid "Screen translations"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:56
+msgid "Search source, translation, or file"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:58
+msgid "Search translations"
+msgstr ""
+
+#: Api/routes/experience_api.py:59 templates/Settings/translation_manager.html:104
+msgid "Source text"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:39
+msgid "Target language"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:68 templates/Settings/translation_manager.html:81 templates/Settings/translation_manager.html:162
+msgid "Translated"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:105
+msgid "Translation"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:3 templates/Settings/translation_manager.html:21
+msgid "Translation Management"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:130
+msgid "Translation catalog pages"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:37
+msgid "Translation filters"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:163
+msgid "Translation for"
+msgstr ""
+
+#: Api/routes/experience_api.py:73 templates/Settings/translation_manager.html:65
+msgid "Translation status"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:164
+msgid "Translations saved successfully."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:115
+msgid "Try another screen, status, or search phrase."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:165
+msgid "Unassigned source"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:166
+msgid "Unsaved changes"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:167
+msgid "Will reset"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:157
+msgid "matching strings"
 msgstr ""

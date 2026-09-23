@@ -3644,6 +3644,42 @@
     "internal": true
   },
   {
+    "endpoint": "translations.save_translation_management_catalog_api",
+    "rule": "/api/translations/manage/catalog",
+    "methods": [
+      "PUT"
+    ],
+    "blueprint": "translations",
+    "module": "translations",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "translations.translation_management_catalog_api",
+    "rule": "/api/translations/manage/catalog",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "translations",
+    "module": "translations",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "translations.translation_management_page",
+    "rule": "/translations/manage",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "translations",
+    "module": "translations",
+    "classification": "USER_INTERFACE",
+    "owned_by": "translation_manager",
+    "internal": false
+  },
+  {
     "endpoint": "update_keyword",
     "rule": "/api/keywords/<int:keyword_id>",
     "methods": [

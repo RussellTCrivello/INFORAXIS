@@ -148,12 +148,12 @@ the navigation entry vanished the first time this rename happened.
 ## 5. The registry reference
 
 <!-- BEGIN GENERATED REGISTRY TABLE -->
-- Interfaces: **25** (features declared separately: **1**)
-- Endpoints owned: **65**
-- With a keyboard shortcut: **11**; with a help topic: **23**
-- By domain: ADMINISTRATION 1, ANALYZE 3, CLASSIFY 2, DISCOVER 9, INGEST 2, INTERNAL 1, OPERATE 2, REPORT 2, SETTINGS 2, WORK 1
-- By status: ACTIVE 24, DEPRECATED 1
-- By kind: INTERNAL 1, PAGE 23, SECTION 1
+- Interfaces: **26** (features declared separately: **1**)
+- Endpoints owned: **66**
+- With a keyboard shortcut: **12**; with a help topic: **24**
+- By domain: ADMINISTRATION 1, ANALYZE 3, CLASSIFY 2, DISCOVER 9, INGEST 2, INTERNAL 1, OPERATE 2, REPORT 2, SETTINGS 3, WORK 1
+- By status: ACTIVE 25, DEPRECATED 1
+- By kind: INTERNAL 1, PAGE 24, SECTION 1
 
 
 ### WORK (1)
@@ -218,12 +218,13 @@ the navigation entry vanished the first time this rename happened.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `users` | Users and Roles | ADMINISTRATION | `users_page` | — | admin | on | — | administration/users | g u | ACTIVE |
 
-### SETTINGS (2)
+### SETTINGS (3)
 
 | ID | Name | Domain | Route | Aliases | Role | Default | Depends on | Help | Shortcut | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `settings` | Settings | SETTINGS | `settings_page_direct` | `settings_api.settings_page` | admin | on | — | settings/overview | g , | ACTIVE |
 | `interface_manager` | Interface Manager | SETTINGS | — | — | admin | on | `settings` | settings/interfaces | — | ACTIVE |
+| `translation_manager` | Translation Management | SETTINGS | `translations.translation_management_page` | — | admin | on | — | settings/translations | g t | ACTIVE |
 
 ### INTERNAL (1)
 
