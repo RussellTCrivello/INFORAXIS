@@ -9906,3 +9906,643 @@ msgstr "Unesite naziv za ovo pretraživanje:"
 #: templates/Search/search_advanced.html
 msgid "Delete this saved search?"
 msgstr "Izbrisati ovo spremljeno pretraživanje?"
+
+#: templates/Search/search_advanced.html
+msgid "Hide exact duplicates"
+msgstr "Sakrij točne duplikate"
+
+#: templates/Search/search_advanced.html
+msgid "File type (A-Z)"
+msgstr "Vrsta datoteke (A–Ž)"
+
+#: templates/Search/search_advanced.html
+msgid "Similarity ≥"
+msgstr "Sličnost ≥"
+
+#: templates/Search/search_advanced.html
+msgid "Minimum content similarity for grouping"
+msgstr "Najmanja sličnost sadržaja za grupiranje"
+
+#: templates/Search/search_advanced.html
+msgid "Choose the minimum content similarity for grouping"
+msgstr "Odaberite najmanju sličnost sadržaja za grupiranje"
+
+#: templates/Search/search_advanced.html
+msgid "Group similar files on this results page"
+msgstr "Grupiraj slične datoteke na ovoj stranici rezultata"
+
+#: templates/Search/search_advanced.html
+msgid "Group similar"
+msgstr "Grupiraj slične"
+
+#: templates/Search/search_advanced.html
+msgid "Open this search workspace in a separate window"
+msgstr "Otvori ovaj radni prostor za pretraživanje u zasebnom prozoru"
+
+#: templates/Search/search_advanced.html
+msgid "New window"
+msgstr "Novi prozor"
+
+#: templates/Search/search_advanced.html
+msgid "Current results page"
+msgstr "Trenutačna stranica rezultata"
+
+#: templates/Search/search_advanced.html
+msgid "CSV"
+msgstr "CSV"
+
+#: templates/Search/search_advanced.html
+msgid "Excel (XLSX)"
+msgstr "datoteka Excel (XLSX)"
+
+#: templates/Search/search_advanced.html
+msgid "All matching results"
+msgstr "Svi podudarni rezultati"
+
+#: templates/Search/search_advanced.html
+msgid "JSON"
+msgstr "JSON"
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (CSV)"
+msgstr "Podudarni nazivi datoteka (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (Excel)"
+msgstr "Podudarni nazivi datoteka (Excel)"
+
+#: templates/Search/search_advanced.html
+msgid "Filtered corpus (CSV; ignores search terms)"
+msgstr "Filtrirani skup (CSV; zanemaruje pojmove pretraživanja)"
+
+#: templates/Search/search_advanced.html
+msgid "selected across this search"
+msgstr "odabrano među rezultatima ove pretrage"
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text for selected documents as a ZIP"
+msgstr "Preuzmi izdvojeni tekst odabranih dokumenata kao ZIP datoteku"
+
+#: templates/Search/search_advanced.html
+msgid "Text ZIP"
+msgstr "ZIP s tekstom"
+
+#: templates/Search/search_advanced.html
+msgid "Download available original files for selected documents as a ZIP"
+msgstr "Preuzmi dostupne izvorne datoteke odabranih dokumenata kao ZIP datoteku"
+
+#: templates/Search/search_advanced.html
+msgid "Originals ZIP"
+msgstr "ZIP izvornih datoteka"
+
+#: templates/Search/search_advanced.html
+msgid "Names CSV"
+msgstr "Nazivi (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Names Excel"
+msgstr "Nazivi (Excel)"
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for extracted text"
+msgstr "Odaberite postojeću mapu ili stvorite podmapu za izdvojeni tekst"
+
+#: templates/Search/search_advanced.html
+msgid "Text to folder"
+msgstr "Spremi tekst u mapu"
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for original files"
+msgstr "Odaberite postojeću mapu ili stvorite podmapu za izvorne datoteke"
+
+#: templates/Search/search_advanced.html
+msgid "Originals to folder"
+msgstr "Spremi izvorne datoteke u mapu"
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one TXT file"
+msgstr "Pročitaj i spoji tekst prve stranice odabranih dokumenata u jednu TXT datoteku"
+
+#: templates/Search/search_advanced.html
+msgid "Read & export first pages (TXT)"
+msgstr "Pročitaj i izvezi prve stranice (TXT)"
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one Word file"
+msgstr "Pročitaj i spoji tekst prve stranice odabranih dokumenata u jednu Word datoteku"
+
+#: templates/Search/search_advanced.html
+msgid "First pages (DOCX)"
+msgstr "Prve stranice (DOCX)"
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links CSV"
+msgstr "E-pošta i poveznice (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links XLSX"
+msgstr "E-pošta i poveznice (XLSX)"
+
+#: templates/Search/search_advanced.html
+msgid "Document review"
+msgstr "Pregled dokumenata"
+
+#: templates/Search/search_advanced.html
+msgid "Search & review"
+msgstr "Pretraživanje i pregled"
+
+#: templates/Search/search_advanced.html
+msgid "Select a result to review"
+msgstr "Odaberite rezultat za pregled"
+
+#: templates/Search/search_advanced.html
+msgid "Close document review"
+msgstr "Zatvori pregled dokumenta"
+
+#: templates/Search/search_advanced.html
+msgid "Open full record"
+msgstr "Otvori cijeli zapis"
+
+#: templates/Search/search_advanced.html
+msgid "Download the original document and choose its filename"
+msgstr "Preuzmite izvorni dokument i odaberite naziv datoteke"
+
+#: templates/Search/search_advanced.html
+msgid "Download original"
+msgstr "Preuzmi izvornik"
+
+#: templates/Search/search_advanced.html
+msgid "Native application access requires the local INFORAXIS companion"
+msgstr "Za pristup izvornoj aplikaciji potreban je lokalni pomoćni program INFORAXIS"
+
+#: templates/Search/search_advanced.html
+msgid "Open in native app"
+msgstr "Otvori u izvornoj aplikaciji"
+
+#: templates/Search/search_advanced.html
+msgid "Opening a local folder requires the local INFORAXIS companion"
+msgstr "Za otvaranje lokalne mape potreban je lokalni pomoćni program INFORAXIS"
+
+#: templates/Search/search_advanced.html
+msgid "Open containing folder"
+msgstr "Otvori nadređenu mapu"
+
+#: templates/Search/search_advanced.html
+msgid "This browser can preview and download the source file. Launching or editing it in a native app, or opening its operating-system folder, requires a trusted local INFORAXIS companion."
+msgstr "Ovaj preglednik može prikazati pretpregled izvorne datoteke i preuzeti je. Pokretanje ili uređivanje u izvornoj aplikaciji, kao i otvaranje mape datoteke u operacijskom sustavu, zahtijeva pouzdani lokalni pomoćni program INFORAXIS."
+
+#: templates/Search/search_advanced.html
+msgid "Document view"
+msgstr "Prikaz dokumenta"
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text"
+msgstr "Izdvojeni tekst"
+
+#: templates/Search/search_advanced.html
+msgid "Original preview"
+msgstr "Pretpregled izvornika"
+
+#: templates/Search/search_advanced.html
+msgid "Navigate keyword matches"
+msgstr "Kreći se po podudaranjima ključnih riječi"
+
+#: templates/Search/search_advanced.html
+msgid "Previous match"
+msgstr "Prethodno podudaranje"
+
+#: templates/Search/search_advanced.html
+msgid "Next match"
+msgstr "Sljedeće podudaranje"
+
+#: templates/Search/search_advanced.html
+msgid "Choose Review on a search result to inspect its content."
+msgstr "Odaberite „Pregled” na rezultatu pretraživanja da biste pregledali njegov sadržaj."
+
+#: templates/Search/search_advanced.html
+msgid "Copy selected passage"
+msgstr "Kopiraj odabrani odlomak"
+
+#: templates/Search/search_advanced.html
+msgid "First-page preview"
+msgstr "Pretpregled prve stranice"
+
+#: templates/Search/search_advanced.html
+msgid "Loading document context…"
+msgstr "Učitavanje konteksta dokumenta…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load this document context."
+msgstr "Nije moguće učitati kontekst ovog dokumenta."
+
+#: templates/Search/search_advanced.html
+msgid "No extracted text is available for this document."
+msgstr "Za ovaj dokument nije dostupan izdvojeni tekst."
+
+#: templates/Search/search_advanced.html
+msgid "No query matches in extracted text."
+msgstr "U izdvojenom tekstu nema podudaranja s upitom."
+
+#: templates/Search/search_advanced.html
+msgid "Showing the first {count} matches."
+msgstr "Prikazuje se prvih {count} podudaranja."
+
+#: templates/Search/search_advanced.html
+msgid "The original file is not available."
+msgstr "Izvorna datoteka nije dostupna."
+
+#: templates/Search/search_advanced.html
+msgid "Could not load the original preview."
+msgstr "Nije moguće učitati pretpregled izvornika."
+
+#: templates/Search/search_advanced.html
+msgid "Choose a filename for this original document:"
+msgstr "Odaberite naziv datoteke za ovaj izvorni dokument:"
+
+#: templates/Search/search_advanced.html
+msgid "Original download ready."
+msgstr "Izvorna datoteka spremna je za preuzimanje."
+
+#: templates/Search/search_advanced.html
+msgid "Could not download the original document."
+msgstr "Nije moguće preuzeti izvorni dokument."
+
+#: templates/Search/search_advanced.html
+msgid "Opening or editing a native file and opening its operating-system folder require the trusted local INFORAXIS companion. Use the browser preview or download here."
+msgstr "Otvaranje ili uređivanje datoteke u izvornoj aplikaciji te otvaranje njezine mape u operacijskom sustavu zahtijeva pouzdani lokalni pomoćni program INFORAXIS. Ovdje upotrijebite pretpregled preglednika ili preuzmite datoteku."
+
+#: templates/Search/search_advanced.html
+msgid "The local INFORAXIS companion could not complete this action."
+msgstr "Lokalni pomoćni program INFORAXIS nije mogao dovršiti ovu radnju."
+
+#: templates/Search/search_advanced.html
+msgid "Select a passage in the document first."
+msgstr "Najprije odaberite odlomak u dokumentu."
+
+#: templates/Search/search_advanced.html
+msgid "Passage copied."
+msgstr "Odlomak je kopiran."
+
+#: templates/Search/search_advanced.html
+msgid "Updating duplicate filter…"
+msgstr "Ažuriranje filtra duplikata…"
+
+#: templates/Search/search_advanced.html
+msgid "Grouping similar files on this results page…"
+msgstr "Grupiranje sličnih datoteka na ovoj stranici rezultata…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not group similar files."
+msgstr "Nije moguće grupirati slične datoteke."
+
+#: templates/Search/search_advanced.html
+msgid "Similarity groups apply to this results page only."
+msgstr "Grupe sličnosti odnose se samo na ovu stranicu rezultata."
+
+#: templates/Search/search_advanced.html
+msgid "Similarity group {group}"
+msgstr "Grupa sličnosti {group}"
+
+#: templates/Search/search_advanced.html
+msgid "Files without extracted text are shown separately."
+msgstr "Datoteke bez izdvojenog teksta prikazuju se zasebno."
+
+#: templates/Search/search_advanced.html
+msgid "Name your export (leave blank for an automatic name):"
+msgstr "Unesite naziv izvoza ili ostavite prazno za automatski naziv:"
+
+#: templates/Search/search_advanced.html
+msgid "Name this download:"
+msgstr "Unesite naziv ovog preuzimanja:"
+
+#: templates/Search/search_advanced.html
+msgid "Name this selected-file export (leave blank for an automatic name):"
+msgstr "Unesite naziv izvoza odabranih datoteka ili ostavite prazno za automatski naziv:"
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export failed."
+msgstr "Izvoz odabranih datoteka nije uspio."
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export ready."
+msgstr "Izvoz odabranih datoteka je spreman."
+
+#: templates/Search/search_advanced.html
+msgid "First-page export ready."
+msgstr "Izvoz prvih stranica je spreman."
+
+#: templates/Search/search_advanced.html
+msgid "The export was saved, but some selected documents had no readable extracted text."
+msgstr "Izvoz je spremljen, ali neki odabrani dokumenti nemaju čitljiv izdvojeni tekst."
+
+#: templates/Search/search_advanced.html
+msgid "Email and hyperlink export ready."
+msgstr "Izvoz e-pošte i poveznica je spreman."
+
+#: templates/Search/search_advanced.html
+msgid "No email addresses or links were found; a headers-only report was saved."
+msgstr "Nisu pronađene adrese e-pošte ni poveznice; spremljeno je izvješće samo sa zaglavljima."
+
+#: templates/Search/search_advanced.html
+msgid "Selected filename export ready."
+msgstr "Izvoz naziva odabranih datoteka je spreman."
+
+#: templates/Search/search_advanced.html
+msgid "Select one or more documents first."
+msgstr "Najprije odaberite jedan ili više dokumenata."
+
+#: templates/Search/search_advanced.html
+msgid "Select no more than 200 documents for one export."
+msgstr "Za jedan izvoz odaberite najviše 200 dokumenata."
+
+#: templates/Search/search_advanced.html
+msgid "Folder export is not supported in this browser; downloading a ZIP instead."
+msgstr "Ovaj preglednik ne podržava izvoz u mapu; umjesto toga preuzima se ZIP datoteka."
+
+#: templates/Search/search_advanced.html
+msgid "Could not write to the selected folder."
+msgstr "Nije moguće zapisati u odabranu mapu."
+
+#: templates/Search/search_advanced.html
+msgid "Writing selected documents to the chosen folder…"
+msgstr "Zapisivanje odabranih dokumenata u odabranu mapu…"
+
+#: templates/Search/search_advanced.html
+msgid "Documents saved to the chosen folder."
+msgstr "Dokumenti su spremljeni u odabranu mapu."
+
+#: templates/Search/search_advanced.html
+msgid "Some documents could not be saved to the chosen folder."
+msgstr "Neke dokumente nije bilo moguće spremiti u odabranu mapu."
+
+#: templates/Search/search_advanced.html
+msgid "Optional: enter a new subfolder name, or leave blank to use the selected folder."
+msgstr "Neobavezno: unesite naziv nove podmape ili ostavite prazno za upotrebu odabrane mape."
+
+#: templates/Search/search_advanced.html
+msgid "Allow pop-ups to open this search in a new window."
+msgstr "Dopustite skočne prozore da biste otvorili ovo pretraživanje u novom prozoru."
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text"
+msgstr "Preuzmi izdvojeni tekst"
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text download ready."
+msgstr "Izdvojeni tekst spreman je za preuzimanje."
+
+#: templates/Search/search_advanced.html
+msgid "Review beside results"
+msgstr "Pregled uz rezultate"
+
+#: templates/Search/search_advanced.html
+msgid "Filename match"
+msgstr "Podudaranje naziva datoteke"
+
+#: templates/Search/search_advanced.html
+msgid "Content match"
+msgstr "Podudaranje sadržaja"
+
+#: templates/Search/search_advanced.html
+msgid "Filename and content match"
+msgstr "Podudaranje naziva datoteke i sadržaja"
+
+#: templates/Search/search_advanced.html
+msgid "Metadata match"
+msgstr "Podudaranje metapodataka"
+
+#: templates/Search/search_advanced.html
+msgid "similarity"
+msgstr "sličnost"
+
+#: templates/Search/search_advanced.html
+msgid "Other results"
+msgstr "Ostali rezultati"
+
+#: templates/Search/search_advanced.html
+msgid "Clear groups"
+msgstr "Ukloni grupe"
+
+#: templates/Search/search_advanced.html
+msgid "At least two results are needed to group similar files."
+msgstr "Potrebna su najmanje dva rezultata za grupiranje sličnih datoteka."
+
+#: templates/Search/search_advanced.html
+msgid "Your browser cannot play this media."
+msgstr "Preglednik ne može reproducirati ovaj medij."
+
+#: templates/Search/search_advanced.html
+msgid "This format cannot be displayed inline."
+msgstr "Ovaj se format ne može prikazati unutar stranice."
+
+#: templates/Search/search_advanced.html
+msgid "Could not copy the selected passage."
+msgstr "Nije moguće kopirati odabrani odlomak."
+
+#: templates/Search/search_advanced.html
+msgid "Matching filename export ready."
+msgstr "Izvoz podudarnih naziva datoteka je spreman."
+
+#: templates/Search/search_advanced.html
+msgid "Could not export the matching filenames."
+msgstr "Nije moguće izvesti podudarne nazive datoteka."
+
+#: templates/Search/search_advanced.html
+msgid "The filename export reached the 50,000-row limit; narrow the search to export everything."
+msgstr "Izvoz naziva datoteka dosegnuo je ograničenje od 50.000 redaka; suzite pretraživanje da biste izvezli sve."
+
+#: templates/Search/search_enhanced.html
+msgid "Open Search & Review workspace"
+msgstr "Otvori radni prostor za pretraživanje i pregled"
+
+#: templates/Search/search_enhanced.html
+msgid "Name this export (leave blank for an automatic name):"
+msgstr "Unesite naziv ovog izvoza ili ostavite prazno za automatski naziv:"
+
+#: templates/Search/search_enhanced.html
+msgid "Case sensitive"
+msgstr "Razlikuj velika i mala slova"
+
+#: templates/Search/search_enhanced.html
+msgid "Match uppercase and lowercase exactly"
+msgstr "Točno podudaranje velikih i malih slova"
+
+#: templates/Search/search_enhanced.html
+msgid "Whole word"
+msgstr "Cijela riječ"
+
+#: templates/Search/search_enhanced.html
+msgid "Match complete words only"
+msgstr "Podudaraj samo cijele riječi"
+
+#: templates/Settings/translation_manager.html
+msgid "Translation Management"
+msgstr "Upravljanje prijevodima"
+
+#: templates/Settings/translation_manager.html
+msgid "Administration"
+msgstr "Administracija"
+
+#: templates/Settings/translation_manager.html
+msgid "Review and edit the localized text used throughout every screen."
+msgstr "Pregledajte i uredite lokalizirani tekst na svim zaslonima."
+
+#: templates/Settings/translation_manager.html
+msgid "Back to Settings"
+msgstr "Natrag na postavke"
+
+#: templates/Settings/translation_manager.html
+msgid "Saved edits take effect across server-rendered and browser-rendered screens. Reset a row to return to the checked-in catalog translation."
+msgstr "Spremljene izmjene primjenjuju se na poslužiteljski i preglednički prikaz. Poništite redak da biste vratili prijevod iz kataloga u repozitoriju."
+
+#: templates/Settings/translation_manager.html
+msgid "Translation filters"
+msgstr "Filtri prijevoda"
+
+#: templates/Settings/translation_manager.html
+msgid "Target language"
+msgstr "Ciljni jezik"
+
+#: templates/Settings/translation_manager.html
+msgid "Screen or source file"
+msgstr "Zaslon ili izvorna datoteka"
+
+#: templates/Settings/translation_manager.html
+msgid "All screens"
+msgstr "Svi zasloni"
+
+#: templates/Settings/translation_manager.html
+msgid "Search source, translation, or file"
+msgstr "Pretraži izvorni tekst, prijevod ili datoteku"
+
+#: templates/Settings/translation_manager.html
+msgid "Search translations"
+msgstr "Pretraži prijevode"
+
+#: templates/Settings/translation_manager.html
+msgid "Translation status"
+msgstr "Status prijevoda"
+
+#: templates/Settings/translation_manager.html
+msgid "Translated"
+msgstr "Prevedeno"
+
+#: templates/Settings/translation_manager.html
+msgid "Missing"
+msgstr "Nedostaje"
+
+#: templates/Settings/translation_manager.html
+msgid "Custom overrides"
+msgstr "Prilagođene izmjene"
+
+#: templates/Settings/translation_manager.html
+msgid "Catalog summary"
+msgstr "Sažetak kataloga"
+
+#: templates/Settings/translation_manager.html
+msgid "Catalog strings"
+msgstr "Tekstualne stavke kataloga"
+
+#: templates/Settings/translation_manager.html
+msgid "Screen translations"
+msgstr "Prijevodi zaslona"
+
+#: templates/Settings/translation_manager.html
+msgid "Loading translations…"
+msgstr "Učitavanje prijevoda…"
+
+#: templates/Settings/translation_manager.html
+msgid "Save changes"
+msgstr "Spremi promjene"
+
+#: templates/Settings/translation_manager.html
+msgid "Source text"
+msgstr "Izvorni tekst"
+
+#: templates/Settings/translation_manager.html
+msgid "Translation"
+msgstr "Prijevod"
+
+#: templates/Settings/translation_manager.html
+msgid "Row actions"
+msgstr "Radnje retka"
+
+#: templates/Settings/translation_manager.html
+msgid "No strings match these filters"
+msgstr "Nijedan niz ne odgovara ovim filtrima"
+
+#: templates/Settings/translation_manager.html
+msgid "Try another screen, status, or search phrase."
+msgstr "Isprobajte drugi zaslon, status ili pojam za pretraživanje."
+
+#: templates/Settings/translation_manager.html
+msgid "Translation catalog pages"
+msgstr "Stranice kataloga prijevoda"
+
+#: templates/Settings/translation_manager.html
+msgid "A translation cannot be blank."
+msgstr "Prijevod ne može biti prazan."
+
+#: templates/Settings/translation_manager.html
+msgid "Catalog unavailable"
+msgstr "Katalog nije dostupan"
+
+#: templates/Settings/translation_manager.html
+msgid "Could not load translations."
+msgstr "Prijevode nije moguće učitati."
+
+#: templates/Settings/translation_manager.html
+msgid "Could not save translations."
+msgstr "Prijevode nije moguće spremiti."
+
+#: templates/Settings/translation_manager.html
+msgid "Custom override"
+msgstr "Prilagođeni prijevod"
+
+#: templates/Settings/translation_manager.html
+msgid "Discard unsaved changes?"
+msgstr "Odbaciti nespremljene promjene?"
+
+#: templates/Settings/translation_manager.html
+msgid "Fix blank translations and placeholders before saving."
+msgstr "Prije spremanja ispravite prazne prijevode i rezervirana mjesta."
+
+#: templates/Settings/translation_manager.html
+msgid "Keep every named placeholder from the source text."
+msgstr "Zadržite sve imenovane rezervirane oznake iz izvornog teksta."
+
+#: templates/Settings/translation_manager.html
+msgid "Keep named placeholders unchanged."
+msgstr "Imenovane rezervirane oznake ostavite nepromijenjenima."
+
+#: templates/Settings/translation_manager.html
+msgid "matching strings"
+msgstr "podudarnih nizova"
+
+#: templates/Settings/translation_manager.html
+msgid "Reset to catalog translation"
+msgstr "Vrati prijevod na onaj iz kataloga"
+
+#: templates/Settings/translation_manager.html
+msgid "Translation for"
+msgstr "Prijevod za"
+
+#: templates/Settings/translation_manager.html
+msgid "Translations saved successfully."
+msgstr "Prijevodi su uspješno spremljeni."
+
+#: templates/Settings/translation_manager.html
+msgid "Unassigned source"
+msgstr "Nedodijeljeni izvor"
+
+#: templates/Settings/translation_manager.html
+msgid "Unsaved changes"
+msgstr "Nespremljene promjene"
+
+#: templates/Settings/translation_manager.html
+msgid "Will reset"
+msgstr "Vratit će se na prijevod iz kataloga"
+
+#: core/interfaces/registry.py
+msgid "Review and manage localized strings across every screen."
+msgstr "Pregledajte i upravljajte lokaliziranim tekstom na svim zaslonima."

@@ -150,10 +150,10 @@ Counted from the catalogs the build ships - the Babel catalogs under `translatio
 
 | Language | Catalog entries | Source strings | Translated | Fallback | Missing | Coverage | Of which translated |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `ar` | 2994 | 2633 | 2626 | 7 | 0 | 100.0% | 99.7% |
-| `fa` | 2994 | 2633 | 2628 | 5 | 0 | 100.0% | 99.8% |
-| `he` | 2994 | 2633 | 2622 | 11 | 0 | 100.0% | 99.6% |
-| `hr` | 2708 | 2633 | 2510 | 21 | 102 | 96.1% | 95.3% |
+| `ar` | 3112 | 2751 | 2742 | 9 | 0 | 100.0% | 99.7% |
+| `fa` | 3112 | 2751 | 2744 | 7 | 0 | 100.0% | 99.7% |
+| `he` | 3112 | 2751 | 2738 | 13 | 0 | 100.0% | 99.5% |
+| `hr` | 2868 | 2751 | 2668 | 23 | 60 | 97.8% | 97.0% |
 
 ### Coverage per screen
 
@@ -185,7 +185,7 @@ The strings a screen's contract asks for, and how many of them a language actual
 | `users` | 5 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
 | `settings` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
 | `interface_manager` | 5 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
-| `translation_manager` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 0.0% (0 by key) |
+| `translation_manager` | 5 | 100.0% (0 by key) | 100.0% (0 by key) | 100.0% (0 by key) | 100.0% (0 by key) |
 | `concurrency_monitor` | 3 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
 
 ### Screens nobody has described yet
@@ -198,5 +198,5 @@ These have a contract derived from the registry, so they work: they have an iden
 
 Every contract passes the declarative checks: no SQL, no imports, no calls, no authorisation decisions, destructive actions carry a confirmation, bulk actions require a selection, and no key holds two different source strings.
 
-_Generated from 26 contracts, 2633 source strings and 5 catalogs._
+_Generated from 26 contracts, 2751 source strings and 5 catalogs._
 <!-- END GENERATED EXPERIENCE CONTRACT -->

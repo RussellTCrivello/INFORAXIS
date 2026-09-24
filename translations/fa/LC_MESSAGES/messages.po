@@ -9962,3 +9962,475 @@ msgstr "به ترجمه فهرست بازمی‌گردد"
 #: templates/Settings/translation_manager.html:157
 msgid "matching strings"
 msgstr "رشته‌های منطبق"
+
+#: templates/Search/search_advanced.html
+msgid "Hide exact duplicates"
+msgstr "پنهان‌کردن موارد تکراریِ دقیق"
+
+#: templates/Search/search_advanced.html
+msgid "File type (A-Z)"
+msgstr "نوع پرونده (الف تا ی)"
+
+#: templates/Search/search_advanced.html
+msgid "Similarity ≥"
+msgstr "شباهت ≥"
+
+#: templates/Search/search_advanced.html
+msgid "Minimum content similarity for grouping"
+msgstr "حداقل شباهت محتوا برای گروه‌بندی"
+
+#: templates/Search/search_advanced.html
+msgid "Choose the minimum content similarity for grouping"
+msgstr "انتخاب حداقل شباهت محتوا برای گروه‌بندی"
+
+#: templates/Search/search_advanced.html
+msgid "Group similar files on this results page"
+msgstr "گروه‌بندی پرونده‌های مشابه در این صفحهٔ نتایج"
+
+#: templates/Search/search_advanced.html
+msgid "Group similar"
+msgstr "گروه‌بندی موارد مشابه"
+
+#: templates/Search/search_advanced.html
+msgid "Open this search workspace in a separate window"
+msgstr "بازکردن فضای جست‌وجو در پنجره‌ای جداگانه"
+
+#: templates/Search/search_advanced.html
+msgid "New window"
+msgstr "پنجرهٔ جدید"
+
+#: templates/Search/search_advanced.html
+msgid "Current results page"
+msgstr "صفحهٔ نتایج فعلی"
+
+#: templates/Search/search_advanced.html
+msgid "CSV"
+msgstr "CSV"
+
+#: templates/Search/search_advanced.html
+msgid "Excel (XLSX)"
+msgstr "فایل Excel (XLSX)"
+
+#: templates/Search/search_advanced.html
+msgid "All matching results"
+msgstr "همهٔ نتایج منطبق"
+
+#: templates/Search/search_advanced.html
+msgid "JSON"
+msgstr "JSON"
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (CSV)"
+msgstr "نام پرونده‌های منطبق (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (Excel)"
+msgstr "نام پرونده‌های منطبق (Excel)"
+
+#: templates/Search/search_advanced.html
+msgid "Filtered corpus (CSV; ignores search terms)"
+msgstr "مجموعهٔ پالایش‌شده (CSV؛ بدون درنظرگرفتن عبارت‌های جست‌وجو)"
+
+#: templates/Search/search_advanced.html
+msgid "selected across this search"
+msgstr "انتخاب‌شده در نتایج این جست‌وجو"
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text for selected documents as a ZIP"
+msgstr "دریافت متن استخراج‌شدهٔ اسناد انتخاب‌شده به‌صورت فایل ZIP"
+
+#: templates/Search/search_advanced.html
+msgid "Text ZIP"
+msgstr "بستهٔ ZIP متنی"
+
+#: templates/Search/search_advanced.html
+msgid "Download available original files for selected documents as a ZIP"
+msgstr "دریافت فایل‌های اصلیِ موجود برای اسناد انتخاب‌شده به‌صورت ZIP"
+
+#: templates/Search/search_advanced.html
+msgid "Originals ZIP"
+msgstr "بستهٔ ZIP فایل‌های اصلی"
+
+#: templates/Search/search_advanced.html
+msgid "Names CSV"
+msgstr "نام‌ها (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Names Excel"
+msgstr "نام‌ها (Excel)"
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for extracted text"
+msgstr "انتخاب پوشهٔ موجود یا ایجاد زیرپوشه برای متن استخراج‌شده"
+
+#: templates/Search/search_advanced.html
+msgid "Text to folder"
+msgstr "ذخیرهٔ متن در پوشه"
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for original files"
+msgstr "انتخاب پوشهٔ موجود یا ایجاد زیرپوشه برای فایل‌های اصلی"
+
+#: templates/Search/search_advanced.html
+msgid "Originals to folder"
+msgstr "ذخیرهٔ فایل‌های اصلی در پوشه"
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one TXT file"
+msgstr "خواندن و ادغام متن صفحهٔ نخست اسناد انتخاب‌شده در یک فایل TXT"
+
+#: templates/Search/search_advanced.html
+msgid "Read & export first pages (TXT)"
+msgstr "خواندن و برون‌بری صفحات نخست (TXT)"
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one Word file"
+msgstr "خواندن و ادغام متن صفحهٔ نخست اسناد انتخاب‌شده در یک فایل Word"
+
+#: templates/Search/search_advanced.html
+msgid "First pages (DOCX)"
+msgstr "صفحات نخست (DOCX)"
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links CSV"
+msgstr "رایانامه‌ها و پیوندها (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links XLSX"
+msgstr "رایانامه‌ها و پیوندها (XLSX)"
+
+#: templates/Search/search_advanced.html
+msgid "Document review"
+msgstr "بازبینی اسناد"
+
+#: templates/Search/search_advanced.html
+msgid "Search & review"
+msgstr "جست‌وجو و بازبینی"
+
+#: templates/Search/search_advanced.html
+msgid "Select a result to review"
+msgstr "یک نتیجه را برای بازبینی انتخاب کنید"
+
+#: templates/Search/search_advanced.html
+msgid "Close document review"
+msgstr "بستن بازبینی سند"
+
+#: templates/Search/search_advanced.html
+msgid "Open full record"
+msgstr "بازکردن رکورد کامل"
+
+#: templates/Search/search_advanced.html
+msgid "Download the original document and choose its filename"
+msgstr "دریافت سند اصلی و انتخاب نام فایل آن"
+
+#: templates/Search/search_advanced.html
+msgid "Download original"
+msgstr "دریافت نسخهٔ اصلی"
+
+#: templates/Search/search_advanced.html
+msgid "Native application access requires the local INFORAXIS companion"
+msgstr "دسترسی به برنامهٔ بومی به برنامهٔ همراه محلی INFORAXIS نیاز دارد"
+
+#: templates/Search/search_advanced.html
+msgid "Open in native app"
+msgstr "بازکردن در برنامهٔ بومی"
+
+#: templates/Search/search_advanced.html
+msgid "Opening a local folder requires the local INFORAXIS companion"
+msgstr "بازکردن پوشهٔ محلی به برنامهٔ همراه محلی INFORAXIS نیاز دارد"
+
+#: templates/Search/search_advanced.html
+msgid "Open containing folder"
+msgstr "بازکردن پوشهٔ حاوی"
+
+#: templates/Search/search_advanced.html
+msgid "This browser can preview and download the source file. Launching or editing it in a native app, or opening its operating-system folder, requires a trusted local INFORAXIS companion."
+msgstr "این مرورگر می‌تواند پیش‌نمایش فایل اصلی را نشان دهد و آن را دریافت کند. اجرا یا ویرایش فایل در برنامهٔ بومی، یا بازکردن پوشهٔ آن در سیستم‌عامل، به برنامهٔ همراه محلی و مورداعتماد INFORAXIS نیاز دارد."
+
+#: templates/Search/search_advanced.html
+msgid "Document view"
+msgstr "نمای سند"
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text"
+msgstr "متن استخراج‌شده"
+
+#: templates/Search/search_advanced.html
+msgid "Original preview"
+msgstr "پیش‌نمایش نسخهٔ اصلی"
+
+#: templates/Search/search_advanced.html
+msgid "Navigate keyword matches"
+msgstr "پیمایش میان موارد منطبق با کلیدواژه"
+
+#: templates/Search/search_advanced.html
+msgid "Previous match"
+msgstr "مورد منطبق قبلی"
+
+#: templates/Search/search_advanced.html
+msgid "Next match"
+msgstr "مورد منطبق بعدی"
+
+#: templates/Search/search_advanced.html
+msgid "Choose Review on a search result to inspect its content."
+msgstr "برای بررسی محتوا، گزینهٔ «بازبینی» را در یکی از نتایج جست‌وجو انتخاب کنید."
+
+#: templates/Search/search_advanced.html
+msgid "Copy selected passage"
+msgstr "رونوشت از بخش انتخاب‌شده"
+
+#: templates/Search/search_advanced.html
+msgid "First-page preview"
+msgstr "پیش‌نمایش صفحهٔ نخست"
+
+#: templates/Search/search_advanced.html
+msgid "Loading document context…"
+msgstr "درحال بارگذاری زمینهٔ سند…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load this document context."
+msgstr "بارگذاری زمینهٔ این سند ممکن نشد."
+
+#: templates/Search/search_advanced.html
+msgid "No extracted text is available for this document."
+msgstr "متن استخراج‌شده‌ای برای این سند موجود نیست."
+
+#: templates/Search/search_advanced.html
+msgid "No query matches in extracted text."
+msgstr "در متن استخراج‌شده مورد منطبقی برای عبارت جست‌وجو نیست."
+
+#: templates/Search/search_advanced.html
+msgid "Showing the first {count} matches."
+msgstr "نمایش {count} مورد منطبق نخست."
+
+#: templates/Search/search_advanced.html
+msgid "The original file is not available."
+msgstr "فایل اصلی در دسترس نیست."
+
+#: templates/Search/search_advanced.html
+msgid "Could not load the original preview."
+msgstr "بارگذاری پیش‌نمایش فایل اصلی ممکن نشد."
+
+#: templates/Search/search_advanced.html
+msgid "Choose a filename for this original document:"
+msgstr "برای فایل سند اصلی نامی انتخاب کنید:"
+
+#: templates/Search/search_advanced.html
+msgid "Original download ready."
+msgstr "دریافت فایل اصلی آماده است."
+
+#: templates/Search/search_advanced.html
+msgid "Could not download the original document."
+msgstr "دریافت سند اصلی ممکن نشد."
+
+#: templates/Search/search_advanced.html
+msgid "Opening or editing a native file and opening its operating-system folder require the trusted local INFORAXIS companion. Use the browser preview or download here."
+msgstr "بازکردن یا ویرایش فایل در برنامهٔ بومی و بازکردن پوشهٔ آن در سیستم‌عامل به برنامهٔ همراه محلی و مورداعتماد INFORAXIS نیاز دارد. از پیش‌نمایش مرورگر استفاده کنید یا فایل را از اینجا دریافت کنید."
+
+#: templates/Search/search_advanced.html
+msgid "The local INFORAXIS companion could not complete this action."
+msgstr "برنامهٔ همراه محلی INFORAXIS نتوانست این کار را کامل کند."
+
+#: templates/Search/search_advanced.html
+msgid "Select a passage in the document first."
+msgstr "ابتدا بخشی از سند را انتخاب کنید."
+
+#: templates/Search/search_advanced.html
+msgid "Passage copied."
+msgstr "بخش انتخاب‌شده رونوشت شد."
+
+#: templates/Search/search_advanced.html
+msgid "Updating duplicate filter…"
+msgstr "درحال به‌روزرسانی فیلتر موارد تکراری…"
+
+#: templates/Search/search_advanced.html
+msgid "Grouping similar files on this results page…"
+msgstr "درحال گروه‌بندی پرونده‌های مشابه در این صفحهٔ نتایج…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not group similar files."
+msgstr "گروه‌بندی پرونده‌های مشابه ممکن نشد."
+
+#: templates/Search/search_advanced.html
+msgid "Similarity groups apply to this results page only."
+msgstr "گروه‌های شباهت فقط در همین صفحهٔ نتایج اعمال می‌شوند."
+
+#: templates/Search/search_advanced.html
+msgid "Similarity group {group}"
+msgstr "گروه شباهت {group}"
+
+#: templates/Search/search_advanced.html
+msgid "Files without extracted text are shown separately."
+msgstr "پرونده‌های بدون متن استخراج‌شده جداگانه نمایش داده می‌شوند."
+
+#: templates/Search/search_advanced.html
+msgid "Name your export (leave blank for an automatic name):"
+msgstr "برای خروجی نامی وارد کنید یا برای نام خودکار خالی بگذارید:"
+
+#: templates/Search/search_advanced.html
+msgid "Name this download:"
+msgstr "برای این دریافت نامی وارد کنید:"
+
+#: templates/Search/search_advanced.html
+msgid "Name this selected-file export (leave blank for an automatic name):"
+msgstr "برای خروجی فایل‌های انتخاب‌شده نامی وارد کنید یا برای نام خودکار خالی بگذارید:"
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export failed."
+msgstr "برون‌بری فایل‌های انتخاب‌شده ناموفق بود."
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export ready."
+msgstr "خروجی فایل‌های انتخاب‌شده آماده است."
+
+#: templates/Search/search_advanced.html
+msgid "First-page export ready."
+msgstr "خروجی صفحات نخست آماده است."
+
+#: templates/Search/search_advanced.html
+msgid "The export was saved, but some selected documents had no readable extracted text."
+msgstr "خروجی ذخیره شد، اما برخی اسناد انتخاب‌شده متن استخراج‌شدهٔ خوانایی نداشتند."
+
+#: templates/Search/search_advanced.html
+msgid "Email and hyperlink export ready."
+msgstr "برون‌بری رایانامه‌ها و پیوندها آماده است."
+
+#: templates/Search/search_advanced.html
+msgid "No email addresses or links were found; a headers-only report was saved."
+msgstr "هیچ نشانی رایانامه یا پیوندی پیدا نشد؛ گزارشی شامل سرستون‌ها ذخیره شد."
+
+#: templates/Search/search_advanced.html
+msgid "Selected filename export ready."
+msgstr "خروجی نام پرونده‌های انتخاب‌شده آماده است."
+
+#: templates/Search/search_advanced.html
+msgid "Select one or more documents first."
+msgstr "ابتدا یک یا چند سند را انتخاب کنید."
+
+#: templates/Search/search_advanced.html
+msgid "Select no more than 200 documents for one export."
+msgstr "برای هر بار برون‌بری حداکثر ۲۰۰ سند انتخاب کنید."
+
+#: templates/Search/search_advanced.html
+msgid "Folder export is not supported in this browser; downloading a ZIP instead."
+msgstr "این مرورگر از ذخیره در پوشه پشتیبانی نمی‌کند؛ در عوض فایل ZIP دریافت می‌شود."
+
+#: templates/Search/search_advanced.html
+msgid "Could not write to the selected folder."
+msgstr "نوشتن در پوشهٔ انتخاب‌شده ممکن نشد."
+
+#: templates/Search/search_advanced.html
+msgid "Writing selected documents to the chosen folder…"
+msgstr "درحال نوشتن اسناد انتخاب‌شده در پوشهٔ برگزیده…"
+
+#: templates/Search/search_advanced.html
+msgid "Documents saved to the chosen folder."
+msgstr "اسناد در پوشهٔ برگزیده ذخیره شدند."
+
+#: templates/Search/search_advanced.html
+msgid "Some documents could not be saved to the chosen folder."
+msgstr "ذخیرهٔ برخی اسناد در پوشهٔ برگزیده ممکن نشد."
+
+#: templates/Search/search_advanced.html
+msgid "Optional: enter a new subfolder name, or leave blank to use the selected folder."
+msgstr "اختیاری: نام زیرپوشه‌ای تازه وارد کنید یا برای استفاده از پوشهٔ انتخاب‌شده آن را خالی بگذارید."
+
+#: templates/Search/search_advanced.html
+msgid "Allow pop-ups to open this search in a new window."
+msgstr "برای بازکردن این جست‌وجو در پنجره‌ای تازه، بازشدن پنجره‌های بازشو را مجاز کنید."
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text"
+msgstr "دریافت متن استخراج‌شده"
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text download ready."
+msgstr "دریافت متن استخراج‌شده آماده است."
+
+#: templates/Search/search_advanced.html
+msgid "Review beside results"
+msgstr "بازبینی در کنار نتایج"
+
+#: templates/Search/search_advanced.html
+msgid "Filename match"
+msgstr "انطباق نام پرونده"
+
+#: templates/Search/search_advanced.html
+msgid "Content match"
+msgstr "انطباق محتوا"
+
+#: templates/Search/search_advanced.html
+msgid "Filename and content match"
+msgstr "انطباق نام پرونده و محتوا"
+
+#: templates/Search/search_advanced.html
+msgid "Metadata match"
+msgstr "انطباق فراداده"
+
+#: templates/Search/search_advanced.html
+msgid "similarity"
+msgstr "میزان شباهت"
+
+#: templates/Search/search_advanced.html
+msgid "Other results"
+msgstr "نتایج دیگر"
+
+#: templates/Search/search_advanced.html
+msgid "Clear groups"
+msgstr "پاک‌کردن گروه‌ها"
+
+#: templates/Search/search_advanced.html
+msgid "At least two results are needed to group similar files."
+msgstr "برای گروه‌بندی پرونده‌های مشابه دست‌کم دو نتیجه لازم است."
+
+#: templates/Search/search_advanced.html
+msgid "Your browser cannot play this media."
+msgstr "مرورگر شما نمی‌تواند این رسانه را پخش کند."
+
+#: templates/Search/search_advanced.html
+msgid "This format cannot be displayed inline."
+msgstr "این قالب را نمی‌توان درون صفحه نمایش داد."
+
+#: templates/Search/search_advanced.html
+msgid "Could not copy the selected passage."
+msgstr "رونوشت از بخش انتخاب‌شده ممکن نشد."
+
+#: templates/Search/search_advanced.html
+msgid "Matching filename export ready."
+msgstr "خروجی نام پرونده‌های منطبق آماده است."
+
+#: templates/Search/search_advanced.html
+msgid "Could not export the matching filenames."
+msgstr "برون‌بری نام پرونده‌های منطبق ممکن نشد."
+
+#: templates/Search/search_advanced.html
+msgid "The filename export reached the 50,000-row limit; narrow the search to export everything."
+msgstr "خروجی نام پرونده‌ها به سقف ۵۰٬۰۰۰ ردیف رسید؛ برای برون‌بری همهٔ موارد، جست‌وجو را محدودتر کنید."
+
+#: templates/Search/search_enhanced.html
+msgid "Open Search & Review workspace"
+msgstr "بازکردن فضای جست‌وجو و بازبینی"
+
+#: templates/Search/search_enhanced.html
+msgid "Name this export (leave blank for an automatic name):"
+msgstr "برای این خروجی نامی وارد کنید یا برای نام خودکار خالی بگذارید:"
+
+#: templates/Search/search_enhanced.html
+msgid "Case sensitive"
+msgstr "حساس به بزرگی و کوچکی حروف"
+
+#: templates/Search/search_enhanced.html
+msgid "Match uppercase and lowercase exactly"
+msgstr "تطبیق دقیق حروف بزرگ و کوچک"
+
+#: templates/Search/search_enhanced.html
+msgid "Whole word"
+msgstr "واژهٔ کامل"
+
+#: templates/Search/search_enhanced.html
+msgid "Match complete words only"
+msgstr "تنها تطبیق واژه‌های کامل"
+
+#: core/interfaces/registry.py
+msgid "Review and manage localized strings across every screen."
+msgstr "بازبینی و مدیریت متن‌های بومی‌سازی‌شده در همهٔ صفحه‌ها."

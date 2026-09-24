@@ -9828,3 +9828,475 @@ msgstr "ستُستعاد ترجمة الفهرس"
 #: templates/Settings/translation_manager.html:157
 msgid "matching strings"
 msgstr "عبارات مطابقة"
+
+#: templates/Search/search_advanced.html
+msgid "Hide exact duplicates"
+msgstr "إخفاء النسخ المكررة تمامًا"
+
+#: templates/Search/search_advanced.html
+msgid "File type (A-Z)"
+msgstr "نوع الملف (أ-ي)"
+
+#: templates/Search/search_advanced.html
+msgid "Similarity ≥"
+msgstr "التشابه ≥"
+
+#: templates/Search/search_advanced.html
+msgid "Minimum content similarity for grouping"
+msgstr "الحد الأدنى لتشابه المحتوى للتجميع"
+
+#: templates/Search/search_advanced.html
+msgid "Choose the minimum content similarity for grouping"
+msgstr "اختر الحد الأدنى لتشابه المحتوى للتجميع"
+
+#: templates/Search/search_advanced.html
+msgid "Group similar files on this results page"
+msgstr "تجميع الملفات المتشابهة في صفحة النتائج هذه"
+
+#: templates/Search/search_advanced.html
+msgid "Group similar"
+msgstr "تجميع الملفات المتشابهة"
+
+#: templates/Search/search_advanced.html
+msgid "Open this search workspace in a separate window"
+msgstr "فتح مساحة البحث هذه في نافذة منفصلة"
+
+#: templates/Search/search_advanced.html
+msgid "New window"
+msgstr "نافذة جديدة"
+
+#: templates/Search/search_advanced.html
+msgid "Current results page"
+msgstr "صفحة النتائج الحالية"
+
+#: templates/Search/search_advanced.html
+msgid "CSV"
+msgstr "CSV"
+
+#: templates/Search/search_advanced.html
+msgid "Excel (XLSX)"
+msgstr "ملف Excel (XLSX)"
+
+#: templates/Search/search_advanced.html
+msgid "All matching results"
+msgstr "جميع النتائج المطابقة"
+
+#: templates/Search/search_advanced.html
+msgid "JSON"
+msgstr "JSON"
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (CSV)"
+msgstr "أسماء الملفات المطابقة (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (Excel)"
+msgstr "أسماء الملفات المطابقة (Excel)"
+
+#: templates/Search/search_advanced.html
+msgid "Filtered corpus (CSV; ignores search terms)"
+msgstr "مجموعة الملفات المصفّاة (CSV؛ تتجاهل عبارات البحث)"
+
+#: templates/Search/search_advanced.html
+msgid "selected across this search"
+msgstr "المحدد ضمن نتائج هذا البحث"
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text for selected documents as a ZIP"
+msgstr "تنزيل النص المستخرج للمستندات المحددة كملف ZIP"
+
+#: templates/Search/search_advanced.html
+msgid "Text ZIP"
+msgstr "ملف ZIP للنصوص"
+
+#: templates/Search/search_advanced.html
+msgid "Download available original files for selected documents as a ZIP"
+msgstr "تنزيل الملفات الأصلية المتاحة للمستندات المحددة كملف ZIP"
+
+#: templates/Search/search_advanced.html
+msgid "Originals ZIP"
+msgstr "ملف ZIP للملفات الأصلية"
+
+#: templates/Search/search_advanced.html
+msgid "Names CSV"
+msgstr "أسماء الملفات (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Names Excel"
+msgstr "أسماء الملفات (Excel)"
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for extracted text"
+msgstr "اختر مجلدًا موجودًا أو أنشئ مجلدًا فرعيًا للنص المستخرج"
+
+#: templates/Search/search_advanced.html
+msgid "Text to folder"
+msgstr "حفظ النص في مجلد"
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for original files"
+msgstr "اختر مجلدًا موجودًا أو أنشئ مجلدًا فرعيًا للملفات الأصلية"
+
+#: templates/Search/search_advanced.html
+msgid "Originals to folder"
+msgstr "حفظ الملفات الأصلية في مجلد"
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one TXT file"
+msgstr "قراءة نص الصفحة الأولى للمستندات المحددة ودمجه في ملف TXT واحد"
+
+#: templates/Search/search_advanced.html
+msgid "Read & export first pages (TXT)"
+msgstr "قراءة الصفحات الأولى وتصديرها (TXT)"
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one Word file"
+msgstr "قراءة نص الصفحة الأولى للمستندات المحددة ودمجه في ملف Word واحد"
+
+#: templates/Search/search_advanced.html
+msgid "First pages (DOCX)"
+msgstr "الصفحات الأولى (DOCX)"
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links CSV"
+msgstr "عناوين البريد الإلكتروني والروابط (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links XLSX"
+msgstr "عناوين البريد الإلكتروني والروابط (XLSX)"
+
+#: templates/Search/search_advanced.html
+msgid "Document review"
+msgstr "مراجعة المستندات"
+
+#: templates/Search/search_advanced.html
+msgid "Search & review"
+msgstr "البحث والمراجعة"
+
+#: templates/Search/search_advanced.html
+msgid "Select a result to review"
+msgstr "حدد نتيجة لمراجعتها"
+
+#: templates/Search/search_advanced.html
+msgid "Close document review"
+msgstr "إغلاق مراجعة المستند"
+
+#: templates/Search/search_advanced.html
+msgid "Open full record"
+msgstr "فتح السجل الكامل"
+
+#: templates/Search/search_advanced.html
+msgid "Download the original document and choose its filename"
+msgstr "تنزيل المستند الأصلي واختيار اسم ملفه"
+
+#: templates/Search/search_advanced.html
+msgid "Download original"
+msgstr "تنزيل الملف الأصلي"
+
+#: templates/Search/search_advanced.html
+msgid "Native application access requires the local INFORAXIS companion"
+msgstr "يتطلب الوصول إلى التطبيق الأصلي وجود تطبيق INFORAXIS المحلي المرافق"
+
+#: templates/Search/search_advanced.html
+msgid "Open in native app"
+msgstr "فتح في التطبيق الأصلي"
+
+#: templates/Search/search_advanced.html
+msgid "Opening a local folder requires the local INFORAXIS companion"
+msgstr "يتطلب فتح مجلد محلي وجود تطبيق INFORAXIS المحلي المرافق"
+
+#: templates/Search/search_advanced.html
+msgid "Open containing folder"
+msgstr "فتح المجلد الحاوي"
+
+#: templates/Search/search_advanced.html
+msgid "This browser can preview and download the source file. Launching or editing it in a native app, or opening its operating-system folder, requires a trusted local INFORAXIS companion."
+msgstr "يمكن لهذا المتصفح معاينة الملف المصدر وتنزيله. أما تشغيله أو تحريره في تطبيق أصلي، أو فتح مجلده في نظام التشغيل، فيتطلب تطبيق INFORAXIS محليًا موثوقًا."
+
+#: templates/Search/search_advanced.html
+msgid "Document view"
+msgstr "Prikaz dokumenta"
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text"
+msgstr "النص المستخرج"
+
+#: templates/Search/search_advanced.html
+msgid "Original preview"
+msgstr "المعاينة الأصلية"
+
+#: templates/Search/search_advanced.html
+msgid "Navigate keyword matches"
+msgstr "التنقل بين مواضع تطابق الكلمات المفتاحية"
+
+#: templates/Search/search_advanced.html
+msgid "Previous match"
+msgstr "التطابق السابق"
+
+#: templates/Search/search_advanced.html
+msgid "Next match"
+msgstr "التطابق التالي"
+
+#: templates/Search/search_advanced.html
+msgid "Choose Review on a search result to inspect its content."
+msgstr "اختر «مراجعة» في إحدى نتائج البحث لفحص محتواها."
+
+#: templates/Search/search_advanced.html
+msgid "Copy selected passage"
+msgstr "نسخ المقطع المحدد"
+
+#: templates/Search/search_advanced.html
+msgid "First-page preview"
+msgstr "معاينة الصفحة الأولى"
+
+#: templates/Search/search_advanced.html
+msgid "Loading document context…"
+msgstr "جارٍ تحميل سياق المستند…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load this document context."
+msgstr "تعذر تحميل سياق هذا المستند."
+
+#: templates/Search/search_advanced.html
+msgid "No extracted text is available for this document."
+msgstr "لا يتوفر نص مستخرج لهذا المستند."
+
+#: templates/Search/search_advanced.html
+msgid "No query matches in extracted text."
+msgstr "لا توجد نتائج مطابقة للاستعلام في النص المستخرج."
+
+#: templates/Search/search_advanced.html
+msgid "Showing the first {count} matches."
+msgstr "يُعرض أول {count} من التطابقات."
+
+#: templates/Search/search_advanced.html
+msgid "The original file is not available."
+msgstr "الملف الأصلي غير متاح."
+
+#: templates/Search/search_advanced.html
+msgid "Could not load the original preview."
+msgstr "تعذر تحميل معاينة الملف الأصلي."
+
+#: templates/Search/search_advanced.html
+msgid "Choose a filename for this original document:"
+msgstr "اختر اسمًا لملف هذا المستند الأصلي:"
+
+#: templates/Search/search_advanced.html
+msgid "Original download ready."
+msgstr "الملف الأصلي جاهز للتنزيل."
+
+#: templates/Search/search_advanced.html
+msgid "Could not download the original document."
+msgstr "تعذر تنزيل المستند الأصلي."
+
+#: templates/Search/search_advanced.html
+msgid "Opening or editing a native file and opening its operating-system folder require the trusted local INFORAXIS companion. Use the browser preview or download here."
+msgstr "يتطلب فتح ملف في تطبيق أصلي أو تحريره، وفتح مجلده في نظام التشغيل، تطبيق INFORAXIS محليًا موثوقًا. استخدم معاينة المتصفح أو التنزيل هنا."
+
+#: templates/Search/search_advanced.html
+msgid "The local INFORAXIS companion could not complete this action."
+msgstr "تعذر على تطبيق INFORAXIS المحلي المرافق إكمال هذا الإجراء."
+
+#: templates/Search/search_advanced.html
+msgid "Select a passage in the document first."
+msgstr "حدد مقطعًا من المستند أولًا."
+
+#: templates/Search/search_advanced.html
+msgid "Passage copied."
+msgstr "تم نسخ المقطع."
+
+#: templates/Search/search_advanced.html
+msgid "Updating duplicate filter…"
+msgstr "جارٍ تحديث مرشح التكرارات…"
+
+#: templates/Search/search_advanced.html
+msgid "Grouping similar files on this results page…"
+msgstr "جارٍ تجميع الملفات المتشابهة في صفحة النتائج هذه…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not group similar files."
+msgstr "تعذر تجميع الملفات المتشابهة."
+
+#: templates/Search/search_advanced.html
+msgid "Similarity groups apply to this results page only."
+msgstr "تنطبق مجموعات التشابه على صفحة النتائج هذه فقط."
+
+#: templates/Search/search_advanced.html
+msgid "Similarity group {group}"
+msgstr "مجموعة التشابه {group}"
+
+#: templates/Search/search_advanced.html
+msgid "Files without extracted text are shown separately."
+msgstr "تُعرض الملفات التي لا تحتوي على نص مستخرج على حدة."
+
+#: templates/Search/search_advanced.html
+msgid "Name your export (leave blank for an automatic name):"
+msgstr "أدخل اسم ملف التصدير أو اتركه فارغًا لإنشاء اسم تلقائي:"
+
+#: templates/Search/search_advanced.html
+msgid "Name this download:"
+msgstr "أدخل اسم هذا التنزيل:"
+
+#: templates/Search/search_advanced.html
+msgid "Name this selected-file export (leave blank for an automatic name):"
+msgstr "أدخل اسم تصدير الملفات المحددة أو اتركه فارغًا لإنشاء اسم تلقائي:"
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export failed."
+msgstr "فشل تصدير الملفات المحددة."
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export ready."
+msgstr "تصدير الملفات المحددة جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "First-page export ready."
+msgstr "تصدير الصفحات الأولى جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "The export was saved, but some selected documents had no readable extracted text."
+msgstr "تم حفظ التصدير، لكن بعض المستندات المحددة لا تحتوي على نص مستخرج قابل للقراءة."
+
+#: templates/Search/search_advanced.html
+msgid "Email and hyperlink export ready."
+msgstr "تصدير عناوين البريد الإلكتروني والروابط جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "No email addresses or links were found; a headers-only report was saved."
+msgstr "لم يتم العثور على عناوين بريد إلكتروني أو روابط؛ تم حفظ تقرير بالعناوين فقط."
+
+#: templates/Search/search_advanced.html
+msgid "Selected filename export ready."
+msgstr "تصدير أسماء الملفات المحددة جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "Select one or more documents first."
+msgstr "حدد مستندًا واحدًا أو أكثر أولًا."
+
+#: templates/Search/search_advanced.html
+msgid "Select no more than 200 documents for one export."
+msgstr "حدد 200 مستند كحد أقصى في عملية تصدير واحدة."
+
+#: templates/Search/search_advanced.html
+msgid "Folder export is not supported in this browser; downloading a ZIP instead."
+msgstr "لا يدعم هذا المتصفح التصدير إلى مجلد؛ سيتم تنزيل ملف ZIP بدلًا من ذلك."
+
+#: templates/Search/search_advanced.html
+msgid "Could not write to the selected folder."
+msgstr "تعذرت الكتابة إلى المجلد المحدد."
+
+#: templates/Search/search_advanced.html
+msgid "Writing selected documents to the chosen folder…"
+msgstr "جارٍ حفظ المستندات المحددة في المجلد المختار…"
+
+#: templates/Search/search_advanced.html
+msgid "Documents saved to the chosen folder."
+msgstr "تم حفظ المستندات في المجلد المختار."
+
+#: templates/Search/search_advanced.html
+msgid "Some documents could not be saved to the chosen folder."
+msgstr "تعذر حفظ بعض المستندات في المجلد المختار."
+
+#: templates/Search/search_advanced.html
+msgid "Optional: enter a new subfolder name, or leave blank to use the selected folder."
+msgstr "اختياري: أدخل اسم مجلد فرعي جديد أو اتركه فارغًا لاستخدام المجلد المحدد."
+
+#: templates/Search/search_advanced.html
+msgid "Allow pop-ups to open this search in a new window."
+msgstr "اسمح بالنوافذ المنبثقة لفتح هذا البحث في نافذة جديدة."
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text"
+msgstr "تنزيل النص المستخرج"
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text download ready."
+msgstr "النص المستخرج جاهز للتنزيل."
+
+#: templates/Search/search_advanced.html
+msgid "Review beside results"
+msgstr "مراجعة بجانب النتائج"
+
+#: templates/Search/search_advanced.html
+msgid "Filename match"
+msgstr "تطابق اسم الملف"
+
+#: templates/Search/search_advanced.html
+msgid "Content match"
+msgstr "تطابق المحتوى"
+
+#: templates/Search/search_advanced.html
+msgid "Filename and content match"
+msgstr "تطابق اسم الملف والمحتوى"
+
+#: templates/Search/search_advanced.html
+msgid "Metadata match"
+msgstr "تطابق البيانات الوصفية"
+
+#: templates/Search/search_advanced.html
+msgid "similarity"
+msgstr "درجة التشابه"
+
+#: templates/Search/search_advanced.html
+msgid "Other results"
+msgstr "نتائج أخرى"
+
+#: templates/Search/search_advanced.html
+msgid "Clear groups"
+msgstr "إزالة التجميع"
+
+#: templates/Search/search_advanced.html
+msgid "At least two results are needed to group similar files."
+msgstr "يلزم وجود نتيجتين على الأقل لتجميع الملفات المتشابهة."
+
+#: templates/Search/search_advanced.html
+msgid "Your browser cannot play this media."
+msgstr "لا يستطيع متصفحك تشغيل هذا الملف الصوتي أو المرئي."
+
+#: templates/Search/search_advanced.html
+msgid "This format cannot be displayed inline."
+msgstr "لا يمكن عرض هذا التنسيق داخل الصفحة."
+
+#: templates/Search/search_advanced.html
+msgid "Could not copy the selected passage."
+msgstr "تعذر نسخ المقطع المحدد."
+
+#: templates/Search/search_advanced.html
+msgid "Matching filename export ready."
+msgstr "تصدير أسماء الملفات المطابقة جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "Could not export the matching filenames."
+msgstr "تعذر تصدير أسماء الملفات المطابقة."
+
+#: templates/Search/search_advanced.html
+msgid "The filename export reached the 50,000-row limit; narrow the search to export everything."
+msgstr "بلغ تصدير أسماء الملفات حد 50,000 صف؛ ضيّق نطاق البحث لتصدير كل النتائج."
+
+#: templates/Search/search_enhanced.html
+msgid "Open Search & Review workspace"
+msgstr "فتح مساحة البحث والمراجعة"
+
+#: templates/Search/search_enhanced.html
+msgid "Name this export (leave blank for an automatic name):"
+msgstr "أدخل اسم هذا التصدير أو اتركه فارغًا لإنشاء اسم تلقائي:"
+
+#: templates/Search/search_enhanced.html
+msgid "Case sensitive"
+msgstr "حساس لحالة الأحرف"
+
+#: templates/Search/search_enhanced.html
+msgid "Match uppercase and lowercase exactly"
+msgstr "مطابقة الأحرف الكبيرة والصغيرة كما هي تمامًا"
+
+#: templates/Search/search_enhanced.html
+msgid "Whole word"
+msgstr "كلمة كاملة"
+
+#: templates/Search/search_enhanced.html
+msgid "Match complete words only"
+msgstr "مطابقة الكلمات الكاملة فقط"
+
+#: core/interfaces/registry.py
+msgid "Review and manage localized strings across every screen."
+msgstr "مراجعة وإدارة النصوص الموطّنة في جميع الشاشات."

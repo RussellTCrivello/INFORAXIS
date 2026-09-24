@@ -89,12 +89,12 @@ _SQL = {
             file_name, file_path, file_size, file_type, file_status, file_date,
             date_creation, context_id, coordinates, extraction_provenance,
             processing_status, status_detail, attempts, parent_path_id,
-            hierarchy_path
+            hierarchy_path, status_updated_at
         ) VALUES (
             %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s::jsonb,
             %s, %s, %s, %s,
-            %s
+            %s, NOW()
         )
         RETURNING id
     """,
@@ -403,7 +403,7 @@ class DeduplicationService:
             "processing_status", "date_creation",
             "context_id", "source_id", "side_id", "source_name", "side_name",
         )
-        return [dict(zip(keys, r)) for r in rows]
+        return [dict(zip(keys, r, strict=True)) for r in rows]
 
     # ------------------------------------------------------------------
     # Registration

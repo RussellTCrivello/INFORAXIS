@@ -56,6 +56,7 @@ INTERFACE_TEMPLATES = (
     "templates/components/file_nav.html",
     "templates/components/operations_widget.html",
     "templates/auth/users.html",
+    "templates/Settings/translation_manager.html",
     "templates/Search/search_advanced.html",
     "templates/Search/search_enhanced.html",
     "templates/email_words/email_words.html",
@@ -293,6 +294,29 @@ def test_user_management_page_renders_in_the_selected_language(admin_client, lan
     assert data_match
     page_data = json.loads(data_match.group(1))
     assert page_data["translations"]["resetPassword"] == catalog.get("Reset password").string
+
+
+@pytest.mark.parametrize("lang", ("ar", "he", "fa"))
+def test_translation_management_page_renders_in_the_selected_language(admin_client, lang):
+    """The translation editor itself is reachable and localized in the UI."""
+    _set_language(admin_client, lang)
+    response = admin_client.get("/translations/manage")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert f'<html lang="{lang}"' in html
+    assert 'dir="rtl"' in html
+    catalog = _catalog(lang)
+    for english in (
+        "Translation Management",
+        "Review and edit the localized text used throughout every screen.",
+        "Translation filters",
+        "Save changes",
+    ):
+        entry = catalog.get(english)
+        assert entry and entry.string, f"[{lang}] missing translation for {english!r}"
+        assert entry.string in html, (
+            f"[{lang}] {english!r} did not render as {entry.string!r}")
 
 
 @pytest.mark.parametrize("lang", ("ar", "he", "fa"))
