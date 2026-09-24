@@ -761,7 +761,12 @@ class FileRouterService:
                     # Supported, unsupported and failed children all settle into
                     # their real bucket, so none of them disappears from the
                     # accounting and the parent can still reach 100%.
-                    child_unit.settle(_classify(result))
+                    # Attribute settlement to the container that published the
+                    # child. Otherwise the live-container counter stays positive
+                    # after the work finishes and the run waits out its stall grace.
+                    progress_ledger.settle(
+                        child_unit, _classify(result), container=parent_file
+                    )
 
                 if result:
                     extracted_results.append(result)
@@ -838,7 +843,12 @@ class FileRouterService:
                     # Supported, unsupported and failed children all settle into
                     # their real bucket, so none of them disappears from the
                     # accounting and the parent can still reach 100%.
-                    child_unit.settle(_classify(result))
+                    # Attribute settlement to the container that published the
+                    # child. Otherwise the live-container counter stays positive
+                    # after the work finishes and the run waits out its stall grace.
+                    progress_ledger.settle(
+                        child_unit, _classify(result), container=parent_file
+                    )
 
                 if result:
                     extracted_results.append(result)
@@ -915,7 +925,12 @@ class FileRouterService:
                     # Supported, unsupported and failed children all settle into
                     # their real bucket, so none of them disappears from the
                     # accounting and the parent can still reach 100%.
-                    child_unit.settle(_classify(result))
+                    # Attribute settlement to the container that published the
+                    # child. Otherwise the live-container counter stays positive
+                    # after the work finishes and the run waits out its stall grace.
+                    progress_ledger.settle(
+                        child_unit, _classify(result), container=parent_file
+                    )
 
                 if result:
                     extracted_results.append(result)
