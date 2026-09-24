@@ -289,10 +289,29 @@ def test_archives_page_offers_the_original_file_view(admin_client):
     assert 'id="extractedContentTab"' in html
 
 
-def test_reader_page_links_to_the_original_file(admin_client, originals):
-    """The reader shows the text; the source file is one click away."""
-    resp = admin_client.get(f"/file/{originals['ids']['plain']}/full-content")
+def test_reader_page_offers_the_original_file_in_place(admin_client, originals):
+    """The reader exposes the original tab and its lazy viewer module."""
+    file_id = originals["ids"]["plain"]
+    resp = admin_client.get(f"/file/{file_id}/full-content")
     assert resp.status_code == 200, resp.get_data(as_text=True)
     html = resp.get_data(as_text=True)
-    assert f"/api/file/{originals['ids']['plain']}/original/content" in html
-    assert "?download=1" in html
+    assert 'id="extractedContentTab"' in html
+    assert 'id="originalFileTab"' in html
+    assert 'data-content-pane="original"' in html
+    assert "js/pages/full-content-page.js" in html
+
+    page_module = (PROJECT_ROOT / "static/js/pages/full-content-page.js").read_text(
+        encoding="utf-8")
+    tab_module = (PROJECT_ROOT / "static/js/modules/original-content-tab.js").read_text(
+        encoding="utf-8")
+    assert "initOriginalContentTab(fileId)" in page_module
+    assert "showOriginalFile(fileId, originalPane)" in tab_module
+
+    # The viewer resolves its URLs from the server's descriptor, rather than
+    # baking a source path into the HTML returned for a Reader page.
+    descriptor = admin_client.get(f"/api/file/{file_id}/original")
+    assert descriptor.status_code == 200
+    original = descriptor.get_json()["original"]
+    assert original["serve_url"].endswith(
+        f"/api/file/{file_id}/original/content")
+    assert original["download_url"].endswith("?download=1")
