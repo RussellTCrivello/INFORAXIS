@@ -126,7 +126,9 @@ class TestTheRequestModel:
 class TestTheRowsAreTheServers:
     def test_tuples_and_dictionaries_arrive_in_one_shape(self):
         rows = search_export.normalise([
-            {"id": 1, "file_name": "a.pdf", "snippet": "…agreement was signed…"},
+            {"id": 1, "file_name": "a.pdf", "categories": ["smart"],
+             "analyst_categories": ["reviewed"],
+             "snippet": "…agreement was signed…"},
             (2, "b.docx", "docx", 12, None, "Read",
              "S", 1, "Side", 2, 0.5, None, "…"),
         ])
@@ -134,7 +136,36 @@ class TestTheRowsAreTheServers:
         for row in rows:
             assert list(row) == list(search_export.COLUMNS)
         assert rows[0]["id"] == 1
+        assert rows[0]["smart_categories"] == "smart"
+        assert rows[0]["analyst_categories"] == "reviewed"
         assert rows[1]["id"] == 2
+
+    def test_each_export_format_uses_the_same_published_columns(self):
+        rows = search_export.normalise([{
+            "id": 7, "file_name": "record.txt", "categories": ["smart"],
+            "analyst_categories": ["reviewed"], "snippet": "matched text",
+        }])
+
+        for format_name in ("csv", "excel", "json"):
+            request = search_export.parse(dict(DEFINITION, format=format_name))
+            result = search_export.SearchExportResult(request=request, rows=rows, total=1)
+            output, _mimetype, _extension = search_export.export_bytes(result)
+
+            if format_name == "csv":
+                header = next(csv.reader(io.StringIO(
+                    output.getvalue().decode("utf-8-sig"))))
+            elif format_name == "excel":
+                from openpyxl import load_workbook
+
+                workbook = load_workbook(io.BytesIO(output.getvalue()), read_only=True)
+                sheet = workbook.active
+                header = list(next(sheet.iter_rows(values_only=True)))
+                workbook.close()
+            else:
+                header = list(json.loads(output.getvalue().decode("utf-8"))[
+                    "results"][0])
+
+            assert header == list(search_export.COLUMNS), format_name
 
     def test_a_datetime_is_serialised_once(self):
         from datetime import datetime
@@ -230,8 +261,12 @@ class TestTheServedEndpoint:
             pytest.skip("the disposable database has no records to export")
         text = response.get_data(as_text=True)
         first = next(iter(csv.reader(io.StringIO(text))), [])
-        for column in search_export.COLUMNS:
-            assert column in first, column
+        assert first, "the CSV response has no header row"
+        # The endpoint emits a UTF-8 BOM so spreadsheet applications recognize
+        # the encoding; csv.reader keeps it on the first field by design.
+        first[0] = first[0].lstrip("\ufeff")
+        assert first == list(search_export.COLUMNS), (
+            "CSV must have exactly the published columns, in their declared order")
 
     def test_an_unauthenticated_client_gets_nothing(self, client):
         response = client.post("/api/search/export",

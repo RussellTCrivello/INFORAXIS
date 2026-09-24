@@ -104,8 +104,8 @@ document with what it writes.
 
 | Measurement | Count |
 | --- | --- |
-| Interfaces | 25 |
-| Navigable interfaces | 23 |
+| Interfaces | 26 |
+| Navigable interfaces | 24 |
 | Interfaces with a described screen | 5 |
 | Interfaces declaring no help topic | 2 |
 | Interfaces declaring no keyboard shortcut | 14 |
@@ -117,9 +117,9 @@ document with what it writes.
 | Actions no described screen presents | 1 |
 | Declared components | 20 |
 | Components an element cannot resolve to | 0 |
-| Classes rendered in the product | 280 |
+| Classes rendered in the product | 282 |
 | Classes the project owns | 81 |
-| Classes that are third-party | 199 |
+| Classes that are third-party | 201 |
 | Classes belonging to nobody | 0 |
 | Bindings the scan found | 8 |
 
@@ -199,6 +199,7 @@ with the evidence.
 | `users` | ADMINISTRATION | `users_page` | administration/users | g u | 0 |
 | `settings` | SETTINGS | `settings_page_direct` | settings/overview | g , | 0 |
 | `interface_manager` | SETTINGS | `None` | settings/interfaces | Not declared | 0 |
+| `translation_manager` | SETTINGS | `translations.translation_management_page` | settings/translations | g t | 0 |
 | `concurrency_monitor` | INTERNAL | `concurrency.dashboard` | Not declared | Not declared | 0 |
 
 ### Fields, and how many actions declare them
@@ -209,8 +210,8 @@ with the evidence.
 | binding | 6 | 34 |
 | component | 20 | 20 |
 | execution | 29 | 34 |
-| help | 23 | 25 |
-| interface | 25 | 25 |
+| help | 24 | 26 |
+| interface | 26 | 26 |
 | permission | 34 | 34 |
 | scope | 34 | 34 |
 | state | 34 | 34 |

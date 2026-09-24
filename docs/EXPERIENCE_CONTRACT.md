@@ -108,10 +108,10 @@ claimed about strings that have not been moved.
 <!-- BEGIN GENERATED EXPERIENCE CONTRACT -->
 ### What this build declares
 
-- Contracts: **25** (described: **5**, derived from the registry only: **20**)
+- Contracts: **26** (described: **5**, derived from the registry only: **21**)
 - Definitions: **34** actions, **14** columns, **6** filters, **0** fields, **5** states
-- Translation keys the screens need: **192**
-- With help: **23**; with a shortcut: **11**; with a navigation entry: **25**
+- Translation keys the screens need: **197**
+- With help: **24**; with a shortcut: **12**; with a navigation entry: **26**
 
 ### Every screen
 
@@ -141,6 +141,7 @@ claimed about strings that have not been moved.
 | `users` | ADMINISTRATION | derived | `screen.users.title` | — | — | — | — | yes |
 | `settings` | SETTINGS | derived | `screen.settings.title` | — | — | — | — | yes |
 | `interface_manager` | SETTINGS | derived | `screen.interface_manager.title` | — | — | — | — | yes |
+| `translation_manager` | SETTINGS | derived | `screen.translation_manager.title` | — | — | — | — | yes |
 | `concurrency_monitor` | INTERNAL | derived | `screen.concurrency_monitor.title` | — | — | — | — | — |
 
 ### Translation coverage, measured
@@ -149,10 +150,10 @@ Counted from the catalogs the build ships - the Babel catalogs under `translatio
 
 | Language | Catalog entries | Source strings | Translated | Fallback | Missing | Coverage | Of which translated |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `ar` | 2897 | 2531 | 2524 | 7 | 0 | 100.0% | 99.7% |
-| `fa` | 2897 | 2531 | 2526 | 5 | 0 | 100.0% | 99.8% |
-| `he` | 2897 | 2531 | 2520 | 11 | 0 | 100.0% | 99.6% |
-| `hr` | 2646 | 2531 | 2448 | 21 | 62 | 97.6% | 96.7% |
+| `ar` | 2994 | 2633 | 2626 | 7 | 0 | 100.0% | 99.7% |
+| `fa` | 2994 | 2633 | 2628 | 5 | 0 | 100.0% | 99.8% |
+| `he` | 2994 | 2633 | 2622 | 11 | 0 | 100.0% | 99.6% |
+| `hr` | 2708 | 2633 | 2510 | 21 | 102 | 96.1% | 95.3% |
 
 ### Coverage per screen
 
@@ -184,17 +185,18 @@ The strings a screen's contract asks for, and how many of them a language actual
 | `users` | 5 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
 | `settings` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) |
 | `interface_manager` | 5 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
+| `translation_manager` | 5 | 80.0% (0 by key) | 80.0% (0 by key) | 80.0% (0 by key) | 0.0% (0 by key) |
 | `concurrency_monitor` | 3 | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) | 0.0% (0 by key) |
 
 ### Screens nobody has described yet
 
 These have a contract derived from the registry, so they work: they have an identity, a navigation entry, a lifecycle and a help topic. What they do not have is a description of what they offer - columns, filters, actions, states - because nobody has decided it. The list is the remaining work, not a defect.
 
-`dashboard`, `search`, `categories`, `email_words`, `analyst_categorization`, `notifications`, `input_ingestion`, `import_center`, `archives`, `path_analysis`, `batch_analysis`, `classification`, `comprehensive_dashboard`, `charts_dashboard`, `jobs`, `import_export_console`, `users`, `settings`
+`dashboard`, `search`, `categories`, `email_words`, `analyst_categorization`, `notifications`, `input_ingestion`, `import_center`, `archives`, `path_analysis`, `batch_analysis`, `classification`, `comprehensive_dashboard`, `charts_dashboard`, `jobs`, `import_export_console`, `users`, `settings`, `translation_manager`
 
 ### Contract validation
 
 Every contract passes the declarative checks: no SQL, no imports, no calls, no authorisation decisions, destructive actions carry a confirmation, bulk actions require a selection, and no key holds two different source strings.
 
-_Generated from 25 contracts, 2531 source strings and 5 catalogs._
+_Generated from 26 contracts, 2633 source strings and 5 catalogs._
 <!-- END GENERATED EXPERIENCE CONTRACT -->

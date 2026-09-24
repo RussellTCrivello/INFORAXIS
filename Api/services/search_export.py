@@ -58,12 +58,20 @@ MAX_ROWS = 50_000
 #: How many rows are fetched per round when the whole result set is wanted.
 CHUNK = 1_000
 
-#: The shape of an exported row, in order. One definition, so the CSV header,
-#: the spreadsheet and the JSON cannot disagree about what a result is.
-COLUMNS: Tuple[str, ...] = (
+#: Legacy positional shape returned by older search query paths. It is kept
+#: only to map tuple rows into the public export schema below.
+_RESULT_COLUMNS: Tuple[str, ...] = (
     "id", "file_name", "file_type", "file_size", "file_date",
     "file_status", "source_name", "source_id", "side_name", "side_id",
     "relevance_score", "categories", "snippet",
+)
+
+#: The public shape of an exported row, in order. CSV, Excel and JSON all use
+#: this one definition; smart and analyst taxonomies stay separate.
+COLUMNS: Tuple[str, ...] = (
+    "id", "file_name", "file_type", "file_size", "file_date",
+    "file_status", "source_name", "source_id", "side_name", "side_id",
+    "relevance_score", "smart_categories", "analyst_categories", "snippet",
 )
 
 #: Query-definition fields this service accepts. Anything else in the payload
@@ -435,27 +443,28 @@ def normalise(rows: Sequence[Any]) -> List[Dict[str, Any]]:
 
     The search service answers with tuples on some paths and dictionaries on
     others. A file that changes shape depending on how the query happened to be
-    answered is a file nobody can trust, so the shape is fixed here.
+    answered is a file nobody can trust, so the shape is fixed here. Older
+    query tuples and dictionaries call the smart taxonomy ``categories``;
+    exports publish it as ``smart_categories`` beside analyst categories.
     """
     out: List[Dict[str, Any]] = []
     for row in rows:
         if isinstance(row, dict):
-            item = {column: row.get(column) for column in COLUMNS}
-            # A dictionary may carry the fields under different names; the
-            # published column set is what the export promises.
-            for key, value in row.items():
-                if key not in item and key in COLUMNS:
-                    item[key] = value
-            if "id" not in row:
-                item["id"] = row.get("file_id")
-            if "snippet" not in row:
-                item["snippet"] = row.get("match_snippet") or row.get("line_content")
-            out.append({column: _clean(item.get(column)) for column in COLUMNS})
-            continue
-        values = list(row) if isinstance(row, (list, tuple)) else [row]
-        padded = values + [None] * (len(COLUMNS) - len(values))
-        out.append({column: _clean(padded[index])
-                    for index, column in enumerate(COLUMNS)})
+            item = dict(row)
+        else:
+            values = list(row) if isinstance(row, (list, tuple)) else [row]
+            item = {
+                column: values[index] if index < len(values) else None
+                for index, column in enumerate(_RESULT_COLUMNS)
+            }
+
+        if "id" not in item:
+            item["id"] = item.get("file_id")
+        if "snippet" not in item:
+            item["snippet"] = item.get("match_snippet") or item.get("line_content")
+        if item.get("smart_categories") is None:
+            item["smart_categories"] = item.get("categories")
+        out.append({column: _clean(item.get(column)) for column in COLUMNS})
     return out
 
 
@@ -518,16 +527,49 @@ def suggested_filename(request: SearchExportRequest) -> str:
 
 
 def export_bytes(result: SearchExportResult):
-    """Turn the collected rows into the requested file, through ExportService."""
-    from Api.services.export_service import ExportService
+    """Serialize the same published columns to CSV, Excel, or JSON."""
+    from Api.services.document_intelligence import spreadsheet_safe_text
 
     rows = result.rows
     if result.request.format == "csv":
-        return (ExportService.export_search_results_csv(rows), "text/csv", "csv")
+        import csv
+        from io import BytesIO, StringIO
+
+        output = StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({column: spreadsheet_safe_text(row.get(column, ""))
+                             for column in COLUMNS})
+        return BytesIO(output.getvalue().encode("utf-8-sig")), "text/csv", "csv"
+
     if result.request.format == "excel":
-        return (ExportService.export_search_results_excel(rows),
+        from io import BytesIO
+
+        try:
+            from openpyxl import Workbook
+        except ImportError as exc:
+            raise ImportError("openpyxl is required for Excel export") from exc
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Search Results"
+        sheet.append(list(COLUMNS))
+        for row in rows:
+            sheet.append([spreadsheet_safe_text(row.get(column, ""))
+                          for column in COLUMNS])
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        output = BytesIO()
+        workbook.save(output)
+        workbook.close()
+        output.seek(0)
+        return (output,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "xlsx")
+
+    from Api.services.export_service import ExportService
+
     return (ExportService.export_search_results_json(rows),
             "application/json", "json")
 

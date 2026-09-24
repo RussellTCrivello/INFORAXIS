@@ -151,12 +151,12 @@ Counted by scanning `templates/**`. These are the places a shared component has 
 | Markup | Component that replaces it | Templates |
 | --- | --- | --- |
 | Hand-written empty state | `states` | 4 templates |
-| Hand-written loading indicator | `states` | 8 templates |
+| Hand-written loading indicator | `states` | 9 templates |
 | Hand-written inline error | `states` | 7 templates |
-| Hand-written table | `table` | 13 templates |
+| Hand-written table | `table` | 15 templates |
 | Hand-written pagination markup | `pagination` | 0 templates |
 | Pagination mount (filled by the shared renderer) | `pagination` | 4 templates |
-| Hand-written search input | `search_input` | 6 templates |
+| Hand-written search input | `search_input` | 7 templates |
 | Hand-written filter control | `filter_bar` | 14 templates |
 | Browser confirm() dialog | `confirm_dialog` | 0 templates |
 | Hand-written status badge | `status_badge` | 0 badges, in 0 templates |
@@ -170,9 +170,9 @@ How much of the repeated markup has moved onto its component. Standardized count
 | Markup | Standardized | Hand-written | Adoption |
 | --- | --- | --- | --- |
 | Hand-written empty state | 2 | 4 | 33% |
-| Hand-written table | 1 | 13 | 7% |
+| Hand-written table | 1 | 15 | 6% |
 | Hand-written pagination markup | 10 | 0 | 100% |
-| Hand-written search input | 8 | 6 | 57% |
+| Hand-written search input | 8 | 7 | 53% |
 | Hand-written filter control | 1 | 14 | 7% |
 | Browser confirm() dialog | 2 | 0 | 100% |
 | Hand-written status badge | 7 | 0 | 100% |

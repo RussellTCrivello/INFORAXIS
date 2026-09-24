@@ -709,6 +709,18 @@
     "internal": true
   },
   {
+    "endpoint": "api_export_search_filenames",
+    "rule": "/api/search/export-filenames",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "(app)",
+    "module": "search",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "api_export_search_results",
     "rule": "/api/search/export",
     "methods": [
@@ -1822,6 +1834,18 @@
     "internal": false
   },
   {
+    "endpoint": "files.api_file_type_statistics",
+    "rule": "/api/files/types",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "files.bulk_delete_files",
     "rule": "/files/bulk-delete",
     "methods": [
@@ -1857,6 +1881,42 @@
     "classification": "ACTION",
     "owned_by": "file_library",
     "internal": false
+  },
+  {
+    "endpoint": "files.export_file_names",
+    "rule": "/api/files/names/export",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "files.export_selected_contacts",
+    "rule": "/api/files/extract-contacts/export",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "files.export_selected_first_pages",
+    "rule": "/api/files/first-pages/export",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
   },
   {
     "endpoint": "files.file_chart_data",
@@ -1943,6 +2003,18 @@
     "internal": false
   },
   {
+    "endpoint": "files.file_types_page",
+    "rule": "/files/types",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "USER_INTERFACE",
+    "owned_by": "file_library",
+    "internal": false
+  },
+  {
     "endpoint": "files.files_list",
     "rule": "/files",
     "methods": [
@@ -1964,6 +2036,18 @@
     "module": "files",
     "classification": "API_ENDPOINT",
     "owned_by": "input_ingestion",
+    "internal": true
+  },
+  {
+    "endpoint": "files.group_similar_search_results",
+    "rule": "/api/search/group-similar",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
     "internal": true
   },
   {
@@ -2955,6 +3039,18 @@
   {
     "endpoint": "preview.get_file_preview",
     "rule": "/api/preview/<int:file_id>",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "preview",
+    "module": "preview",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "preview.get_file_preview_image",
+    "rule": "/api/preview/<int:file_id>/image",
     "methods": [
       "GET"
     ],

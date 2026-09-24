@@ -62,8 +62,13 @@ ACTION_ATTRIBUTES: Tuple[str, ...] = (
 #: handed and therefore bind nothing themselves.
 SKIP_PARTS = ("components/",)
 
+# A page also uses ``data-action`` for local dispatch keys (``edit``, ``view``
+# and similar). Only the namespaced form is an Action Registry id, so counting
+# those local keys as bindings would inflate coverage and make an action look
+# bound when the registry cannot name it.
 _ACTION_ATTR = re.compile(
-    r"data-(?:action|record-action|confirm-action)\s*=\s*[\"'](?P<id>[a-z][\w.]*)[\"']")
+    r"data-(?:action|record-action|confirm-action)\s*=\s*"
+    r"[\"'](?P<id>[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)[\"']")
 _HREF_LITERAL = re.compile(r"href\s*=\s*[\"'](?P<url>/[^\"'{]*)[\"']")
 _URL_FOR = re.compile(r"url_for\(\s*[\"'](?P<endpoint>[\w.]+)[\"']")
 _RECORD_ENDPOINT = re.compile(
@@ -154,12 +159,15 @@ def scan(files: Optional[Iterable[Path]] = None,
          ) -> List[Dict[str, Any]]:
     """Every action a screen binds, with where it is and what it points at.
 
-    Two kinds of hit are reported. ``kind="attribute"`` is a control that names
-    its action in markup and carries (or builds) the address it goes to -
-    this is the kind that can point at a route nobody served. ``kind="literal"``
-    is an action named as a value: a macro argument, or a string in the page
-    script that drives the control. That kind has no address of its own - the
-    page's JavaScript holds it - so it is reported, and never called dangling.
+    Three kinds of hit are reported. ``kind="attribute"`` is a control that
+    names its registry action in markup and carries (or builds) the address it
+    goes to - this is the kind that can point at a route nobody served.
+    ``kind="literal"`` is an action named as a value: a macro argument, or a
+    string in the page script that drives the control. ``kind="prepared"`` is
+    an action named by the Python file a screen declared as its binding source.
+    The latter two have no address of their own, so they are reported but never
+    called dangling. Generic dispatch keys such as ``data-action="edit"`` are
+    not registry action ids and are deliberately not counted.
     """
     known = set(known_actions) if known_actions is not None else set(_known_ids())
     prepared_files = set(_binding_sources())
@@ -172,7 +180,6 @@ def scan(files: Optional[Iterable[Path]] = None,
                 and not any(f'"{action_id}"' in text or f"'{action_id}'" in text
                             for action_id in known):
             continue
-        lines = text.splitlines()
         relative = _relative(path)
         for match in _ACTION_ATTR.finditer(text):
             line_index = text[:match.start()].count("\n")

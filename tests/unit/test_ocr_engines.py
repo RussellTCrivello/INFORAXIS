@@ -178,10 +178,14 @@ class TestTesseractEngine:
         result = tesseract_with_stub(stub).recognize(object(), ["heb", "ara", "zzz"])
         assert result.language == "ara"
 
-    def test_falls_back_to_eng_when_none_installed(self):
+    def test_missing_requested_language_is_not_silently_replaced(self):
+        """A missing script is reported, never hidden by English fallback."""
         stub = _StubTesseract(text_by_psm={11: "x"}, languages=("deu",))
         result = tesseract_with_stub(stub).recognize(object(), ["heb"])
-        assert result.language == "eng"
+        assert result.language == ""
+        assert result.text == ""
+        assert result.error == "Missing Tesseract language data: heb"
+        assert result.attempted is True
 
     def test_no_text_in_any_psm_is_a_clean_empty_result(self):
         stub = _StubTesseract(text_by_psm={})

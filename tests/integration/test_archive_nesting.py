@@ -274,7 +274,7 @@ def test_no_stored_row_contradicts_itself(corpus):
     (TXT_MARKER, "notes.txt"),
     (DUP_MARKER, "duplicate_a.txt"),
 ])
-def test_nested_content_is_searchable_and_traces_to_its_object(marker, expected):
+def test_nested_content_is_searchable_and_traces_to_its_object(corpus, marker, expected):
     """SEARCH -> the hit must name the exact row, not just the container."""
     from Api.services.search_service import SearchService
 
