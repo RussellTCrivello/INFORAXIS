@@ -9,6 +9,11 @@ import { endpoints } from '../api/endpoints.js';
 import { escapeHtml, escapeAttribute, getCSRFToken } from '../core/utils.js';
 import notificationSystem from '../ui/notifications.js';
 import advancedSearch from './advanced-search.js';
+import {
+    chooseExportDestination,
+    ensureExportExtension,
+    saveExportBlob,
+} from '../core/export-download.js';
 
 // State management
 const searchState = {
@@ -16,7 +21,10 @@ const searchState = {
     currentFilters: {},
     currentScope: 'uncategorized',
     currentSort: { by: 'relevance', order: 'desc' },
-    currentOptions: { use_advanced: true, use_bm25: true, use_expansion: true, use_fuzzy: true },
+    currentOptions: {
+        use_advanced: true, use_bm25: true, use_expansion: true, use_fuzzy: true,
+        case_sensitive: false, whole_word: false
+    },
     lastDefinition: null,
     currentPage: 1,
     perPage: 10,
@@ -220,6 +228,8 @@ export async function performSearch() {
             use_bm25: advancedOptions.use_bm25 ? 'true' : 'false',
             use_expansion: advancedOptions.use_expansion ? 'true' : 'false',
             use_fuzzy: advancedOptions.use_fuzzy ? 'true' : 'false',
+            case_sensitive: advancedOptions.case_sensitive ? 'true' : 'false',
+            whole_word: advancedOptions.whole_word ? 'true' : 'false',
             ...Object.fromEntries(
                 Object.entries(searchState.currentFilters).filter(([, value]) => value !== '')
             )
@@ -349,10 +359,23 @@ function displayResults(data) {
     const notAvailable = searchText('N/A', 'N/A');
     const unknownLabel = searchText('Unknown', 'Unknown');
 
+    const workspaceParams = new URLSearchParams();
+    if (searchState.currentQuery) workspaceParams.set('q', searchState.currentQuery);
+    if (searchState.currentScope && searchState.currentScope !== 'uncategorized') {
+        workspaceParams.set('scope', searchState.currentScope);
+    }
+    const workspaceHref = `/search/advanced${workspaceParams.toString() ? `?${workspaceParams.toString()}` : ''}`;
+
     let html = `
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div><strong>${safeCount(data?.pagination?.total)}</strong> ${escapeHtml(searchText('results found', 'results found'))}</div>
-            <div class="btn-group" role="group" aria-label="${escapeAttribute(searchText('Export', 'Export'))}">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <a class="btn btn-sm btn-outline-secondary" href="${escapeAttribute(workspaceHref)}"
+                   target="_blank" rel="noopener" data-open-search-workspace="true">
+                    <i class="bi bi-layout-split me-1" aria-hidden="true"></i>
+                    ${escapeHtml(searchText('Open Search & Review workspace', 'Open Search & Review workspace'))}
+                </a>
+                <div class="btn-group" role="group" aria-label="${escapeAttribute(searchText('Export', 'Export'))}">
                 <button type="button" class="btn btn-sm btn-outline-primary" data-search-export-format="csv" aria-label="CSV">
                     <i class="bi bi-file-earmark-spreadsheet me-1" aria-hidden="true"></i>CSV
                 </button>
@@ -362,6 +385,7 @@ function displayResults(data) {
                 <button type="button" class="btn btn-sm btn-outline-primary" data-search-export-format="json" aria-label="JSON">
                     <i class="bi bi-file-earmark-code me-1" aria-hidden="true"></i>JSON
                 </button>
+                </div>
             </div>
         </div>
     `;
@@ -562,13 +586,29 @@ export async function exportResults(format, triggerButton = null) {
     const filters = definition.filters || {};
     const options = definition.options || {};
     const sort = definition.sort || { by: 'relevance', order: 'desc' };
+    const extension = format === 'excel' ? 'xlsx' : format;
+    const requestedFilename = window.prompt(
+        searchText('filenameExportPrompt', 'Name this export (leave blank for an automatic name):'),
+        `search_results_${new Date().toISOString().slice(0, 10)}`);
+    if (requestedFilename === null) return;
+    const suggestedName = ensureExportExtension(
+        requestedFilename.trim() || `search_results_${new Date().toISOString().slice(0, 10)}`,
+        extension,
+        'search_results');
+    let destination = null;
+    try {
+        destination = await chooseExportDestination(suggestedName);
+        if (destination === false) return;
+    } catch (error) {
+        console.warn('Save location picker unavailable:', error);
+    }
     const asList = value => value == null || value === '' ? [] : (Array.isArray(value) ? value : [value]);
     const payload = {
         query: definition.query,
         export_scope: 'filtered',
         analyst_scope: definition.scope || 'uncategorized',
         format,
-        filename: `search_results_${new Date().toISOString().split('T')[0]}`,
+        filename: requestedFilename.trim() || `search_results_${new Date().toISOString().split('T')[0]}`,
         page: definition.page || 1,
         per_page: definition.per_page || searchState.perPage,
         file_type: asList(filters.file_type),
@@ -581,7 +621,9 @@ export async function exportResults(format, triggerButton = null) {
         use_fulltext: true,
         use_bm25: options.use_bm25 !== false,
         use_expansion: options.use_expansion !== false,
-        use_fuzzy: options.use_fuzzy !== false
+        use_fuzzy: options.use_fuzzy !== false,
+        case_sensitive: options.case_sensitive === true,
+        whole_word: options.whole_word === true
     };
     const exportButtons = Array.from(document.querySelectorAll('[data-search-export-format]'));
     exportButtons.forEach(button => {
@@ -623,15 +665,7 @@ export async function exportResults(format, triggerButton = null) {
             try { filename = decodeURIComponent(rawFilename); } catch (_) { filename = rawFilename; }
         }
 
-        const url = window.URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = filename;
-        anchor.hidden = true;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        await saveExportBlob(blob, filename, destination);
         notificationSystem.success(searchText('Export ready', 'Export ready'));
     } catch (error) {
         console.error('Export error:', error);
@@ -733,8 +767,8 @@ async function renderPreviewBody(body, previewData, renderSequence) {
     if (!body || !previewData || typeof previewData !== 'object') return;
 
     if (previewData.preview_type === 'image') {
-        const imageSource = String(previewData.data || '');
-        if (!/^data:image\/(?:jpeg|png|gif|webp|bmp);base64,[A-Za-z0-9+/]*={0,2}$/i.test(imageSource)) {
+        const fileId = Number(previewData.file_id);
+        if (!Number.isSafeInteger(fileId) || fileId < 1) {
             const message = document.createElement('p');
             message.className = 'text-muted';
             message.textContent = searchText('Error loading preview', 'Error loading preview');
@@ -742,7 +776,7 @@ async function renderPreviewBody(body, previewData, renderSequence) {
             return;
         }
         const image = document.createElement('img');
-        image.src = imageSource;
+        image.src = `/api/preview/${fileId}/image`;
         image.className = 'img-fluid';
         image.alt = searchText('File Preview', 'File Preview');
         body.replaceChildren(image);
@@ -767,7 +801,7 @@ async function renderPreviewBody(body, previewData, renderSequence) {
             const name = String(previewData.file_name || previewData.file_type || '');
             const extension = name.includes('.') ? name.split('.').pop() : (previewData.file_type || 'txt');
             formatted = formatter.formatContentByType(
-                text, extension, String(previewData.file_path || ''), previewData.file_id || null);
+                text, extension, '', previewData.file_id || null);
         } catch (error) {
             console.warn('Formatted preview unavailable, using plain text:', error);
         }

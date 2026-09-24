@@ -125,12 +125,13 @@ class OriginalFileService:
         return guessed or 'application/octet-stream'
 
     @classmethod
-    def describe(cls, file_id: int) -> Dict[str, Any]:
+    def describe(cls, file_id: int, *, include_path: bool = False) -> Dict[str, Any]:
         """Everything the viewer needs to show (or explain) the original file.
 
         Always returns a payload - an object whose source file has disappeared
         from disk is a normal, reportable state (the extracted text survives
-        it), not an error.
+        it), not an error. The server-side path is omitted from API responses;
+        only trusted server workflows such as ZIP construction may request it.
         """
         row = cls._row(file_id)
         if row is None:
@@ -150,7 +151,6 @@ class OriginalFileService:
         info: Dict[str, Any] = {
             'file_id': row['id'],
             'name': name,
-            'path': stored_path,
             'extension': extension,
             'stored_size': row['file_size'] or 0,
             'file_type': row['file_type'] or '',
@@ -163,6 +163,8 @@ class OriginalFileService:
             'serve_url': f'/api/file/{row["id"]}/original/content',
             'download_url': f'/api/file/{row["id"]}/original/content?download=1',
         }
+        if include_path:
+            info['path'] = stored_path
 
         if path_obj is None:
             info['message'] = {

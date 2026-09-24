@@ -13,9 +13,10 @@
     <div>
         <h1 class="page-title"><i class="bi bi-book me-2"></i> {{ _('File Library') }} ({{ total_files|default(0)  }})</h1>
     </div>
-    <div class="d-flex gap-2">
-        <a href="{{ url_for('operations_input_page') }}" class="btn btn-outline-primary"><i class="bi bi-plus-circle"></i>{{ _('Upload Files') }}</a>
-        <button class="btn btn-outline-primary" onclick="location.reload()"><i class="bi bi-arrow-clockwise"></i>{{ _('Refresh') }}</button>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('files.file_types_page') }}" class="btn btn-outline-primary"><i class="bi bi-file-earmark-break me-1" aria-hidden="true"></i>{{ _('Browse by type') }}</a>
+        <a href="{{ url_for('operations_input_page') }}" class="btn btn-outline-primary"><i class="bi bi-plus-circle" aria-hidden="true"></i>{{ _('Upload Files') }}</a>
+        <button type="button" class="btn btn-outline-primary" onclick="location.reload()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>{{ _('Refresh') }}</button>
     </div>
 </div>
 
@@ -208,6 +209,14 @@
                 <button class="btn-action btn-outline-primary" id="bulkExportBtn" onclick="bulkExport()" disabled>
                     <i class="bi bi-download"></i>
                     {{ _('Export') }}
+                </button>
+                <button type="button" class="btn-action btn-outline-primary" id="bulkNamesCsvBtn" onclick="exportSelectedFileNames('csv')" disabled>
+                    <i class="bi bi-filetype-csv" aria-hidden="true"></i>
+                    {{ _('Filenames CSV') }}
+                </button>
+                <button type="button" class="btn-action btn-outline-primary" id="bulkNamesExcelBtn" onclick="exportSelectedFileNames('excel')" disabled>
+                    <i class="bi bi-file-earmark-excel" aria-hidden="true"></i>
+                    {{ _('Filenames Excel') }}
                 </button>
                 <button class="btn-action btn-outline-danger" id="bulkDeleteBtn" onclick="bulkDelete()" disabled>
                     <i class="bi bi-trash"></i>
@@ -446,6 +455,10 @@
         "files": _('files'),
         "errorStartingAnalysis": _('Error starting analysis'),
         "pleaseSelectFilesToExport": _('Please select files to export'),
+        "filenameExportPrompt": _('Name this filename export (leave blank for an automatic name):'),
+        "filenameExportReady": _('Filename export ready.'),
+        "filenameExportFailed": _('Could not export the filename list.'),
+        "filenameExportLimit": _('The selected filename list is too large to export in one file.'),
         "pleaseSelectFilesToDelete": _('Please select files to delete'),
         "deleteFilesConfirm": _('Delete files? This cannot be undone.'),
         "deletedFiles": _('Deleted'),

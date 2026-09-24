@@ -428,6 +428,10 @@ function addAdvancedSearchOptions() {
         expansionHelp: searchText('Include synonyms', 'Include synonyms'),
         fuzzy: searchText('Fuzzy Matching', 'Fuzzy Matching'),
         fuzzyHelp: searchText('Typo tolerance', 'Typo tolerance'),
+        caseSensitive: searchText('Case sensitive', 'Case sensitive'),
+        caseSensitiveHelp: searchText('Match uppercase and lowercase exactly', 'Match uppercase and lowercase exactly'),
+        wholeWord: searchText('Whole word', 'Whole word'),
+        wholeWordHelp: searchText('Match complete words only', 'Match complete words only'),
         algorithms: searchText('Advanced Algorithms', 'Advanced Algorithms'),
         algorithmsHelp: searchText('Enable all features', 'Enable all features'),
         tip: searchText('Tip:', 'Tip:'),
@@ -482,6 +486,26 @@ function addAdvancedSearchOptions() {
                         </div>
                         <div class="col-md-6">
                             <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="caseSensitive">
+                                <label class="form-check-label" for="caseSensitive">
+                                    <i class="bi bi-type me-1" aria-hidden="true"></i>
+                                    ${escapeHtml(labels.caseSensitive)}
+                                    <small class="d-block text-muted">${escapeHtml(labels.caseSensitiveHelp)}</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="wholeWord">
+                                <label class="form-check-label" for="wholeWord">
+                                    <i class="bi bi-fonts me-1" aria-hidden="true"></i>
+                                    ${escapeHtml(labels.wholeWord)}
+                                    <small class="d-block text-muted">${escapeHtml(labels.wholeWordHelp)}</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="useAdvanced" checked>
                                 <label class="form-check-label" for="useAdvanced">
                                     <i class="bi bi-magic me-1" aria-hidden="true"></i>
@@ -517,7 +541,9 @@ export function getAdvancedSearchOptions() {
         use_advanced: document.getElementById('useAdvanced')?.checked !== false,
         use_bm25: document.getElementById('useBM25')?.checked !== false,
         use_expansion: document.getElementById('useExpansion')?.checked !== false,
-        use_fuzzy: document.getElementById('useFuzzy')?.checked !== false
+        use_fuzzy: document.getElementById('useFuzzy')?.checked !== false,
+        case_sensitive: document.getElementById('caseSensitive')?.checked === true,
+        whole_word: document.getElementById('wholeWord')?.checked === true
     };
 }
 

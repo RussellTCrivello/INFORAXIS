@@ -61,7 +61,7 @@ CHUNK = 1_000
 #: The shape of an exported row, in order. One definition, so the CSV header,
 #: the spreadsheet and the JSON cannot disagree about what a result is.
 COLUMNS: Tuple[str, ...] = (
-    "id", "file_name", "file_path", "file_type", "file_size", "file_date",
+    "id", "file_name", "file_type", "file_size", "file_date",
     "file_status", "source_name", "source_id", "side_name", "side_id",
     "relevance_score", "categories", "snippet",
 )
@@ -75,6 +75,7 @@ _ACCEPTED = frozenset({
     "category_id", "category_ids", "analyst_category_id",
     "analyst_category_ids", "status", "date_from", "date_to", "sort_by", "sort_order",
     "use_advanced", "use_fulltext", "use_bm25", "use_expansion", "use_fuzzy",
+    "case_sensitive", "whole_word", "hide_duplicates",
 })
 
 #: Keys that mean "here are the rows, please write them out". Named explicitly
@@ -114,6 +115,9 @@ class SearchExportRequest:
     use_bm25: bool = True
     use_expansion: bool = True
     use_fuzzy: bool = True
+    case_sensitive: bool = False
+    whole_word: bool = False
+    hide_duplicates: bool = False
     definition: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -302,7 +306,11 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
         query=query,
         scope=scope,
         format=export_format,
-        filename=str(payload.get("filename") or "").strip(),
+        filename=re.sub(
+            r"\.(?:csv|xlsx?|json)$", "",
+            str(payload.get("filename") or "").strip(),
+            flags=re.IGNORECASE,
+        ),
         page=page,
         per_page=per_page,
         file_types=_as_strings(payload.get("file_type"), "file_type"),
@@ -330,6 +338,9 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
         use_bm25=_as_bool(payload.get("use_bm25"), True),
         use_expansion=_as_bool(payload.get("use_expansion"), True),
         use_fuzzy=_as_bool(payload.get("use_fuzzy"), True),
+        case_sensitive=_as_bool(payload.get("case_sensitive"), False),
+        whole_word=_as_bool(payload.get("whole_word"), False),
+        hide_duplicates=_as_bool(payload.get("hide_duplicates"), False),
     )
     # The definition is kept beside the request: it is what the audit line and
     # any future export record need, and it is the whole of what was asked for.
@@ -348,6 +359,14 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
         "date_to": request.date_to,
         "sort_by": request.sort_by,
         "sort_order": request.sort_order,
+        "use_advanced": request.use_advanced,
+        "use_fulltext": request.use_fulltext,
+        "use_bm25": request.use_bm25,
+        "use_expansion": request.use_expansion,
+        "use_fuzzy": request.use_fuzzy,
+        "case_sensitive": request.case_sensitive,
+        "whole_word": request.whole_word,
+        "hide_duplicates": request.hide_duplicates,
     })
     return request
 
@@ -361,7 +380,8 @@ def _search_once(request: SearchExportRequest, limit: int, offset: int,
     from Api.services.search_service import SearchService
 
     query = request.bounded_query
-    if request.use_advanced:
+    if (request.use_advanced or request.hide_duplicates
+            or request.case_sensitive or request.whole_word):
         return SearchService.advanced_search(
             query=query,
             file_type=list(request.file_types) or None,
@@ -385,6 +405,9 @@ def _search_once(request: SearchExportRequest, limit: int, offset: int,
             analyst_category_ids=(list(request.analyst_category_ids) or None),
             file_statuses=(list(request.file_statuses)
                            if request.file_statuses is not None else None),
+            hide_duplicates=request.hide_duplicates,
+            case_sensitive=request.case_sensitive,
+            whole_word=request.whole_word,
         )
     if request.use_fulltext and query:
         return SearchService.full_text_search(
@@ -401,6 +424,7 @@ def _search_once(request: SearchExportRequest, limit: int, offset: int,
             limit=limit,
             offset=offset,
             analyst_scope=analyst_scope,
+            hide_duplicates=request.hide_duplicates,
         )
     return SearchService.simple_search(
         query=query, limit=limit, offset=offset, analyst_scope=analyst_scope)
@@ -485,11 +509,12 @@ def suggested_filename(request: SearchExportRequest) -> str:
         return cleaned[:limit]
 
     if request.filename:
-        base = _safe(request.filename, 80)
-    else:
-        stem = _safe(request.query or "all", 40)
-        base = f"search_{stem or 'all'}_{request.scope}"
-    return f"{base or 'export'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # A name supplied by the operator is the name of the export, not a
+        # prefix to which the server silently appends a timestamp.
+        return _safe(request.filename, 80) or "export"
+    stem = _safe(request.query or "all", 40)
+    base = f"search_{stem or 'all'}_{request.scope}"
+    return f"{base}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 
 def export_bytes(result: SearchExportResult):

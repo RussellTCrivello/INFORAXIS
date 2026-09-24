@@ -127,7 +127,7 @@ class TestTheRowsAreTheServers:
     def test_tuples_and_dictionaries_arrive_in_one_shape(self):
         rows = search_export.normalise([
             {"id": 1, "file_name": "a.pdf", "snippet": "…agreement was signed…"},
-            (2, "b.docx", "C:\\Evidence\\b.docx", "docx", 12, None, "Read",
+            (2, "b.docx", "docx", 12, None, "Read",
              "S", 1, "Side", 2, 0.5, None, "…"),
         ])
         assert len(rows) == 2

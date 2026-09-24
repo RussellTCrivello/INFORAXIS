@@ -96,6 +96,12 @@ def _advanced_search_run_url(query: str, filters: Optional[dict]) -> str:
         params['scope'] = f['scope']
     if f.get('sort_by') and f['sort_by'] != 'relevance':
         params['sort'] = f['sort_by']
+    try:
+        similarity_threshold = float(f.get('similarity_threshold', 0.32))
+    except (TypeError, ValueError):
+        similarity_threshold = 0.32
+    if 0.05 <= similarity_threshold <= 0.95 and similarity_threshold != 0.32:
+        params['sim'] = str(similarity_threshold)
     options = f.get('options') if isinstance(f.get('options'), dict) else {}
     if options.get('case_sensitive'):
         params['cs'] = '1'
@@ -103,6 +109,8 @@ def _advanced_search_run_url(query: str, filters: Optional[dict]) -> str:
         params['ww'] = '1'
     if options.get('use_fuzzy') is False:
         params['fz'] = '0'
+    if f.get('hide_duplicates'):
+        params['hd'] = '1'
 
     def _ids(key: str) -> list:
         values = f.get(key) or []
@@ -472,6 +480,11 @@ def register_search_routes(app):
             use_bm25 = _request_bool(data, 'use_bm25', True)
             use_expansion = _request_bool(data, 'use_expansion', True)
             use_fuzzy = _request_bool(data, 'use_fuzzy', True)
+            case_sensitive = _request_bool(data, 'case_sensitive', False)
+            whole_word = _request_bool(data, 'whole_word', False)
+            hide_duplicates = _request_bool(data, 'hide_duplicates', False)
+            if hide_duplicates or case_sensitive or whole_word:
+                use_advanced = True
 
             offset = (page - 1) * per_page
 
@@ -511,7 +524,10 @@ def register_search_routes(app):
                     use_fuzzy=use_fuzzy,
                     analyst_scope=analyst_scope,
                     analyst_category_ids=analyst_category_ids if analyst_category_ids else None,
-                    file_statuses=file_statuses
+                    file_statuses=file_statuses,
+                    hide_duplicates=hide_duplicates,
+                    case_sensitive=case_sensitive,
+                    whole_word=whole_word,
                 )
             elif use_fulltext and query:
                 results, total_count = SearchService.full_text_search(
@@ -526,7 +542,8 @@ def register_search_routes(app):
                     sort_order=sort_order,
                     limit=per_page,
                     offset=offset,
-                    analyst_scope=analyst_scope
+                    analyst_scope=analyst_scope,
+                    hide_duplicates=hide_duplicates,
                 )
             else:
                 # Fallback to simple search
@@ -558,7 +575,8 @@ def register_search_routes(app):
                         'date_to': date_to,
                         'category_id': category_id,
                         'status': file_statuses,
-                        'analyst_scope': analyst_scope
+                        'analyst_scope': analyst_scope,
+                        'hide_duplicates': hide_duplicates,
                     },
                     result_count=total_count,
                     user_id=user_id
@@ -909,5 +927,75 @@ def register_search_routes(app):
 
         except Exception as e:
             logger.error(f"Export search results error: {e}", exc_info=True)
+            return client_error(e, subsystem='Api.routes.search', status=500)
+
+    @app.route('/api/search/export-filenames', methods=['POST'])
+    @limiter.limit("6 per minute")
+    def api_export_search_filenames():
+        """Export only the filenames from the authoritative current search."""
+        import csv
+        from io import BytesIO, StringIO
+        from flask import Response
+        from Api.services import search_export
+        from Api.services.document_intelligence import spreadsheet_safe_text
+
+        try:
+            definition = search_export.parse(request.get_json(silent=True))
+        except search_export.ExportRequestError as refused:
+            return jsonify({'success': False, 'error': str(refused),
+                            'code': 'invalid_export_request'}), 400
+
+        try:
+            result = search_export.resolve(definition, resolve_request_scope())
+            if not result.rows:
+                return jsonify({
+                    'success': False,
+                    'error': 'Nothing to export: the query and filters produced no results.',
+                    'scope': definition.scope,
+                    'total': 0,
+                }), 400
+
+            values = [
+                (spreadsheet_safe_text(row.get('file_name', '')),
+                 spreadsheet_safe_text(row.get('file_type', 'Unknown')))
+                for row in result.rows
+            ]
+            base = f"{search_export.suggested_filename(definition)}_filenames"
+            if definition.format == 'csv':
+                output = StringIO(newline='')
+                writer = csv.writer(output)
+                writer.writerow(['File name', 'File type'])
+                writer.writerows(values)
+                response = Response(
+                    output.getvalue().encode('utf-8-sig'),
+                    mimetype='text/csv; charset=utf-8')
+                response.headers['Content-Disposition'] = f'attachment; filename="{base}.csv"'
+            elif definition.format == 'excel':
+                try:
+                    from openpyxl import Workbook
+                except ImportError:
+                    return jsonify({'success': False, 'error': 'XLSX export is unavailable on this server'}), 503
+                workbook = Workbook(write_only=True)
+                sheet = workbook.create_sheet('Matching filenames')
+                sheet.append(['File name', 'File type'])
+                for row in values:
+                    sheet.append(list(row))
+                buffer = BytesIO()
+                workbook.save(buffer)
+                buffer.seek(0)
+                response = send_file(
+                    buffer,
+                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    as_attachment=True,
+                    download_name=f'{base}.xlsx',
+                )
+            else:
+                return jsonify({'success': False, 'error': 'format must be csv or excel'}), 400
+
+            for header, value in result.headers.items():
+                response.headers[header] = value
+            return response
+        except Exception as e:
+            logger.error(f"Filename search export failed: {e}", exc_info=True)
             return client_error(e, subsystem='Api.routes.search', status=500)
 

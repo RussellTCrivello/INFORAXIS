@@ -19,10 +19,18 @@ except ImportError:
     PIL_AVAILABLE = False
 
 try:
-    import PyPDF2
-    PDF_AVAILABLE = True
+    import fitz
+    FITZ_AVAILABLE = True
 except ImportError:
-    PDF_AVAILABLE = False
+    fitz = None
+    FITZ_AVAILABLE = False
+
+try:
+    import PyPDF2
+    PDF_FALLBACK_AVAILABLE = True
+except ImportError:
+    PyPDF2 = None
+    PDF_FALLBACK_AVAILABLE = False
 
 try:
     from docx import Document as DocxDocument
@@ -62,12 +70,9 @@ class FilePreviewService:
     DOCUMENT_FORMATS = {'.pdf', '.docx', '.xlsx', '.txt', '.md', '.csv'}
     
     @staticmethod
-    @staticmethod
-    def _with_file_info(payload: Dict[str, Any], file_name, file_path, file_type) -> Dict[str, Any]:
-        """Attach the file's identity so the client can render the preview
-        through the same type-aware formatter used on the content pages."""
+    def _with_file_info(payload: Dict[str, Any], file_name, file_type) -> Dict[str, Any]:
+        """Attach display-safe identity without exposing the server path."""
         payload['file_name'] = file_name
-        payload['file_path'] = file_path
         payload['file_type'] = file_type
         return payload
 
@@ -148,23 +153,23 @@ class FilePreviewService:
             if file_ext in FilePreviewService.IMAGE_FORMATS:
                 return FilePreviewService._with_file_info(
                     FilePreviewService._preview_image(file_path, max_width, max_height, mime_type),
-                    file_name, file_path, file_type)
+                    file_name, file_type)
             elif file_ext == '.pdf':
                 return FilePreviewService._with_file_info(
                     FilePreviewService._preview_pdf(file_path, max_width, max_height),
-                    file_name, file_path, file_type)
+                    file_name, file_type)
             elif file_ext == '.docx':
                 return FilePreviewService._with_file_info(
                     FilePreviewService._preview_docx(file_path),
-                    file_name, file_path, file_type)
+                    file_name, file_type)
             elif file_ext == '.xlsx':
                 return FilePreviewService._with_file_info(
                     FilePreviewService._preview_xlsx(file_path),
-                    file_name, file_path, file_type)
+                    file_name, file_type)
             elif file_ext in {'.txt', '.md', '.csv'}:
                 return FilePreviewService._with_file_info(
                     FilePreviewService._preview_text(file_path),
-                    file_name, file_path, file_type)
+                    file_name, file_type)
             else:
                 return {
                     'preview_type': 'unsupported',
@@ -177,7 +182,7 @@ class FilePreviewService:
             logger.error(f"Error generating preview for file {file_id}: {e}", exc_info=True)
             return {
                 'preview_type': 'error',
-                'error': str(e)
+                'error': 'Preview generation failed'
             }
     
     @staticmethod
@@ -225,7 +230,7 @@ class FilePreviewService:
             logger.error(f"Error previewing image {file_path}: {e}", exc_info=True)
             return {
                 'preview_type': 'error',
-                'error': f'Error processing image: {str(e)}'
+                'error': 'Could not generate image preview'
             }
     
     @staticmethod
@@ -234,44 +239,70 @@ class FilePreviewService:
         max_width: int,
         max_height: int
     ) -> Dict[str, Any]:
-        """Generate PDF preview (first page as image)."""
-        if not PDF_AVAILABLE or not PIL_AVAILABLE:
-            return {
-                'preview_type': 'error',
-                'error': 'PDF preview requires PyPDF2 and PIL/Pillow'
-            }
-        
-        try:
-            # For PDF preview, we return text content of first page
-            # Full PDF rendering would require pdf2image which may not be available
-            with open(file_path, 'rb') as f:
-                pdf_reader = PyPDF2.PdfReader(f)
-                if len(pdf_reader.pages) > 0:
-                    first_page = pdf_reader.pages[0]
-                    text_content = first_page.extract_text()
-                    
+        """Render the physical first PDF page to a bounded PNG thumbnail."""
+        if FITZ_AVAILABLE:
+            try:
+                with fitz.open(file_path) as document:
+                    if not len(document):
+                        return {'preview_type': 'error', 'error': 'PDF file is empty'}
+                    page = document.load_page(0)
+                    page_rect = page.rect
+                    bounded_width = max(1, int(max_width))
+                    bounded_height = max(1, int(max_height))
+                    scale = min(
+                        bounded_width / max(float(page_rect.width), 1.0),
+                        bounded_height / max(float(page_rect.height), 1.0),
+                        2.0,
+                    )
+                    pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+                    image_data = base64.b64encode(pixmap.tobytes('png')).decode('ascii')
+                    return {
+                        'preview_type': 'image',
+                        'preview_kind': 'pdf_first_page',
+                        'mime_type': 'image/png',
+                        'data': f'data:image/png;base64,{image_data}',
+                        'width': pixmap.width,
+                        'height': pixmap.height,
+                        'page_count': len(document),
+                        'metadata': {'total_pages': len(document), 'preview_page': 1},
+                    }
+            except Exception as render_error:
+                logger.warning('PyMuPDF first-page preview failed for %s: %s',
+                               file_path, render_error)
+
+        # Keep readable first-page text as a useful fallback when PyMuPDF is
+        # unavailable or a particular PDF cannot be rendered.
+        if PDF_FALLBACK_AVAILABLE:
+            try:
+                with open(file_path, 'rb') as stream:
+                    pdf_reader = PyPDF2.PdfReader(stream)
+                    if not pdf_reader.pages:
+                        return {'preview_type': 'error', 'error': 'PDF file is empty'}
+                    text_content = pdf_reader.pages[0].extract_text() or ''
                     return {
                         'preview_type': 'pdf',
                         'mime_type': 'application/pdf',
-                        'data': text_content[:5000],  # Limit text preview
+                        'data': text_content[:5000],
                         'page_count': len(pdf_reader.pages),
                         'metadata': {
                             'total_pages': len(pdf_reader.pages),
-                            'preview_page': 1
-                        }
+                            'preview_page': 1,
+                        },
                     }
-                else:
-                    return {
-                        'preview_type': 'error',
-                        'error': 'PDF file is empty'
-                    }
-                    
-        except Exception as e:
-            logger.error(f"Error previewing PDF {file_path}: {e}", exc_info=True)
-            return {
-                'preview_type': 'error',
-                'error': f'Error processing PDF: {str(e)}'
-            }
+            except Exception as fallback_error:
+                logger.error('PDF preview failed for %s: %s', file_path,
+                             fallback_error, exc_info=True)
+                return {
+                    'preview_type': 'error',
+                    'error': 'Could not generate PDF preview',
+                }
+
+        if FITZ_AVAILABLE or PDF_FALLBACK_AVAILABLE:
+            return {'preview_type': 'error', 'error': 'PDF file is empty'}
+        return {
+            'preview_type': 'error',
+            'error': 'PDF preview requires PyMuPDF (fitz) or PyPDF2',
+        }
     
     @staticmethod
     def _preview_docx(file_path: str) -> Dict[str, Any]:
@@ -300,7 +331,7 @@ class FilePreviewService:
             logger.error(f"Error previewing DOCX {file_path}: {e}", exc_info=True)
             return {
                 'preview_type': 'error',
-                'error': f'Error processing DOCX: {str(e)}'
+                'error': 'Could not generate DOCX preview'
             }
     
     @staticmethod
@@ -353,7 +384,7 @@ class FilePreviewService:
             logger.error(f"Error previewing XLSX {file_path}: {e}", exc_info=True)
             return {
                 'preview_type': 'error',
-                'error': f'Error processing XLSX: {str(e)}'
+                'error': 'Could not generate spreadsheet preview'
             }
         finally:
             # A read-only workbook streams rows from the stream it was opened
@@ -403,6 +434,6 @@ class FilePreviewService:
             logger.error(f"Error previewing text file {file_path}: {e}", exc_info=True)
             return {
                 'preview_type': 'error',
-                'error': f'Error reading text file: {str(e)}'
+                'error': 'Could not read text preview'
             }
 

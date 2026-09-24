@@ -172,7 +172,10 @@ const FileManagement = {
         if (countEl) countEl.textContent = selected;
         
         // Enable/disable bulk action buttons
-        const bulkBtns = ['bulkAnalyzeBtn', 'bulkExportBtn', 'bulkDeleteBtn'];
+        const bulkBtns = [
+            'bulkAnalyzeBtn', 'bulkExportBtn', 'bulkNamesCsvBtn', 'bulkNamesExcelBtn',
+            'bulkDeleteBtn'
+        ];
         bulkBtns.forEach(btnId => {
             const btn = document.getElementById(btnId);
             if (btn) btn.disabled = selected === 0;
