@@ -320,7 +320,9 @@ class TestLanguageSupport:
         eng = TesseractEngine()
         eng._pytesseract = Stub()
         eng._load_attempted = True
-        assert eng._languages(["heb", "ara", "zzz"]) == "ara"
+        assert eng._languages(["heb", "ara", "zzz"]) == (
+            "ara", ["heb", "zzz"]
+        )
 
     def test_fallback_engine_models_are_latin_and_chinese_only(self, engine):
         """This project declares DEFAULT_OCR_LANGUAGES = heb/eng/ara.

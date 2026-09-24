@@ -3,7 +3,6 @@
 # This file is distributed under the same license as the File Analysis System project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: File Analysis System 2.0.0\n"
@@ -9445,3 +9444,859 @@ msgstr "حذف الملف"
 #: templates/file/file_detail.html
 msgid "Keep it"
 msgstr "الإبقاء عليه"
+
+msgid "INFORAXIS System"
+msgstr "نظام إنفوراكسيس"
+
+msgid "Primary navigation"
+msgstr "التنقل الرئيسي"
+
+msgid "Breadcrumb navigation"
+msgstr "التنقل عبر مسار التصفح"
+
+msgid "Open navigation menu"
+msgstr "افتح قائمة التنقل"
+
+msgid "Close navigation menu"
+msgstr "أغلق قائمة التنقل"
+
+msgid "New password must be at least %(min)s characters."
+msgstr "يجب ألا تقل كلمة المرور الجديدة عن %(min)s حرفًا."
+
+msgid "Minimum %(min)s characters."
+msgstr "الحد الأدنى %(min)s أحرف."
+
+msgid "Source name"
+msgstr "اسم المصدر"
+
+msgid "Job / role"
+msgstr "الوظيفة / الدور"
+
+msgid "Job or role"
+msgstr "الوظيفة أو الدور"
+
+msgid "Importance (0–1)"
+msgstr "الأهمية (0–1)"
+
+msgid "Side name"
+msgstr "اسم الجهة"
+
+msgid "You"
+msgstr "أنت"
+
+msgid "Reset password"
+msgstr "إعادة تعيين كلمة المرور"
+
+msgid "No users found."
+msgstr "لم يتم العثور على مستخدمين."
+
+msgid "Username and password are required."
+msgstr "اسم المستخدم وكلمة المرور مطلوبان."
+
+msgid "Failed to create user."
+msgstr "تعذر إنشاء المستخدم."
+
+msgid "Failed to delete user."
+msgstr "تعذر حذف المستخدم."
+
+msgid "Please try again."
+msgstr "يرجى المحاولة مرة أخرى."
+
+msgid "User updated successfully."
+msgstr "تم تحديث المستخدم بنجاح."
+
+msgid "User deleted successfully."
+msgstr "تم حذف المستخدم بنجاح."
+
+msgid "Select keyword"
+msgstr "حدد كلمة مفتاحية"
+
+msgid "Smart Category"
+msgstr "فئة ذكية"
+
+msgid "Remove filter"
+msgstr "إزالة عامل التصفية"
+
+#: templates/Search/search_advanced.html
+msgid "Saved searches"
+msgstr "عمليات البحث المحفوظة"
+
+#: templates/Search/search_advanced.html
+msgid "Saved"
+msgstr "محفوظ"
+
+#: templates/Search/search_advanced.html
+msgid "Manage all"
+msgstr "إدارة الكل"
+
+#: templates/Search/search_advanced.html
+msgid "Save this search so you can re-run it any time"
+msgstr "احفظ هذا البحث لإعادة تشغيله في أي وقت"
+
+#: templates/Search/search_advanced.html
+msgid "Open in new tab"
+msgstr "فتح في علامة تبويب جديدة"
+
+#: templates/Search/search_advanced.html
+msgid "Quick preview (stays on this page)"
+msgstr "معاينة سريعة (تبقى في هذه الصفحة)"
+
+#: templates/Search/search_advanced.html
+msgid "Close preview"
+msgstr "إغلاق المعاينة"
+
+#: templates/Search/search_advanced.html
+msgid "Loading preview…"
+msgstr "جارٍ تحميل المعاينة…"
+
+#: templates/Search/search_advanced.html
+msgid "Preview is not available for this file."
+msgstr "المعاينة غير متاحة لهذا الملف."
+
+#: templates/Search/search_advanced.html
+msgid "Open the file in a new tab to view the full content."
+msgstr "افتح الملف في علامة تبويب جديدة لعرض المحتوى كاملاً."
+
+#: templates/Search/search_advanced.html
+msgid "First page text"
+msgstr "نص الصفحة الأولى"
+
+#: templates/Search/search_advanced.html
+msgid "pages"
+msgstr "صفحات"
+
+#: templates/Search/search_advanced.html
+msgid "Saved search"
+msgstr "بحث محفوظ"
+
+#: templates/Search/search_advanced.html
+msgid "Name this search:"
+msgstr "سمِّ هذا البحث:"
+
+#: templates/Search/search_advanced.html
+msgid "Search saved. Find it under Saved searches."
+msgstr "تم حفظ البحث. اعثر عليه ضمن عمليات البحث المحفوظة."
+
+#: templates/Search/search_advanced.html
+msgid "Could not save this search."
+msgstr "تعذّر حفظ هذا البحث."
+
+#: templates/Search/search_advanced.html
+msgid "Run a search first, then save it here."
+msgstr "نفّذ بحثاً أولاً ثم احفظه هنا."
+
+#: templates/Search/search_advanced.html
+msgid "Loading saved searches…"
+msgstr "جارٍ تحميل عمليات البحث المحفوظة…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load saved searches."
+msgstr "تعذّر تحميل عمليات البحث المحفوظة."
+
+#: templates/Search/search_advanced.html
+msgid "No saved searches yet. Run a search and press Save."
+msgstr "لا توجد عمليات بحث محفوظة بعد. نفّذ بحثاً ثم اضغط حفظ."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search applied"
+msgstr "تم تطبيق البحث المحفوظ"
+
+#: templates/Search/search_advanced.html
+msgid "Could not run this saved search."
+msgstr "تعذّر تشغيل هذا البحث المحفوظ."
+
+#: templates/Search/search_advanced.html
+msgid "Saved search deleted"
+msgstr "تم حذف البحث المحفوظ"
+
+#: templates/Search/search_advanced.html
+msgid "Could not delete this saved search."
+msgstr "تعذّر حذف هذا البحث المحفوظ."
+
+#: templates/Search/search_enhanced.html
+msgid "Sort results by"
+msgstr "فرز النتائج حسب"
+
+#: templates/Search/search_enhanced.html
+msgid "Sort order"
+msgstr "ترتيب الفرز"
+
+#: templates/Search/search_enhanced.html
+msgid "Clear recent searches"
+msgstr "مسح عمليات البحث الأخيرة"
+
+#: templates/Search/search_enhanced.html
+msgid "No search history"
+msgstr "لا يوجد سجل بحث"
+
+#: templates/Search/search_enhanced.html
+msgid "Save current search"
+msgstr "حفظ البحث الحالي"
+
+#: templates/Search/search_enhanced.html
+msgid "No saved searches"
+msgstr "لا توجد عمليات بحث محفوظة"
+
+#: templates/Search/search_enhanced.html
+msgid "Pagination"
+msgstr "التنقّل بين الصفحات"
+
+#: templates/Search/search_enhanced.html
+msgid "Matching content:"
+msgstr "المحتوى المطابق:"
+
+#: templates/Search/search_enhanced.html
+msgid "Line"
+msgstr "السطر"
+
+#: templates/Search/search_enhanced.html
+msgid "Similar"
+msgstr "مشابه"
+
+#: templates/Search/search_advanced.html
+msgid "Enter a name for this search:"
+msgstr "أدخل اسمًا لهذا البحث:"
+
+#: templates/Search/search_advanced.html
+msgid "Delete this saved search?"
+msgstr "حذف هذا البحث المحفوظ؟"
+
+#: templates/Settings/translation_manager.html:147
+msgid "A translation cannot be blank."
+msgstr "لا يمكن أن تكون الترجمة فارغة."
+
+#: templates/Settings/translation_manager.html:18
+msgid "Administration"
+msgstr "الإدارة"
+
+#: templates/Settings/translation_manager.html:49
+msgid "All screens"
+msgstr "كل الشاشات"
+
+#: templates/Settings/translation_manager.html:27
+msgid "Back to Settings"
+msgstr "العودة إلى الإعدادات"
+
+#: templates/Settings/translation_manager.html:80
+msgid "Catalog strings"
+msgstr "عبارات الفهرس"
+
+#: templates/Settings/translation_manager.html:79
+msgid "Catalog summary"
+msgstr "ملخص الفهرس"
+
+#: templates/Settings/translation_manager.html:148
+msgid "Catalog unavailable"
+msgstr "الفهرس غير متاح"
+
+#: templates/Settings/translation_manager.html:149
+msgid "Could not load translations."
+msgstr "تعذر تحميل الترجمات."
+
+#: templates/Settings/translation_manager.html:150
+msgid "Could not save translations."
+msgstr "تعذر حفظ الترجمات."
+
+#: templates/Settings/translation_manager.html:151
+msgid "Custom override"
+msgstr "ترجمة مخصصة"
+
+#: templates/Settings/translation_manager.html:70 templates/Settings/translation_manager.html:83
+msgid "Custom overrides"
+msgstr "الترجمات المخصصة"
+
+#: templates/Settings/translation_manager.html:152
+msgid "Discard unsaved changes?"
+msgstr "هل تريد تجاهل التغييرات غير المحفوظة؟"
+
+#: templates/Settings/translation_manager.html:153
+msgid "Fix blank translations and placeholders before saving."
+msgstr "أكمل الترجمات الفارغة وتحقق من العناصر النائبة قبل الحفظ."
+
+#: templates/Settings/translation_manager.html:154
+msgid "Keep every named placeholder from the source text."
+msgstr "احتفظ بجميع العناصر النائبة المسماة كما هي في النص الأصلي."
+
+#: templates/Settings/translation_manager.html:155
+msgid "Keep named placeholders unchanged."
+msgstr "أبقِ العناصر النائبة المسماة دون تغيير."
+
+#: templates/Settings/translation_manager.html:90 templates/Settings/translation_manager.html:119 templates/Settings/translation_manager.html:156
+msgid "Loading translations…"
+msgstr "جارٍ تحميل الترجمات…"
+
+#: templates/Settings/translation_manager.html:69 templates/Settings/translation_manager.html:82 templates/Settings/translation_manager.html:158
+msgid "Missing"
+msgstr "غير مترجم"
+
+#: templates/Settings/translation_manager.html:114
+msgid "No strings match these filters"
+msgstr "لا توجد عبارات تطابق عوامل التصفية هذه."
+
+#: templates/Settings/translation_manager.html:161
+msgid "Reset to catalog translation"
+msgstr "استعادة ترجمة الفهرس"
+
+#: templates/Settings/translation_manager.html:23
+msgid "Review and edit the localized text used throughout every screen."
+msgstr "راجع النصوص المترجمة المستخدمة في كل شاشة وعدّلها."
+
+#: templates/Settings/translation_manager.html:107
+msgid "Row actions"
+msgstr "إجراءات الصف"
+
+#: templates/Settings/translation_manager.html:94 templates/Settings/translation_manager.html:126
+msgid "Save changes"
+msgstr "حفظ التغييرات"
+
+#: templates/Settings/translation_manager.html:33
+msgid "Saved edits take effect across server-rendered and browser-rendered screens. Reset a row to return to the checked-in catalog translation."
+msgstr "تسري التعديلات المحفوظة على الشاشات المعروضة على الخادم والمتصفح. أعد تعيين الصف للعودة إلى ترجمة الفهرس المعتمدة."
+
+#: templates/Settings/translation_manager.html:47
+msgid "Screen or source file"
+msgstr "الشاشة أو الملف المصدر"
+
+#: templates/Settings/translation_manager.html:89
+msgid "Screen translations"
+msgstr "ترجمات الشاشات"
+
+#: templates/Settings/translation_manager.html:56
+msgid "Search source, translation, or file"
+msgstr "ابحث في النص الأصلي أو الترجمة أو الملف"
+
+#: templates/Settings/translation_manager.html:58
+msgid "Search translations"
+msgstr "بحث في الترجمات"
+
+#: Api/routes/experience_api.py:59 templates/Settings/translation_manager.html:104
+msgid "Source text"
+msgstr "النص المصدر"
+
+#: templates/Settings/translation_manager.html:39
+msgid "Target language"
+msgstr "اللغة المستهدفة"
+
+#: templates/Settings/translation_manager.html:68 templates/Settings/translation_manager.html:81 templates/Settings/translation_manager.html:162
+msgid "Translated"
+msgstr "مترجم"
+
+#: templates/Settings/translation_manager.html:105
+msgid "Translation"
+msgstr "الترجمة"
+
+#: templates/Settings/translation_manager.html:3 templates/Settings/translation_manager.html:21
+msgid "Translation Management"
+msgstr "إدارة الترجمات"
+
+#: templates/Settings/translation_manager.html:130
+msgid "Translation catalog pages"
+msgstr "صفحات فهرس الترجمات"
+
+#: templates/Settings/translation_manager.html:37
+msgid "Translation filters"
+msgstr "عوامل تصفية الترجمات"
+
+#: templates/Settings/translation_manager.html:163
+msgid "Translation for"
+msgstr "ترجمة العبارة"
+
+#: Api/routes/experience_api.py:73 templates/Settings/translation_manager.html:65
+msgid "Translation status"
+msgstr "حالة الترجمة"
+
+#: templates/Settings/translation_manager.html:164
+msgid "Translations saved successfully."
+msgstr "حُفظت الترجمات بنجاح."
+
+#: templates/Settings/translation_manager.html:115
+msgid "Try another screen, status, or search phrase."
+msgstr "جرّب اختيار شاشة أو حالة أو عبارة بحث أخرى."
+
+#: templates/Settings/translation_manager.html:165
+msgid "Unassigned source"
+msgstr "مصدر غير معيّن"
+
+#: templates/Settings/translation_manager.html:166
+msgid "Unsaved changes"
+msgstr "تغييرات غير محفوظة"
+
+#: templates/Settings/translation_manager.html:167
+msgid "Will reset"
+msgstr "ستُستعاد ترجمة الفهرس"
+
+#: templates/Settings/translation_manager.html:157
+msgid "matching strings"
+msgstr "عبارات مطابقة"
+
+#: templates/Search/search_advanced.html
+msgid "Hide exact duplicates"
+msgstr "إخفاء النسخ المكررة تمامًا"
+
+#: templates/Search/search_advanced.html
+msgid "File type (A-Z)"
+msgstr "نوع الملف (أ-ي)"
+
+#: templates/Search/search_advanced.html
+msgid "Similarity ≥"
+msgstr "التشابه ≥"
+
+#: templates/Search/search_advanced.html
+msgid "Minimum content similarity for grouping"
+msgstr "الحد الأدنى لتشابه المحتوى للتجميع"
+
+#: templates/Search/search_advanced.html
+msgid "Choose the minimum content similarity for grouping"
+msgstr "اختر الحد الأدنى لتشابه المحتوى للتجميع"
+
+#: templates/Search/search_advanced.html
+msgid "Group similar files on this results page"
+msgstr "تجميع الملفات المتشابهة في صفحة النتائج هذه"
+
+#: templates/Search/search_advanced.html
+msgid "Group similar"
+msgstr "تجميع الملفات المتشابهة"
+
+#: templates/Search/search_advanced.html
+msgid "Open this search workspace in a separate window"
+msgstr "فتح مساحة البحث هذه في نافذة منفصلة"
+
+#: templates/Search/search_advanced.html
+msgid "New window"
+msgstr "نافذة جديدة"
+
+#: templates/Search/search_advanced.html
+msgid "Current results page"
+msgstr "صفحة النتائج الحالية"
+
+#: templates/Search/search_advanced.html
+msgid "CSV"
+msgstr "CSV"
+
+#: templates/Search/search_advanced.html
+msgid "Excel (XLSX)"
+msgstr "ملف Excel (XLSX)"
+
+#: templates/Search/search_advanced.html
+msgid "All matching results"
+msgstr "جميع النتائج المطابقة"
+
+#: templates/Search/search_advanced.html
+msgid "JSON"
+msgstr "JSON"
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (CSV)"
+msgstr "أسماء الملفات المطابقة (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (Excel)"
+msgstr "أسماء الملفات المطابقة (Excel)"
+
+#: templates/Search/search_advanced.html
+msgid "Filtered corpus (CSV; ignores search terms)"
+msgstr "مجموعة الملفات المصفّاة (CSV؛ تتجاهل عبارات البحث)"
+
+#: templates/Search/search_advanced.html
+msgid "selected across this search"
+msgstr "المحدد ضمن نتائج هذا البحث"
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text for selected documents as a ZIP"
+msgstr "تنزيل النص المستخرج للمستندات المحددة كملف ZIP"
+
+#: templates/Search/search_advanced.html
+msgid "Text ZIP"
+msgstr "ملف ZIP للنصوص"
+
+#: templates/Search/search_advanced.html
+msgid "Download available original files for selected documents as a ZIP"
+msgstr "تنزيل الملفات الأصلية المتاحة للمستندات المحددة كملف ZIP"
+
+#: templates/Search/search_advanced.html
+msgid "Originals ZIP"
+msgstr "ملف ZIP للملفات الأصلية"
+
+#: templates/Search/search_advanced.html
+msgid "Names CSV"
+msgstr "أسماء الملفات (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Names Excel"
+msgstr "أسماء الملفات (Excel)"
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for extracted text"
+msgstr "اختر مجلدًا موجودًا أو أنشئ مجلدًا فرعيًا للنص المستخرج"
+
+#: templates/Search/search_advanced.html
+msgid "Text to folder"
+msgstr "حفظ النص في مجلد"
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for original files"
+msgstr "اختر مجلدًا موجودًا أو أنشئ مجلدًا فرعيًا للملفات الأصلية"
+
+#: templates/Search/search_advanced.html
+msgid "Originals to folder"
+msgstr "حفظ الملفات الأصلية في مجلد"
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one TXT file"
+msgstr "قراءة نص الصفحة الأولى للمستندات المحددة ودمجه في ملف TXT واحد"
+
+#: templates/Search/search_advanced.html
+msgid "Read & export first pages (TXT)"
+msgstr "قراءة الصفحات الأولى وتصديرها (TXT)"
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one Word file"
+msgstr "قراءة نص الصفحة الأولى للمستندات المحددة ودمجه في ملف Word واحد"
+
+#: templates/Search/search_advanced.html
+msgid "First pages (DOCX)"
+msgstr "الصفحات الأولى (DOCX)"
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links CSV"
+msgstr "عناوين البريد الإلكتروني والروابط (CSV)"
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links XLSX"
+msgstr "عناوين البريد الإلكتروني والروابط (XLSX)"
+
+#: templates/Search/search_advanced.html
+msgid "Document review"
+msgstr "مراجعة المستندات"
+
+#: templates/Search/search_advanced.html
+msgid "Search & review"
+msgstr "البحث والمراجعة"
+
+#: templates/Search/search_advanced.html
+msgid "Select a result to review"
+msgstr "حدد نتيجة لمراجعتها"
+
+#: templates/Search/search_advanced.html
+msgid "Close document review"
+msgstr "إغلاق مراجعة المستند"
+
+#: templates/Search/search_advanced.html
+msgid "Open full record"
+msgstr "فتح السجل الكامل"
+
+#: templates/Search/search_advanced.html
+msgid "Download the original document and choose its filename"
+msgstr "تنزيل المستند الأصلي واختيار اسم ملفه"
+
+#: templates/Search/search_advanced.html
+msgid "Download original"
+msgstr "تنزيل الملف الأصلي"
+
+#: templates/Search/search_advanced.html
+msgid "Native application access requires the local INFORAXIS companion"
+msgstr "يتطلب الوصول إلى التطبيق الأصلي وجود تطبيق INFORAXIS المحلي المرافق"
+
+#: templates/Search/search_advanced.html
+msgid "Open in native app"
+msgstr "فتح في التطبيق الأصلي"
+
+#: templates/Search/search_advanced.html
+msgid "Opening a local folder requires the local INFORAXIS companion"
+msgstr "يتطلب فتح مجلد محلي وجود تطبيق INFORAXIS المحلي المرافق"
+
+#: templates/Search/search_advanced.html
+msgid "Open containing folder"
+msgstr "فتح المجلد الحاوي"
+
+#: templates/Search/search_advanced.html
+msgid "This browser can preview and download the source file. Launching or editing it in a native app, or opening its operating-system folder, requires a trusted local INFORAXIS companion."
+msgstr "يمكن لهذا المتصفح معاينة الملف المصدر وتنزيله. أما تشغيله أو تحريره في تطبيق أصلي، أو فتح مجلده في نظام التشغيل، فيتطلب تطبيق INFORAXIS محليًا موثوقًا."
+
+#: templates/Search/search_advanced.html
+msgid "Document view"
+msgstr "Prikaz dokumenta"
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text"
+msgstr "النص المستخرج"
+
+#: templates/Search/search_advanced.html
+msgid "Original preview"
+msgstr "المعاينة الأصلية"
+
+#: templates/Search/search_advanced.html
+msgid "Navigate keyword matches"
+msgstr "التنقل بين مواضع تطابق الكلمات المفتاحية"
+
+#: templates/Search/search_advanced.html
+msgid "Previous match"
+msgstr "التطابق السابق"
+
+#: templates/Search/search_advanced.html
+msgid "Next match"
+msgstr "التطابق التالي"
+
+#: templates/Search/search_advanced.html
+msgid "Choose Review on a search result to inspect its content."
+msgstr "اختر «مراجعة» في إحدى نتائج البحث لفحص محتواها."
+
+#: templates/Search/search_advanced.html
+msgid "Copy selected passage"
+msgstr "نسخ المقطع المحدد"
+
+#: templates/Search/search_advanced.html
+msgid "First-page preview"
+msgstr "معاينة الصفحة الأولى"
+
+#: templates/Search/search_advanced.html
+msgid "Loading document context…"
+msgstr "جارٍ تحميل سياق المستند…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not load this document context."
+msgstr "تعذر تحميل سياق هذا المستند."
+
+#: templates/Search/search_advanced.html
+msgid "No extracted text is available for this document."
+msgstr "لا يتوفر نص مستخرج لهذا المستند."
+
+#: templates/Search/search_advanced.html
+msgid "No query matches in extracted text."
+msgstr "لا توجد نتائج مطابقة للاستعلام في النص المستخرج."
+
+#: templates/Search/search_advanced.html
+msgid "Showing the first {count} matches."
+msgstr "يُعرض أول {count} من التطابقات."
+
+#: templates/Search/search_advanced.html
+msgid "The original file is not available."
+msgstr "الملف الأصلي غير متاح."
+
+#: templates/Search/search_advanced.html
+msgid "Could not load the original preview."
+msgstr "تعذر تحميل معاينة الملف الأصلي."
+
+#: templates/Search/search_advanced.html
+msgid "Choose a filename for this original document:"
+msgstr "اختر اسمًا لملف هذا المستند الأصلي:"
+
+#: templates/Search/search_advanced.html
+msgid "Original download ready."
+msgstr "الملف الأصلي جاهز للتنزيل."
+
+#: templates/Search/search_advanced.html
+msgid "Could not download the original document."
+msgstr "تعذر تنزيل المستند الأصلي."
+
+#: templates/Search/search_advanced.html
+msgid "Opening or editing a native file and opening its operating-system folder require the trusted local INFORAXIS companion. Use the browser preview or download here."
+msgstr "يتطلب فتح ملف في تطبيق أصلي أو تحريره، وفتح مجلده في نظام التشغيل، تطبيق INFORAXIS محليًا موثوقًا. استخدم معاينة المتصفح أو التنزيل هنا."
+
+#: templates/Search/search_advanced.html
+msgid "The local INFORAXIS companion could not complete this action."
+msgstr "تعذر على تطبيق INFORAXIS المحلي المرافق إكمال هذا الإجراء."
+
+#: templates/Search/search_advanced.html
+msgid "Select a passage in the document first."
+msgstr "حدد مقطعًا من المستند أولًا."
+
+#: templates/Search/search_advanced.html
+msgid "Passage copied."
+msgstr "تم نسخ المقطع."
+
+#: templates/Search/search_advanced.html
+msgid "Updating duplicate filter…"
+msgstr "جارٍ تحديث مرشح التكرارات…"
+
+#: templates/Search/search_advanced.html
+msgid "Grouping similar files on this results page…"
+msgstr "جارٍ تجميع الملفات المتشابهة في صفحة النتائج هذه…"
+
+#: templates/Search/search_advanced.html
+msgid "Could not group similar files."
+msgstr "تعذر تجميع الملفات المتشابهة."
+
+#: templates/Search/search_advanced.html
+msgid "Similarity groups apply to this results page only."
+msgstr "تنطبق مجموعات التشابه على صفحة النتائج هذه فقط."
+
+#: templates/Search/search_advanced.html
+msgid "Similarity group {group}"
+msgstr "مجموعة التشابه {group}"
+
+#: templates/Search/search_advanced.html
+msgid "Files without extracted text are shown separately."
+msgstr "تُعرض الملفات التي لا تحتوي على نص مستخرج على حدة."
+
+#: templates/Search/search_advanced.html
+msgid "Name your export (leave blank for an automatic name):"
+msgstr "أدخل اسم ملف التصدير أو اتركه فارغًا لإنشاء اسم تلقائي:"
+
+#: templates/Search/search_advanced.html
+msgid "Name this download:"
+msgstr "أدخل اسم هذا التنزيل:"
+
+#: templates/Search/search_advanced.html
+msgid "Name this selected-file export (leave blank for an automatic name):"
+msgstr "أدخل اسم تصدير الملفات المحددة أو اتركه فارغًا لإنشاء اسم تلقائي:"
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export failed."
+msgstr "فشل تصدير الملفات المحددة."
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export ready."
+msgstr "تصدير الملفات المحددة جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "First-page export ready."
+msgstr "تصدير الصفحات الأولى جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "The export was saved, but some selected documents had no readable extracted text."
+msgstr "تم حفظ التصدير، لكن بعض المستندات المحددة لا تحتوي على نص مستخرج قابل للقراءة."
+
+#: templates/Search/search_advanced.html
+msgid "Email and hyperlink export ready."
+msgstr "تصدير عناوين البريد الإلكتروني والروابط جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "No email addresses or links were found; a headers-only report was saved."
+msgstr "لم يتم العثور على عناوين بريد إلكتروني أو روابط؛ تم حفظ تقرير بالعناوين فقط."
+
+#: templates/Search/search_advanced.html
+msgid "Selected filename export ready."
+msgstr "تصدير أسماء الملفات المحددة جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "Select one or more documents first."
+msgstr "حدد مستندًا واحدًا أو أكثر أولًا."
+
+#: templates/Search/search_advanced.html
+msgid "Select no more than 200 documents for one export."
+msgstr "حدد 200 مستند كحد أقصى في عملية تصدير واحدة."
+
+#: templates/Search/search_advanced.html
+msgid "Folder export is not supported in this browser; downloading a ZIP instead."
+msgstr "لا يدعم هذا المتصفح التصدير إلى مجلد؛ سيتم تنزيل ملف ZIP بدلًا من ذلك."
+
+#: templates/Search/search_advanced.html
+msgid "Could not write to the selected folder."
+msgstr "تعذرت الكتابة إلى المجلد المحدد."
+
+#: templates/Search/search_advanced.html
+msgid "Writing selected documents to the chosen folder…"
+msgstr "جارٍ حفظ المستندات المحددة في المجلد المختار…"
+
+#: templates/Search/search_advanced.html
+msgid "Documents saved to the chosen folder."
+msgstr "تم حفظ المستندات في المجلد المختار."
+
+#: templates/Search/search_advanced.html
+msgid "Some documents could not be saved to the chosen folder."
+msgstr "تعذر حفظ بعض المستندات في المجلد المختار."
+
+#: templates/Search/search_advanced.html
+msgid "Optional: enter a new subfolder name, or leave blank to use the selected folder."
+msgstr "اختياري: أدخل اسم مجلد فرعي جديد أو اتركه فارغًا لاستخدام المجلد المحدد."
+
+#: templates/Search/search_advanced.html
+msgid "Allow pop-ups to open this search in a new window."
+msgstr "اسمح بالنوافذ المنبثقة لفتح هذا البحث في نافذة جديدة."
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text"
+msgstr "تنزيل النص المستخرج"
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text download ready."
+msgstr "النص المستخرج جاهز للتنزيل."
+
+#: templates/Search/search_advanced.html
+msgid "Review beside results"
+msgstr "مراجعة بجانب النتائج"
+
+#: templates/Search/search_advanced.html
+msgid "Filename match"
+msgstr "تطابق اسم الملف"
+
+#: templates/Search/search_advanced.html
+msgid "Content match"
+msgstr "تطابق المحتوى"
+
+#: templates/Search/search_advanced.html
+msgid "Filename and content match"
+msgstr "تطابق اسم الملف والمحتوى"
+
+#: templates/Search/search_advanced.html
+msgid "Metadata match"
+msgstr "تطابق البيانات الوصفية"
+
+#: templates/Search/search_advanced.html
+msgid "similarity"
+msgstr "درجة التشابه"
+
+#: templates/Search/search_advanced.html
+msgid "Other results"
+msgstr "نتائج أخرى"
+
+#: templates/Search/search_advanced.html
+msgid "Clear groups"
+msgstr "إزالة التجميع"
+
+#: templates/Search/search_advanced.html
+msgid "At least two results are needed to group similar files."
+msgstr "يلزم وجود نتيجتين على الأقل لتجميع الملفات المتشابهة."
+
+#: templates/Search/search_advanced.html
+msgid "Your browser cannot play this media."
+msgstr "لا يستطيع متصفحك تشغيل هذا الملف الصوتي أو المرئي."
+
+#: templates/Search/search_advanced.html
+msgid "This format cannot be displayed inline."
+msgstr "لا يمكن عرض هذا التنسيق داخل الصفحة."
+
+#: templates/Search/search_advanced.html
+msgid "Could not copy the selected passage."
+msgstr "تعذر نسخ المقطع المحدد."
+
+#: templates/Search/search_advanced.html
+msgid "Matching filename export ready."
+msgstr "تصدير أسماء الملفات المطابقة جاهز."
+
+#: templates/Search/search_advanced.html
+msgid "Could not export the matching filenames."
+msgstr "تعذر تصدير أسماء الملفات المطابقة."
+
+#: templates/Search/search_advanced.html
+msgid "The filename export reached the 50,000-row limit; narrow the search to export everything."
+msgstr "بلغ تصدير أسماء الملفات حد 50,000 صف؛ ضيّق نطاق البحث لتصدير كل النتائج."
+
+#: templates/Search/search_enhanced.html
+msgid "Open Search & Review workspace"
+msgstr "فتح مساحة البحث والمراجعة"
+
+#: templates/Search/search_enhanced.html
+msgid "Name this export (leave blank for an automatic name):"
+msgstr "أدخل اسم هذا التصدير أو اتركه فارغًا لإنشاء اسم تلقائي:"
+
+#: templates/Search/search_enhanced.html
+msgid "Case sensitive"
+msgstr "حساس لحالة الأحرف"
+
+#: templates/Search/search_enhanced.html
+msgid "Match uppercase and lowercase exactly"
+msgstr "مطابقة الأحرف الكبيرة والصغيرة كما هي تمامًا"
+
+#: templates/Search/search_enhanced.html
+msgid "Whole word"
+msgstr "كلمة كاملة"
+
+#: templates/Search/search_enhanced.html
+msgid "Match complete words only"
+msgstr "مطابقة الكلمات الكاملة فقط"
+
+#: core/interfaces/registry.py
+msgid "Review and manage localized strings across every screen."
+msgstr "مراجعة وإدارة النصوص الموطّنة في جميع الشاشات."

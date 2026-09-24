@@ -660,12 +660,25 @@ await exercisePage({
     group.appendChild(new FakeElement('button', { type: 'submit', class: 'btn-action btn-primary' }));
     group.appendChild(new FakeElement('a', { class: 'btn-action btn-outline-secondary',
                                              href: '/email-words' }));
+    const copyButton = document.register(group.appendChild(new FakeElement('button', {
+        id: 'copyEmailWordsButton', type: 'button',
+    })));
+    const exportButton = document.register(group.appendChild(new FakeElement('button', {
+        id: 'exportEmailWordsButton', type: 'button',
+    })));
 
-    await loadPageModule('email-words-page.js', document, window);
+    let runtimeCalls = 0;
+    window.ActionToolbar = { sync() { runtimeCalls += 1; } };
+    const emailWordsPage = await loadPageModule('email-words-page.js', document, window);
+    if (typeof emailWordsPage.default === 'function') emailWordsPage.default();
     fireDomContentLoaded(document);
 
-    check('email_words: page actions need no runtime call at all',
-          typeof window.exportData === 'function' || typeof window.refreshPage === 'function');
+    check('email_words: the page is initialized through its module entry point',
+          typeof emailWordsPage.default === 'function');
+    check('email_words: copy and export are wired to their page actions',
+          (copyButton.listeners.click || []).length === 1
+          && (exportButton.listeners.click || []).length === 1);
+    check('email_words: page actions do not sync a selection toolbar', runtimeCalls === 0);
     check('email_words: the bar has nothing to keep in step',
           bar.querySelectorAll('[data-bulk-action]').length === 0
           && bar.querySelectorAll('[data-selection-summary]').length === 0);

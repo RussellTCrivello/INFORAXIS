@@ -428,10 +428,10 @@ def main(argv: Sequence[str]) -> int:
     if "--inventory" in argv:
         import pathlib
 
-        from apps.web.app import create_app
+        from apps.web.app import app
 
         target = pathlib.Path(argv[argv.index("--inventory") + 1])
-        target.write_text(endpoint_inventory(create_app()))
+        target.write_text(endpoint_inventory(app))
         print(f"wrote the endpoint inventory to {target}")
         return 0
 

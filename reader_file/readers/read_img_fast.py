@@ -407,16 +407,16 @@ class ImageFileReader(BaseReader):
                             f"Language: {lang}"
                         )
                 else:
-                    # Never report an image as successfully processed when its
-                    # pixels were not examined. The original file remains
-                    # stored, but searchable content is explicitly marked as
-                    # unavailable and the job can surface the dependency error.
-                    result["ocr_attempted"] = True
-                    result["ocr_engine"] = "unavailable"
+                    # OCR was required but no backend could run. That is not
+                    # an OCR attempt: preserve the original, mark the content
+                    # retryable, and report the missing capability explicitly.
+                    result["ocr_attempted"] = False
+                    result["ocr_engine"] = "none"
+                    result["retryable"] = True
                     result["extraction_info"].update({
                         "extracted": False,
                         "stored": False,
-                        "error": "OCR is required but no OCR engine is available",
+                        "error": "No OCR engine available",
                         "reason": "ocr_required_engine_unavailable",
                         "image_size": f"{width}x{height}",
                         "image_format": img_format

@@ -285,6 +285,8 @@ class TestInventory:
         assert classify_endpoint("auth.login", "/auth/login", ["POST"]) is EndpointClass.SYSTEM_ENDPOINT
         assert classify_endpoint("some.api", "/api/things", ["GET"]) is EndpointClass.API_ENDPOINT
         assert classify_endpoint("diag.pools", "/concurrency/api/pools", ["GET"]) is EndpointClass.API_ENDPOINT
+        assert classify_endpoint("files.get_active_tasks", "/upload/active-tasks", ["GET"]) is EndpointClass.API_ENDPOINT
+        assert classify_endpoint("files.upload_progress", "/upload/progress/<task_id>", ["GET"]) is EndpointClass.API_ENDPOINT
         assert classify_endpoint("page", "/page", ["GET"]) is EndpointClass.USER_INTERFACE
         assert classify_endpoint("action", "/page/delete", ["POST"]) is EndpointClass.ACTION
 

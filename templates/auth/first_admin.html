@@ -1,10 +1,11 @@
+{% set password_min = password_min_length|default(12) %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ current_language|default('en') }}" dir="{% if current_language|default('en') in ['ar', 'fa', 'he', 'ur'] %}rtl{% else %}ltr{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Create administrator - File Analysis System</title>
+    <title>{{ _('Create administrator') }} - {{ user_settings.get('system', 'app_name', _('INFORAXIS System')) if user_settings else _('INFORAXIS System') }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logos/logo_347c1538.png') }}">
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='icons/bootstrap-icons.css') }}" rel="stylesheet">
@@ -201,10 +202,10 @@
     <div class="card admin-card">
         <div class="card-body p-4">
             <div class="head-icon"><i class="bi bi-person-workspace"></i></div>
-            <h4 class="text-center">Create the administrator account</h4>
+            <h4 class="text-center">{{ _('Create the administrator account') }}</h4>
             <p class="head-sub text-center">
-                <i class="bi bi-info-circle"></i>
-                <span>This page is available only until the first administrator exists.</span>
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <span>{{ _('This page is available only until the first administrator exists.') }}</span>
             </p>
             <div id="err" class="admin-error" role="alert">
                 <i class="bi bi-exclamation-triangle-fill"></i><span id="err-msg"></span>
@@ -212,49 +213,74 @@
             <form id="form" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="field">
-                    <label class="field-label" for="username"><i class="bi bi-person-badge"></i> Admin username <span class="req">*</span></label>
+                    <label class="field-label" for="username"><i class="bi bi-person-badge" aria-hidden="true"></i> {{ _('Admin username') }} <span class="req" aria-hidden="true">*</span><span class="visually-hidden">{{ _('required') }}</span></label>
                     <div class="field-control">
                         <span class="field-icon"><i class="bi bi-person-vcard"></i></span>
                         <input class="form-control" id="username" name="username" required maxlength="64"
-                               autocomplete="username" placeholder="e.g. admin">
+                               autocomplete="username" placeholder="{{ _('e.g. admin') }}">
                     </div>
                 </div>
                 <div class="field">
-                    <label class="field-label" for="password"><i class="bi bi-key-fill"></i> Password <span class="req">*</span></label>
+                    <label class="field-label" for="password"><i class="bi bi-key-fill" aria-hidden="true"></i> {{ _('Password') }} <span class="req" aria-hidden="true">*</span><span class="visually-hidden">{{ _('required') }}</span></label>
                     <div class="field-control">
                         <span class="field-icon"><i class="bi bi-lock-fill"></i></span>
                         <input class="form-control" id="password" name="password" type="password" required
-                               minlength="12" autocomplete="new-password" placeholder="Minimum 12 characters">
+                               minlength="{{ password_min }}" autocomplete="new-password" aria-describedby="pw-hint"
+                               placeholder="{{ _('Minimum %(min)s characters.', min=password_min) }}">
                         <span class="field-trail">
-                            <button type="button" class="pw-toggle" data-target="password" aria-label="Show password" tabindex="-1"><i class="bi bi-eye"></i></button>
+                            <button type="button" class="pw-toggle" data-target="password" aria-label="{{ _('Show password') }}" title="{{ _('Show password') }}" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button>
                         </span>
                     </div>
                     <div class="pw-bar" aria-hidden="true"><div class="pw-bar-fill" id="pw-strength"></div></div>
-                    <div class="form-text" id="pw-hint"><i class="bi bi-shield-lock"></i> Minimum 12 characters.</div>
+                    <div class="form-text" id="pw-hint"><i class="bi bi-shield-lock" aria-hidden="true"></i> {{ _('Minimum %(min)s characters.', min=password_min) }}</div>
                 </div>
                 <div class="field">
-                    <label class="field-label" for="password2"><i class="bi bi-key"></i> Confirm password <span class="req">*</span></label>
+                    <label class="field-label" for="password2"><i class="bi bi-key" aria-hidden="true"></i> {{ _('Confirm password') }} <span class="req" aria-hidden="true">*</span><span class="visually-hidden">{{ _('required') }}</span></label>
                     <div class="field-control">
                         <span class="field-icon"><i class="bi bi-lock"></i></span>
-                        <input class="form-control" id="password2" type="password" required minlength="12"
-                               autocomplete="new-password" placeholder="Re-enter password">
+                        <input class="form-control" id="password2" type="password" required minlength="{{ password_min }}"
+                               autocomplete="new-password" placeholder="{{ _('Re-enter password') }}">
                         <span class="field-trail">
-                            <button type="button" class="pw-toggle" data-target="password2" aria-label="Show password" tabindex="-1"><i class="bi bi-eye"></i></button>
+                            <button type="button" class="pw-toggle" data-target="password2" aria-label="{{ _('Show password') }}" title="{{ _('Show password') }}" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button>
                         </span>
                     </div>
                 </div>
                 <button class="btn-create" id="btn" type="submit">
-                    <i class="bi bi-person-check-fill"></i> Create administrator
+                    <i class="bi bi-person-check-fill" aria-hidden="true"></i> {{ _('Create administrator') }}
                 </button>
             </form>
         </div>
     </div>
 </div>
-<p class="page-footnote"><i class="bi bi-hdd-stack"></i> File Analysis System</p>
+<p class="page-footnote"><i class="bi bi-hdd-stack" aria-hidden="true"></i> {{ user_settings.get('system', 'app_name', _('INFORAXIS System')) if user_settings else _('INFORAXIS System') }}</p>
 <script>
 (function () {
     var form = document.getElementById('form');
     var errBox = document.getElementById('err');
+    var submitButton = document.getElementById('btn');
+    var strings = {
+        minimum: {{ _('Minimum %(min)s characters.', min=password_min)|tojson }},
+        weak: {{ _('Weak password')|tojson }},
+        fair: {{ _('Fair password')|tojson }},
+        strong: {{ _('Strong password')|tojson }},
+        creating: {{ _('Creating…')|tojson }},
+        create: {{ _('Create administrator')|tojson }},
+        passwordMismatch: {{ _('Passwords do not match')|tojson }},
+        createFailed: {{ _('Failed to create administrator')|tojson }},
+        genericError: {{ _('An internal error occurred.')|tojson }},
+        showPassword: {{ _('Show password')|tojson }},
+        hidePassword: {{ _('Hide password')|tojson }}
+    };
+
+    function setSubmitState(loading) {
+        var icon = document.createElement('i');
+        icon.className = loading ? 'bi bi-arrow-repeat icon-spin' : 'bi bi-person-check-fill';
+        icon.setAttribute('aria-hidden', 'true');
+        submitButton.replaceChildren(icon, document.createTextNode(' ' + (loading ? strings.creating : strings.create)));
+        submitButton.disabled = loading;
+        if (loading) submitButton.setAttribute('aria-busy', 'true');
+        else submitButton.removeAttribute('aria-busy');
+    }
 
     function showError(msg) {
         document.getElementById('err-msg').textContent = msg;
@@ -267,17 +293,25 @@
             var input = document.getElementById(btn.dataset.target);
             var show = input.type === 'password';
             input.type = show ? 'text' : 'password';
-            btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
-            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            var label = show ? strings.hidePassword : strings.showPassword;
+            var icon = document.createElement('i');
+            icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+            icon.setAttribute('aria-hidden', 'true');
+            btn.replaceChildren(icon);
+            btn.setAttribute('aria-label', label);
+            btn.setAttribute('title', label);
+            btn.setAttribute('aria-pressed', show ? 'true' : 'false');
         });
     });
 
-    // Password strength indicator (presentation only)
+    // Password strength indicator (presentation only), using the same minimum
+    // rendered into the password control and enforced by the auth service.
     document.getElementById('password').addEventListener('input', function () {
         var pw = this.value;
+        var minLength = Number(this.minLength) || 12;
         var score = 0;
-        if (pw.length >= 12) score++;
-        if (pw.length >= 16) score++;
+        if (pw.length >= minLength) score++;
+        if (pw.length >= minLength + 4) score++;
         if (/[A-Z]/.test(pw)) score++;
         if (/[0-9]/.test(pw)) score++;
         if (/[^A-Za-z0-9]/.test(pw)) score++;
@@ -287,27 +321,35 @@
         bar.style.width = pct + '%';
         bar.style.background = colors[score] || '#e2e8f0';
         var hint = document.getElementById('pw-hint');
-        var label = pw.length === 0 ? 'Minimum 12 characters.' :
-                    score < 2 ? 'Weak password' : score < 4 ? 'Fair password' : 'Strong password';
-        var icon = pw.length === 0 ? 'bi-shield-lock' :
-                   score < 2 ? 'bi-shield-exclamation' : score < 4 ? 'bi-shield-plus' : 'bi-shield-check';
-        hint.innerHTML = '<i class="bi ' + icon + '"></i> ' + label;
+        var label = pw.length === 0 ? strings.minimum :
+                    score < 2 ? strings.weak : score < 4 ? strings.fair : strings.strong;
+        var iconName = pw.length === 0 ? 'bi-shield-lock' :
+                       score < 2 ? 'bi-shield-exclamation' : score < 4 ? 'bi-shield-plus' : 'bi-shield-check';
+        var icon = document.createElement('i');
+        icon.className = 'bi ' + iconName;
+        icon.setAttribute('aria-hidden', 'true');
+        hint.replaceChildren(icon, document.createTextNode(' ' + label));
+    });
+
+    var passwordConfirmation = document.getElementById('password2');
+    passwordConfirmation.addEventListener('input', function () {
+        passwordConfirmation.setCustomValidity('');
     });
 
     form.addEventListener('submit', function (e) {
         e.preventDefault();
         errBox.classList.remove('show');
-        var btn = document.getElementById('btn');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="bi bi-arrow-repeat icon-spin"></i> Creating…';
+        setSubmitState(true);
         var p1 = document.getElementById('password').value;
-        var p2 = document.getElementById('password2').value;
+        var p2 = passwordConfirmation.value;
         if (p1 !== p2) {
-            showError('Passwords do not match');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-person-check-fill"></i> Create administrator';
+            passwordConfirmation.setCustomValidity(strings.passwordMismatch);
+            passwordConfirmation.reportValidity();
+            showError(strings.passwordMismatch);
+            setSubmitState(false);
             return;
         }
+        passwordConfirmation.setCustomValidity('');
         fetch(window.location.href, {
             method: 'POST',
             headers: {
@@ -321,13 +363,11 @@
         }).then(function (r) { return r.json().then(function (j) { return {ok: r.ok, body: j}; }); })
           .then(function (res) {
             if (res.ok) { window.location.href = res.body.redirect || '/'; return; }
-            showError(res.body.error || 'Failed to create administrator');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-person-check-fill"></i> Create administrator';
+            showError(res.body.error || strings.createFailed);
+            setSubmitState(false);
         }).catch(function () {
-            showError('An internal error occurred.');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-person-check-fill"></i> Create administrator';
+            showError(strings.genericError);
+            setSubmitState(false);
         });
     });
 })();

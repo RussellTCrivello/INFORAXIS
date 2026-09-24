@@ -95,7 +95,9 @@ def _load_dotenv_file(project_root: Path) -> None:
         if not env_file.exists():
             return
         from dotenv import load_dotenv  # python-dotenv is a core dependency
-        loaded = load_dotenv(env_file, override=False)
+        # Generated credentials are literal values; interpolation would turn
+        # a password such as ``pa${HOME}ss`` into a different secret.
+        loaded = load_dotenv(env_file, override=False, interpolate=False)
         if loaded:
             import logging
             logging.getLogger(__name__).info(

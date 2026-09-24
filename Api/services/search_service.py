@@ -42,6 +42,127 @@ def _escape_like(value: str) -> str:
     return text
 
 
+def _escape_postgres_regex(value: str) -> str:
+    """Escape user text for a PostgreSQL ARE regular-expression literal."""
+    special = set(r"\.^$|?*+(){}[]")
+    return "".join(("\\" + char) if char in special else char for char in str(value))
+
+
+def _postgres_word_pattern(value: str) -> str:
+    """Build a literal PostgreSQL regex requiring word boundaries."""
+    parts = [part for part in re.split(r"\s+", str(value).strip()) if part]
+    if not parts:
+        return r"(?!)"
+    phrase = r"[[:space:]]+".join(_escape_postgres_regex(part) for part in parts)
+    return r"(^|[^[:alnum:]_])" + phrase + r"([^[:alnum:]_]|$)"
+
+def _text_match_clause(field: str, value: str, *, case_sensitive: bool = False,
+                       whole_word: bool = False) -> Tuple[str, str]:
+    """Return a safe SQL predicate and bound pattern for a literal text field."""
+    if whole_word:
+        operator = "~" if case_sensitive else "~*"
+        return f"{field} {operator} %s", _postgres_word_pattern(value)
+    operator = "LIKE" if case_sensitive else "ILIKE"
+    return f"{field} {operator} %s", f"%{_escape_like(value)}%"
+
+
+def _parse_boolean_search_expression(query: str):
+    """Parse literals, quotes, parentheses, AND/OR/NOT into a small AST.
+
+    AND binds more tightly than OR; adjacent operands imply AND, and a binary
+    NOT means AND NOT (``alpha NOT beta``). All leaves remain literal user
+    strings and are bound by the SQL builder.
+    """
+    token_re = re.compile(
+        r'"([^"]*)"|(\bAND\b|\bOR\b|\bNOT\b)|([()])|([^\s()"]+)',
+        re.IGNORECASE,
+    )
+    tokens = []
+    for match in token_re.finditer(str(query or '')):
+        if match.group(1) is not None:
+            value = match.group(1).strip()
+            if value:
+                tokens.append(('term', value))
+        elif match.group(2) is not None:
+            tokens.append(match.group(2).upper())
+        elif match.group(3) is not None:
+            tokens.append(match.group(3))
+        elif match.group(4) is not None:
+            tokens.append(('term', match.group(4)))
+    if not tokens:
+        return None
+
+    position = 0
+
+    def peek():
+        return tokens[position] if position < len(tokens) else None
+
+    def parse_primary():
+        nonlocal position
+        token = peek()
+        if token == 'NOT':
+            position += 1
+            operand = parse_primary()
+            return ('not', operand) if operand is not None else None
+        if token == '(':
+            position += 1
+            node = parse_or()
+            if node is None or peek() != ')':
+                return None
+            position += 1
+            return node
+        if isinstance(token, tuple) and token[0] == 'term':
+            position += 1
+            return token
+        return None
+
+    def parse_and():
+        nonlocal position
+        node = parse_primary()
+        if node is None:
+            return None
+        while position < len(tokens):
+            token = peek()
+            if token == 'OR' or token == ')':
+                break
+            if token == 'AND':
+                position += 1
+                right = parse_primary()
+                if right is None:
+                    return None
+                node = ('and', node, right)
+            elif token == 'NOT':
+                position += 1
+                right = parse_primary()
+                if right is None:
+                    return None
+                node = ('and', node, ('not', right))
+            elif isinstance(token, tuple) and token[0] == 'term' or token == '(':
+                # Google-like adjacent terms default to AND.
+                right = parse_primary()
+                if right is None:
+                    return None
+                node = ('and', node, right)
+            else:
+                return None
+        return node
+
+    def parse_or():
+        nonlocal position
+        node = parse_and()
+        if node is None:
+            return None
+        while peek() == 'OR':
+            position += 1
+            right = parse_and()
+            if right is None:
+                return None
+            node = ('or', node, right)
+        return node
+
+    expression = parse_or()
+    return expression if expression is not None and position == len(tokens) else None
+
 
 # Spreadsheet structure tracking: maps a line of stored spreadsheet text to
 # its worksheet + row, so a search hit can cite the exact cell ("Budget - B4")
@@ -176,7 +297,8 @@ class SearchService:
         sort_order: str = 'desc',
         limit: int = 100,
         offset: int = 0,
-        analyst_scope: Optional[str] = None
+        analyst_scope: Optional[str] = None,
+        hide_duplicates: bool = False
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Perform full-text search using PostgreSQL tsvector/tsquery.
@@ -211,9 +333,11 @@ class SearchService:
             params = []
             
             # Google-like search: supports partial words, multiple words, numbers, and partial text
+            ranking_query = query.strip() if query else ''
             if query and len(query.strip()) >= 2:
                 query_clean = query.strip()
                 search_terms = query_clean.split()
+                ranking_query = ' '.join(term.strip('"') for term in search_terms)
                 
                 # Build search conditions using ILIKE for partial matching (Google-like)
                 # This supports:
@@ -263,10 +387,17 @@ class SearchService:
                 except:
                     tsquery_terms = None
             
-            # File type filter
+            # File type filter (one value or a multi-select list).
             if file_type:
-                where_conditions.append("p.file_type = %s")
-                params.append(file_type)
+                file_types = list(file_type) if isinstance(file_type, (list, tuple)) else [file_type]
+                file_types = [str(value) for value in file_types if value]
+                if len(file_types) == 1:
+                    where_conditions.append("p.file_type = %s")
+                    params.append(file_types[0])
+                elif file_types:
+                    placeholders = ','.join(['%s'] * len(file_types))
+                    where_conditions.append(f"p.file_type IN ({placeholders})")
+                    params.extend(file_types)
             
             # Source filter
             if source_id:
@@ -348,9 +479,15 @@ class SearchService:
                     END) {order}, p.file_date DESC
                 """
             
-            # Count query
+            # The displayed total follows the same duplicate policy as the
+            # result rows. Exact duplicate identity is the indexed source hash;
+            # records without one remain distinct by path id.
+            count_expression = (
+                "COUNT(DISTINCT COALESCE(h.hash::text, 'path:' || p.id::text))"
+                if hide_duplicates else "COUNT(DISTINCT p.id)"
+            )
             count_query = f"""
-                SELECT COUNT(DISTINCT p.id)
+                SELECT {count_expression}
                 FROM paths p
                 LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
                 WHERE {where_clause}
@@ -359,8 +496,14 @@ class SearchService:
             cursor.execute(count_query, tuple(params))
             total_count = cursor.fetchone()[0]
             
-            # Main search query with ranking using window function for proper sorting
-            # Use ROW_NUMBER() instead of DISTINCT ON to allow flexible sorting
+            # Main search query with two stable ranks: first collapse joins to
+            # one row per path, then (when requested) collapse exact content
+            # hashes to one visible representative. Sorting remains server-side
+            # for correct pagination and totals.
+            content_order = order_by_final
+            if not re.search(r"\bid\b", content_order):
+                content_order = f"{content_order}, id ASC"
+            duplicate_filter = "content_rank = 1" if hide_duplicates else "1=1"
             search_query = f"""
                 WITH ranked_results AS (
                     SELECT 
@@ -376,6 +519,7 @@ class SearchService:
                         COALESCE(si.name, 'Unknown') as side_name,
                         hc.source_id,
                         hc.side_id,
+                        h.hash::text as content_hash,
                         CASE
                             WHEN query IS NOT NULL THEN
                                 -- Google-like relevance: count matching search terms
@@ -414,6 +558,16 @@ class SearchService:
                         SELECT %s::text as query
                     ) q
                     WHERE {where_clause}
+                ),
+                path_results AS (
+                    SELECT * FROM ranked_results WHERE rn = 1
+                ),
+                deduplicated_results AS (
+                    SELECT *, ROW_NUMBER() OVER (
+                        PARTITION BY COALESCE(content_hash, 'path:' || id::text)
+                        ORDER BY {content_order}
+                    ) AS content_rank
+                    FROM path_results
                 )
                 SELECT 
                     id,
@@ -429,16 +583,17 @@ class SearchService:
                     source_id,
                     side_id,
                     relevance_score
-                FROM ranked_results
-                WHERE rn = 1
+                FROM deduplicated_results
+                WHERE {duplicate_filter}
                 ORDER BY {order_by_final}
                 LIMIT %s OFFSET %s
             """
             
             # Add query parameter for relevance calculation
-            if query and len(query.strip()) >= 2:
-                # Pass the full query string for relevance calculation
-                params_with_query = [query.strip()] + params + [limit, offset]
+            if ranking_query and len(ranking_query.strip()) >= 2:
+                # Remove query syntax (quotes/operators) for score terms while
+                # keeping the exact phrase predicates in the WHERE clause.
+                params_with_query = [ranking_query.strip()] + params + [limit, offset]
             else:
                 params_with_query = [''] + params + [limit, offset]
             
@@ -450,7 +605,6 @@ class SearchService:
                 result = {
                     'id': row[0],
                     'file_name': row[1],
-                    'file_path': row[2],
                     'file_type': row[3],
                     'file_size': row[4],
                     'file_date': row[5].isoformat() if row[5] else None,
@@ -463,18 +617,31 @@ class SearchService:
                     'relevance_score': float(row[12]) if row[12] else 0.0
                 }
                 
-                # Find matching lines in content if query is provided
-                # Return all matching lines (no limit for comprehensive search)
                 if query and len(query.strip()) >= 2:
-                    # PERF-01: line enrichment loads and scans the whole file
-                    # per result (N+1). Bound it: the UI only renders the
-                    # first three matches and shows "+N more" afterwards.
+                    try:
+                        content = load_text_content(row[0]) or ''
+                    except Exception:
+                        content = ''
+                    fields = SearchService._matching_fields(
+                        result['file_name'], content, query,
+                        metadata_text=' '.join((
+                            str(result.get('file_type') or ''),
+                            str(result.get('source_name') or ''),
+                            str(result.get('side_name') or ''),
+                        )))
+                    result['match_fields'] = fields
+                    result['matched_in'] = [
+                        field for field, matched in fields.items() if matched
+                    ]
                     line_matches = SearchService._find_matching_lines(
-                        row[0], query, max_matches=SearchService.MAX_LINE_MATCHES_PER_FILE
+                        row[0], query,
+                        max_matches=SearchService.MAX_LINE_MATCHES_PER_FILE,
+                        content=content,
                     )
                     if line_matches:
                         result['line_matches'] = line_matches
                         result['line_match_count'] = len(line_matches)
+                        result['snippet'] = line_matches[0]['line_text']
                 
                 results.append(result)
             
@@ -490,50 +657,84 @@ class SearchService:
             return [], 0
     
     @staticmethod
-    def _find_matching_lines(path_id: int, query: str, max_matches: Optional[int] = None) -> List[Dict[str, Any]]:
-        """
-        Find lines in file content that contain the search query.
-        
-        Args:
-            path_id: Path ID of the file
-            query: Search query string
-            max_matches: Maximum number of line matches to return (None = all matches)
-        
-        Returns:
-            List of dictionaries with line_number, line_text, and context
-        """
+    def _query_match_patterns(
+        query: str, *, case_sensitive: bool = False, whole_word: bool = False
+    ) -> List[Tuple[str, re.Pattern]]:
+        """Compile positive query words/phrases for result annotation."""
+        if not query or not query.strip():
+            return []
+        intent = SearchService._get_query_understanding().detect_intent(query)
+        values = list(intent.get('phrases') or [])
+        values.extend(
+            str(item.get('term', '')).strip().strip('()')
+            for item in (intent.get('terms') or [])
+            if isinstance(item, dict) and item.get('term')
+        )
+        if (not values and not intent.get('has_operators')
+                and not intent.get('has_quotes')):
+            values = [query.strip()]
+        patterns = []
+        seen = set()
+        for value in values:
+            value = str(value).strip()
+            seen_key = value if case_sensitive else value.casefold()
+            if not value or seen_key in seen:
+                continue
+            seen.add(seen_key)
+            source = (r'\s+'.join(re.escape(part) for part in value.split())
+                      if ' ' in value else re.escape(value))
+            if whole_word:
+                source = rf'(?<!\w)(?:{source})(?!\w)'
+            flags = 0 if case_sensitive else re.IGNORECASE
+            patterns.append((value, re.compile(source, flags)))
+        return patterns
+
+    @staticmethod
+    def _matching_fields(
+        file_name: str,
+        content: str,
+        query: str,
+        *,
+        case_sensitive: bool = False,
+        whole_word: bool = False,
+        metadata_text: str = '',
+    ) -> Dict[str, bool]:
+        """Report which searchable fields contain a positive query match."""
+        patterns = SearchService._query_match_patterns(
+            query, case_sensitive=case_sensitive, whole_word=whole_word)
+        searchable_content = strip_structural_markers(content or '')
+        return {
+            'file_name': any(pattern.search(str(file_name or '')) for _value, pattern in patterns),
+            'content': any(pattern.search(searchable_content) for _value, pattern in patterns),
+            'metadata': any(pattern.search(str(metadata_text or '')) for _value, pattern in patterns),
+        }
+
+    @staticmethod
+    def _find_matching_lines(
+        path_id: int,
+        query: str,
+        max_matches: Optional[int] = None,
+        content: Optional[str] = None,
+        case_sensitive: bool = False,
+        whole_word: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Find lines matching positive query terms and preserve their context."""
         try:
-            # Load file content
-            content = load_text_content(path_id)
+            if content is None:
+                content = load_text_content(path_id)
             if not content:
                 return []
-            
-            # Split content into lines
+
             lines = content.split('\n')
-            
-            # Clean the query - search for the entire phrase as a whole
-            query_clean = query.strip()
-            
-            if not query_clean:
+            patterns = SearchService._query_match_patterns(
+                query, case_sensitive=case_sensitive, whole_word=whole_word)
+            if not patterns:
                 return []
-            
-            # Prepare the search pattern - search for the entire query text as a phrase
-            # Handle whitespace variations (multiple spaces, tabs) but keep word order
-            # Split query into words and create a flexible pattern
-            query_words = query_clean.split()
-            
-            if len(query_words) == 1:
-                # Single word - simple search
-                search_pattern = re.escape(query_clean)
-            else:
-                # Multiple words - create pattern that allows flexible whitespace
-                # Escape each word and join with pattern that matches whitespace variations
-                escaped_words = [re.escape(word) for word in query_words]
-                # Match any whitespace (spaces, tabs) between words
-                search_pattern = r'\s+'.join(escaped_words)
-            
-            # Compile pattern for case-insensitive search
-            pattern = re.compile(search_pattern, re.IGNORECASE)
+            pattern_source = '|'.join(
+                source.pattern for _value, source in
+                sorted(patterns, key=lambda item: len(item[0]), reverse=True)
+            )
+            pattern = re.compile(pattern_source, 0 if case_sensitive else re.IGNORECASE)
             
             # Exact locations for spreadsheet rows: worksheet + row number.
             # Only for spreadsheets (worksheet headers present) and pure
@@ -765,7 +966,6 @@ class SearchService:
                 results.append({
                     'id': row[0],
                     'file_name': row[1],
-                    'file_path': row[2],
                     'file_type': row[3],
                     'file_size': row[4],
                     'file_date': row[5].isoformat() if row[5] else None,
@@ -809,7 +1009,11 @@ class SearchService:
         use_expansion: bool = True,
         use_fuzzy: bool = True,
         analyst_scope: Optional[str] = None,
-        analyst_category_ids: Optional[List[int]] = None
+        analyst_category_ids: Optional[List[int]] = None,
+        file_statuses: Optional[List[str]] = None,
+        hide_duplicates: bool = False,
+        case_sensitive: bool = False,
+        whole_word: bool = False,
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Advanced search using Google-like algorithms (BM25, query expansion, fuzzy matching).
@@ -839,6 +1043,9 @@ class SearchService:
             analyst_category_ids: Filter by analyst (manual) category IDs -
                 a separate dimension from the smart ``category_ids`` filter
                 (FR-1.4 / FR-3.1).
+            file_statuses: Optional ``Read``/``Unread`` file-status filter.
+                ``None`` leaves status unfiltered; an empty list matches none.
+            hide_duplicates: Return one result per exact stored content hash.
         
         Returns:
             Tuple of (results list, total count)
@@ -859,105 +1066,100 @@ class SearchService:
                 
                 # Understand query intent
                 intent = SearchService._get_query_understanding().detect_intent(query)
+                ranking_terms = [str(phrase) for phrase in intent.get('phrases', [])]
+                ranking_terms.extend(
+                    str(term.get('term', '')) for term in (intent.get('terms') or [])
+                    if isinstance(term, dict) and term.get('term')
+                )
+                ranking_query = ' '.join(term for term in ranking_terms if term) or query.strip()
                 
                 # Build WHERE conditions
                 where_conditions = []
                 params = []
+
+                def literal_field_matches(value):
+                    """Search indexed text plus searchable file/provenance metadata."""
+                    clauses = []
+                    match_params = []
+                    for field in ('p.file_name', 'p.file_type'):
+                        clause, pattern = _text_match_clause(
+                            field, value, case_sensitive=case_sensitive,
+                            whole_word=whole_word)
+                        clauses.append(clause)
+                        match_params.append(pattern)
+                    for table_alias, source_column, id_column in (
+                        ('_search_source', 'name', 'hc.source_id'),
+                        ('_search_side', 'name', 'hc.side_id'),
+                    ):
+                        clause, pattern = _text_match_clause(
+                            f'{table_alias}.{source_column}', value,
+                            case_sensitive=case_sensitive,
+                            whole_word=whole_word)
+                        table = 'sources' if table_alias == '_search_source' else 'sides'
+                        clauses.append(
+                            f"EXISTS (SELECT 1 FROM {table} {table_alias} "
+                            f"WHERE {table_alias}.id = {id_column} AND {clause})")
+                        match_params.append(pattern)
+                    content_clause, content_pattern = _text_match_clause(
+                        'cr.content', value, case_sensitive=case_sensitive,
+                        whole_word=whole_word)
+                    clauses.append(
+                        "EXISTS (SELECT 1 FROM contents_raw cr "
+                        f"WHERE cr.hash_id = h.id AND {content_clause})")
+                    match_params.append(content_pattern)
+                    # Legacy indexed records may not have the structured raw
+                    # text row. Retain token search when case preservation is
+                    # not requested; token tables cannot prove original case.
+                    if not case_sensitive:
+                        word_clause, word_pattern = _text_match_clause(
+                            'w.word', value, case_sensitive=False,
+                            whole_word=whole_word)
+                        clauses.append(
+                            "EXISTS (SELECT 1 FROM words_hashs _search_wp "
+                            "JOIN words w ON _search_wp.word_id = w.id "
+                            "WHERE _search_wp.hash_id = h.id AND "
+                            f"{word_clause})")
+                        match_params.append(word_pattern)
+                    return clauses, match_params
                 
-                # Handle Google-like query parsing with operators and quotes
+                # Explicit queries, case-sensitive searches, and whole-word
+                # searches use literal predicates against text, filenames and
+                # provenance metadata. Full-text indexes cannot enforce those
+                # modes, exact phrases, or boolean grouping.
                 plain_term_matching = False
-                if intent['has_quotes'] or intent['has_operators']:
-                    # Complex query with phrases and/or operators
-                    query_conditions = []
-                    
-                    # Handle quoted phrases (exact matches)
-                    if intent['has_quotes']:
-                        phrases = intent['phrases']
-                        for phrase in phrases:
-                            phrase_conditions = []
-                            phrase_conditions.append("p.file_name ILIKE %s")
-                            phrase_conditions.append("""
-                                EXISTS (
-                                    SELECT 1 FROM words_hashs wp
-                                    JOIN words w ON wp.word_id = w.id
-                                    WHERE wp.hash_id = (
-                            SELECT hc0.hash_id FROM hash_contexts hc0
-                            WHERE hc0.id = p.context_id
-                        )
-                                    AND w.word ILIKE %s
-                                )
-                            """)
-                            phrase_pattern = f'%{_escape_like(phrase)}%'
-                            params.extend([phrase_pattern, phrase_pattern])
-                            query_conditions.append(f"({' OR '.join(phrase_conditions)})")
-                    
-                    # Handle terms with operators
-                    if intent.get('terms'):
-                        term_conditions = []
-                        for term_obj in intent['terms']:
-                            term = term_obj['term']
-                            operator = term_obj.get('operator', 'AND')
-                            
-                            term_cond = f"""
-                                (
-                                    p.file_name ILIKE %s
-                                    OR EXISTS (
-                                        SELECT 1 FROM words_hashs wp
-                                        JOIN words w ON wp.word_id = w.id
-                                        WHERE wp.hash_id = (
-                            SELECT hc0.hash_id FROM hash_contexts hc0
-                            WHERE hc0.id = p.context_id
-                        )
-                                        AND w.word ILIKE %s
-                                    )
-                                )
-                            """
-                            term_pattern = f'%{_escape_like(term)}%'
-                            params.extend([term_pattern, term_pattern])
-                            
-                            if operator == 'OR':
-                                # For OR, we'll combine with existing conditions
-                                term_conditions.append(term_cond)
-                            else:  # AND (default)
-                                term_conditions.append(term_cond)
-                        
-                        if term_conditions:
-                            # Combine with AND (all terms must match)
-                            query_conditions.append(f"({' AND '.join(term_conditions)})")
-                    
-                    # Handle exclude terms (NOT)
-                    if intent.get('exclude_terms'):
-                        exclude_conditions = []
-                        for exclude_term in intent['exclude_terms']:
-                            exclude_conditions.append("""
-                                NOT (
-                                    p.file_name ILIKE %s
-                                    OR EXISTS (
-                                        SELECT 1 FROM words_hashs wp
-                                        JOIN words w ON wp.word_id = w.id
-                                        WHERE wp.hash_id = (
-                            SELECT hc0.hash_id FROM hash_contexts hc0
-                            WHERE hc0.id = p.context_id
-                        )
-                                        AND w.word ILIKE %s
-                                    )
-                                )
-                            """)
-                            exclude_pattern = f'%{_escape_like(exclude_term)}%'
-                            params.extend([exclude_pattern, exclude_pattern])
-                        
-                        if exclude_conditions:
-                            query_conditions.extend(exclude_conditions)
-                    
-                    if query_conditions:
-                        # Combine all conditions with AND
-                        where_conditions.append(f"({' AND '.join(query_conditions)})")
+                needs_literal_matching = (
+                    intent['has_quotes'] or intent['has_operators']
+                    or '(' in query or ')' in query
+                    or case_sensitive or whole_word
+                )
+
+                def compile_literal_expression(expression):
+                    kind = expression[0]
+                    if kind == 'term':
+                        clauses, values = literal_field_matches(expression[1])
+                        return f"({' OR '.join(clauses)})", values
+                    if kind == 'not':
+                        child_sql, child_values = compile_literal_expression(expression[1])
+                        return f"NOT ({child_sql})", child_values
+                    left_sql, left_values = compile_literal_expression(expression[1])
+                    right_sql, right_values = compile_literal_expression(expression[2])
+                    operator = 'AND' if kind == 'and' else 'OR'
+                    return (f"({left_sql} {operator} {right_sql})",
+                            left_values + right_values)
+
+                if needs_literal_matching:
+                    expression = _parse_boolean_search_expression(query)
+                    if expression is None:
+                        where_conditions.append("1=0")
+                    else:
+                        expression_sql, expression_params = compile_literal_expression(
+                            expression)
+                        where_conditions.append(expression_sql)
+                        params.extend(expression_params)
                 elif query and len(query.strip()) >= 2:
-                    # Regular search with potential expansion
+                    # Regular search with potential expansion.
                     search_query = query.strip()
                     plain_term_matching = True
-                else:
-                    plain_term_matching = False
 
                 # EXPANSION-FIX (FR-1.1): expanded terms widen recall - they
                 # are OR alternatives, never additional AND requirements. The
@@ -1041,9 +1243,24 @@ class SearchService:
                         core_params = [tsquery_terms, like_patterns, tsquery_terms, like_patterns]
 
                     if search_terms:
+                        # Keep the full-text/tokenized path for ranking-friendly
+                        # recall, and add literal predicates for names, content,
+                        # and provenance fields that are not part of the vector.
+                        literal_terms = []
+                        literal_params = []
+                        for search_term in search_terms:
+                            field_clauses, field_params = literal_field_matches(
+                                search_term)
+                            literal_terms.append(
+                                f"({' OR '.join(field_clauses)})")
+                            literal_params.extend(field_params)
+                        literal_condition = (
+                            f"({' AND '.join(literal_terms)})" if literal_terms
+                            else "1=0")
+
                         if expansion_terms:
                             # OR the expanded synonyms alongside the original
-                            # terms so expansion only ever widens the result set
+                            # terms so expansion only ever widens the result set.
                             exp_placeholders = ','.join(['%s'] * len(expansion_terms))
                             expansion_condition = f"""
                                 (
@@ -1061,12 +1278,15 @@ class SearchService:
                             """
                             exp_patterns = [f'%{_escape_like(t)}%' for t in expansion_terms]
                             where_conditions.append(
-                                f"({core_condition} OR {expansion_condition})"
-                            )
-                            params.extend(core_params + exp_patterns + exp_patterns)
+                                f"({core_condition} OR {literal_condition} "
+                                f"OR {expansion_condition})")
+                            params.extend(
+                                core_params + literal_params
+                                + exp_patterns + exp_patterns)
                         else:
-                            where_conditions.append(core_condition)
-                            params.extend(core_params)
+                            where_conditions.append(
+                                f"({core_condition} OR {literal_condition})")
+                            params.extend(core_params + literal_params)
             
                 # Apply filters - optimize query order (source/side first for better performance)
                 # Source and side filters are applied early to reduce dataset size
@@ -1114,6 +1334,18 @@ class SearchService:
                 if date_to:
                     where_conditions.append("p.file_date <= %s")
                     params.append(date_to)
+
+                if file_statuses is not None:
+                    allowed_statuses = {'Read', 'Unread'}
+                    statuses = list(dict.fromkeys(file_statuses))
+                    if any(status not in allowed_statuses for status in statuses):
+                        raise ValueError("file_statuses must contain only 'Read' or 'Unread'")
+                    if not statuses:
+                        where_conditions.append("1=0")
+                    else:
+                        placeholders = ','.join(['%s'] * len(statuses))
+                        where_conditions.append(f"p.file_status IN ({placeholders})")
+                        params.extend(statuses)
                 
                 # Handle multiple category_ids
                 if category_ids and len(category_ids) > 0:
@@ -1170,9 +1402,14 @@ class SearchService:
 
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
             
-            # Count query
+            # Count with the same exact-content identity used by the visible
+            # result list. Missing hashes remain distinct path records.
+            count_expression = (
+                "COUNT(DISTINCT COALESCE(h.hash::text, 'path:' || p.id::text))"
+                if hide_duplicates else "COUNT(DISTINCT p.id)"
+            )
             count_query = f"""
-                SELECT COUNT(DISTINCT p.id)
+                SELECT {count_expression}
                 FROM paths p
                 LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
                 WHERE {where_clause}
@@ -1181,30 +1418,76 @@ class SearchService:
             cursor.execute(count_query, tuple(params))
             total_count = cursor.fetchone()[0]
             
-            # Fetch candidate documents (get more than limit for ranking)
+            # Fetch candidate documents (get more than limit for ranking).
+            # Duplicate suppression is applied in SQL before this cap, so a
+            # page full of repeated hashes cannot crowd unique documents out.
             fetch_limit = min(limit * 3, 1000)  # Get 3x results for ranking
-            
-            candidate_query = f"""
-                SELECT DISTINCT
-                    p.id,
-                    p.file_name,
-                    p.file_path,
-                    p.file_type,
-                    p.file_size,
-                    p.file_date,
-                    p.file_status,
-                    p.date_creation,
-                    COALESCE(s.name, 'Unknown') as source_name,
-                    COALESCE(si.name, 'Unknown') as side_name,
-                    hc.source_id,
-                    hc.side_id
-                FROM paths p
-                LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
-                LEFT JOIN sources s ON hc.source_id = s.id
-                LEFT JOIN sides si ON hc.side_id = si.id
-                WHERE {where_clause}
-                LIMIT %s
-            """
+            sort_direction = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+            candidate_order = {
+                'date': f'p.file_date {sort_direction}, p.id ASC',
+                'name': f'p.file_name {sort_direction}, p.id ASC',
+                'type': f'p.file_type {sort_direction}, p.file_name ASC, p.id ASC',
+                'size': f'p.file_size {sort_direction}, p.file_name ASC, p.id ASC',
+            }.get(sort_by, 'p.file_date DESC, p.id ASC')
+            candidate_order_final = candidate_order.replace('p.', '')
+
+            if hide_duplicates:
+                candidate_query = f"""
+                    WITH candidate_paths AS (
+                        SELECT
+                            p.id,
+                            p.file_name,
+                            p.file_path,
+                            p.file_type,
+                            p.file_size,
+                            p.file_date,
+                            p.file_status,
+                            p.date_creation,
+                            COALESCE(s.name, 'Unknown') as source_name,
+                            COALESCE(si.name, 'Unknown') as side_name,
+                            hc.source_id,
+                            hc.side_id,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY COALESCE(h.hash::text, 'path:' || p.id::text)
+                                ORDER BY {candidate_order}
+                            ) AS duplicate_rank
+                        FROM paths p
+                        LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                        LEFT JOIN sources s ON hc.source_id = s.id
+                        LEFT JOIN sides si ON hc.side_id = si.id
+                        WHERE {where_clause}
+                    )
+                    SELECT id, file_name, file_path, file_type, file_size,
+                           file_date, file_status, date_creation, source_name,
+                           side_name, source_id, side_id
+                    FROM candidate_paths
+                    WHERE duplicate_rank = 1
+                    ORDER BY {candidate_order_final}
+                    LIMIT %s
+                """
+            else:
+                candidate_query = f"""
+                    SELECT DISTINCT
+                        p.id,
+                        p.file_name,
+                        p.file_path,
+                        p.file_type,
+                        p.file_size,
+                        p.file_date,
+                        p.file_status,
+                        p.date_creation,
+                        COALESCE(s.name, 'Unknown') as source_name,
+                        COALESCE(si.name, 'Unknown') as side_name,
+                        hc.source_id,
+                        hc.side_id
+                    FROM paths p
+                    LEFT JOIN hash_contexts hc ON p.context_id = hc.id LEFT JOIN hashs h ON hc.hash_id = h.id
+                    LEFT JOIN sources s ON hc.source_id = s.id
+                    LEFT JOIN sides si ON hc.side_id = si.id
+                    WHERE {where_clause}
+                    ORDER BY {candidate_order}
+                    LIMIT %s
+                """
             
             cursor.execute(candidate_query, tuple(params + [fetch_limit]))
             candidates = cursor.fetchall()
@@ -1287,7 +1570,6 @@ class SearchService:
                 result = {
                     'id': doc['id'],
                     'file_name': doc['file_name'],
-                    'file_path': doc['file_path'],
                     'file_type': doc['file_type'],
                     'file_size': doc['file_size'],
                     'file_date': doc['file_date'].isoformat() if doc.get('file_date') else None,
@@ -1300,12 +1582,37 @@ class SearchService:
                     'relevance_score': doc.get('relevance_score', 0.0)
                 }
                 
-                # Find matching lines in content if query is provided
                 if query and len(query.strip()) >= 2:
-                    line_matches = SearchService._find_matching_lines(doc['id'], query, max_matches=5)
+                    content = doc.get('content') or ''
+                    try:
+                        # BM25 keeps only a short ranking sample; load the full
+                        # stored text for match-source flags and precise context.
+                        content = load_text_content(doc['id']) or content
+                    except Exception:
+                        pass
+                    fields = SearchService._matching_fields(
+                        result['file_name'], content, query,
+                        case_sensitive=case_sensitive, whole_word=whole_word,
+                        metadata_text=' '.join((
+                            str(result.get('file_type') or ''),
+                            str(result.get('source_name') or ''),
+                            str(result.get('side_name') or ''),
+                        )))
+                    result['match_fields'] = fields
+                    result['matched_in'] = [
+                        field for field, matched in fields.items() if matched
+                    ]
+                    line_matches = SearchService._find_matching_lines(
+                        doc['id'], query, max_matches=SearchService.MAX_LINE_MATCHES_PER_FILE,
+                        content=content, case_sensitive=case_sensitive,
+                        whole_word=whole_word,
+                    )
                     if line_matches:
                         result['line_matches'] = line_matches
                         result['line_match_count'] = len(line_matches)
+                        result['snippet'] = line_matches[0]['line_text']
+                    elif fields['file_name']:
+                        result['snippet'] = result['file_name']
                 results.append(result)
 
             cursor.close()

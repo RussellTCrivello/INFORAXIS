@@ -3,6 +3,12 @@
  * Complete overhaul with professional filtering and intelligent algorithms
  */
 
+import {
+    chooseExportDestination,
+    ensureExportExtension,
+    saveExportBlob,
+} from '../modules/core/export-download.js';
+
 // Global state
 /** Detail-page URL that carries the originating content search so the
  *  term is located precisely when the file opens (?q= alias). */
@@ -16,6 +22,9 @@ function fileDetailHref(fileId) {
     const qs = params.toString();
     return `/file/${fileId}${qs ? '?' + qs : ''}`;
 }
+
+let activeAdvancedSearchController = null;
+let advancedSearchRequestSequence = 0;
 
 const searchState = {
     query: '',
@@ -41,7 +50,11 @@ const searchState = {
     canCategorize: false,
     analystCategories: [],
     selectedIds: new Set(),
+    activeSelectionKey: null,
+    similarityGroups: null,
     results: [],
+    pagination: null,
+    lastDefinition: null,
     currentPage: 1,
     resultsPerPage: 20,
     totalResults: 0,
@@ -50,20 +63,29 @@ const searchState = {
     searchHistory: []
 };
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
+async function initializeSearchAdvancedPage() {
     console.log('Advanced Search page loaded - Google-like implementation');
     initializePageData();
     initializeSearch();
     initializeScopeSelector();
-    loadFilterOptions();
-    loadSearchHistory();
     setupEventListeners();
-    // Restore a search encoded in the URL (refresh / returning to this
-    // tab / shared link) and re-run it so results are never lost.
+
+    // History is independent of filter controls; load it without delaying the
+    // initial search. URL/saved-search restoration must wait until every
+    // asynchronous select has its options, or selected IDs are silently lost.
+    void loadSearchHistory();
+    await loadFilterOptions();
     restoreSearchFromUrlAndRun();
     window.addEventListener('popstate', restoreSearchFromUrlAndRun);
-});
+}
+
+export default function init() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeSearchAdvancedPage, { once: true });
+    } else {
+        initializeSearchAdvancedPage();
+    }
+}
 
 // ====================================================================
 // Search-state persistence (the "search is lost" fix, part 1)
@@ -83,7 +105,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // URL parameters understood by restoreSearchFromUrl(). Keep in sync
 // with _advanced_search_run_url in Api/routes/search.py.
 const SEARCH_URL_PARAMS = ['q', 'scope', 'sort', 'cs', 'ww', 'fz', 'ft',
-    'cat', 'acat', 'src', 'side', 'df', 'dt', 'st', 'page'];
+    'cat', 'acat', 'src', 'side', 'df', 'dt', 'st', 'page', 'hd', 'sim'];
 
 /** The search exactly as the on-screen controls currently define it. */
 function currentSearchDefinition() {
@@ -92,6 +114,7 @@ function currentSearchDefinition() {
         scope: searchState.scope,
         sort_by: document.getElementById('sortBy')?.value || 'relevance',
         page: searchState.currentPage,
+        similarity_threshold: Number(document.getElementById('similarityThreshold')?.value) || 0.32,
         options: {
             case_sensitive: document.getElementById('caseSensitive')?.checked || false,
             whole_word: document.getElementById('wholeWord')?.checked || false,
@@ -99,6 +122,45 @@ function currentSearchDefinition() {
         },
         filters: collectFilters()
     };
+}
+
+/** Stable selection identity ignores page and sort: both are views of the
+ * same filtered result set. The selected ids themselves live only in this tab. */
+function selectionKeyForDefinition(definition) {
+    const identity = {
+        query: definition.query || '',
+        scope: definition.scope || 'uncategorized',
+        options: definition.options || {},
+        filters: definition.filters || {}
+    };
+    const serialized = JSON.stringify(identity);
+    let hash = 2166136261;
+    for (let i = 0; i < serialized.length; i += 1) {
+        hash ^= serialized.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `inforaxis.search.selection.v1.${(hash >>> 0).toString(36)}`;
+}
+
+function readStoredSelection(key) {
+    try {
+        const parsed = JSON.parse(sessionStorage.getItem(key) || '[]');
+        return new Set(Array.isArray(parsed)
+            ? parsed.map(Number).filter(id => Number.isSafeInteger(id) && id > 0)
+            : []);
+    } catch (_error) {
+        return new Set();
+    }
+}
+
+function persistSelectedIds() {
+    if (!searchState.activeSelectionKey) return;
+    try {
+        sessionStorage.setItem(searchState.activeSelectionKey,
+            JSON.stringify(Array.from(searchState.selectedIds)));
+    } catch (_error) {
+        // The search remains usable when storage is unavailable or full.
+    }
 }
 
 /** Encode a search definition into URL parameters (lossless). */
@@ -113,6 +175,9 @@ function serializeDefinitionToParams(def) {
     if (options.case_sensitive) params.set('cs', '1');
     if (options.whole_word) params.set('ww', '1');
     if (options.use_fuzzy === false) params.set('fz', '0');
+    if (def.similarity_threshold && Number(def.similarity_threshold) !== 0.32) {
+        params.set('sim', String(Number(def.similarity_threshold)));
+    }
 
     const appendAll = (key, values) =>
         (values || []).forEach(v => params.append(key, String(v)));
@@ -124,6 +189,7 @@ function serializeDefinitionToParams(def) {
 
     if (filters.date_from) params.set('df', filters.date_from);
     if (filters.date_to) params.set('dt', filters.date_to);
+    if (filters.hide_duplicates) params.set('hd', '1');
 
     const status = Array.isArray(filters.status) ? filters.status : ['Read'];
     const read = status.includes('Read');
@@ -137,9 +203,9 @@ function serializeDefinitionToParams(def) {
 }
 
 /** Reflect the current search into the address bar (replace, not push). */
-function persistSearchToUrl() {
+function persistSearchToUrl(definition = null) {
     try {
-        const qs = serializeDefinitionToParams(currentSearchDefinition()).toString();
+        const qs = serializeDefinitionToParams(definition || currentSearchDefinition()).toString();
         window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
     } catch (e) {
         console.warn('Could not update the address bar', e);
@@ -180,6 +246,11 @@ function applyDefinitionToControls(def) {
 
     const sortSelect = document.getElementById('sortBy');
     if (sortSelect && def.sort_by) sortSelect.value = def.sort_by;
+    const similaritySelect = document.getElementById('similarityThreshold');
+    if (similaritySelect && Number.isFinite(Number(def.similarity_threshold))) {
+        const threshold = Number(def.similarity_threshold);
+        if (threshold >= 0.05 && threshold <= 0.95) similaritySelect.value = String(threshold);
+    }
 
     const caseEl = document.getElementById('caseSensitive');
     if (caseEl) caseEl.checked = !!options.case_sensitive;
@@ -187,12 +258,20 @@ function applyDefinitionToControls(def) {
     if (wholeEl) wholeEl.checked = !!options.whole_word;
     const fuzzyEl = document.getElementById('useFuzzy');
     if (fuzzyEl) fuzzyEl.checked = options.use_fuzzy !== false;
+    searchState.options = {
+        caseSensitive: !!options.case_sensitive,
+        wholeWord: !!options.whole_word,
+        useFuzzy: options.use_fuzzy !== false
+    };
 
     setMultiSelectValues('fileType', filters.file_type);
     setMultiSelectValues('categoriesSelect', filters.category_id);
     setMultiSelectValues('analystCategoriesFilter', filters.analyst_category_id);
     setMultiSelectValues('sourcesSelect', filters.source_id);
     setMultiSelectValues('sidesSelect', filters.side_id);
+
+    const duplicateToggle = document.getElementById('hideDuplicates');
+    if (duplicateToggle) duplicateToggle.checked = !!filters.hide_duplicates;
 
     const from = document.getElementById('dateFrom');
     if (from) from.value = filters.date_from || '';
@@ -229,6 +308,7 @@ function readDefinitionFromUrl() {
         scope: params.get('scope') || undefined,
         sort_by: params.get('sort') || undefined,
         page: Math.max(1, parseInt(params.get('page'), 10) || 1),
+        similarity_threshold: Number(params.get('sim')) || 0.32,
         options: {
             case_sensitive: params.get('cs') === '1',
             whole_word: params.get('ww') === '1',
@@ -242,7 +322,8 @@ function readDefinitionFromUrl() {
             side_id: params.getAll('side').map(v => parseInt(v, 10)).filter(v => !isNaN(v)),
             date_from: params.get('df') || null,
             date_to: params.get('dt') || null,
-            status: status
+            status: status,
+            hide_duplicates: params.get('hd') === '1'
         }
     };
 }
@@ -259,7 +340,7 @@ function restoreSearchFromUrl() {
 
 function restoreSearchFromUrlAndRun() {
     if (restoreSearchFromUrl()) {
-        executeAdvancedSearch();
+        executeAdvancedSearch(true);
     }
 }
 
@@ -312,7 +393,6 @@ function initializeSearch() {
     let suggestionTimeout;
     mainInput.addEventListener('input', function(e) {
         const query = e.target.value.trim();
-        searchState.query = query;
         
         // Show/hide clear button
         const clearBtn = document.getElementById('clearSearchBtn');
@@ -379,11 +459,54 @@ function setupEventListeners() {
             element.addEventListener('change', updateFilterChips);
         }
     });
+
+    const similaritySelect = document.getElementById('similarityThreshold');
+    similaritySelect?.addEventListener('change', () => {
+        if (searchState.lastDefinition) {
+            searchState.lastDefinition = {
+                ...searchState.lastDefinition,
+                similarity_threshold: Number(similaritySelect.value) || 0.32,
+            };
+            persistSearchToUrl(searchState.lastDefinition);
+        }
+    });
+
+    const suggestionsList = document.getElementById('suggestionsList');
+    suggestionsList?.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-suggestion]');
+        if (item && suggestionsList.contains(item)) selectSuggestion(item.dataset.suggestion || '');
+    });
+
+    const filterChips = document.getElementById('filtersChips');
+    filterChips?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-filter-chip]');
+        if (button && filterChips.contains(button)) {
+            removeFilterChip(button.dataset.filterType || '', button.dataset.filterId || '');
+        }
+    });
 }
 
 // Load filter options
 async function loadFilterOptions() {
     try {
+        // Populate the type filter from ingestion-detected formats so new
+        // readers/extensions appear automatically without editing this page.
+        const fileTypesResponse = await fetch('/api/files/types');
+        if (fileTypesResponse.ok) {
+            const fileTypesData = await fileTypesResponse.json();
+            const fileTypeSelect = document.getElementById('fileType');
+            if (fileTypeSelect && Array.isArray(fileTypesData.types)) {
+                const allTypesLabel = escapeHtml(tPage('allTypes', 'All Types'));
+                fileTypeSelect.innerHTML = `<option value="">${allTypesLabel}</option>` +
+                    fileTypesData.types.map(item => {
+                        const value = String(item.file_type || '');
+                        const label = String(item.label || value || 'Unknown');
+                        const count = Number(item.file_count) || 0;
+                        return `<option value="${escapeAttr(value)}">${escapeHtml(label)} (${count.toLocaleString()})</option>`;
+                    }).join('');
+            }
+        }
+
         // Load categories
         const categoriesRes = await fetch('/api/categories');
         const categories = await categoriesRes.json();
@@ -503,20 +626,19 @@ function displaySuggestions(suggestions, query) {
     }
     
     list.innerHTML = suggestions.map(suggestion => `
-        <div class="suggestion-item" onclick="selectSuggestion('${suggestion.replace(/'/g, "\\'")}')">
-            <i class="bi bi-search"></i>
+        <button type="button" class="suggestion-item" data-suggestion="${escapeAttr(suggestion)}">
+            <i class="bi bi-search" aria-hidden="true"></i>
             <span>${highlightMatch(suggestion, query)}</span>
-        </div>
+        </button>
     `).join('');
     
     dropdown.classList.add('active');
+    document.getElementById('mainSearchInput')?.setAttribute('aria-expanded', 'true');
 }
 
-// Highlight match in suggestion
+// Render suggestion text safely while marking query matches.
 function highlightMatch(text, query) {
-    if (!query) return text;
-    const regex = new RegExp(`(${query})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
+    return highlightQueryTerms(text, query);
 }
 
 // Select suggestion
@@ -533,6 +655,7 @@ function hideSuggestions() {
     if (dropdown) {
         dropdown.classList.remove('active');
     }
+    document.getElementById('mainSearchInput')?.setAttribute('aria-expanded', 'false');
 }
 
 // Update filter chips
@@ -543,17 +666,18 @@ function updateFilterChips() {
     const fileTypes = Array.from(document.getElementById('fileType').selectedOptions).map(o => o.value);
     if (fileTypes.length > 0) {
         fileTypes.forEach(type => {
-            if (type) chips.push({ type: 'fileType', label: 'File Type', value: type });
+            if (type) chips.push({ type: 'fileType', label: tPage('fileType', 'File Type'), value: type, id: type });
         });
     }
     
     // Categories (smart taxonomy - separate from analyst categories, FR-1.4)
-    const categories = Array.from(document.getElementById('categoriesSelect').selectedOptions).map(o => o.value);
+    const categoriesSelect = document.getElementById('categoriesSelect');
+    const categories = Array.from(categoriesSelect.selectedOptions).map(o => o.value);
     if (categories.length > 0) {
         categories.forEach(catId => {
-            const option = document.getElementById('categoriesSelect').querySelector(`option[value="${catId}"]`);
+            const option = Array.from(categoriesSelect.options).find(candidate => candidate.value === catId);
             if (option) {
-                chips.push({ type: 'category', label: 'Smart Category', value: option.textContent, id: catId });
+                chips.push({ type: 'category', label: tPage('smartCategory', 'Smart Category'), value: option.textContent, id: catId });
             }
         });
     }
@@ -562,28 +686,30 @@ function updateFilterChips() {
     const analystFilter = document.getElementById('analystCategoriesFilter');
     if (analystFilter) {
         Array.from(analystFilter.selectedOptions).forEach(opt => {
-            chips.push({ type: 'analystCategory', label: 'Analyst Category', value: opt.textContent, id: opt.value });
+            chips.push({ type: 'analystCategory', label: tPage('analystCategory', 'Analyst Category'), value: opt.textContent, id: opt.value });
         });
     }
     
     // Sources
-    const sources = Array.from(document.getElementById('sourcesSelect').selectedOptions).map(o => o.value);
+    const sourcesSelect = document.getElementById('sourcesSelect');
+    const sources = Array.from(sourcesSelect.selectedOptions).map(o => o.value);
     if (sources.length > 0) {
         sources.forEach(sourceId => {
-            const option = document.getElementById('sourcesSelect').querySelector(`option[value="${sourceId}"]`);
+            const option = Array.from(sourcesSelect.options).find(candidate => candidate.value === sourceId);
             if (option) {
-                chips.push({ type: 'source', label: 'Source', value: option.textContent, id: sourceId });
+                chips.push({ type: 'source', label: tPage('source', 'Source'), value: option.textContent, id: sourceId });
             }
         });
     }
     
     // Sides
-    const sides = Array.from(document.getElementById('sidesSelect').selectedOptions).map(o => o.value);
+    const sidesSelect = document.getElementById('sidesSelect');
+    const sides = Array.from(sidesSelect.selectedOptions).map(o => o.value);
     if (sides.length > 0) {
         sides.forEach(sideId => {
-            const option = document.getElementById('sidesSelect').querySelector(`option[value="${sideId}"]`);
+            const option = Array.from(sidesSelect.options).find(candidate => candidate.value === sideId);
             if (option) {
-                chips.push({ type: 'side', label: 'Side', value: option.textContent, id: sideId });
+                chips.push({ type: 'side', label: tPage('side', 'Side'), value: option.textContent, id: sideId });
             }
         });
     }
@@ -592,19 +718,21 @@ function updateFilterChips() {
     const dateFrom = document.getElementById('dateFrom').value;
     const dateTo = document.getElementById('dateTo').value;
     if (dateFrom) {
-        chips.push({ type: 'dateFrom', label: 'From', value: dateFrom });
+        chips.push({ type: 'dateFrom', label: tPage('from', 'From'), value: dateFrom });
     }
     if (dateTo) {
-        chips.push({ type: 'dateTo', label: 'To', value: dateTo });
+        chips.push({ type: 'dateTo', label: tPage('to', 'To'), value: dateTo });
     }
     
     // Status
     const statusRead = document.getElementById('statusRead').checked;
     const statusUnread = document.getElementById('statusUnread').checked;
     if (statusRead && !statusUnread) {
-        chips.push({ type: 'status', label: 'Status', value: 'Analyzed' });
+        // Read is the default status, so it is not shown as an active filter.
     } else if (!statusRead && statusUnread) {
-        chips.push({ type: 'status', label: 'Status', value: 'Pending' });
+        chips.push({ type: 'status', label: tPage('status', 'Status'), value: tPage('pending', 'Pending') });
+    } else if (!statusRead && !statusUnread) {
+        chips.push({ type: 'status', label: tPage('status', 'Status'), value: tPage('noStatusesSelected', 'No statuses selected') });
     }
     
     // Display chips
@@ -630,14 +758,18 @@ function displayFilterChips(chips) {
     }
     
     container.style.display = 'block';
-    chipsEl.innerHTML = chips.map((chip, index) => {
+    chipsEl.innerHTML = chips.map((chip) => {
         const chipClass = chip.priority ? 'filter-chip priority-chip' : 'filter-chip';
+        const type = escapeAttr(chip.type || '');
+        const id = escapeAttr(chip.id == null ? '' : chip.id);
         return `
             <div class="${chipClass}">
-                <span class="chip-label">${chip.label}:</span>
-                <span class="chip-value">${chip.value}</span>
-                <button type="button" class="chip-remove" onclick="removeFilterChip(${index}, '${chip.type}', '${chip.id || ''}', ${chip.priority || false})">
-                    <i class="bi bi-x"></i>
+                <span class="chip-label">${escapeHtml(chip.label)}:</span>
+                <span class="chip-value">${escapeHtml(chip.value)}</span>
+                <button type="button" class="chip-remove" data-remove-filter-chip="true"
+                        data-filter-type="${type}" data-filter-id="${id}"
+                        aria-label="${escapeAttr(tPage('removeFilter', 'Remove filter'))}">
+                    <i class="bi bi-x" aria-hidden="true"></i>
                 </button>
             </div>
         `;
@@ -645,35 +777,35 @@ function displayFilterChips(chips) {
 }
 
 // Remove filter chip
-function removeFilterChip(index, type, id) {
+function removeFilterChip(type, id) {
     {
         // Handle regular filters
         switch (type) {
             case 'fileType':
                 const fileTypeSelect = document.getElementById('fileType');
-                const fileTypeOption = fileTypeSelect.querySelector(`option[value="${id}"]`);
+                const fileTypeOption = Array.from(fileTypeSelect.options).find(option => option.value === String(id));
                 if (fileTypeOption) fileTypeOption.selected = false;
                 break;
             case 'category':
                 const categorySelect = document.getElementById('categoriesSelect');
-                const categoryOption = categorySelect.querySelector(`option[value="${id}"]`);
+                const categoryOption = Array.from(categorySelect.options).find(option => option.value === String(id));
                 if (categoryOption) categoryOption.selected = false;
                 break;
             case 'analystCategory':
                 const analystFilter = document.getElementById('analystCategoriesFilter');
                 if (analystFilter) {
-                    const analystOption = analystFilter.querySelector(`option[value="${id}"]`);
+                    const analystOption = Array.from(analystFilter.options).find(option => option.value === String(id));
                     if (analystOption) analystOption.selected = false;
                 }
                 break;
             case 'source':
                 const sourceSelect = document.getElementById('sourcesSelect');
-                const sourceOption = sourceSelect.querySelector(`option[value="${id}"]`);
+                const sourceOption = Array.from(sourceSelect.options).find(option => option.value === String(id));
                 if (sourceOption) sourceOption.selected = false;
                 break;
             case 'side':
                 const sideSelect = document.getElementById('sidesSelect');
-                const sideOption = sideSelect.querySelector(`option[value="${id}"]`);
+                const sideOption = Array.from(sideSelect.options).find(option => option.value === String(id));
                 if (sideOption) sideOption.selected = false;
                 break;
             case 'dateFrom':
@@ -703,6 +835,8 @@ function clearAllFilters() {
     document.getElementById('dateTo').value = '';
     document.getElementById('statusRead').checked = true;
     document.getElementById('statusUnread').checked = false;
+    const duplicateToggle = document.getElementById('hideDuplicates');
+    if (duplicateToggle) duplicateToggle.checked = false;
     updateFilterChips();
 }
 
@@ -718,127 +852,182 @@ function toggleFiltersPanel() {
     }
 }
 
+// Map the user-facing sort choices to the API's stable field/direction pair.
+function getAdvancedSortDefinition(choice = document.getElementById('sortBy')?.value || 'relevance') {
+    const sortMap = {
+        relevance: { sort_by: 'relevance', sort_order: 'desc' },
+        date: { sort_by: 'date', sort_order: 'desc' },
+        date_old: { sort_by: 'date', sort_order: 'asc' },
+        name: { sort_by: 'name', sort_order: 'asc' },
+        type: { sort_by: 'type', sort_order: 'asc' },
+        size: { sort_by: 'size', sort_order: 'desc' },
+    };
+    return sortMap[choice] || sortMap.relevance;
+}
+
 // Execute advanced search
-async function executeAdvancedSearch() {
+async function executeAdvancedSearch(preservePage = false) {
     const startTime = performance.now();
-    const query = document.getElementById('mainSearchInput').value.trim();
-    
+    const query = document.getElementById('mainSearchInput')?.value.trim() || '';
+    const filters = collectFilters();
+
     if (!query && getActiveFiltersCount() === 0) {
         alert('Please enter a search query or select filters');
         return;
     }
-    
-    // Hide suggestions
-    hideSuggestions();
 
-    // A new search invalidates the previous result selection (FR-1.2)
-    searchState.selectedIds = new Set();
-    updateSelectionBar();
-
-    // Show loading
-    showLoading();
-    
-    // Collect filters. Source/side scoping lives in the advanced-filters
-    // panel (the former "Search Within" block was merged into it).
-    const filters = collectFilters();
-    const sourceIds = filters.source_id;
-    const sideIds = filters.side_id;
-    
-    // Show warning if searching without source/side filter (for large databases)
+    // Confirm before changing selection or entering a loading state. Returning
+    // here must leave the previous results usable, not strand a spinner.
     if (!filters.source_id.length && !filters.side_id.length && !query) {
         const confirmSearch = confirm(tPage('largeSearchConfirm',
             'Searching without a source or side filter may be slow on large datasets. Continue?'));
         if (!confirmSearch) return;
     }
-    
-    // Search options
+
+    hideSuggestions();
+    searchState.query = query;
+
     const options = {
-        case_sensitive: document.getElementById('caseSensitive').checked,
-        whole_word: document.getElementById('wholeWord').checked,
-        use_fuzzy: document.getElementById('useFuzzy').checked
+        case_sensitive: document.getElementById('caseSensitive')?.checked || false,
+        whole_word: document.getElementById('wholeWord')?.checked || false,
+        use_fuzzy: document.getElementById('useFuzzy')?.checked !== false
     };
-    
+    searchState.options = {
+        caseSensitive: options.case_sensitive,
+        wholeWord: options.whole_word,
+        useFuzzy: options.use_fuzzy
+    };
+    const nextSearchIdentity = {
+        query,
+        scope: searchState.scope,
+        options,
+        filters,
+    };
+    if (!preservePage && searchState.lastDefinition &&
+        selectionKeyForDefinition(searchState.lastDefinition) !==
+            selectionKeyForDefinition(nextSearchIdentity)) {
+        searchState.currentPage = 1;
+    }
+    const sort = getAdvancedSortDefinition();
+    const definition = {
+        query,
+        scope: searchState.scope,
+        sort_by: document.getElementById('sortBy')?.value || 'relevance',
+        page: searchState.currentPage,
+        similarity_threshold: Number(document.getElementById('similarityThreshold')?.value) || 0.32,
+        options,
+        filters
+    };
+
+    // Keep a selection while paging or changing sort; a different query or
+    // filter set gets its own tab-scoped selection. This makes selection
+    // durable across refresh and back/forward without leaking it across users.
+    const selectionKey = selectionKeyForDefinition(definition);
+    if (searchState.activeSelectionKey !== selectionKey) {
+        if (searchState.activeSelectionKey !== null) closeReviewPane();
+        searchState.activeSelectionKey = selectionKey;
+        searchState.selectedIds = readStoredSelection(selectionKey);
+    }
+    searchState.similarityGroups = null;
+    updateSimilarityButton();
+    updateSelectionBar();
+
+    // Cancel any previous request so a slower response cannot overwrite the
+    // newer query/filter selection.
+    activeAdvancedSearchController?.abort();
+    const controller = new AbortController();
+    activeAdvancedSearchController = controller;
+    const requestSequence = ++advancedSearchRequestSequence;
+    showLoading();
+
     try {
-        // Use advanced search API
         const params = new URLSearchParams({
-            query: query || '',
-            page: searchState.currentPage,
-            per_page: searchState.resultsPerPage,
+            query,
+            page: String(searchState.currentPage),
+            per_page: String(searchState.resultsPerPage),
             use_advanced: 'true',
+            use_fulltext: 'true',
             use_bm25: 'true',
             use_expansion: 'true',
             use_fuzzy: options.use_fuzzy ? 'true' : 'false',
-            sort_by: document.getElementById('sortBy').value || 'relevance',
-            sort_order: 'desc'
+            case_sensitive: options.case_sensitive ? 'true' : 'false',
+            whole_word: options.whole_word ? 'true' : 'false',
+            hide_duplicates: filters.hide_duplicates ? 'true' : 'false',
+            sort_by: sort.sort_by,
+            sort_order: sort.sort_order
         });
 
         // Analyst-categorization search scope (FR-2.x). Always sent so the
-        // server can persist the selection in the session (FR-2.3) and apply
-        // the default "uncategorized only" behavior (FR-2.1).
+        // server can persist the selection in the session (FR-2.3).
         params.set('scope', searchState.scope);
 
-        // Add filters
         if (filters.file_type.length > 0) {
             filters.file_type.forEach(type => params.append('file_type', type));
         }
         if (filters.category_id.length > 0) {
-            filters.category_id.forEach(id => params.append('category_id', id));
+            filters.category_id.forEach(id => params.append('category_id', String(id)));
         }
-        // Analyst-category filter - a separate parameter from the smart
-        // category_id filter above (FR-1.4 separation).
         if (filters.analyst_category_id.length > 0) {
-            filters.analyst_category_id.forEach(id => params.append('analyst_category_id', id));
+            filters.analyst_category_id.forEach(id => params.append('analyst_category_id', String(id)));
         }
         if (filters.source_id.length > 0) {
-            filters.source_id.forEach(id => params.append('source_id', id));
+            filters.source_id.forEach(id => params.append('source_id', String(id)));
         }
         if (filters.side_id.length > 0) {
-            filters.side_id.forEach(id => params.append('side_id', id));
+            filters.side_id.forEach(id => params.append('side_id', String(id)));
         }
         if (filters.date_from) params.append('date_from', filters.date_from);
         if (filters.date_to) params.append('date_to', filters.date_to);
-        
-        const response = await fetch(`/api/search?${params.toString()}`);
-        
+
+        // The status checkboxes represent paths.file_status (Read/Unread).
+        // Send an explicit sentinel when both are cleared so the API returns
+        // no statuses rather than silently dropping the filter.
+        if (filters.status.length > 0) {
+            filters.status.forEach(status => params.append('status', status));
+        } else {
+            params.append('status', 'none');
+        }
+
+        const response = await fetch(`/api/search?${params.toString()}`, {
+            signal: controller.signal
+        });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
-        const endTime = performance.now();
-        searchState.searchTime = ((endTime - startTime) / 1000).toFixed(2);
-        
-        // Process results
-        if (data.results && Array.isArray(data.results)) {
+        if (controller.signal.aborted || requestSequence !== advancedSearchRequestSequence) return;
+
+        searchState.searchTime = ((performance.now() - startTime) / 1000).toFixed(2);
+        if (Array.isArray(data.results)) {
             searchState.results = data.results;
-            searchState.totalResults = data.pagination?.total || data.results.length;
+            searchState.pagination = data.pagination || null;
+            searchState.totalResults = Number(data.pagination?.total) || data.results.length;
             displayResults(data.results, data.pagination);
         } else {
             searchState.results = [];
+            searchState.pagination = null;
             searchState.totalResults = 0;
             displayResults([], null);
         }
 
-        // Keep the address bar pointing at exactly this search so a
-        // refresh, a bookmark or a return to this tab restores it.
-        persistSearchToUrl();
-        
-        // Note: Search history is already saved by the API endpoint
-        // This is a backup save (optional, won't cause errors if it fails)
-        if (query) {
-            // Only save if API didn't already save it (check response)
-            // For now, skip to avoid duplicate saves - API already handles it
-            // saveToSearchHistory(query, filters);
-        }
-        
+        // Keep the address bar and exports tied to the exact definition that
+        // produced these rows, not controls the reader may have since edited.
+        searchState.lastDefinition = definition;
+        persistSearchToUrl(definition);
     } catch (error) {
+        if (error.name === 'AbortError' || requestSequence !== advancedSearchRequestSequence) return;
         console.error('Search error:', error);
         alert(tPage('searchError', 'Search error') + ': ' + error.message);
         searchState.results = [];
+        searchState.pagination = null;
+        searchState.totalResults = 0;
         displayResults([], null);
     } finally {
-        hideLoading();
+        if (requestSequence === advancedSearchRequestSequence) {
+            activeAdvancedSearchController = null;
+            hideLoading();
+        }
     }
 }
 
@@ -888,6 +1077,27 @@ function fileTypeMeta(type) {
     return map[type] || { icon: 'bi-file-earmark', css: '' };
 }
 
+function matchLocationMarkup(result) {
+    const fields = result?.match_fields || {};
+    const inName = fields.file_name === true;
+    const inContent = fields.content === true;
+    const inMetadata = fields.metadata === true;
+    if (!searchState.query || (!inName && !inContent && !inMetadata)) return '';
+    const labels = [];
+    if (inName && inContent) {
+        labels.push(tPage('matchBoth', 'Filename and content match'));
+    } else if (inName) {
+        labels.push(tPage('matchFilename', 'Filename match'));
+    } else if (inContent) {
+        labels.push(tPage('matchContent', 'Content match'));
+    }
+    if (inMetadata) labels.push(tPage('matchMetadata', 'Metadata match'));
+    const label = labels.join(' · ');
+    return `<div class="result-match-location" title="${escapeAttr(label)}">
+        <i class="bi bi-crosshair" aria-hidden="true"></i><span>${escapeHtml(label)}</span>
+    </div>`;
+}
+
 // Display results
 function displayResults(results, pagination) {
     const section = document.getElementById('searchResultsSection');
@@ -925,9 +1135,13 @@ function displayResults(results, pagination) {
         return;
     }
     
-    container.innerHTML = results.map(result => {
+    const renderResultCard = (result) => {
+        if (!result || typeof result !== 'object') return '';
+        const fileId = Number(result.id);
+        if (!Number.isSafeInteger(fileId) || fileId < 1) return '';
         const snippet = result.snippet || result.file_name || '';
         const highlightedSnippet = highlightQueryTerms(snippet, searchState.query);
+        const matchLocation = matchLocationMarkup(result);
 
         // File-type presentation: color-coded icon + uppercase chip share
         // one tint family per type (see search-advanced.css .type-*).
@@ -953,27 +1167,28 @@ function displayResults(results, pagination) {
         ` : '';
 
         return `
-            <div class="result-item ${searchState.selectedIds.has(result.id) ? 'result-selected' : ''}" data-file-id="${result.id}">
+            <div class="result-item ${searchState.selectedIds.has(fileId) ? 'result-selected' : ''}" data-file-id="${fileId}">
                 <div class="result-select" onclick="event.stopPropagation()">
                     <input class="form-check-input result-checkbox" type="checkbox"
-                           ${searchState.selectedIds.has(result.id) ? 'checked' : ''}
-                           onchange="toggleResultSelection(${result.id}, this.checked)"
+                           ${searchState.selectedIds.has(fileId) ? 'checked' : ''}
+                           onchange="toggleResultSelection(${fileId}, this.checked)"
                            title="${escapeAttr(tPage('selectForCategorization', 'Select for manual categorization'))}"
                            aria-label="${escapeAttr(tPage('selectFileForCategorization', 'Select {file} for manual categorization').replace('{file}', result.file_name || 'file'))}">
                 </div>
-                <div class="result-body" onclick="openResultInNewTab(event, ${result.id})"
+                <div class="result-body" onclick="openResultInNewTab(event, ${fileId})"
                      title="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}">
                     <div class="result-title-row">
                         <span class="result-file-icon ${typeInfo.css}" title="${escapeAttr(fileType || '')}">
                             <i class="bi ${typeInfo.icon}" aria-hidden="true"></i>
                         </span>
-                        <a class="result-title result-title-link" href="${fileDetailHref(result.id)}"
+                        <a class="result-title result-title-link" href="${fileDetailHref(fileId)}"
                            target="_blank" rel="noopener"
                            onclick="event.stopPropagation()">${escapeHtml(result.file_name || tPage('untitled', 'Untitled'))}</a>
                         ${fileType ? `<span class="result-type-chip ${typeInfo.css}">${escapeHtml(fileType)}</span>` : ''}
                         ${result.relevance_score ? `<span class="relevance-badge">${Math.round(result.relevance_score * 100)}%</span>` : ''}
                     </div>
                     ${snippet ? `<div class="result-snippet">${highlightedSnippet}</div>` : ''}
+                    ${matchLocation}
                     <div class="result-meta">
                         <span class="result-meta-item">
                             <i class="bi bi-building" aria-hidden="true"></i>
@@ -997,14 +1212,26 @@ function displayResults(results, pagination) {
                         </div>
                     ` : ''}
                     <div class="result-hover-actions">
+                        <button type="button" class="result-action-btn result-action-review"
+                                onclick="reviewResultInPane(${fileId}, event)"
+                                title="${escapeAttr(tPage('reviewInPane', 'Review beside results'))}"
+                                aria-label="${escapeAttr(tPage('reviewInPane', 'Review beside results'))}">
+                            <i class="bi bi-layout-split" aria-hidden="true"></i>
+                        </button>
                         <button type="button" class="result-action-btn result-action-preview"
-                                onclick="showFilePreview(${result.id}); event.stopPropagation();"
+                                onclick="showFilePreview(${fileId}); event.stopPropagation();"
                                 title="${escapeAttr(tPage('preview', 'Quick preview (stays on this page)'))}"
                                 aria-label="${escapeAttr(tPage('preview', 'Quick preview (stays on this page)'))}">
                             <i class="bi bi-eye" aria-hidden="true"></i>
                         </button>
+                        <button type="button" class="result-action-btn result-action-export"
+                                onclick="exportSingleFileText(${fileId}, event)"
+                                title="${escapeAttr(tPage('exportText', 'Download extracted text'))}"
+                                aria-label="${escapeAttr(tPage('exportText', 'Download extracted text'))}">
+                            <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>
+                        </button>
                         <button type="button" class="result-action-btn result-action-open"
-                                onclick="openResultInNewTab(event, ${result.id})"
+                                onclick="openResultInNewTab(event, ${fileId})"
                                 title="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}"
                                 aria-label="${escapeAttr(tPage('openInNewTab', 'Open in new tab'))}">
                             <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
@@ -1013,7 +1240,40 @@ function displayResults(results, pagination) {
                 </div>
             </div>
         `;
-    }).join('');
+    };
+
+    if (searchState.similarityGroups?.length) {
+        const resultsById = new Map(results.map(result => [Number(result.id), result]));
+        const renderedIds = new Set();
+        const groupsMarkup = searchState.similarityGroups.map(group => {
+            const groupResults = (group.file_ids || [])
+                .map(id => resultsById.get(Number(id)))
+                .filter(Boolean);
+            groupResults.forEach(result => renderedIds.add(Number(result.id)));
+            if (!groupResults.length) return '';
+            const groupName = tPage('similarityGroup', 'Similarity group {group}')
+                .replace('{group}', String(group.group_id));
+            const similarity = Number(group.similarity);
+            const score = Number.isFinite(similarity)
+                ? `<span class="similarity-score">${Math.round(similarity * 100)}% ${escapeHtml(tPage('similarity', 'similarity'))}</span>`
+                : '';
+            return `
+                <section class="similarity-group" aria-label="${escapeAttr(groupName)}">
+                    <h3 class="similarity-group-heading">
+                        <span>${escapeHtml(groupName)} (${groupResults.length})</span>${score}
+                    </h3>
+                    <div class="similarity-group-results">${groupResults.map(renderResultCard).join('')}</div>
+                </section>`;
+        }).join('');
+        const ungrouped = results.filter(result => !renderedIds.has(Number(result.id)));
+        container.innerHTML = `
+            <p class="similarity-scope-note">${escapeHtml(tPage('groupingPageScope', 'Similarity groups apply to this results page only.'))}</p>
+            ${groupsMarkup}
+            ${ungrouped.length ? `<section class="similarity-group"><h3 class="similarity-group-heading">${escapeHtml(tPage('otherResults', 'Other results'))}</h3><div class="similarity-group-results">${ungrouped.map(renderResultCard).join('')}</div></section>` : ''}
+        `;
+    } else {
+        container.innerHTML = results.map(renderResultCard).join('');
+    }
 
     // Sync the select-all checkbox with the fresh result page
     syncSelectAllCheckbox();
@@ -1042,6 +1302,7 @@ function toggleResultSelection(fileId, checked) {
     }
     const item = document.querySelector(`.result-item[data-file-id="${fileId}"]`);
     if (item) item.classList.toggle('result-selected', checked);
+    persistSelectedIds();
     syncSelectAllCheckbox();
     updateSelectionBar();
 }
@@ -1060,6 +1321,7 @@ function toggleSelectAllResults(checked) {
         const item = document.querySelector(`.result-item[data-file-id="${result.id}"]`);
         if (item) item.classList.toggle('result-selected', checked);
     });
+    persistSelectedIds();
     updateSelectionBar();
 }
 
@@ -1073,19 +1335,24 @@ function syncSelectAllCheckbox() {
     selectAll.indeterminate = !allSelected && someSelected;
 }
 
-// Show/hide the categorization bar and update its counters
+// Show/hide the action bars and update their counters.
 function updateSelectionBar() {
-    const bar = document.getElementById('analystCategorizationBar');
-    if (!bar) return;
     const count = searchState.selectedIds.size;
+    const bar = document.getElementById('analystCategorizationBar');
     const countEl = document.getElementById('analystSelectedCount');
     if (countEl) countEl.textContent = count;
-    bar.style.display = count > 0 && searchState.canCategorize ? 'flex' : 'none';
+    if (bar) bar.style.display = count > 0 && searchState.canCategorize ? 'flex' : 'none';
+
+    const exportBar = document.getElementById('selectedDocumentActions');
+    const exportCount = document.getElementById('selectedDocumentCount');
+    if (exportCount) exportCount.textContent = count;
+    if (exportBar) exportBar.style.display = count > 0 ? 'flex' : 'none';
 }
 
 // Clear the current selection
 function clearResultSelection() {
     searchState.selectedIds.clear();
+    persistSelectedIds();
     document.querySelectorAll('.result-checkbox').forEach(cb => cb.checked = false);
     document.querySelectorAll('.result-item.result-selected').forEach(el =>
         el.classList.remove('result-selected'));
@@ -1242,40 +1509,63 @@ function showAnalystToast(message) {
     toast._hideTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
 }
 
-// Highlight query terms in text
-function highlightQueryTerms(text, query) {
-    if (!query || !text) return text;
-    
-    // Parse query for terms (handle quotes, AND, OR, NOT)
-    const terms = parseQueryTerms(query);
-    
-    let highlighted = text;
-    terms.forEach(term => {
-        const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-        highlighted = highlighted.replace(regex, '<mark>$1</mark>');
-    });
-    
-    return highlighted;
+// Escape and highlight query terms without ever treating source text as HTML.
+function highlightQueryTerms(text, query, targetAbsoluteOffset = null, chunkOffset = 0,
+    caseSensitive = false, wholeWord = false) {
+    const source = String(text == null ? '' : text);
+    const terms = parseQueryTerms(String(query || '')).filter(Boolean);
+    if (!terms.length) return escapeHtml(source);
+
+    const alternatives = [...new Set(terms)]
+        .sort((a, b) => b.length - a.length)
+        .map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const expression = `(?:${alternatives.join('|')})`;
+    const matcherSource = wholeWord
+        ? `(?<![\\p{L}\\p{N}_])${expression}(?![\\p{L}\\p{N}_])`
+        : expression;
+    const matcher = new RegExp(matcherSource, caseSensitive ? 'gu' : 'giu');
+    let output = '';
+    let lastIndex = 0;
+    for (const match of source.matchAll(matcher)) {
+        output += escapeHtml(source.slice(lastIndex, match.index));
+        const isCurrent = targetAbsoluteOffset !== null
+            && chunkOffset + match.index === targetAbsoluteOffset;
+        output += `<mark${isCurrent ? ' class="review-current-match"' : ''}>${escapeHtml(match[0])}</mark>`;
+        lastIndex = match.index + match[0].length;
+    }
+    return output + escapeHtml(source.slice(lastIndex));
 }
 
-// Parse query terms (handle quotes, operators)
+// Parse positive terms and quoted phrases using the same simple operator
+// grammar as the server; NOT operands are intentionally not highlighted.
 function parseQueryTerms(query) {
     const terms = [];
-    const quoted = query.match(/"([^"]+)"/g);
-    const unquoted = query.replace(/"([^"]+)"/g, '').trim();
-    
+    const quoted = String(query || '').match(/"([^"]+)"/g);
+    const unquoted = String(query || '').replace(/"([^"]+)"/g, ' ').trim();
+
     if (quoted) {
-        quoted.forEach(q => terms.push(q.replace(/"/g, '')));
-    }
-    
-    if (unquoted) {
-        unquoted.split(/\s+(?:AND|OR|NOT)\s+/i).forEach(term => {
-            const cleanTerm = term.trim().replace(/\b(AND|OR|NOT)\b/gi, '').trim();
-            if (cleanTerm) terms.push(cleanTerm);
+        quoted.forEach(phrase => {
+            const value = phrase.slice(1, -1).trim();
+            if (value) terms.push(value);
         });
     }
-    
-    return terms.length > 0 ? terms : [query];
+
+    if (unquoted) {
+        const parts = unquoted.split(/\s+(AND|OR|NOT)\s+/i);
+        let operator = 'AND';
+        for (const part of parts) {
+            if (/^(AND|OR|NOT)$/i.test(part.trim())) {
+                operator = part.trim().toUpperCase();
+                continue;
+            }
+            if (operator === 'NOT') continue;
+            const clean = part.replace(/[()]/g, ' ').trim();
+            if (clean) terms.push(...clean.split(/\s+/).filter(Boolean));
+            operator = 'AND';
+        }
+    }
+
+    return [...new Set(terms)];
 }
 
 // Update pagination
@@ -1318,11 +1608,15 @@ function getActiveFiltersCount() {
     let count = 0;
     count += document.getElementById('fileType').selectedOptions.length;
     count += document.getElementById('categoriesSelect').selectedOptions.length;
+    count += document.getElementById('analystCategoriesFilter')?.selectedOptions.length || 0;
     count += document.getElementById('sourcesSelect').selectedOptions.length;
     count += document.getElementById('sidesSelect').selectedOptions.length;
     if (document.getElementById('dateFrom').value) count++;
     if (document.getElementById('dateTo').value) count++;
-    if (!document.getElementById('statusRead').checked || document.getElementById('statusUnread').checked) count++;
+    if (document.getElementById('hideDuplicates')?.checked) count++;
+    // Read-only is the default; both checked means all statuses (no filter).
+    // An explicit unread-only or empty selection remains an active filter.
+    if (!document.getElementById('statusRead').checked) count++;
     return count;
 }
 
@@ -1390,12 +1684,28 @@ async function saveToSearchHistory(query, filters) {
 
 // Sort results
 function sortResults() {
-    const sortBy = document.getElementById('sortBy').value;
     searchState.currentPage = 1;
     executeAdvancedSearch();
 }
 
+function toggleDuplicateFilter(_enabled) {
+    searchState.currentPage = 1;
+    Toast.info(tPage('duplicateFilterChanged', 'Updating duplicate filter…'));
+    executeAdvancedSearch();
+}
+
 // Export results in various formats
+async function chooseDestinationForExport(filename) {
+    try {
+        return await chooseExportDestination(filename);
+    } catch (error) {
+        // A browser without an available native picker can still use its own
+        // download manager; the data never leaves the normal same-origin flow.
+        console.warn('Save location picker unavailable:', error);
+        return null;
+    }
+}
+
 /**
  * The filters as they stand on screen.
  *
@@ -1420,6 +1730,7 @@ function collectFilters() {
         side_id: sideIds,
         date_from: document.getElementById('dateFrom').value || null,
         date_to: document.getElementById('dateTo').value || null,
+        hide_duplicates: !!document.getElementById('hideDuplicates')?.checked,
         status: [],
     };
     if (document.getElementById('statusRead').checked) filters.status.push('Read');
@@ -1427,29 +1738,58 @@ function collectFilters() {
     return filters;
 }
 
-async function exportResults(format = 'csv') {
+async function exportResults(format = 'csv', scope = 'filtered') {
     if (searchState.results.length === 0) {
         Toast.info(tPage('nothingToExport', 'No results to export.'));
         return;
     }
 
-    // The definition of the query, not its rows. The server re-runs it and
-    // decides what the file contains; the browser never supplies the data.
-    const filters = collectFilters();
+    // The definition that produced the visible rows, not the current controls
+    // and never the browser's result array. The server re-runs this query.
+    const definition = searchState.lastDefinition;
+    if (!definition) {
+        Toast.info(tPage('nothingToExport', 'No results to export.'));
+        return;
+    }
+    const filters = definition.filters || {};
+    const options = definition.options || {};
+    const sort = getAdvancedSortDefinition(definition.sort_by);
+    const proposedName = `search_results_${new Date().toISOString().slice(0, 10)}`;
+    const filename = window.prompt(
+        tPage('exportFilenamePrompt', 'Name your export (leave blank for an automatic name):'),
+        proposedName);
+    if (filename === null) return;
+    const extension = format === 'excel' ? 'xlsx' : format;
+    const suggestedExportName = ensureExportExtension(
+        filename.trim() || proposedName, extension, proposedName);
+    const destination = await chooseDestinationForExport(suggestedExportName);
+    if (destination === false) return;
     const payload = {
-        query: document.getElementById('mainSearchInput')?.value || '',
-        scope: 'filtered',
-        format: format,
-        // The same sort the screen is showing, read from the same control.
-        sort_by: document.getElementById('sortBy').value || 'relevance',
-        sort_order: 'desc',
-        source_ids: filters.source_id,
-        side_ids: filters.side_id,
-        category_ids: filters.category_id,
-        analyst_category_ids: filters.analyst_category_id,
-        file_type: filters.file_type.length === 1 ? filters.file_type[0] : null,
-        date_from: filters.date_from,
-        date_to: filters.date_to,
+        query: definition.query || '',
+        export_scope: scope,
+        analyst_scope: definition.scope || 'uncategorized',
+        format,
+        filename: filename.trim(),
+        page: definition.page || searchState.currentPage || 1,
+        per_page: searchState.resultsPerPage,
+        hide_duplicates: !!filters.hide_duplicates,
+        sort_by: sort.sort_by,
+        sort_order: sort.sort_order,
+        source_ids: filters.source_id || [],
+        side_ids: filters.side_id || [],
+        category_ids: filters.category_id || [],
+        analyst_category_ids: filters.analyst_category_id || [],
+        file_type: filters.file_type || [],
+        status: filters.status || [],
+        date_from: filters.date_from || null,
+        date_to: filters.date_to || null,
+        use_advanced: true,
+        use_fulltext: true,
+        use_bm25: true,
+        use_expansion: true,
+        use_fuzzy: options.use_fuzzy !== false,
+        case_sensitive: options.case_sensitive === true,
+        whole_word: options.whole_word === true,
     };
 
     try {
@@ -1473,9 +1813,10 @@ async function exportResults(format = 'csv') {
         const truncated = response.headers.get('X-Export-Truncated') === 'true';
         const disposition = response.headers.get('Content-Disposition') || '';
         const named = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
-        downloadBlob(blob, named
+        const downloadName = named
             ? decodeURIComponent(named[1].replace(/"/g, ''))
-            : `search_export_${new Date().toISOString().split('T')[0]}.${format}`);
+            : `search_export_${new Date().toISOString().split('T')[0]}.${extension}`;
+        await saveExportBlob(blob, downloadName, destination);
 
         // Say what was exported, and say it out loud when it was capped.
         if (truncated) {
@@ -1490,6 +1831,85 @@ async function exportResults(format = 'csv') {
     }
 }
 
+async function exportMatchingFilenames(format = 'csv') {
+    const definition = searchState.lastDefinition;
+    if (!definition || searchState.totalResults === 0) {
+        Toast.info(tPage('nothingToExport', 'No results to export.'));
+        return;
+    }
+    const filters = definition.filters || {};
+    const options = definition.options || {};
+    const sort = getAdvancedSortDefinition(definition.sort_by);
+    const filename = window.prompt(
+        tPage('exportFilenamePrompt', 'Name your export (leave blank for an automatic name):'),
+        `matching_${new Date().toISOString().slice(0, 10)}`);
+    if (filename === null) return;
+    const extension = format === 'excel' ? 'xlsx' : 'csv';
+    const suggestedExportName = ensureExportExtension(
+        `${filename.trim() || 'matching'}_filenames`, extension, 'matching_filenames');
+    const destination = await chooseDestinationForExport(suggestedExportName);
+    if (destination === false) return;
+
+    const payload = {
+        query: definition.query || '',
+        export_scope: 'filtered',
+        analyst_scope: definition.scope || 'uncategorized',
+        format: format === 'excel' ? 'excel' : 'csv',
+        filename: filename.trim(),
+        page: definition.page || searchState.currentPage || 1,
+        per_page: searchState.resultsPerPage,
+        hide_duplicates: !!filters.hide_duplicates,
+        sort_by: sort.sort_by,
+        sort_order: sort.sort_order,
+        source_ids: filters.source_id || [],
+        side_ids: filters.side_id || [],
+        category_ids: filters.category_id || [],
+        analyst_category_ids: filters.analyst_category_id || [],
+        file_type: filters.file_type || [],
+        status: filters.status || [],
+        date_from: filters.date_from || null,
+        date_to: filters.date_to || null,
+        use_advanced: true,
+        use_fulltext: true,
+        use_bm25: true,
+        use_expansion: true,
+        use_fuzzy: options.use_fuzzy !== false,
+        case_sensitive: options.case_sensitive === true,
+        whole_word: options.whole_word === true,
+    };
+
+    try {
+        const response = await fetch('/api/search/export-filenames', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const problem = await response.json().catch(() => ({}));
+            throw new Error(problem.error || `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const rows = response.headers.get('X-Export-Rows') || '';
+        await saveExportBlob(blob, exportFilenameFromResponse(
+            response,
+            `matching_filenames.${extension}`), destination);
+        if (response.headers.get('X-Export-Truncated') === 'true') {
+            Toast.warning(tPage('filenameExportTruncated',
+                'The filename export reached the 50,000-row limit; narrow the search to export everything.'),
+                { detail: `${rows} rows` });
+        } else {
+            Toast.success(tPage('filenameExportReady', 'Matching filename export ready.'),
+                { detail: `${rows} rows` });
+        }
+    } catch (error) {
+        console.error('Matching filename export failed:', error);
+        Toast.error(tPage('filenameExportFailed', 'Could not export the matching filenames.') + ` ${error.message}`);
+    }
+}
+
 // Print results
 function printResults() {
     if (searchState.results.length === 0) {
@@ -1497,14 +1917,19 @@ function printResults() {
         return;
     }
     
-    const query = document.getElementById('mainSearchInput')?.value || 'Search Results';
+    const query = searchState.lastDefinition?.query || 'Search Results';
     const printWindow = window.open('', '_blank');
-    
+    if (!printWindow) {
+        Toast.error(tPage('printWindowBlocked', 'Allow pop-ups to print these results.'));
+        return;
+    }
+    const safeQuery = escapeHtml(query);
+
     const printContent = `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Search Results - ${query}</title>
+    <title>Search Results - ${safeQuery}</title>
     <style>
         @media print {
             @page { margin: 1cm; }
@@ -1531,8 +1956,9 @@ function printResults() {
     </style>
 </head>
 <body>
-    <h1>Search Results: ${escapeHtml(query)}</h1>
+    <h1>Search Results: ${safeQuery}</h1>
     <div class="header-info">
+        <p><strong>Results on this page:</strong> ${searchState.results.length.toLocaleString()}</p>
         <p><strong>Total Results:</strong> ${searchState.totalResults.toLocaleString()}</p>
         <p><strong>Search Time:</strong> ${searchState.searchTime} seconds</p>
         <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
@@ -1542,7 +1968,6 @@ function printResults() {
             <tr>
                 <th>#</th>
                 <th>File Name</th>
-                <th>File Path</th>
                 <th>Type</th>
                 <th>Size</th>
                 <th>Date</th>
@@ -1556,7 +1981,6 @@ function printResults() {
                 <tr>
                     <td>${index + 1}</td>
                     <td>${escapeHtml(result.file_name || 'N/A')}</td>
-                    <td>${escapeHtml(result.file_path || 'N/A')}</td>
                     <td>${escapeHtml(result.file_type || 'N/A')}</td>
                     <td>${formatFileSize(result.file_size || 0)}</td>
                     <td>${result.file_date ? new Date(result.file_date).toLocaleDateString() : 'N/A'}</td>
@@ -1598,18 +2022,6 @@ function escapeAttr(text) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-}
-
-// Helper function to download blob
-function downloadBlob(blob, filename) {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
 }
 
 // Format file size (keep for backward compatibility)
@@ -1723,19 +2135,24 @@ function renderPreviewPayload(data, fileId) {
     previewModal.titleEl.textContent = name;
     const type = data.preview_type;
 
-    if (type === 'image' && data.data) {
-        // data is a full data: URI produced by the preview service
+    if (type === 'image' && Number.isSafeInteger(Number(fileId)) && Number(fileId) > 0) {
+        // Image bytes are fetched through the authenticated, opaque file-ID
+        // endpoint; the preview response never contains a server path.
+        const note = data.preview_kind === 'pdf_first_page'
+            ? `<div class="sfp-note">${escapeHtml(tPage('pdfFirstPagePreview', 'First-page preview'))} · ${Number(data.page_count) || 1} ${escapeHtml(tPage('pages', 'pages'))}</div>`
+            : '';
+        const imageUrl = `/api/preview/${Number(fileId)}/image`;
         body.innerHTML = `
+            ${note}
             <div class="sfp-image-wrap">
-                <img class="sfp-image" src="${escapeAttr(data.data)}" alt="${escapeAttr(name)}">
+                <img class="sfp-image" src="${escapeAttr(imageUrl)}" alt="${escapeAttr(name)}">
             </div>`;
     } else if ((type === 'text' || type === 'document' || type === 'pdf') && data.data) {
         const note = type === 'pdf' && data.page_count
             ? `<div class="sfp-note">${escapeHtml(tPage('pdfFirstPage', 'First page text'))} · ${data.page_count} ${escapeHtml(tPage('pages', 'pages'))}</div>`
             : '';
-        // Escape first, then highlight — the highlighter writes <mark> tags.
-        const escaped = escapeHtml(String(data.data));
-        body.innerHTML = `${note}<pre class="sfp-text">${highlightQueryTerms(escaped, searchState.query)}</pre>`;
+        // The highlighter escapes source text and emits only its own <mark> tags.
+        body.innerHTML = `${note}<pre class="sfp-text">${highlightQueryTerms(String(data.data), searchState.query)}</pre>`;
     } else if (type === 'unsupported') {
         body.innerHTML = `
             <div class="sfp-message">
@@ -1752,6 +2169,722 @@ function renderPreviewPayload(data, fileId) {
                 <p class="sfp-message-hint">${escapeHtml(tPage('openFullPageHint', 'Open the file in a new tab to view the full content.'))}</p>
             </div>`;
     }
+}
+
+// ====================================================================
+// Shared search/review workspace. Reviewing a result does not issue another
+// search or navigate away: the query, page, filters, sort, selection and result
+// list remain in place while contextual text or the original is inspected here.
+// ====================================================================
+
+const reviewPaneState = {
+    fileId: null,
+    generation: 0,
+    activeTab: 'text',
+    query: '',
+    matches: [],
+    totalMatches: 0,
+    matchIndex: 0,
+    chunkText: '',
+    chunkOffset: 0,
+    original: null,
+    originalPromise: null,
+};
+
+function reviewQueryTerm() {
+    // The endpoint parses the full query so multi-term/quoted searches keep
+    // their positive match set while exclusions remain unhighlighted.
+    return String(searchState.query || '').trim();
+}
+
+function safeReviewUrl(value) {
+    try {
+        const parsed = new URL(String(value || ''), window.location.origin);
+        return parsed.origin === window.location.origin
+            ? `${parsed.pathname}${parsed.search}${parsed.hash}`
+            : null;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function reviewDesktopBridge() {
+    return window.inforaxisDesktop || window.INFORAXIS_DESKTOP || null;
+}
+
+function configureReviewDesktopActions(original) {
+    const bridge = reviewDesktopBridge();
+    const canOpen = !!original?.available && !!bridge &&
+        (typeof bridge.openDocumentForEdit === 'function' || typeof bridge.openDocument === 'function');
+    const canBrowse = !!original?.available && !!bridge &&
+        typeof bridge.openContainingFolder === 'function';
+    const nativeButton = document.getElementById('reviewOpenNative');
+    const folderButton = document.getElementById('reviewOpenContainingFolder');
+    const note = document.getElementById('reviewDesktopIntegrationNote');
+    if (nativeButton) nativeButton.disabled = !canOpen;
+    if (folderButton) folderButton.disabled = !canBrowse;
+    if (note) note.hidden = canOpen && canBrowse;
+}
+
+async function openReviewInNativeApplication() {
+    const bridge = reviewDesktopBridge();
+    const original = reviewPaneState.original;
+    const fileId = reviewPaneState.fileId;
+    const openDocument = bridge?.openDocumentForEdit || bridge?.openDocument;
+    if (!fileId || !original?.available || typeof openDocument !== 'function') {
+        Toast.info(tPage('desktopBridgeMissing',
+            'Opening or editing a native file and opening its operating-system folder require the trusted local INFORAXIS companion. Use the browser preview or download here.'));
+        return;
+    }
+    try {
+        await openDocument.call(bridge, {
+            fileId,
+            fileName: original.name,
+            extension: original.extension,
+            mimeType: original.mime_type,
+            downloadUrl: safeReviewUrl(original.download_url),
+            edit: typeof bridge.openDocumentForEdit === 'function',
+        });
+    } catch (error) {
+        console.error('Native document action failed:', error);
+        Toast.error(tPage('desktopBridgeFailed', 'The local INFORAXIS companion could not complete this action.') + ` ${error.message}`);
+    }
+}
+
+async function openReviewContainingFolder() {
+    const bridge = reviewDesktopBridge();
+    const original = reviewPaneState.original;
+    const fileId = reviewPaneState.fileId;
+    if (!fileId || !original?.available || typeof bridge?.openContainingFolder !== 'function') {
+        Toast.info(tPage('desktopBridgeMissing',
+            'Opening or editing a native file and opening its operating-system folder require the trusted local INFORAXIS companion. Use the browser preview or download here.'));
+        return;
+    }
+    try {
+        await bridge.openContainingFolder({ fileId, fileName: original.name });
+    } catch (error) {
+        console.error('Open containing folder failed:', error);
+        Toast.error(tPage('desktopBridgeFailed', 'The local INFORAXIS companion could not complete this action.') + ` ${error.message}`);
+    }
+}
+
+function setReviewTab(tab) {
+    reviewPaneState.activeTab = tab;
+    const extracted = document.getElementById('reviewExtractedTab');
+    const original = document.getElementById('reviewOriginalTab');
+    extracted?.classList.toggle('is-active', tab === 'text');
+    extracted?.setAttribute('aria-selected', String(tab === 'text'));
+    original?.classList.toggle('is-active', tab === 'original');
+    original?.setAttribute('aria-selected', String(tab === 'original'));
+    updateReviewMatchNavigation();
+}
+
+async function reviewResultInPane(fileId, event = null) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    const id = Number(fileId);
+    if (!Number.isSafeInteger(id) || id < 1) return;
+
+    const result = searchState.results.find(item => Number(item.id) === id);
+    const fileName = result?.file_name || tPage('untitled', 'Untitled');
+    const pane = document.getElementById('documentReviewPane');
+    const grid = document.getElementById('searchWorkspaceGrid');
+    if (!pane || !grid) return;
+
+    reviewPaneState.generation += 1;
+    const generation = reviewPaneState.generation;
+    reviewPaneState.fileId = id;
+    reviewPaneState.activeTab = 'text';
+    reviewPaneState.query = reviewQueryTerm();
+    reviewPaneState.matches = [];
+    reviewPaneState.totalMatches = 0;
+    reviewPaneState.matchIndex = 0;
+    reviewPaneState.chunkText = '';
+    reviewPaneState.chunkOffset = 0;
+    reviewPaneState.original = null;
+    reviewPaneState.originalPromise = null;
+    configureReviewDesktopActions(null);
+
+    pane.hidden = false;
+    grid.classList.add('is-review-open');
+    document.getElementById('reviewPaneTitle').textContent = fileName;
+    document.getElementById('reviewOpenFull').href = fileDetailHref(id);
+    const downloadLink = document.getElementById('reviewDownloadOriginal');
+    downloadLink.href = `/api/file/${id}/original/content?download=1`;
+    downloadLink.classList.add('is-pending');
+    downloadLink.setAttribute('aria-disabled', 'true');
+    setReviewTab('text');
+    document.getElementById('reviewPaneStatus').textContent = '';
+    document.getElementById('reviewPaneContent').innerHTML = `
+        <div class="review-pane-loading" role="status">
+            <span class="loading-spinner" aria-hidden="true"></span>
+            <span>${escapeHtml(tPage('reviewLoading', 'Loading document context…'))}</span>
+        </div>`;
+    document.querySelectorAll('.result-item.review-active').forEach(item => item.classList.remove('review-active'));
+    document.querySelector(`.result-item[data-file-id="${id}"]`)?.classList.add('review-active');
+
+    // Read-only descriptor enables/disables the browser download without
+    // exposing a server filesystem path to the page.
+    reviewPaneState.originalPromise = fetch(`/api/file/${id}/original`)
+        .then(async response => {
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+            return data.original;
+        })
+        .then(original => {
+            if (reviewPaneState.generation !== generation) return null;
+            reviewPaneState.original = original;
+            configureReviewDesktopActions(original);
+            const sourceUrl = original?.available ? safeReviewUrl(original.download_url) : null;
+            if (sourceUrl) {
+                downloadLink.href = sourceUrl;
+                downloadLink.classList.remove('is-pending');
+                downloadLink.removeAttribute('aria-disabled');
+            } else {
+                downloadLink.removeAttribute('href');
+                downloadLink.classList.remove('is-pending');
+                downloadLink.setAttribute('aria-disabled', 'true');
+                downloadLink.title = original?.message || tPage('reviewOriginalUnavailable', 'The original file is not available.');
+            }
+            return original;
+        })
+        .catch(error => {
+            console.warn('Could not describe original file:', error);
+            return null;
+        });
+
+    try {
+        if (reviewPaneState.query) {
+            const params = new URLSearchParams({
+                q: reviewPaneState.query,
+                case_sensitive: String(!!searchState.options.caseSensitive),
+                whole_word: String(!!searchState.options.wholeWord),
+            });
+            const response = await fetch(`/file/${id}/search?${params.toString()}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+            if (reviewPaneState.generation !== generation) return;
+            reviewPaneState.matches = Array.isArray(data.matches) ? data.matches.slice(0, 1000) : [];
+            reviewPaneState.totalMatches = Number(data.total_matches) || 0;
+        }
+        if (reviewPaneState.generation !== generation) return;
+        updateReviewMatchNavigation();
+        if (reviewPaneState.matches.length) {
+            await renderReviewChunk(reviewPaneState.matches[0].global_start, 0, generation);
+        } else {
+            await renderReviewChunk(null, 0, generation);
+        }
+    } catch (error) {
+        if (reviewPaneState.generation !== generation) return;
+        console.error('Review context failed:', error);
+        document.getElementById('reviewPaneContent').innerHTML = `
+            <div class="review-pane-message">${escapeHtml(tPage('reviewLoadFailed', 'Could not load this document context.'))}</div>`;
+    }
+}
+
+function updateReviewMatchNavigation() {
+    const navigation = document.getElementById('reviewMatchNavigation');
+    const counter = document.getElementById('reviewMatchCount');
+    if (!navigation || !counter) return;
+    navigation.hidden = !reviewPaneState.query || reviewPaneState.activeTab !== 'text';
+    if (navigation.hidden) return;
+    if (!reviewPaneState.totalMatches) {
+        counter.textContent = tPage('reviewNoMatches', 'No query matches in extracted text.');
+        return;
+    }
+    counter.textContent = tPage('reviewMatches', 'Match {current} of {total}')
+        .replace('{current}', String(reviewPaneState.matchIndex + 1))
+        .replace('{total}', String(reviewPaneState.totalMatches));
+    if (reviewPaneState.totalMatches > reviewPaneState.matches.length) {
+        counter.title = tPage('reviewMoreMatches', 'Showing the first {count} matches.')
+            .replace('{count}', String(reviewPaneState.matches.length));
+    } else {
+        counter.removeAttribute('title');
+    }
+}
+
+async function renderReviewChunk(targetAbsoluteOffset = null, matchIndex = 0, generation = reviewPaneState.generation) {
+    const fileId = reviewPaneState.fileId;
+    if (!fileId || generation !== reviewPaneState.generation) return;
+    const chunkOffset = targetAbsoluteOffset === null
+        ? 0 : Math.max(0, Number(targetAbsoluteOffset) - 3000);
+    const params = new URLSearchParams({ offset: String(chunkOffset), limit: '12000' });
+    const response = await fetch(`/file/${fileId}/content?${params.toString()}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    if (generation !== reviewPaneState.generation || reviewPaneState.activeTab !== 'text') return;
+
+    reviewPaneState.chunkText = String(data.content || '');
+    reviewPaneState.chunkOffset = Number(data.offset) || 0;
+    reviewPaneState.matchIndex = matchIndex;
+    const content = document.getElementById('reviewPaneContent');
+    if (!reviewPaneState.chunkText) {
+        content.innerHTML = `<p class="review-pane-empty">${escapeHtml(tPage('reviewNoText', 'No extracted text is available for this document.'))}</p>`;
+        document.getElementById('reviewPaneStatus').textContent = '';
+        return;
+    }
+
+    const target = targetAbsoluteOffset === null ? null : Number(targetAbsoluteOffset);
+    content.innerHTML = `<pre class="review-pane-text">${highlightQueryTerms(
+        reviewPaneState.chunkText, searchState.query, target,
+        reviewPaneState.chunkOffset, !!searchState.options.caseSensitive,
+        !!searchState.options.wholeWord)}</pre>`;
+    const end = reviewPaneState.chunkOffset + reviewPaneState.chunkText.length;
+    document.getElementById('reviewPaneStatus').textContent =
+        `${reviewPaneState.chunkOffset + 1}–${end} / ${Number(data.total_length) || end}`;
+    updateReviewMatchNavigation();
+    if (target !== null) {
+        requestAnimationFrame(() => content.querySelector('.review-current-match')?.scrollIntoView({ block: 'center' }));
+    }
+}
+
+function navigateReviewMatch(direction) {
+    if (!reviewPaneState.matches.length) return;
+    const total = reviewPaneState.matches.length;
+    const nextIndex = (reviewPaneState.matchIndex + Number(direction) + total) % total;
+    reviewPaneState.matchIndex = nextIndex;
+    updateReviewMatchNavigation();
+    const match = reviewPaneState.matches[nextIndex];
+    renderReviewChunk(Number(match.global_start), nextIndex).catch(error => {
+        console.error('Could not navigate to the next match:', error);
+    });
+}
+
+function showReviewExtracted() {
+    if (!reviewPaneState.fileId) return;
+    setReviewTab('text');
+    const match = reviewPaneState.matches[reviewPaneState.matchIndex];
+    renderReviewChunk(match ? Number(match.global_start) : null, reviewPaneState.matchIndex)
+        .catch(error => console.error('Could not render extracted text:', error));
+}
+
+async function showReviewOriginal() {
+    if (!reviewPaneState.fileId) return;
+    const generation = reviewPaneState.generation;
+    setReviewTab('original');
+    const content = document.getElementById('reviewPaneContent');
+    content.innerHTML = `<div class="review-pane-loading" role="status">${escapeHtml(tPage('reviewLoading', 'Loading document context…'))}</div>`;
+    try {
+        const original = reviewPaneState.originalPromise
+            ? await reviewPaneState.originalPromise
+            : reviewPaneState.original;
+        if (generation !== reviewPaneState.generation || reviewPaneState.activeTab !== 'original') return;
+        if (!original || !original.available) {
+            content.innerHTML = `<div class="review-pane-message">${escapeHtml(original?.message || tPage('reviewOriginalUnavailable', 'The original file is not available.'))}</div>`;
+            return;
+        }
+        const url = safeReviewUrl(original.serve_url);
+        if (!url) throw new Error('The original preview URL is not same-origin.');
+        const title = escapeAttr(original.name || tPage('untitled', 'Untitled'));
+        const kind = String(original.kind || 'download');
+        if (kind === 'pdf') {
+            content.innerHTML = `<iframe class="review-pane-frame" src="${escapeAttr(`${url}#page=1`)}" title="${title} — page 1"></iframe>`;
+        } else if (kind === 'image') {
+            content.innerHTML = `<div class="review-pane-image-wrap"><img class="review-pane-image" src="${escapeAttr(url)}" alt="${title}"></div>`;
+        } else if (kind === 'text') {
+            content.innerHTML = `<iframe class="review-pane-frame" src="${escapeAttr(url)}" title="${title}"></iframe>`;
+        } else if (kind === 'audio') {
+            content.innerHTML = `<audio class="review-pane-media" controls src="${escapeAttr(url)}">${escapeHtml(tPage('reviewMediaUnsupported', 'Your browser cannot play this media.'))}</audio>`;
+        } else if (kind === 'video') {
+            content.innerHTML = `<video class="review-pane-media" controls src="${escapeAttr(url)}">${escapeHtml(tPage('reviewMediaUnsupported', 'Your browser cannot play this media.'))}</video>`;
+        } else {
+            const downloadUrl = safeReviewUrl(original.download_url) || '#';
+            content.innerHTML = `<div class="review-pane-message"><p>${escapeHtml(tPage('reviewNoInlinePreview', 'This format cannot be displayed inline.'))}</p><a class="btn btn-sm btn-primary" href="${escapeAttr(downloadUrl)}" download>${escapeHtml(tPage('downloadOriginal', 'Download original'))}</a></div>`;
+        }
+    } catch (error) {
+        if (generation !== reviewPaneState.generation) return;
+        console.warn('Original preview failed:', error);
+        content.innerHTML = `<div class="review-pane-message">${escapeHtml(tPage('reviewOriginalFailed', 'Could not load the original preview.'))}</div>`;
+    }
+}
+
+async function downloadReviewOriginal(event = null) {
+    event?.preventDefault();
+    const original = reviewPaneState.original;
+    if (!original?.available) {
+        Toast.info(tPage('reviewOriginalUnavailable', 'The original file is not available.'));
+        return;
+    }
+    const requestedName = window.prompt(
+        tPage('reviewOriginalFilenamePrompt', 'Choose a filename for this original document:'),
+        original.name || `file_${reviewPaneState.fileId}`);
+    if (requestedName === null) return;
+
+    let filename = safeClientFilename(requestedName, original.name || `file_${reviewPaneState.fileId}`);
+    const extension = String(original.extension || '').toLowerCase();
+    if (extension && !filename.toLowerCase().endsWith(extension)) filename += extension;
+    const destination = await chooseDestinationForExport(filename);
+    if (destination === false) return;
+    const downloadUrl = safeReviewUrl(original.download_url);
+    if (!downloadUrl) {
+        Toast.error(tPage('reviewOriginalDownloadFailed', 'Could not download the original document.'));
+        return;
+    }
+
+    try {
+        const response = await fetch(downloadUrl, { credentials: 'same-origin' });
+        if (!response.ok) {
+            const problem = await response.json().catch(() => ({}));
+            throw new Error(problem.error || `HTTP ${response.status}`);
+        }
+        await saveExportBlob(await response.blob(), filename, destination);
+        Toast.success(tPage('reviewOriginalDownloadReady', 'Original download ready.'));
+    } catch (error) {
+        console.error('Original file download failed:', error);
+        Toast.error(tPage('reviewOriginalDownloadFailed', 'Could not download the original document.') + ` ${error.message}`);
+    }
+}
+
+async function copyReviewSelection() {
+    const selection = window.getSelection();
+    const pane = document.getElementById('reviewPaneContent');
+    const anchor = selection?.anchorNode;
+    if (!selection || selection.isCollapsed || !anchor || !pane?.contains(anchor)) {
+        Toast.info(tPage('reviewCopySelect', 'Select a passage in the document first.'));
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(selection.toString());
+        Toast.success(tPage('reviewCopied', 'Passage copied.'));
+    } catch (error) {
+        console.warn('Clipboard access failed:', error);
+        Toast.error(tPage('copyFailed', 'Could not copy the selected passage.'));
+    }
+}
+
+function closeReviewPane() {
+    const pane = document.getElementById('documentReviewPane');
+    const grid = document.getElementById('searchWorkspaceGrid');
+    if (pane) pane.hidden = true;
+    grid?.classList.remove('is-review-open');
+    document.querySelectorAll('.result-item.review-active').forEach(item => item.classList.remove('review-active'));
+    reviewPaneState.generation += 1;
+    reviewPaneState.fileId = null;
+    reviewPaneState.originalPromise = null;
+}
+
+function openSearchInNewWindow() {
+    const definition = searchState.lastDefinition || currentSearchDefinition();
+    const params = serializeDefinitionToParams(definition);
+    const target = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+    const opened = window.open(target, '_blank', 'popup,width=1440,height=900,resizable=yes,scrollbars=yes');
+    if (!opened) Toast.error(tPage('openWindowBlocked', 'Allow pop-ups to open this search in a new window.'));
+}
+
+function updateSimilarityButton() {
+    const button = document.getElementById('groupSimilarBtn');
+    if (!button) return;
+    const active = Array.isArray(searchState.similarityGroups);
+    const label = active ? tPage('clearGrouping', 'Clear groups') : tPage('groupSimilar', 'Group similar');
+    button.innerHTML = `<i class="bi ${active ? 'bi-x-circle' : 'bi-diagram-3'} me-1" aria-hidden="true"></i>${escapeHtml(label)}`;
+    button.setAttribute('aria-pressed', String(active));
+}
+
+async function toggleSimilarityGrouping() {
+    if (Array.isArray(searchState.similarityGroups)) {
+        searchState.similarityGroups = null;
+        updateSimilarityButton();
+        displayResults(searchState.results, searchState.pagination);
+        return;
+    }
+    const fileIds = searchState.results.map(result => Number(result.id))
+        .filter(id => Number.isSafeInteger(id) && id > 0);
+    if (fileIds.length < 2) {
+        Toast.info(tPage('groupNeedsResults', 'At least two results are needed to group similar files.'));
+        return;
+    }
+    const button = document.getElementById('groupSimilarBtn');
+    if (button) button.disabled = true;
+    try {
+        const response = await fetch('/api/search/group-similar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': analystCsrftoken(),
+            },
+            body: JSON.stringify({
+                file_ids: fileIds,
+                threshold: Number(document.getElementById('similarityThreshold')?.value) || 0.32,
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+        searchState.similarityGroups = Array.isArray(data.groups) ? data.groups : [];
+        updateSimilarityButton();
+        displayResults(searchState.results, searchState.pagination);
+        Toast.info(tPage('groupingPageScope', 'Similarity groups apply to this results page only.'));
+    } catch (error) {
+        console.error('Similarity grouping failed:', error);
+        Toast.error(tPage('groupingFailed', 'Could not group similar files.') + ` ${error.message}`);
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+function selectedIdsForExport() {
+    const fileIds = Array.from(searchState.selectedIds);
+    if (!fileIds.length) {
+        Toast.info(tPage('selectFilesFirst', 'Select one or more documents first.'));
+        return null;
+    }
+    if (fileIds.length > 200) {
+        Toast.error(tPage('selectedExportLimit', 'Select no more than 200 documents for one export.'));
+        return null;
+    }
+    return fileIds;
+}
+
+function selectedExportName() {
+    return window.prompt(
+        tPage('selectedExportPrompt', 'Name this selected-file export (leave blank for an automatic name):'),
+        `selected_documents_${new Date().toISOString().slice(0, 10)}`);
+}
+
+function exportFilenameFromResponse(response, fallback) {
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
+    if (!match) return fallback;
+    try { return decodeURIComponent(match[1].replace(/\"/g, '')); }
+    catch (_error) { return match[1].replace(/\"/g, ''); }
+}
+
+async function downloadSelectedExport(endpoint, payload, fallbackName, successMessage) {
+    const extension = String(fallbackName).split('.').pop().toLowerCase();
+    const suggestedName = ensureExportExtension(
+        payload.filename || String(fallbackName).replace(/\.[^.]+$/, ''),
+        extension,
+        String(fallbackName).replace(/\.[^.]+$/, 'export'));
+    const destination = await chooseDestinationForExport(suggestedName);
+    if (destination === false) return;
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': analystCsrftoken(),
+            },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const problem = await response.json().catch(() => ({}));
+            throw new Error(problem.error || `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        await saveExportBlob(blob, exportFilenameFromResponse(response, fallbackName), destination);
+        const unavailableCount = Number(response.headers.get('X-Export-Unavailable')) || 0;
+        if (unavailableCount > 0) {
+            Toast.warning(tPage('exportUnavailableSections',
+                'The export was saved, but some selected documents had no readable extracted text.'),
+                { detail: `${unavailableCount}` });
+        } else if (response.headers.get('X-Export-Empty') === 'true') {
+            Toast.info(tPage('contactExportEmpty',
+                'No email addresses or links were found; a headers-only report was saved.'));
+        } else {
+            Toast.success(successMessage);
+        }
+    } catch (error) {
+        console.error('Selected-file export failed:', error);
+        Toast.error(tPage('selectedExportFailed', 'Selected-file export failed.') + ` ${error.message}`);
+    }
+}
+
+async function exportSingleFileText(fileId, event = null) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    const id = Number(fileId);
+    if (!Number.isSafeInteger(id) || id < 1) return;
+    const result = searchState.results.find(item => Number(item.id) === id);
+    const suggested = `${String(result?.file_name || `file_${id}`).replace(/\.[^.]+$/, '')}_extracted_text`;
+    const filename = window.prompt(
+        tPage('exportFilenamePromptShort', 'Name this download:'), suggested);
+    if (filename === null) return;
+    const requestedName = ensureExportExtension(filename.trim() || suggested, 'txt', suggested);
+    const destination = await chooseDestinationForExport(requestedName);
+    if (destination === false) return;
+    try {
+        const response = await fetch(`/api/files/${id}/export?filename=${encodeURIComponent(filename.trim())}`);
+        if (!response.ok) {
+            const problem = await response.json().catch(() => ({}));
+            throw new Error(problem.error || `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        await saveExportBlob(blob, exportFilenameFromResponse(response, `${suggested}.txt`), destination);
+        Toast.success(tPage('singleTextExportReady', 'Extracted text download ready.'));
+    } catch (error) {
+        console.error('Extracted-text download failed:', error);
+        Toast.error(tPage('selectedExportFailed', 'Selected-file export failed.') + ` ${error.message}`);
+    }
+}
+
+function exportSelectedFiles(mode = 'text') {
+    const fileIds = selectedIdsForExport();
+    if (!fileIds) return;
+    const filename = selectedExportName();
+    if (filename === null) return;
+    downloadSelectedExport('/files/export', {
+        file_ids: fileIds,
+        mode: mode === 'originals' ? 'originals' : 'text',
+        filename: filename.trim(),
+    }, `selected_${mode}.zip`, tPage('selectedExportReady', 'Selected-file export ready.'));
+}
+
+function exportSelectedNames(format = 'csv') {
+    const fileIds = selectedIdsForExport();
+    if (!fileIds) return;
+    const filename = selectedExportName();
+    if (filename === null) return;
+    const outputFormat = format === 'excel' ? 'excel' : 'csv';
+    const extension = outputFormat === 'excel' ? 'xlsx' : 'csv';
+    downloadSelectedExport('/api/files/names/export', {
+        scope: 'selected',
+        file_ids: fileIds,
+        format: outputFormat,
+        filename: filename.trim(),
+    }, `selected_filenames.${extension}`,
+    tPage('selectedNamesReady', 'Selected filename export ready.'));
+}
+
+function safeClientFilename(value, fallback) {
+    let name = String(value || '').split(/[\/\\]/).pop()
+        .replace(/[\u0000-\u001f<>:"|?*\\]/g, '_')
+        .replace(/^\.+$/, '')
+        .trim();
+    if (!name || name === '.' || name === '..') name = fallback;
+    return name.slice(0, 160) || fallback;
+}
+
+async function exportSelectedToFolder(mode = 'text') {
+    const fileIds = selectedIdsForExport();
+    if (!fileIds) return;
+    if (typeof window.showDirectoryPicker !== 'function') {
+        Toast.info(tPage('folderPickerUnsupported', 'Folder export is not supported in this browser; downloading a ZIP instead.'));
+        exportSelectedFiles(mode === 'originals' ? 'originals' : 'text');
+        return;
+    }
+
+    let parent;
+    try {
+        // Invoke the picker before any await so the browser recognizes this as
+        // a direct user gesture. The app never receives a local filesystem path.
+        parent = await window.showDirectoryPicker({ mode: 'readwrite' });
+    } catch (error) {
+        if (error?.name !== 'AbortError') {
+            console.warn('Folder picker failed:', error);
+            Toast.error(tPage('folderPickerFailed', 'Could not write to the selected folder.'));
+        }
+        return;
+    }
+
+    const folderName = window.prompt(
+        tPage('folderExportSubfolderPrompt', 'Optional: enter a new subfolder name, or leave blank to use the selected folder.'),
+        '');
+    if (folderName === null) return;
+
+    let targetDirectory = parent;
+    const cleanedFolderName = String(folderName).trim()
+        .replace(/[\u0000-\u001f<>:"\/\\|?*]/g, '_')
+        .replace(/^\.+$/, '').slice(0, 80);
+    if (cleanedFolderName) {
+        try {
+            targetDirectory = await parent.getDirectoryHandle(cleanedFolderName, { create: true });
+        } catch (error) {
+            console.error('Could not create selected subfolder:', error);
+            Toast.error(tPage('folderPickerFailed', 'Could not write to the selected folder.') + ` ${error.message}`);
+            return;
+        }
+    }
+
+    const button = document.activeElement;
+    if (button instanceof HTMLButtonElement) button.disabled = true;
+    Toast.info(tPage('folderExportProgress', 'Writing selected documents to the chosen folder…'));
+    const usedNames = new Set();
+    const failures = [];
+    let written = 0;
+
+    for (const fileId of fileIds) {
+        try {
+            const descriptorResponse = await fetch(`/api/file/${fileId}/original`);
+            const descriptorData = await descriptorResponse.json();
+            if (!descriptorResponse.ok || !descriptorData.success) {
+                throw new Error(descriptorData.error || `HTTP ${descriptorResponse.status}`);
+            }
+            const original = descriptorData.original || {};
+            let url;
+            let filename;
+            if (mode === 'originals') {
+                if (!original.available) throw new Error(original.message || 'Original file unavailable');
+                url = safeReviewUrl(original.download_url);
+                filename = safeClientFilename(original.name, `file_${fileId}`);
+            } else {
+                url = `/api/files/${fileId}/export`;
+                const sourceName = safeClientFilename(original.name, `file_${fileId}`);
+                const stem = sourceName.replace(/\.[^.]+$/, '') || `file_${fileId}`;
+                filename = `${stem}_extracted.txt`;
+            }
+            if (!url) throw new Error('The download URL was not valid for this application.');
+
+            const fileResponse = await fetch(url, { credentials: 'same-origin' });
+            if (!fileResponse.ok) {
+                const problem = await fileResponse.json().catch(() => ({}));
+                throw new Error(problem.error || `HTTP ${fileResponse.status}`);
+            }
+            const dot = filename.lastIndexOf('.');
+            const stem = dot > 0 ? filename.slice(0, dot) : filename;
+            const extension = dot > 0 ? filename.slice(dot) : '';
+            let uniqueName = filename;
+            let suffix = 2;
+            while (usedNames.has(uniqueName.toLocaleLowerCase())) {
+                uniqueName = `${stem}_${suffix++}${extension}`;
+            }
+            usedNames.add(uniqueName.toLocaleLowerCase());
+
+            const handle = await targetDirectory.getFileHandle(uniqueName, { create: true });
+            const writable = await handle.createWritable();
+            await writable.write(await fileResponse.blob());
+            await writable.close();
+            written += 1;
+        } catch (error) {
+            console.warn(`Could not export selected file ${fileId}:`, error);
+            failures.push({ fileId, message: error.message });
+        }
+    }
+
+    if (button instanceof HTMLButtonElement) button.disabled = false;
+    if (failures.length) {
+        const detail = `${written}/${fileIds.length}`;
+        Toast.warning(tPage('folderExportPartial', 'Some documents could not be saved to the chosen folder.'), { detail });
+    } else {
+        Toast.success(tPage('folderExportDone', 'Documents saved to the chosen folder.'), { detail: String(written) });
+    }
+}
+
+function exportSelectedFirstPages(format = 'txt') {
+    const fileIds = selectedIdsForExport();
+    if (!fileIds) return;
+    const filename = selectedExportName();
+    if (filename === null) return;
+    const outputFormat = format === 'docx' ? 'docx' : 'txt';
+    downloadSelectedExport('/api/files/first-pages/export', {
+        file_ids: fileIds,
+        format: outputFormat,
+        filename: filename.trim(),
+    }, `first_pages.${outputFormat}`,
+    tPage('firstPagesReady', 'First-page text export ready.'));
+}
+
+function exportSelectedContacts(format = 'csv') {
+    const fileIds = selectedIdsForExport();
+    if (!fileIds) return;
+    const filename = selectedExportName();
+    if (filename === null) return;
+    const outputFormat = format === 'xlsx' ? 'xlsx' : 'csv';
+    downloadSelectedExport('/api/files/extract-contacts/export', {
+        file_ids: fileIds,
+        format: outputFormat,
+        filename: filename.trim(),
+    }, `emails_and_links.${outputFormat}`,
+    tPage('contactsReady', 'Email and hyperlink export ready.'));
 }
 
 // ====================================================================
@@ -1790,6 +2923,7 @@ async function saveCurrentSearch() {
                     ...def.filters,
                     scope: def.scope,
                     sort_by: def.sort_by,
+                    similarity_threshold: def.similarity_threshold,
                     options: def.options
                 }
             })
@@ -1884,6 +3018,7 @@ function applySavedSearch(search) {
         scope: f.scope || 'uncategorized',
         sort_by: f.sort_by || 'relevance',
         page: 1,
+        similarity_threshold: Number(f.similarity_threshold) || 0.32,
         options: f.options || { case_sensitive: false, whole_word: false, use_fuzzy: true },
         filters: {
             file_type: f.file_type || [],
@@ -1893,7 +3028,8 @@ function applySavedSearch(search) {
             side_id: f.side_id || [],
             date_from: f.date_from || null,
             date_to: f.date_to || null,
-            status: Array.isArray(f.status) ? f.status : undefined
+            status: Array.isArray(f.status) ? f.status : undefined,
+            hide_duplicates: !!f.hide_duplicates
         }
     };
     applyDefinitionToControls(def);
@@ -1956,11 +3092,10 @@ if (typeof window !== 'undefined') {
     window.resetAllFilters = resetAllFilters;
     window.clearAllFilters = clearAllFilters;
     window.toggleFiltersPanel = toggleFiltersPanel;
-    window.removeFilterChip = removeFilterChip;
-    window.selectSuggestion = selectSuggestion;
     window.feelingLucky = feelingLucky;
     window.sortResults = sortResults;
     window.exportResults = exportResults;
+    window.exportMatchingFilenames = exportMatchingFilenames;
     window.printResults = printResults;
     // Analyst manual-categorization actions (FR-1.2 / FR-1.3 / NFR-3)
     window.toggleResultSelection = toggleResultSelection;
@@ -1972,6 +3107,24 @@ if (typeof window !== 'undefined') {
     window.openResultInNewTab = openResultInNewTab;
     window.showFilePreview = showFilePreview;
     window.hideFilePreview = hideFilePreview;
+    window.reviewResultInPane = reviewResultInPane;
+    window.closeReviewPane = closeReviewPane;
+    window.downloadReviewOriginal = downloadReviewOriginal;
+    window.openReviewInNativeApplication = openReviewInNativeApplication;
+    window.openReviewContainingFolder = openReviewContainingFolder;
+    window.showReviewExtracted = showReviewExtracted;
+    window.showReviewOriginal = showReviewOriginal;
+    window.navigateReviewMatch = navigateReviewMatch;
+    window.copyReviewSelection = copyReviewSelection;
+    window.openSearchInNewWindow = openSearchInNewWindow;
+    window.toggleDuplicateFilter = toggleDuplicateFilter;
+    window.toggleSimilarityGrouping = toggleSimilarityGrouping;
+    window.exportSelectedFiles = exportSelectedFiles;
+    window.exportSelectedNames = exportSelectedNames;
+    window.exportSingleFileText = exportSingleFileText;
+    window.exportSelectedToFolder = exportSelectedToFolder;
+    window.exportSelectedFirstPages = exportSelectedFirstPages;
+    window.exportSelectedContacts = exportSelectedContacts;
     window.saveCurrentSearch = saveCurrentSearch;
     window.toggleSavedSearchMenu = toggleSavedSearchMenu;
     window.applySavedSearchById = applySavedSearchById;

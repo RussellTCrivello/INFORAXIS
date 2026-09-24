@@ -237,7 +237,7 @@ a {
     background: linear-gradient(180deg, var(--gradient-start, var(--primary-color, #4f46e5)), var(--gradient-end, var(--secondary-color, #06b6d4)));
 }
 
-/* Language switcher (sidebar footer) */
+/* Sidebar footer holds stable product metadata, not a second language control. */
 .sidebar-footer {
     margin-top: auto;
     padding-top: 0.875rem;
@@ -246,67 +246,6 @@ a {
     flex-direction: column;
     gap: 0.6rem;
 }
-
-.sidebar-lang {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.sidebar-lang > .sidebar-lang-icon {
-    position: absolute;
-    inset-inline-start: 0.7rem;
-    display: inline-flex;
-    pointer-events: none;
-    font-size: 0.95rem;
-    color: color-mix(in srgb, var(--sidebar-text, #e2e8f0) 75%, transparent);
-    z-index: 2;
-}
-
-.sidebar-lang > .sidebar-lang-chevron {
-    position: absolute;
-    inset-inline-end: 0.7rem;
-    display: inline-flex;
-    pointer-events: none;
-    font-size: 0.75rem;
-    color: color-mix(in srgb, var(--sidebar-text, #e2e8f0) 65%, transparent);
-}
-
-#sidebarLanguageSelect,
-.sidebar-lang select {
-    width: 100%;
-    height: var(--control-height-sm);
-    appearance: none;
-    -webkit-appearance: none;
-    padding: 0 2rem 0 2.35rem;
-    font-size: 0.85rem;
-    font-weight: 550;
-    color: var(--sidebar-text, #e2e8f0);
-    background-color: color-mix(in srgb, var(--sidebar-text, #e2e8f0) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--sidebar-text, #e2e8f0) 16%, transparent);
-    border-radius: 0.6rem;
-    cursor: pointer;
-    transition: border-color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
-}
-
-#sidebarLanguageSelect:hover {
-    background-color: color-mix(in srgb, var(--sidebar-text, #e2e8f0) 13%, transparent);
-    border-color: color-mix(in srgb, var(--sidebar-text, #e2e8f0) 28%, transparent);
-}
-
-#sidebarLanguageSelect:focus-visible {
-    outline: none;
-    border-color: var(--secondary-color, #06b6d4);
-    box-shadow: var(--focus-ring);
-}
-
-#sidebarLanguageSelect option {
-    color: #1e293b;
-    background: #fff;
-}
-
-[dir="rtl"] #sidebarLanguageSelect { padding: 0 2.35rem 0 2rem; }
 
 .sidebar-version {
     display: inline-flex;

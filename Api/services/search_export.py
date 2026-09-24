@@ -58,23 +58,32 @@ MAX_ROWS = 50_000
 #: How many rows are fetched per round when the whole result set is wanted.
 CHUNK = 1_000
 
-#: The shape of an exported row, in order. One definition, so the CSV header,
-#: the spreadsheet and the JSON cannot disagree about what a result is.
-COLUMNS: Tuple[str, ...] = (
-    "id", "file_name", "file_path", "file_type", "file_size", "file_date",
+#: Legacy positional shape returned by older search query paths. It is kept
+#: only to map tuple rows into the public export schema below.
+_RESULT_COLUMNS: Tuple[str, ...] = (
+    "id", "file_name", "file_type", "file_size", "file_date",
     "file_status", "source_name", "source_id", "side_name", "side_id",
     "relevance_score", "categories", "snippet",
+)
+
+#: The public shape of an exported row, in order. CSV, Excel and JSON all use
+#: this one definition; smart and analyst taxonomies stay separate.
+COLUMNS: Tuple[str, ...] = (
+    "id", "file_name", "file_type", "file_size", "file_date",
+    "file_status", "source_name", "source_id", "side_name", "side_id",
+    "relevance_score", "smart_categories", "analyst_categories", "snippet",
 )
 
 #: Query-definition fields this service accepts. Anything else in the payload
 #: is refused, so a client cannot smuggle a result set through an unknown key
 #: (`results`, `rows`, `data`, ...) and have it pass unnoticed.
 _ACCEPTED = frozenset({
-    "query", "scope", "format", "filename", "page", "per_page",
+    "query", "export_scope", "analyst_scope", "format", "filename", "page", "per_page",
     "file_type", "source_id", "source_ids", "side_id", "side_ids",
     "category_id", "category_ids", "analyst_category_id",
-    "analyst_category_ids", "date_from", "date_to", "sort_by", "sort_order",
+    "analyst_category_ids", "status", "date_from", "date_to", "sort_by", "sort_order",
     "use_advanced", "use_fulltext", "use_bm25", "use_expansion", "use_fuzzy",
+    "case_sensitive", "whole_word", "hide_duplicates",
 })
 
 #: Keys that mean "here are the rows, please write them out". Named explicitly
@@ -98,11 +107,13 @@ class SearchExportRequest:
     filename: str = ""
     page: int = 1
     per_page: int = 50
-    file_type: Optional[str] = None
+    file_types: Tuple[str, ...] = ()
     source_ids: Tuple[int, ...] = ()
     side_ids: Tuple[int, ...] = ()
     category_ids: Tuple[int, ...] = ()
     analyst_category_ids: Tuple[int, ...] = ()
+    file_statuses: Optional[Tuple[str, ...]] = None
+    analyst_scope: Optional[str] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
     sort_by: str = "relevance"
@@ -112,6 +123,9 @@ class SearchExportRequest:
     use_bm25: bool = True
     use_expansion: bool = True
     use_fuzzy: bool = True
+    case_sensitive: bool = False
+    whole_word: bool = False
+    hide_duplicates: bool = False
     definition: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -178,6 +192,52 @@ def _as_ids(value: Any, what: str) -> Tuple[int, ...]:
     return tuple(sorted(set(out)))
 
 
+def _as_strings(value: Any, what: str) -> Tuple[str, ...]:
+    """Validate one or more bounded string filters without losing selections."""
+    if value in (None, "", []):
+        return ()
+    values = list(value) if isinstance(value, (list, tuple, set)) else [value]
+    out: List[str] = []
+    for item in values:
+        text = str(item).strip()
+        if not text:
+            continue
+        if len(text) > 128:
+            raise ExportRequestError(f"{what} values must be at most 128 characters.")
+        if text not in out:
+            out.append(text)
+    return tuple(out)
+
+
+def _as_statuses(payload: Dict[str, Any]) -> Optional[Tuple[str, ...]]:
+    """Validate the UI's Read/Unread path status filter."""
+    if "status" not in payload:
+        return None
+    raw = payload.get("status")
+    values: Sequence[Any]
+    if isinstance(raw, (list, tuple, set)):
+        values = list(raw)
+    elif isinstance(raw, str) and "," in raw:
+        values = raw.split(",")
+    else:
+        values = [raw]
+    normalized: List[str] = []
+    for item in values:
+        text = str(item).strip().lower() if item is not None else ""
+        if not text:
+            continue
+        if text == "none":
+            if len(values) == 1:
+                return ()
+            raise ExportRequestError("status 'none' cannot be combined with another status.")
+        if text not in ("read", "unread"):
+            raise ExportRequestError("status must contain only 'Read', 'Unread', or 'none'.")
+        status = text.capitalize()
+        if status not in normalized:
+            normalized.append(status)
+    return tuple(normalized)
+
+
 def _as_bool(value: Any, default: bool) -> bool:
     if value is None:
         return default
@@ -215,10 +275,10 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
             "Unknown export parameters: " + ", ".join(unknown) + ". A query "
             "definition is the only input this endpoint accepts.")
 
-    scope = str(payload.get("scope") or "filtered").strip().lower()
+    scope = str(payload.get("export_scope") or "filtered").strip().lower()
     if scope not in EXPORT_SCOPES:
         raise ExportRequestError(
-            f"Unknown scope {scope!r}. Say which set you mean: "
+            f"Unknown export_scope {scope!r}. Say which set you mean: "
             + ", ".join(EXPORT_SCOPES) + ".")
 
     export_format = str(payload.get("format") or "csv").strip().lower()
@@ -235,22 +295,33 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
     except (TypeError, ValueError):
         raise ExportRequestError("page and per_page must be whole numbers.") from None
 
-    sort_by = str(payload.get("sort_by") or "relevance").strip()
+    sort_by = str(payload.get("sort_by") or "relevance").strip().lower()
     sort_order = str(payload.get("sort_order") or "desc").strip().lower()
+    if sort_by not in {"relevance", "date", "name", "type", "size"}:
+        raise ExportRequestError("sort_by must be relevance, date, name, type, or size.")
     if sort_order not in ("asc", "desc"):
         raise ExportRequestError("sort_order must be 'asc' or 'desc'.")
 
     query = str(payload.get("query") or "").strip()
+    analyst_scope = payload.get("analyst_scope")
+    if analyst_scope is not None:
+        analyst_scope = str(analyst_scope).strip().lower()
+        if analyst_scope not in {"uncategorized", "categorized", "all"}:
+            raise ExportRequestError("analyst_scope must be uncategorized, categorized, or all.")
+    file_statuses = _as_statuses(payload)
 
     request = SearchExportRequest(
         query=query,
         scope=scope,
         format=export_format,
-        filename=str(payload.get("filename") or "").strip(),
+        filename=re.sub(
+            r"\.(?:csv|xlsx?|json)$", "",
+            str(payload.get("filename") or "").strip(),
+            flags=re.IGNORECASE,
+        ),
         page=page,
         per_page=per_page,
-        file_type=(str(payload["file_type"]).strip()
-                   if payload.get("file_type") else None),
+        file_types=_as_strings(payload.get("file_type"), "file_type"),
         source_ids=_as_ids(payload.get("source_ids")
                            if payload.get("source_ids") is not None
                            else payload.get("source_id"), "source_id"),
@@ -264,6 +335,8 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
             payload.get("analyst_category_ids")
             if payload.get("analyst_category_ids") is not None
             else payload.get("analyst_category_id"), "analyst_category_id"),
+        file_statuses=file_statuses,
+        analyst_scope=analyst_scope,
         date_from=_as_date(payload.get("date_from"), "date_from"),
         date_to=_as_date(payload.get("date_to"), "date_to"),
         sort_by=sort_by,
@@ -273,6 +346,9 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
         use_bm25=_as_bool(payload.get("use_bm25"), True),
         use_expansion=_as_bool(payload.get("use_expansion"), True),
         use_fuzzy=_as_bool(payload.get("use_fuzzy"), True),
+        case_sensitive=_as_bool(payload.get("case_sensitive"), False),
+        whole_word=_as_bool(payload.get("whole_word"), False),
+        hide_duplicates=_as_bool(payload.get("hide_duplicates"), False),
     )
     # The definition is kept beside the request: it is what the audit line and
     # any future export record need, and it is the whole of what was asked for.
@@ -280,7 +356,9 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
         "query": request.bounded_query,
         "scope": request.scope,
         "format": request.format,
-        "file_type": request.file_type,
+        "file_type": list(request.file_types),
+        "file_statuses": list(request.file_statuses) if request.file_statuses is not None else None,
+        "analyst_scope": request.analyst_scope,
         "source_ids": list(request.source_ids),
         "side_ids": list(request.side_ids),
         "category_ids": list(request.category_ids),
@@ -289,6 +367,14 @@ def parse(payload: Optional[Dict[str, Any]]) -> SearchExportRequest:
         "date_to": request.date_to,
         "sort_by": request.sort_by,
         "sort_order": request.sort_order,
+        "use_advanced": request.use_advanced,
+        "use_fulltext": request.use_fulltext,
+        "use_bm25": request.use_bm25,
+        "use_expansion": request.use_expansion,
+        "use_fuzzy": request.use_fuzzy,
+        "case_sensitive": request.case_sensitive,
+        "whole_word": request.whole_word,
+        "hide_duplicates": request.hide_duplicates,
     })
     return request
 
@@ -302,10 +388,11 @@ def _search_once(request: SearchExportRequest, limit: int, offset: int,
     from Api.services.search_service import SearchService
 
     query = request.bounded_query
-    if request.use_advanced and query:
+    if (request.use_advanced or request.hide_duplicates
+            or request.case_sensitive or request.whole_word):
         return SearchService.advanced_search(
             query=query,
-            file_type=request.file_type,
+            file_type=list(request.file_types) or None,
             source_id=request.source_ids[0] if len(request.source_ids) == 1 else None,
             side_id=request.side_ids[0] if len(request.side_ids) == 1 else None,
             date_from=request.date_from,
@@ -324,11 +411,16 @@ def _search_once(request: SearchExportRequest, limit: int, offset: int,
             use_fuzzy=request.use_fuzzy,
             analyst_scope=analyst_scope,
             analyst_category_ids=(list(request.analyst_category_ids) or None),
+            file_statuses=(list(request.file_statuses)
+                           if request.file_statuses is not None else None),
+            hide_duplicates=request.hide_duplicates,
+            case_sensitive=request.case_sensitive,
+            whole_word=request.whole_word,
         )
     if request.use_fulltext and query:
         return SearchService.full_text_search(
             query=query,
-            file_type=request.file_type,
+            file_type=request.file_types[0] if len(request.file_types) == 1 else None,
             source_id=request.source_ids[0] if len(request.source_ids) == 1 else None,
             side_id=request.side_ids[0] if len(request.side_ids) == 1 else None,
             date_from=request.date_from,
@@ -340,6 +432,7 @@ def _search_once(request: SearchExportRequest, limit: int, offset: int,
             limit=limit,
             offset=offset,
             analyst_scope=analyst_scope,
+            hide_duplicates=request.hide_duplicates,
         )
     return SearchService.simple_search(
         query=query, limit=limit, offset=offset, analyst_scope=analyst_scope)
@@ -350,27 +443,28 @@ def normalise(rows: Sequence[Any]) -> List[Dict[str, Any]]:
 
     The search service answers with tuples on some paths and dictionaries on
     others. A file that changes shape depending on how the query happened to be
-    answered is a file nobody can trust, so the shape is fixed here.
+    answered is a file nobody can trust, so the shape is fixed here. Older
+    query tuples and dictionaries call the smart taxonomy ``categories``;
+    exports publish it as ``smart_categories`` beside analyst categories.
     """
     out: List[Dict[str, Any]] = []
     for row in rows:
         if isinstance(row, dict):
-            item = {column: row.get(column) for column in COLUMNS}
-            # A dictionary may carry the fields under different names; the
-            # published column set is what the export promises.
-            for key, value in row.items():
-                if key not in item and key in COLUMNS:
-                    item[key] = value
-            if "id" not in row:
-                item["id"] = row.get("file_id")
-            if "snippet" not in row:
-                item["snippet"] = row.get("match_snippet") or row.get("line_content")
-            out.append({column: _clean(item.get(column)) for column in COLUMNS})
-            continue
-        values = list(row) if isinstance(row, (list, tuple)) else [row]
-        padded = values + [None] * (len(COLUMNS) - len(values))
-        out.append({column: _clean(padded[index])
-                    for index, column in enumerate(COLUMNS)})
+            item = dict(row)
+        else:
+            values = list(row) if isinstance(row, (list, tuple)) else [row]
+            item = {
+                column: values[index] if index < len(values) else None
+                for index, column in enumerate(_RESULT_COLUMNS)
+            }
+
+        if "id" not in item:
+            item["id"] = item.get("file_id")
+        if "snippet" not in item:
+            item["snippet"] = item.get("match_snippet") or item.get("line_content")
+        if item.get("smart_categories") is None:
+            item["smart_categories"] = item.get("categories")
+        out.append({column: _clean(item.get(column)) for column in COLUMNS})
     return out
 
 
@@ -424,24 +518,58 @@ def suggested_filename(request: SearchExportRequest) -> str:
         return cleaned[:limit]
 
     if request.filename:
-        base = _safe(request.filename, 80)
-    else:
-        stem = _safe(request.query or "all", 40)
-        base = f"search_{stem or 'all'}_{request.scope}"
-    return f"{base or 'export'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # A name supplied by the operator is the name of the export, not a
+        # prefix to which the server silently appends a timestamp.
+        return _safe(request.filename, 80) or "export"
+    stem = _safe(request.query or "all", 40)
+    base = f"search_{stem or 'all'}_{request.scope}"
+    return f"{base}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 
 def export_bytes(result: SearchExportResult):
-    """Turn the collected rows into the requested file, through ExportService."""
-    from Api.services.export_service import ExportService
+    """Serialize the same published columns to CSV, Excel, or JSON."""
+    from Api.services.document_intelligence import spreadsheet_safe_text
 
     rows = result.rows
     if result.request.format == "csv":
-        return (ExportService.export_search_results_csv(rows), "text/csv", "csv")
+        import csv
+        from io import BytesIO, StringIO
+
+        output = StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({column: spreadsheet_safe_text(row.get(column, ""))
+                             for column in COLUMNS})
+        return BytesIO(output.getvalue().encode("utf-8-sig")), "text/csv", "csv"
+
     if result.request.format == "excel":
-        return (ExportService.export_search_results_excel(rows),
+        from io import BytesIO
+
+        try:
+            from openpyxl import Workbook
+        except ImportError as exc:
+            raise ImportError("openpyxl is required for Excel export") from exc
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Search Results"
+        sheet.append(list(COLUMNS))
+        for row in rows:
+            sheet.append([spreadsheet_safe_text(row.get(column, ""))
+                          for column in COLUMNS])
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        output = BytesIO()
+        workbook.save(output)
+        workbook.close()
+        output.seek(0)
+        return (output,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "xlsx")
+
+    from Api.services.export_service import ExportService
+
     return (ExportService.export_search_results_json(rows),
             "application/json", "json")
 

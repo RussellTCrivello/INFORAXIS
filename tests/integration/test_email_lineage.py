@@ -278,7 +278,7 @@ def test_attachments_have_their_own_hashes(eml):
     (EML_TXT_MARKER, "notes.txt"),
     (EML_NESTED_MARKER, "deep_report.pdf"),
 ])
-def test_email_content_is_searchable_and_traces_to_its_object(marker, expected):
+def test_email_content_is_searchable_and_traces_to_its_object(eml, marker, expected):
     from Api.services.search_service import SearchService
 
     results, total = SearchService.full_text_search(query=marker, limit=20)
@@ -352,7 +352,7 @@ def test_mbox_attachments_are_linked_to_the_mailbox(mbox):
     ("MBOXATTACH1", "att1.txt"),
     ("MBOXATTACH2", "att2.txt"),
 ])
-def test_mbox_content_is_searchable(marker, expected):
+def test_mbox_content_is_searchable(mbox, marker, expected):
     from Api.services.search_service import SearchService
 
     results, total = SearchService.full_text_search(query=marker, limit=20)

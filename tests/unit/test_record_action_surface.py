@@ -218,12 +218,16 @@ class TestTheScanIsHonest:
     that binds nothing looks like a page that binds four things.
     """
 
-    def test_the_three_kinds_are_reported_separately(self):
-        kinds = {item.get("kind", "attribute") for item in bindings.scan()}
+    def test_the_binding_kinds_are_reported_separately(self):
+        items = bindings.scan()
+        kinds = {item.get("kind", "attribute") for item in items}
         assert kinds == {"literal", "prepared"}, (
             "today the product names its actions in values and in the code "
-            "that prepares the surface, and in no attributes at all: every "
-            "control a reader can press is drawn from prepared data")
+            "that prepares the surface, and in no static registry-action "
+            "attributes: every record control is drawn from prepared data")
+        assert not {item["action_id"] for item in items} & {
+            "edit", "view", "delete", "merge"
+        }, "local row-dispatch keys are not Action Registry bindings"
 
     def test_a_prepared_binding_points_at_the_file_the_screen_declared(self):
         prepared = [item for item in bindings.scan() if item["kind"] == "prepared"]

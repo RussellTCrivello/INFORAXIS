@@ -1,9 +1,10 @@
-"""Translation completeness for the single ingestion interface.
+"""Translation completeness for audited ingestion and user-management interfaces.
 
-The interface this branch ships - ``/operations/input`` and the components it
-uses - is available in every language the application offers (English, Arabic,
-Hebrew, Persian) and is maintained in the dormant Croatian catalog too. This
-module pins that, at three levels:
+The audited surfaces - ``/operations/input`` and its components, plus
+``/users`` - are available in every language the application offers (English,
+Arabic, Hebrew, Persian) and maintained in the Croatian catalog too. This
+module pins the shared server strings and ingestion client strings at three
+levels:
 
 1. **Server strings.** Every ``_('...')`` in the interface's templates exists in
    every catalog with a real translation, and no catalog has an empty or fuzzy
@@ -13,10 +14,10 @@ module pins that, at three levels:
    for exists in every locale pack. The runtime merges the page translations,
    the pack and the server catalog, and the server catalog wins; where a string
    exists in both, the two must agree or the user sees one of them at random.
-3. **The rendered page.** Requesting the page in Arabic, Hebrew and Persian
-   serves translated text (not the English source), with the right ``lang`` and
-   ``dir`` attributes, and the sidebar offers exactly one way into ingestion -
-   the duplicate "Upload Files" shortcut is gone.
+3. **The rendered pages.** Requesting the audited pages in Arabic, Hebrew and
+   Persian serves translated text (not the English source), with the right
+   ``lang`` and ``dir`` attributes; the ingestion sidebar also offers exactly
+   one way into the workflow, without the duplicate "Upload Files" shortcut.
 
 The lists of strings are derived from the sources rather than hard-coded, so a
 string added to the page without a translation fails here instead of shipping
@@ -54,6 +55,11 @@ INTERFACE_TEMPLATES = (
     "templates/Operations/import_center.html",
     "templates/components/file_nav.html",
     "templates/components/operations_widget.html",
+    "templates/auth/users.html",
+    "templates/Settings/translation_manager.html",
+    "templates/Search/search_advanced.html",
+    "templates/Search/search_enhanced.html",
+    "templates/email_words/email_words.html",
 )
 
 #: The page modules whose strings reach the user through window.t().
@@ -265,6 +271,119 @@ def test_the_ingestion_page_renders_in_the_selected_language(admin_client, lang)
         translated = catalog.get(english).string
         assert translated in html, f"[{lang}] {english!r} not rendered as {translated!r}"
         assert english not in html, f"[{lang}] English source {english!r} still rendered"
+
+
+@pytest.mark.parametrize("lang", ("ar", "he", "fa"))
+def test_user_management_page_renders_in_the_selected_language(admin_client, lang):
+    _set_language(admin_client, lang)
+    response = admin_client.get("/users")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert f'<html lang="{lang}"' in html
+    assert 'dir="rtl"' in html
+    rendered = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    catalog = _catalog(lang)
+    for english in ("User Management", "Add User", "Role Capability Matrix"):
+        translated = catalog.get(english).string
+        assert translated in rendered, f"[{lang}] {english!r} not rendered as {translated!r}"
+        assert english not in rendered, f"[{lang}] English source {english!r} still rendered"
+    data_match = re.search(
+        r'<script type="application/json" id="users-page-data">(.*?)</script>', html, re.S
+    )
+    assert data_match
+    page_data = json.loads(data_match.group(1))
+    assert page_data["translations"]["resetPassword"] == catalog.get("Reset password").string
+
+
+@pytest.mark.parametrize("lang", ("ar", "he", "fa"))
+def test_translation_management_page_renders_in_the_selected_language(admin_client, lang):
+    """The translation editor itself is reachable and localized in the UI."""
+    _set_language(admin_client, lang)
+    response = admin_client.get("/translations/manage")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert f'<html lang="{lang}"' in html
+    assert 'dir="rtl"' in html
+    catalog = _catalog(lang)
+    for english in (
+        "Translation Management",
+        "Review and edit the localized text used throughout every screen.",
+        "Translation filters",
+        "Save changes",
+    ):
+        entry = catalog.get(english)
+        assert entry and entry.string, f"[{lang}] missing translation for {english!r}"
+        assert entry.string in html, (
+            f"[{lang}] {english!r} did not render as {entry.string!r}")
+
+
+@pytest.mark.parametrize("lang", ("ar", "he", "fa"))
+def test_advanced_search_page_renders_localized_search_controls(admin_client, lang):
+    _set_language(admin_client, lang)
+    response = admin_client.get("/search/advanced")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert f'<html lang="{lang}"' in html
+    assert 'dir="rtl"' in html
+    assert 'aria-controls="suggestionsList" aria-expanded="false"' in html
+    data_match = re.search(
+        r'<script type="application/json" id="search-advanced-page-data">(.*?)</script>',
+        html,
+        re.S,
+    )
+    assert data_match
+    page_data = json.loads(data_match.group(1))
+    catalog = _catalog(lang)
+    assert page_data["translations"]["removeFilter"] == catalog.get("Remove filter").string
+    assert page_data["translations"]["savedSearches"] == catalog.get("Saved searches").string
+
+
+@pytest.mark.parametrize("lang", ("ar", "he", "fa"))
+def test_enhanced_search_page_renders_localized_dynamic_search_labels(admin_client, lang):
+    _set_language(admin_client, lang)
+    response = admin_client.get("/search/enhanced")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert f'<html lang="{lang}"' in html
+    assert 'data-page-type="search-enhanced"' in html
+    data_match = re.search(
+        r'<script type="application/json" id="searchEnhancedTranslations">(.*?)</script>',
+        html,
+        re.S,
+    )
+    assert data_match
+    page_data = json.loads(data_match.group(1))
+    catalog = _catalog(lang)
+    for key in ("No search history", "No saved searches", "Matching content:"):
+        assert page_data[key] == catalog.get(key).string
+    assert 'onclick="window.fms.search.global' not in html
+
+
+@pytest.mark.parametrize("lang", ("ar", "he", "fa"))
+def test_email_words_page_renders_escaped_actions_and_localized_client_labels(admin_client, lang):
+    _set_language(admin_client, lang)
+    response = admin_client.get("/email-words")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert f'<html lang="{lang}"' in html
+    assert 'class="page-container email-words-page"' in html
+    data_match = re.search(
+        r'<script type="application/json" id="emailWordsFiltersData">(.*?)</script>',
+        html,
+        re.S,
+    )
+    assert data_match
+    page_data = json.loads(data_match.group(1))
+    catalog = _catalog(lang)
+    assert page_data["translations"]["copied"] == catalog.get("Content copied to clipboard!").string
+    assert page_data["translations"]["loadingFiles"] == catalog.get("Loading files...").string
+    assert "onclick=\"copyEmail(" not in html
+    assert "onclick=\"searchInFiles(" not in html
 
 
 @pytest.mark.parametrize("lang", ("ar", "he", "fa"))

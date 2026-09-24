@@ -42,6 +42,7 @@ class TestBootstrap:
             "sources", "hashs", "hash_contexts", "paths", "contents", "contents_raw",
             "titles_content", "keywords", "words_hashs", "keywords_hashs", "alerts",
             "users", "sessions", "audit_log", "schema_migrations",
+            "translation_overrides",
         }
         with db_conn.cursor() as cur:
             cur.execute(

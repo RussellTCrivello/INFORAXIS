@@ -148,12 +148,12 @@ the navigation entry vanished the first time this rename happened.
 ## 5. The registry reference
 
 <!-- BEGIN GENERATED REGISTRY TABLE -->
-- Interfaces: **25** (features declared separately: **1**)
-- Endpoints owned: **63**
-- With a keyboard shortcut: **11**; with a help topic: **23**
-- By domain: ADMINISTRATION 1, ANALYZE 3, CLASSIFY 2, DISCOVER 9, INGEST 2, INTERNAL 1, OPERATE 2, REPORT 2, SETTINGS 2, WORK 1
-- By status: ACTIVE 24, DEPRECATED 1
-- By kind: INTERNAL 1, PAGE 23, SECTION 1
+- Interfaces: **26** (features declared separately: **1**)
+- Endpoints owned: **67**
+- With a keyboard shortcut: **12**; with a help topic: **24**
+- By domain: ADMINISTRATION 1, ANALYZE 3, CLASSIFY 2, DISCOVER 9, INGEST 2, INTERNAL 1, OPERATE 2, REPORT 2, SETTINGS 3, WORK 1
+- By status: ACTIVE 25, DEPRECATED 1
+- By kind: INTERNAL 1, PAGE 24, SECTION 1
 
 
 ### WORK (1)
@@ -166,7 +166,7 @@ the navigation entry vanished the first time this rename happened.
 
 | ID | Name | Domain | Route | Aliases | Role | Default | Depends on | Help | Shortcut | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `file_library` | File Library | DISCOVER | `files.files_list` | `files.file_detail`, `files.file_content_lazy`, `files.file_content_page`, `files.file_full_content`, `files.file_search_all_pages`, `files.file_chart_data`, `files.delete_file`, `files.bulk_delete_files` | any | on | — | discover/file-library | g f | ACTIVE |
+| `file_library` | File Library | DISCOVER | `files.files_list` | `files.file_detail`, `files.file_content_lazy`, `files.file_content_page`, `files.file_full_content`, `files.file_search_all_pages`, `files.file_chart_data`, `files.file_types_page`, `files.delete_file`, `files.bulk_delete_files`, `files.bulk_export_files` | any | on | — | discover/file-library | g f | ACTIVE |
 | `search` | Search | DISCOVER | `search_page` | `search_advanced`, `search_enhanced_page`, `saved_searches_page`, `search_advanced_api` | any | on | — | discover/search | g s | ACTIVE |
 | `sources` | Sources | DISCOVER | `sources_list` | `source_add`, `source_detail`, `source_edit`, `source_categories_keywords` | any | on | — | discover/sources | — | ACTIVE |
 | `sides` | Sides | DISCOVER | `sides_list` | `side_add`, `side_detail`, `side_edit`, `side_categories_keywords` | any | on | — | discover/sides | — | ACTIVE |
@@ -189,7 +189,7 @@ the navigation entry vanished the first time this rename happened.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `archives` | Evidence Archive | ANALYZE | `archives_page` | — | any | on | `file_library` | analyze/archives | g a | ACTIVE |
 | `path_analysis` | Path Analysis | ANALYZE | `path_analysis_page` | — | any | on | `file_library` | analyze/path-analysis | g p | ACTIVE |
-| `batch_analysis` | Batch Processing | ANALYZE | `analysis_batch` | — | any | on | `file_library` | analyze/batch | g b | ACTIVE |
+| `batch_analysis` | Batch Processing | ANALYZE | `analysis_batch` | `analysis_batch_process` | any | on | `file_library` | analyze/batch | g b | ACTIVE |
 
 ### CLASSIFY (2)
 
@@ -218,12 +218,13 @@ the navigation entry vanished the first time this rename happened.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `users` | Users and Roles | ADMINISTRATION | `users_page` | — | admin | on | — | administration/users | g u | ACTIVE |
 
-### SETTINGS (2)
+### SETTINGS (3)
 
 | ID | Name | Domain | Route | Aliases | Role | Default | Depends on | Help | Shortcut | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `settings` | Settings | SETTINGS | `settings_page_direct` | `settings_api.settings_page` | admin | on | — | settings/overview | g , | ACTIVE |
 | `interface_manager` | Interface Manager | SETTINGS | — | — | admin | on | `settings` | settings/interfaces | — | ACTIVE |
+| `translation_manager` | Translation Management | SETTINGS | `translations.translation_management_page` | — | admin | on | — | settings/translations | g t | ACTIVE |
 
 ### INTERNAL (1)
 
@@ -269,7 +270,7 @@ The guardrails that enforce this, and where they live:
 
 | Status | Navigable | Switchable | Marked | Meaning |
 | --- | --- | --- | --- | --- |
-| ACTIVE | yes | yes | — | Part of the product. |
+| ACTIVE | yes | yes | — | — (no status remark; the interface's own description is enough) |
 | EXPERIMENTAL | only while its feature flag is on | yes | "Experimental" | Not finished; hidden until the flag is enabled. |
 | DEPRECATED | yes | yes | "Deprecated" | Still works and is still supported, but scheduled to be replaced. |
 | RETIRED | no | no | "Retired" | No longer part of the product; a stored setting for it is kept and ignored. |

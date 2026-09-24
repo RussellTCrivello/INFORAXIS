@@ -89,10 +89,16 @@ def lineage(pg_db, tmp_path, engine_or_skip):
     with zipfile.ZipFile(root / "outer.zip", "w", zipfile.ZIP_DEFLATED) as outer:
         outer.writestr("inner.zip", inner_buf.getvalue())
 
-    IntegratedFileReader(
+    reader = IntegratedFileReader(
         max_workers=1, enable_storage=True,
         storage_source=f"{tag}_src", storage_side=f"{tag}_side",
-    ).process_folder(str(root))
+    )
+    reader.process_folder(str(root))
+    live_containers = reader.progress_ledger.live_containers()
+    assert not live_containers, (
+        "completed sequential extraction left stale container work: "
+        f"{live_containers}"
+    )
 
     try:
         with conn.cursor() as cur:

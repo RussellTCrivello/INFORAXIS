@@ -5335,17 +5335,11 @@ input:checked + .toggle-slider:before {
         margin-left: 0 !important;
     }
     #menuToggle {
-        display: block !important;
-        position: fixed;
-        top: 1rem;
-        left: 1rem;
-        z-index: 1051;
+        position: static;
+        flex: 0 0 auto;
+        align-self: flex-start;
         border-radius: 0.5rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-    [dir="rtl"] #menuToggle {
-        left: auto;
-        right: 1rem;
     }
 }
 
@@ -5366,15 +5360,6 @@ input:checked + .toggle-slider:before {
     [dir="rtl"] .sidebar {
         right: 0;
         left: auto;
-    }
-    #menuToggle {
-        display: none;
-    }
-}
-
-@media (min-width: 1200px) {
-    #menuToggle {
-        display: none;
     }
 }
 

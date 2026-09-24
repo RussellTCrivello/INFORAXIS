@@ -101,7 +101,9 @@ async function performEnhancedSearch(query) {
             use_advanced: advancedOptions.use_advanced ? 'true' : 'false',
             use_bm25: advancedOptions.use_bm25 ? 'true' : 'false',
             use_expansion: advancedOptions.use_expansion ? 'true' : 'false',
-            use_fuzzy: advancedOptions.use_fuzzy ? 'true' : 'false'
+            use_fuzzy: advancedOptions.use_fuzzy ? 'true' : 'false',
+            case_sensitive: advancedOptions.case_sensitive ? 'true' : 'false',
+            whole_word: advancedOptions.whole_word ? 'true' : 'false'
         };
         
         const apiUrl = endpoints.search(params);
@@ -134,7 +136,9 @@ function getAdvancedSearchOptions() {
         use_advanced: document.getElementById('useAdvanced')?.checked !== false,
         use_bm25: document.getElementById('useBM25')?.checked !== false,
         use_expansion: document.getElementById('useExpansion')?.checked !== false,
-        use_fuzzy: document.getElementById('useFuzzy')?.checked !== false
+        use_fuzzy: document.getElementById('useFuzzy')?.checked !== false,
+        case_sensitive: document.getElementById('caseSensitive')?.checked === true,
+        whole_word: document.getElementById('wholeWord')?.checked === true
     };
 }
 
@@ -250,7 +254,9 @@ async function goToPage(page) {
             use_advanced: advancedOptions.use_advanced ? 'true' : 'false',
             use_bm25: advancedOptions.use_bm25 ? 'true' : 'false',
             use_expansion: advancedOptions.use_expansion ? 'true' : 'false',
-            use_fuzzy: advancedOptions.use_fuzzy ? 'true' : 'false'
+            use_fuzzy: advancedOptions.use_fuzzy ? 'true' : 'false',
+            case_sensitive: advancedOptions.case_sensitive ? 'true' : 'false',
+            whole_word: advancedOptions.whole_word ? 'true' : 'false'
         };
         
         const apiUrl = endpoints.search(params);

@@ -75,8 +75,11 @@ function restoreState(state) {
  * Update navigation buttons (back/forward) state
  */
 export function updateNavButtons() {
-    const backBtn = document.getElementById('navBackBtn');
-    const forwardBtn = document.getElementById('navForwardBtn');
+    // The archive has its own in-page history controls; keep them distinct
+    // from the browser-history controls in the application top bar. Duplicate
+    // IDs made getElementById() update the wrong buttons on the archive page.
+    const backBtn = document.getElementById('archiveNavBackBtn');
+    const forwardBtn = document.getElementById('archiveNavForwardBtn');
     
     if (backBtn) {
         backBtn.disabled = navigationState.currentIndex <= 0;

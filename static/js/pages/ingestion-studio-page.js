@@ -563,6 +563,13 @@ function renderPickList(listId, rows, key) {
 }
 
 async function createSource() {
+  const sourceForm = el('sourceForm');
+  const invalidSourceField = Array.from(sourceForm.querySelectorAll('input[required]'))
+    .find((field) => !field.checkValidity());
+  if (invalidSourceField) {
+    invalidSourceField.reportValidity();
+    return;
+  }
   const body = {
     name: el('nsName').value.trim(),
     job: el('nsJob').value.trim(),
@@ -581,6 +588,7 @@ async function createSource() {
     state.source = body.name;
     el('sourceForm').classList.add('d-none');
     ['nsName', 'nsJob', 'nsCountry', 'nsCity', 'nsDesc'].forEach((id) => { el(id).value = ''; });
+    el('nsImportance').value = '0.5';
     await loadTaxonomy();
     pushMessage(msg('Source “{name}” created and selected.', { name: body.name }), 'ok');
   } catch (error) {
@@ -592,6 +600,11 @@ async function createSource() {
 }
 
 async function createSide() {
+  const nameField = el('nsdName');
+  if (!nameField.checkValidity()) {
+    nameField.reportValidity();
+    return;
+  }
   const body = {
     name: el('nsdName').value.trim(),
     importance: parseFloat(el('nsdImportance').value || '0.5'),
@@ -606,6 +619,7 @@ async function createSide() {
     state.side = body.name;
     el('sideForm').classList.add('d-none');
     el('nsdName').value = '';
+    el('nsdImportance').value = '0.5';
     await loadTaxonomy();
     pushMessage(msg('Side “{name}” created and selected.', { name: body.name }), 'ok');
   } catch (error) {

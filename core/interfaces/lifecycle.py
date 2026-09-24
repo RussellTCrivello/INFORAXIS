@@ -56,7 +56,12 @@ ACTIVE = StatusPolicy(
     navigable=True,
     switchable=True,
     badge=None,
-    note="Part of the product.",
+    # No note: an active interface needs no status remark. The navigation
+    # tooltip already carries the interface's own description, and appending
+    # a blanket sentence to every active entry read as filler, not as
+    # information. (Non-empty notes are still required for statuses that
+    # actually need saying something: EXPERIMENTAL, DEPRECATED, RETIRED.)
+    note="",
     documented_as_surface=True,
 )
 

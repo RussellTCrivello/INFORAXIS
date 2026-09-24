@@ -673,6 +673,83 @@ def files_list():
                              error=str(e))
 
 
+def _file_type_statistics():
+    """Aggregate the type recorded by ingestion for the indexed file library."""
+    rows = execute_query(
+        """
+        SELECT COALESCE(NULLIF(BTRIM(file_type), ''), 'Unknown') AS file_type,
+               COUNT(*) AS file_count,
+               COALESCE(SUM(file_size), 0) AS total_size
+        FROM paths
+        GROUP BY COALESCE(NULLIF(BTRIM(file_type), ''), 'Unknown')
+        ORDER BY file_count DESC, file_type ASC
+        """,
+        fetch='all',
+    ) or []
+    return [
+        {
+            'file_type': str(row[0] or 'Unknown'),
+            'file_count': int(row[1] or 0),
+            'total_size': int(row[2] or 0),
+        }
+        for row in rows
+    ]
+
+
+def _file_type_label(value):
+    """Readable format label without changing the exact stored filter value."""
+    normalized = str(value or 'Unknown').strip().lstrip('.').lower()
+    names = {
+        'pdf': 'PDF', 'doc': 'Word (.doc)', 'docx': 'Word (.docx)',
+        'xls': 'Excel (.xls)', 'xlsx': 'Excel (.xlsx)',
+        'ppt': 'PowerPoint (.ppt)', 'pptx': 'PowerPoint (.pptx)',
+        'jpg': 'Image (JPG)', 'jpeg': 'Image (JPEG)', 'png': 'Image (PNG)',
+        'gif': 'Image (GIF)', 'bmp': 'Image (BMP)', 'tif': 'Image (TIF)',
+        'tiff': 'Image (TIFF)', 'webp': 'Image (WebP)', 'txt': 'Text (.txt)',
+        'csv': 'CSV', 'html': 'HTML', 'htm': 'HTML', 'eml': 'Email (.eml)',
+        'msg': 'Email (.msg)', 'zip': 'ZIP archive', 'rar': 'RAR archive',
+        '7z': '7-Zip archive', 'unknown': 'Unknown format',
+    }
+    return names.get(normalized, normalized.upper() if normalized else 'Unknown format')
+
+
+@files_bp.route('/files/types')
+def file_types_page():
+    """Browse the automatically recorded format classification and counts."""
+    try:
+        type_rows = _file_type_statistics()
+    except Exception as error:
+        logger.error('Could not load file-type statistics: %s', error, exc_info=True)
+        type_rows = []
+    return render_template(
+        'file/file_types.html',
+        file_types=[
+            {**row, 'label': _file_type_label(row['file_type'])}
+            for row in type_rows
+        ],
+        total_files=sum(row['file_count'] for row in type_rows),
+    )
+
+
+@limiter.limit(INTERACTIVE_READ_LIMIT)
+@files_bp.route('/api/files/types')
+def api_file_type_statistics():
+    """Return counts and total sizes grouped by ingestion-detected file type."""
+    try:
+        rows = _file_type_statistics()
+        for row in rows:
+            row['label'] = _file_type_label(row['file_type'])
+        return jsonify({
+            'success': True,
+            'types': rows,
+            'total_files': sum(row['file_count'] for row in rows),
+        })
+    except Exception as error:
+        logger.error('Could not load file-type statistics: %s', error, exc_info=True)
+        return client_error(error, subsystem='Api.blueprints.files',
+                            success_key='success', status=500)
+
+
 # ==================== FILE DETAIL ====================
 
 @files_bp.route('/file/<int:file_id>')
@@ -926,6 +1003,11 @@ def file_export(file_id):
         
         file_name = file_info[0] or f'file_{file_id}'
         file_type = file_info[2] or 'txt'
+        output_name = _export_basename(
+            request.args.get('filename'),
+            f"{Path(file_name).stem or f'file_{file_id}'}_extracted_text",
+            'txt',
+        )
         
         # Get file content
         content = load_text_content(file_id)
@@ -938,7 +1020,7 @@ def file_export(file_id):
             content,
             mimetype='text/plain',
             headers={
-                'Content-Disposition': f'attachment; filename="{secure_filename(file_name)}.txt"'
+                'Content-Disposition': f'attachment; filename="{output_name}"'
             }
         )
         return response
@@ -973,21 +1055,11 @@ def bulk_export_files():
     from flask import send_file
 
     try:
-        raw_ids = request.form.getlist('file_ids')
-        if not raw_ids:
-            body = request.get_json(silent=True) or {}
-            raw_ids = body.get('file_ids') or []
-        mode = 'originals' if request.values.get('mode') == 'originals' else 'text'
-
-        file_ids = []
-        for value in raw_ids:
-            try:
-                file_ids.append(int(value))
-            except (TypeError, ValueError):
-                continue
-        file_ids = list(dict.fromkeys(file_ids))[:500]  # dedupe, cap
-        if not file_ids:
-            return jsonify({'success': False, 'error': 'No files selected'}), 400
+        body = request.get_json(silent=True) or {}
+        file_ids = _selected_file_ids_from_request(max_files=500)
+        mode_value = request.values.get('mode') or body.get('mode')
+        mode = 'originals' if mode_value == 'originals' else 'text'
+        requested_name = request.values.get('filename') or body.get('filename')
 
         placeholders = ','.join(['%s'] * len(file_ids))
         rows = execute_query(
@@ -995,7 +1067,14 @@ def bulk_export_files():
             tuple(file_ids),
             fetch="all",
         )
-        names = {row[0]: row[1] for row in rows or []}
+        names = {int(row[0]): row[1] for row in rows or []}
+        missing_ids = sorted(set(file_ids) - set(names))
+        if missing_ids:
+            return jsonify({
+                'success': False,
+                'error': 'Some selected file records no longer exist.',
+                'missing_file_ids': missing_ids,
+            }), 404
 
         zip_buffer = io.BytesIO()
         included = 0
@@ -1021,7 +1100,7 @@ def bulk_export_files():
                     continue
                 if mode == 'originals':
                     from Api.services.original_file import OriginalFileService
-                    info = OriginalFileService.describe(fid)
+                    info = OriginalFileService.describe(fid, include_path=True)
                     source_path = info.get('path') or ''
                     if info.get('available') and source_path and Path(source_path).is_file():
                         zf.write(source_path, arcname=_arc_for(fname, f'file_{fid}'))
@@ -1055,8 +1134,10 @@ def bulk_export_files():
             }), 422
 
         stamp = _datetime.now().strftime('%Y%m%d_%H%M%S')
-        zip_name = (f"selected_originals_{stamp}.zip" if mode == 'originals'
-                    else f"selected_extracted_text_{stamp}.zip")
+        fallback_name = (f"selected_originals_{stamp}"
+                         if mode == 'originals'
+                         else f"selected_extracted_text_{stamp}")
+        zip_name = _export_basename(requested_name, fallback_name, 'zip')
         zip_buffer.seek(0)
         return send_file(
             zip_buffer,
@@ -1065,8 +1146,415 @@ def bulk_export_files():
             download_name=zip_name,
         )
 
+    except ValueError as validation_error:
+        return jsonify({'success': False, 'error': str(validation_error)}), 400
     except Exception as e:
         logger.error(f"Error in bulk export: {e}", exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+def _selected_file_ids_from_request(max_files=200):
+    """Read a bounded selection without ever accepting client-supplied paths."""
+    from Api.services.document_intelligence import normalize_file_ids
+
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        raw_ids = payload.get('file_ids', [])
+    else:
+        raw_ids = request.form.getlist('file_ids')
+    return normalize_file_ids(raw_ids, max_files=max_files)
+
+
+def _export_basename(value, fallback, extension):
+    """Return a safe, caller-renamable download filename."""
+    base = secure_filename(str(value or '').strip()) or fallback
+    suffix = f'.{extension}'
+    if not base.lower().endswith(suffix):
+        base = f'{base}{suffix}'
+    if len(base) > 120:
+        base = f'{base[:120 - len(suffix)]}{suffix}'
+    return base
+
+
+@limiter.limit('6 per minute')
+@files_bp.route('/api/files/names/export', methods=['POST'])
+def export_file_names():
+    """Export names from an explicit selected/type/all indexed-file scope."""
+    import csv
+    from datetime import datetime
+    from io import BytesIO, StringIO
+    from flask import Response, send_file
+    from Api.services.document_intelligence import normalize_file_ids, spreadsheet_safe_text
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        export_format = str(payload.get('format') or 'csv').lower()
+        extension = 'xlsx' if export_format in {'excel', 'xlsx'} else 'csv'
+        if export_format not in {'csv', 'excel', 'xlsx'}:
+            return jsonify({'success': False, 'error': 'format must be csv or excel'}), 400
+
+        scope = str(payload.get('scope') or '').lower()
+        params = []
+        where = ''
+        requested_file_ids = None
+        if scope == 'selected':
+            file_ids = normalize_file_ids(payload.get('file_ids', []), max_files=5000)
+            requested_file_ids = set(file_ids)
+            placeholders = ','.join(['%s'] * len(file_ids))
+            where = f'WHERE p.id IN ({placeholders})'
+            params.extend(file_ids)
+        elif scope == 'type':
+            file_type = str(payload.get('file_type') or '').strip()
+            if not file_type or len(file_type) > 128:
+                return jsonify({'success': False, 'error': 'A valid file_type is required'}), 400
+            where = 'WHERE COALESCE(NULLIF(BTRIM(p.file_type), \'\'), \'Unknown\') = %s'
+            params.append(file_type)
+        elif scope != 'all':
+            return jsonify({'success': False, 'error': 'scope must be selected, type, or all'}), 400
+
+        rows = execute_query(
+            f"""
+            SELECT p.id, p.file_name,
+                   COALESCE(NULLIF(BTRIM(p.file_type), ''), 'Unknown') AS file_type
+            FROM paths p
+            {where}
+            ORDER BY LOWER(COALESCE(p.file_name, '')), p.id
+            LIMIT 50001
+            """,
+            tuple(params), fetch='all') or []
+        if requested_file_ids is not None:
+            found_ids = {int(row[0]) for row in rows}
+            missing_ids = sorted(requested_file_ids - found_ids)
+            if missing_ids:
+                return jsonify({
+                    'success': False,
+                    'error': 'Some selected file records no longer exist.',
+                    'missing_file_ids': missing_ids,
+                }), 404
+        if len(rows) > 50000:
+            return jsonify({
+                'success': False,
+                'error': 'This filename export exceeds 50,000 rows. Narrow the list to export it synchronously.',
+            }), 413
+        if not rows:
+            return jsonify({'success': False, 'error': 'No indexed filenames were found'}), 404
+
+        columns = ('file_name', 'file_type')
+        safe_rows = [
+            {
+                'file_name': spreadsheet_safe_text(row[1] or ''),
+                'file_type': spreadsheet_safe_text(row[2] or 'Unknown'),
+            }
+            for row in rows
+        ]
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        scope_name = 'all_indexed' if scope == 'all' else (
+            'selected' if scope == 'selected' else _file_type_label(file_type).lower().replace(' ', '_'))
+        fallback_name = f'{scope_name}_filenames_{stamp}'
+        filename = _export_basename(payload.get('filename'), fallback_name, extension)
+
+        if extension == 'csv':
+            output = StringIO(newline='')
+            writer = csv.DictWriter(output, fieldnames=columns, extrasaction='ignore')
+            writer.writerow({'file_name': 'File name', 'file_type': 'File type'})
+            writer.writerows(safe_rows)
+            response = Response(
+                output.getvalue().encode('utf-8-sig'),
+                mimetype='text/csv; charset=utf-8')
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        else:
+            try:
+                from openpyxl import Workbook
+            except ImportError:
+                return jsonify({'success': False, 'error': 'XLSX export is unavailable on this server'}), 503
+            workbook = Workbook(write_only=True)
+            sheet = workbook.create_sheet('Filenames')
+            sheet.append(['File name', 'File type'])
+            for item in safe_rows:
+                sheet.append([item[column] for column in columns])
+            buffer = BytesIO()
+            workbook.save(buffer)
+            buffer.seek(0)
+            response = send_file(
+                buffer,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=filename,
+            )
+        response.headers['X-Export-Scope'] = scope
+        response.headers['X-Export-Rows'] = str(len(safe_rows))
+        return response
+    except ValueError as validation_error:
+        return jsonify({'success': False, 'error': str(validation_error)}), 400
+    except Exception as error:
+        logger.error('Filename export failed: %s', error, exc_info=True)
+        return client_error(error, subsystem='Api.blueprints.files',
+                            success_key='success', status=500)
+
+
+@limiter.limit(INTERACTIVE_READ_LIMIT)
+@files_bp.route('/api/files/first-pages/export', methods=['POST'])
+def export_selected_first_pages():
+    """Export the first-page/preview text for selected indexed documents.
+
+    ``format`` is ``txt`` or ``docx``. The browser chooses the download
+    destination; no server-side client folder is exposed or inferred.
+    """
+    from datetime import datetime
+    from io import BytesIO
+    from flask import Response, send_file
+    from Api.services.document_intelligence import first_page_text
+
+    try:
+        file_ids = _selected_file_ids_from_request(max_files=200)
+        if request.is_json:
+            payload = request.get_json(silent=True) or {}
+            export_format = str(payload.get('format') or 'txt').lower()
+            requested_name = payload.get('filename')
+        else:
+            export_format = str(request.form.get('format') or 'txt').lower()
+            requested_name = request.form.get('filename')
+        if export_format not in {'txt', 'docx'}:
+            return jsonify({'success': False, 'error': 'format must be txt or docx'}), 400
+
+        placeholders = ','.join(['%s'] * len(file_ids))
+        rows = execute_query(
+            f"SELECT id, file_name, file_path FROM paths WHERE id IN ({placeholders})",
+            tuple(file_ids), fetch='all') or []
+        records = {int(row[0]): (row[1] or f'file_{row[0]}', row[2] or '') for row in rows}
+        missing_ids = sorted(set(file_ids) - set(records))
+        if missing_ids:
+            return jsonify({
+                'success': False,
+                'error': 'Some selected file records no longer exist.',
+                'missing_file_ids': missing_ids,
+            }), 404
+        if not records:
+            return jsonify({'success': False, 'error': 'No selected files were found'}), 404
+
+        sections = []
+        for file_id in file_ids:
+            file_name, file_path = records[file_id]
+            try:
+                extracted = load_text_content(file_id)
+                preview = first_page_text(
+                    file_name=file_name, file_path=file_path,
+                    extracted_text=extracted)
+                text = preview.get('text') or '[No extracted text available]'
+                method = preview.get('method') or 'unavailable'
+            except Exception as extraction_error:
+                logger.warning('First-page extraction failed for file %s: %s',
+                               file_id, extraction_error)
+                text, method = '[First-page extraction failed]', 'unavailable'
+            sections.append({
+                'file_id': file_id, 'file_name': file_name,
+                'text': text, 'method': method,
+            })
+
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        fallback = f'first_pages_{stamp}'
+        if export_format == 'txt':
+            from flask import Response
+            body = '\n\n'.join(
+                f"===== {item['file_name']} (ID {item['file_id']}) =====\n"
+                f"Preview method: {item['method']}\n\n{item['text']}"
+                for item in sections
+            )
+            filename = _export_basename(requested_name, fallback, 'txt')
+            response = Response(body.encode('utf-8'), mimetype='text/plain; charset=utf-8')
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response.headers['X-Export-Documents'] = str(len(sections))
+            response.headers['X-Export-Unavailable'] = str(
+                sum(section.get('method') == 'unavailable' for section in sections))
+            return response
+
+        try:
+            from docx import Document
+        except ImportError:
+            return jsonify({'success': False, 'error': 'DOCX export is unavailable on this server'}), 503
+        document = Document()
+        document.add_heading('First-page text export', level=1)
+        document.add_paragraph(f'Exported {len(sections)} selected document(s) at {datetime.now().isoformat(timespec="seconds")}')
+        for index, item in enumerate(sections):
+            document.add_heading(f"{item['file_name']} (ID {item['file_id']})", level=2)
+            document.add_paragraph(f"Preview method: {item['method']}")
+            document.add_paragraph(item['text'])
+            if index < len(sections) - 1:
+                document.add_page_break()
+        buffer = BytesIO()
+        document.save(buffer)
+        buffer.seek(0)
+        filename = _export_basename(requested_name, fallback, 'docx')
+        response = send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers['X-Export-Documents'] = str(len(sections))
+        response.headers['X-Export-Unavailable'] = str(
+            sum(section.get('method') == 'unavailable' for section in sections))
+        return response
+    except ValueError as validation_error:
+        return jsonify({'success': False, 'error': str(validation_error)}), 400
+    except Exception as e:
+        logger.error('First-page export failed: %s', e, exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+@limiter.limit(INTERACTIVE_READ_LIMIT)
+@files_bp.route('/api/files/extract-contacts/export', methods=['POST'])
+def export_selected_contacts():
+    """Extract unique email addresses and URLs from selected indexed files."""
+    import csv
+    from datetime import datetime
+    from io import BytesIO, StringIO
+    from flask import Response, send_file
+    from Api.services.document_intelligence import (
+        extract_contact_occurrences, spreadsheet_safe_text,
+    )
+
+    try:
+        file_ids = _selected_file_ids_from_request(max_files=200)
+        if request.is_json:
+            payload = request.get_json(silent=True) or {}
+            export_format = str(payload.get('format') or 'csv').lower()
+            requested_name = payload.get('filename')
+        else:
+            export_format = str(request.form.get('format') or 'csv').lower()
+            requested_name = request.form.get('filename')
+        if export_format not in {'csv', 'xlsx'}:
+            return jsonify({'success': False, 'error': 'format must be csv or xlsx'}), 400
+
+        placeholders = ','.join(['%s'] * len(file_ids))
+        rows = execute_query(
+            f"SELECT id, file_name FROM paths WHERE id IN ({placeholders})",
+            tuple(file_ids), fetch='all') or []
+        names = {int(row[0]): (row[1] or f'file_{row[0]}') for row in rows}
+        missing_ids = sorted(set(file_ids) - set(names))
+        if missing_ids:
+            return jsonify({
+                'success': False,
+                'error': 'Some selected file records no longer exist.',
+                'missing_file_ids': missing_ids,
+            }), 404
+        if not names:
+            return jsonify({'success': False, 'error': 'No selected files were found'}), 404
+
+        occurrences = []
+        unavailable_ids = []
+        for file_id in file_ids:
+            file_name = names[file_id]
+            try:
+                content = load_text_content(file_id)
+                if content is None:
+                    unavailable_ids.append(file_id)
+                    continue
+                occurrences.extend(extract_contact_occurrences(
+                    content, file_id=file_id, file_name=file_name))
+            except Exception as extraction_error:
+                logger.warning('Email/link extraction failed for file %s: %s',
+                               file_id, extraction_error)
+                unavailable_ids.append(file_id)
+        if unavailable_ids:
+            return jsonify({
+                'success': False,
+                'error': 'Some selected documents could not be read; no partial export was created.',
+                'unavailable_file_ids': unavailable_ids,
+            }), 422
+
+        columns = ('file_id', 'file_name', 'kind', 'value', 'occurrences', 'location', 'first_line', 'context')
+        safe_occurrences = [
+            {
+                column: spreadsheet_safe_text(item.get(column, ''))
+                if isinstance(item.get(column, ''), str) else item.get(column, '')
+                for column in columns
+            }
+            for item in occurrences
+        ]
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        fallback = f'extracted_emails_and_links_{stamp}'
+        if export_format == 'csv':
+            output = StringIO(newline='')
+            writer = csv.DictWriter(output, fieldnames=columns, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(safe_occurrences)
+            filename = _export_basename(requested_name, fallback, 'csv')
+            response = Response(output.getvalue().encode('utf-8-sig'), mimetype='text/csv; charset=utf-8')
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response.headers['X-Export-Entities'] = str(len(occurrences))
+            response.headers['X-Export-Documents'] = str(len(file_ids))
+            response.headers['X-Export-Empty'] = 'true' if not occurrences else 'false'
+            return response
+
+        try:
+            from openpyxl import Workbook
+        except ImportError:
+            return jsonify({'success': False, 'error': 'XLSX export is unavailable on this server'}), 503
+        workbook = Workbook(write_only=True)
+        sheet = workbook.create_sheet('Emails and links')
+        sheet.append(list(columns))
+        for item in safe_occurrences:
+            sheet.append([item.get(column, '') for column in columns])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        filename = _export_basename(requested_name, fallback, 'xlsx')
+        response = send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers['X-Export-Entities'] = str(len(occurrences))
+        response.headers['X-Export-Documents'] = str(len(file_ids))
+        response.headers['X-Export-Empty'] = 'true' if not occurrences else 'false'
+        return response
+    except ValueError as validation_error:
+        return jsonify({'success': False, 'error': str(validation_error)}), 400
+    except Exception as e:
+        logger.error('Email/link export failed: %s', e, exc_info=True)
+        return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
+
+
+@limiter.limit('10 per minute')
+@files_bp.route('/api/search/group-similar', methods=['POST'])
+def group_similar_search_results():
+    """Group the explicitly submitted current-page IDs by extracted-text similarity."""
+    from Api.services.document_intelligence import group_similar_documents, normalize_file_ids
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        file_ids = normalize_file_ids(payload.get('file_ids', []), max_files=100)
+        try:
+            threshold = float(payload.get('threshold', 0.32))
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'threshold must be numeric'}), 400
+        placeholders = ','.join(['%s'] * len(file_ids))
+        rows = execute_query(
+            f"SELECT id, file_name FROM paths WHERE id IN ({placeholders})",
+            tuple(file_ids), fetch='all') or []
+        names = {int(row[0]): (row[1] or f'file_{row[0]}') for row in rows}
+        documents = []
+        for file_id in file_ids:
+            if file_id not in names:
+                continue
+            documents.append({
+                'id': file_id,
+                'file_name': names[file_id],
+                'content': load_text_content(file_id) or '',
+            })
+        groups = group_similar_documents(documents, threshold=threshold)
+        return jsonify({
+            'success': True,
+            'scope': 'submitted_page',
+            'document_count': len(documents),
+            'groups': groups,
+        })
+    except ValueError as validation_error:
+        return jsonify({'success': False, 'error': str(validation_error)}), 400
+    except Exception as e:
+        logger.error('Similarity grouping failed: %s', e, exc_info=True)
         return client_error(e, subsystem='Api.blueprints.files', success_key='success', status=500)
 
 
@@ -1194,18 +1682,15 @@ def file_chart_data(file_id):
 
 @files_bp.route('/file/<int:file_id>/search')
 def file_search_all_pages(file_id):
-    """Search across all pages of a file.
+    """Locate every positive literal term/phrase in a file's full text.
 
-    The query is matched LITERALLY (regex metacharacters are escaped), which
-    is what the UI promises and what "precise location" means: a query like
-    "C++ (2026)" must find exactly that text - never throw a 500 on invalid
-    regex, never act as an unexpected wildcard. Whole-word optionally wraps
-    the escaped pattern in word boundaries.
-
-    Every match carries absolute character offsets plus a 1-based line
-    number, so any content display surface can jump straight to the exact
-    position (consistent precise location across interfaces).
+    The shared query parser supplies literal, escaped alternatives, so regex
+    metacharacters never become executable patterns and exclusions are not
+    treated as hits. This endpoint reports absolute character offsets plus a
+    1-based line number for precise in-document navigation.
     """
+    from Api.services.search_service import SearchService
+
     query = request.args.get('q', '').strip()
     case_sensitive = request.args.get('case_sensitive', 'false').lower() == 'true'
     whole_word = request.args.get('whole_word', 'false').lower() == 'true'
@@ -1228,13 +1713,29 @@ def file_search_all_pages(file_id):
         if not full_content:
             return jsonify({'error': 'No content found'}), 404
 
-        # Literal pattern: escape everything, optionally wrap in boundaries.
-        escaped = re.escape(query)
-        if whole_word:
-            escaped = r'\b' + escaped + r'\b'
-
-        flags = re.IGNORECASE if not case_sensitive else 0
-        regex = re.compile(escaped, flags)
+        # Only positive terms/phrases are navigable hits. The same matcher
+        # configuration used by search-result annotations preserves quotes,
+        # case-sensitivity and whole-word semantics here.
+        patterns = SearchService._query_match_patterns(
+            query, case_sensitive=case_sensitive, whole_word=whole_word)
+        if not patterns:
+            return jsonify({
+                'query': query,
+                'total_matches': 0,
+                'total_pages': 0,
+                'matches_by_page': {},
+                'matches': [],
+                'search_options': {
+                    'case_sensitive': case_sensitive,
+                    'whole_word': whole_word,
+                },
+            })
+        alternatives = '|'.join(
+            pattern.pattern for _value, pattern in
+            sorted(patterns, key=lambda item: len(item[0]), reverse=True)
+        )
+        flags = 0 if case_sensitive else re.IGNORECASE
+        regex = re.compile(alternatives, flags)
 
         # Precompute line-start offsets so each match can report its line.
         line_starts = [0]

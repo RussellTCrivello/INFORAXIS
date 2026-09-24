@@ -264,6 +264,8 @@ msgstr ""
 msgid "Analysis"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:53
+#: templates/Settings/translation_manager.html:60
 #: templates/Analysis/dashboard.html:421 templates/Search/search.html:7
 #: templates/Search/search.html:66 templates/Search/search.html:87
 #: templates/Search/search_advanced.html:43
@@ -908,6 +910,7 @@ msgstr ""
 msgid "Back"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:137
 #: templates/Category/categories_list.html:507
 #: templates/Category/category_words.html:393 templates/base.html:809
 #: templates/components/cursor_pagination.html:37
@@ -918,6 +921,7 @@ msgstr ""
 msgid "Next"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:133
 #: templates/Category/categories_list.html:506
 #: templates/Category/category_words.html:392 templates/base.html:810
 #: templates/components/cursor_pagination.html:28
@@ -948,6 +952,7 @@ msgstr ""
 msgid "Clear"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:75
 #: templates/Category/categories_list.html:39
 #: templates/Category/category_words.html:40
 #: templates/Keyword/keywords_list.html:24
@@ -3428,6 +3433,7 @@ msgstr ""
 msgid "No Content"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:106
 #: templates/Analysis/dashboard.html:590
 #: templates/Keyword/keywords_list.html:133
 #: templates/Keyword/keywords_list.html:262
@@ -4189,6 +4195,7 @@ msgstr ""
 msgid "Visible Categories"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:160
 #: templates/Category/categories_list.html:129
 #: templates/Category/categories_list.html:513
 #: templates/Category/category_words.html:133
@@ -4458,6 +4465,7 @@ msgstr ""
 msgid "Showing"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:159
 #: templates/Category/categories_list.html:515
 #: templates/Category/category_words.html:401
 #: templates/Keyword/keywords_list.html:218
@@ -11066,6 +11074,7 @@ msgstr ""
 msgid "NOT FOUND"
 msgstr ""
 
+#: templates/Settings/translation_manager.html:67
 #: templates/Operations/*:0
 msgid "All statuses"
 msgstr ""
@@ -11753,4 +11762,884 @@ msgstr ""
 
 #: templates/file/file_detail.html
 msgid "Keep it"
+msgstr ""
+
+#: templates/base.html
+msgid "INFORAXIS System"
+msgstr ""
+
+#: templates/base.html
+msgid "Primary navigation"
+msgstr ""
+
+#: templates/base.html
+msgid "Breadcrumb navigation"
+msgstr ""
+
+#: templates/base.html
+msgid "Open navigation menu"
+msgstr ""
+
+#: templates/base.html
+msgid "Close navigation menu"
+msgstr ""
+
+#: templates/base.html
+msgid "New password must be at least %(min)s characters."
+msgstr ""
+
+#: templates/base.html
+msgid "Minimum %(min)s characters."
+msgstr ""
+
+#: templates/Sources/sources_list.html
+msgid "Source name"
+msgstr ""
+
+#: templates/Sources/sources_list.html
+msgid "Job / role"
+msgstr ""
+
+#: templates/Sources/sources_list.html
+msgid "Job or role"
+msgstr ""
+
+#: templates/Sources/sources_list.html
+msgid "Importance (0–1)"
+msgstr ""
+
+#: templates/Side/sides_list.html
+msgid "Side name"
+msgstr ""
+
+#: templates/auth/users.html
+msgid "You"
+msgstr ""
+
+#: templates/auth/users.html
+msgid "Reset password"
+msgstr ""
+
+#: templates/auth/users.html
+msgid "No users found."
+msgstr ""
+
+#: templates/auth/users.html
+msgid "Username and password are required."
+msgstr ""
+
+#: templates/auth/users.html
+msgid "Failed to create user."
+msgstr ""
+
+#: templates/auth/users.html
+msgid "Failed to delete user."
+msgstr ""
+
+#: templates/auth/users.html
+msgid "Please try again."
+msgstr ""
+
+#: templates/auth/users.html
+msgid "User updated successfully."
+msgstr ""
+
+#: templates/auth/users.html
+msgid "User deleted successfully."
+msgstr ""
+
+#: templates/Keyword/keywords_list.html
+msgid "Select keyword"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Smart Category"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Remove filter"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Saved searches"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Saved"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Manage all"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Save this search so you can re-run it any time"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Open in new tab"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Quick preview (stays on this page)"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Close preview"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Loading preview…"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Preview is not available for this file."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Open the file in a new tab to view the full content."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "First page text"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "pages"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Saved search"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Name this search:"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Search saved. Find it under Saved searches."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not save this search."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Run a search first, then save it here."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Loading saved searches…"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not load saved searches."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "No saved searches yet. Run a search and press Save."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Saved search applied"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not run this saved search."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Saved search deleted"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not delete this saved search."
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Sort results by"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Sort order"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Clear recent searches"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "No search history"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Save current search"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "No saved searches"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Pagination"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Matching content:"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Line"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Similar"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Enter a name for this search:"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Delete this saved search?"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:147
+msgid "A translation cannot be blank."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:18
+msgid "Administration"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:49
+msgid "All screens"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:27
+msgid "Back to Settings"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:80
+msgid "Catalog strings"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:79
+msgid "Catalog summary"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:148
+msgid "Catalog unavailable"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:149
+msgid "Could not load translations."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:150
+msgid "Could not save translations."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:151
+msgid "Custom override"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:70 templates/Settings/translation_manager.html:83
+msgid "Custom overrides"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:152
+msgid "Discard unsaved changes?"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:153
+msgid "Fix blank translations and placeholders before saving."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:154
+msgid "Keep every named placeholder from the source text."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:155
+msgid "Keep named placeholders unchanged."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:90 templates/Settings/translation_manager.html:119 templates/Settings/translation_manager.html:156
+msgid "Loading translations…"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:69 templates/Settings/translation_manager.html:82 templates/Settings/translation_manager.html:158
+msgid "Missing"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:114
+msgid "No strings match these filters"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:161
+msgid "Reset to catalog translation"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:23
+msgid "Review and edit the localized text used throughout every screen."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:107
+msgid "Row actions"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:94 templates/Settings/translation_manager.html:126
+msgid "Save changes"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:33
+msgid "Saved edits take effect across server-rendered and browser-rendered screens. Reset a row to return to the checked-in catalog translation."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:47
+msgid "Screen or source file"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:89
+msgid "Screen translations"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:56
+msgid "Search source, translation, or file"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:58
+msgid "Search translations"
+msgstr ""
+
+#: Api/routes/experience_api.py:59 templates/Settings/translation_manager.html:104
+msgid "Source text"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:39
+msgid "Target language"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:68 templates/Settings/translation_manager.html:81 templates/Settings/translation_manager.html:162
+msgid "Translated"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:105
+msgid "Translation"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:3 templates/Settings/translation_manager.html:21
+msgid "Translation Management"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:130
+msgid "Translation catalog pages"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:37
+msgid "Translation filters"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:163
+msgid "Translation for"
+msgstr ""
+
+#: Api/routes/experience_api.py:73 templates/Settings/translation_manager.html:65
+msgid "Translation status"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:164
+msgid "Translations saved successfully."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:115
+msgid "Try another screen, status, or search phrase."
+msgstr ""
+
+#: templates/Settings/translation_manager.html:165
+msgid "Unassigned source"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:166
+msgid "Unsaved changes"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:167
+msgid "Will reset"
+msgstr ""
+
+#: templates/Settings/translation_manager.html:157
+msgid "matching strings"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Hide exact duplicates"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "File type (A-Z)"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Similarity ≥"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Minimum content similarity for grouping"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Choose the minimum content similarity for grouping"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Group similar files on this results page"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Group similar"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Open this search workspace in a separate window"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "New window"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Current results page"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "CSV"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Excel (XLSX)"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "All matching results"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "JSON"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (CSV)"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Matching filenames (Excel)"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Filtered corpus (CSV; ignores search terms)"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "selected across this search"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text for selected documents as a ZIP"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Text ZIP"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Download available original files for selected documents as a ZIP"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Originals ZIP"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Names CSV"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Names Excel"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for extracted text"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Text to folder"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Choose an existing folder or create a subfolder for original files"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Originals to folder"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one TXT file"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Read & export first pages (TXT)"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Read and combine the first-page text of selected documents into one Word file"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "First pages (DOCX)"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links CSV"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Emails & links XLSX"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Document review"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Search & review"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Select a result to review"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Close document review"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Open full record"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Download the original document and choose its filename"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Download original"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Native application access requires the local INFORAXIS companion"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Open in native app"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Opening a local folder requires the local INFORAXIS companion"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Open containing folder"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "This browser can preview and download the source file. Launching or editing it in a native app, or opening its operating-system folder, requires a trusted local INFORAXIS companion."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Document view"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Original preview"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Navigate keyword matches"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Previous match"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Next match"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Choose Review on a search result to inspect its content."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Copy selected passage"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "First-page preview"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Loading document context…"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not load this document context."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "No extracted text is available for this document."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "No query matches in extracted text."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Showing the first {count} matches."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "The original file is not available."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not load the original preview."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Choose a filename for this original document:"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Original download ready."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not download the original document."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Opening or editing a native file and opening its operating-system folder require the trusted local INFORAXIS companion. Use the browser preview or download here."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "The local INFORAXIS companion could not complete this action."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Select a passage in the document first."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Passage copied."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Updating duplicate filter…"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Grouping similar files on this results page…"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not group similar files."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Similarity groups apply to this results page only."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Similarity group {group}"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Files without extracted text are shown separately."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Name your export (leave blank for an automatic name):"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Name this download:"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Name this selected-file export (leave blank for an automatic name):"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export failed."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Selected-file export ready."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "First-page export ready."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "The export was saved, but some selected documents had no readable extracted text."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Email and hyperlink export ready."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "No email addresses or links were found; a headers-only report was saved."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Selected filename export ready."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Select one or more documents first."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Select no more than 200 documents for one export."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Folder export is not supported in this browser; downloading a ZIP instead."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not write to the selected folder."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Writing selected documents to the chosen folder…"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Documents saved to the chosen folder."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Some documents could not be saved to the chosen folder."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Optional: enter a new subfolder name, or leave blank to use the selected folder."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Allow pop-ups to open this search in a new window."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Download extracted text"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Extracted text download ready."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Review beside results"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Filename match"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Content match"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Filename and content match"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Metadata match"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "similarity"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Other results"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Clear groups"
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "At least two results are needed to group similar files."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Your browser cannot play this media."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "This format cannot be displayed inline."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not copy the selected passage."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Matching filename export ready."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "Could not export the matching filenames."
+msgstr ""
+
+#: templates/Search/search_advanced.html
+msgid "The filename export reached the 50,000-row limit; narrow the search to export everything."
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Open Search & Review workspace"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Name this export (leave blank for an automatic name):"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Case sensitive"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Match uppercase and lowercase exactly"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Whole word"
+msgstr ""
+
+#: templates/Search/search_enhanced.html
+msgid "Match complete words only"
+msgstr ""
+
+#: core/interfaces/registry.py
+msgid "Review and manage localized strings across every screen."
 msgstr ""

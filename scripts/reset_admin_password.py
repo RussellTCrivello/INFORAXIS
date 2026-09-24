@@ -74,7 +74,7 @@ def _load_env_file() -> None:
     try:
         from dotenv import load_dotenv
 
-        load_dotenv(env_file, override=False)
+        load_dotenv(env_file, override=False, interpolate=False)
     except ImportError:
         pass
     except Exception as exc:  # never block recovery on a config file issue

@@ -203,7 +203,15 @@ class AuthService:
     @staticmethod
     def _validate_password_strength(password: str) -> None:
         import os as _os
-        min_len = int(_os.environ.get("PASSWORD_MIN_LENGTH", "12"))
+        try:
+            min_len = int(_os.environ.get("PASSWORD_MIN_LENGTH", "12"))
+        except (TypeError, ValueError):
+            min_len = 12
+        # Match the installation wizard's supported range. Invalid persisted
+        # values must not silently weaken password enforcement or make the
+        # settings guidance disagree with the actual authentication policy.
+        if not 8 <= min_len <= 128:
+            min_len = 12
         if not isinstance(password, str) or len(password) < min_len:
             raise AuthError(f"Password must be at least {min_len} characters", "weak_password")
         if len(password) > 256:

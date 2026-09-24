@@ -53,7 +53,6 @@ function exportAsCSV(results, options) {
     const headers = [
         'File ID',
         'File Name',
-        'File Path',
         'File Type',
         'File Size (bytes)',
         'File Size (formatted)',
@@ -75,7 +74,6 @@ function exportAsCSV(results, options) {
         const row = [
             escapeCSV(result.id || ''),
             escapeCSV(result.file_name || ''),
-            escapeCSV(result.file_path || ''),
             escapeCSV(result.file_type || ''),
             result.file_size || 0,
             escapeCSV(formatFileSize(result.file_size || 0)),
@@ -122,7 +120,6 @@ function exportAsJSON(results, options) {
         results: results.map(result => ({
             id: result.id,
             file_name: result.file_name,
-            file_path: result.file_path,
             file_type: result.file_type,
             file_size: result.file_size,
             file_size_formatted: formatFileSize(result.file_size || 0),
@@ -209,7 +206,6 @@ export function printSearchResults(results, options = {}) {
             <tr>
                 <th>#</th>
                 <th>File Name</th>
-                <th>File Path</th>
                 <th>Type</th>
                 <th>Size</th>
                 <th>Date</th>
@@ -223,7 +219,6 @@ export function printSearchResults(results, options = {}) {
                 <tr>
                     <td>${index + 1}</td>
                     <td>${escapeHtml(result.file_name || 'N/A')}</td>
-                    <td>${escapeHtml(result.file_path || 'N/A')}</td>
                     <td>${escapeHtml(result.file_type || 'N/A')}</td>
                     <td>${formatFileSize(result.file_size || 0)}</td>
                     <td>${result.file_date ? new Date(result.file_date).toLocaleDateString() : 'N/A'}</td>

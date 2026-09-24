@@ -12,12 +12,6 @@ function getCurrentEndpoint() {
     return endpoint;
 }
 
-// Get home URL from data attribute
-function getHomeUrl() {
-    const body = document.body;
-    return body.getAttribute('data-home-url') || '/';
-}
-
 // Initialize base page functionality
 document.addEventListener('DOMContentLoaded', function() {
     // Mobile menu toggle with backdrop
@@ -25,36 +19,42 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
     const sidebarBackdrop = document.getElementById('sidebarBackdrop');
     
+    function setSidebarOpen(open, returnFocus = false) {
+        if (!sidebar) return;
+        const desktop = window.innerWidth >= 992;
+        const visible = desktop || open;
+        sidebar.classList.toggle('show', !desktop && open);
+        sidebar.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        sidebar.toggleAttribute('inert', !visible);
+        if (sidebarBackdrop) sidebarBackdrop.classList.toggle('show', !desktop && open);
+        if (menuToggle) {
+            const drawerOpen = !desktop && open;
+            menuToggle.setAttribute('aria-expanded', drawerOpen ? 'true' : 'false');
+            const actionLabel = drawerOpen ? menuToggle.dataset.closeLabel : menuToggle.dataset.openLabel;
+            if (actionLabel) menuToggle.setAttribute('aria-label', actionLabel);
+        }
+        document.body.style.overflow = !desktop && open ? 'hidden' : '';
+        if (returnFocus && !desktop && menuToggle) menuToggle.focus();
+    }
+
     function toggleSidebar() {
-        if (sidebar) {
-            const isOpen = sidebar.classList.contains('show');
-            if (isOpen) {
-                sidebar.classList.remove('show');
-                if (sidebarBackdrop) {
-                    sidebarBackdrop.classList.remove('show');
-                }
-                // Prevent body scroll when sidebar is open
-                document.body.style.overflow = '';
-            } else {
-                sidebar.classList.add('show');
-                if (sidebarBackdrop) {
-                    sidebarBackdrop.classList.add('show');
-                }
-                // Prevent body scroll when sidebar is open
-                document.body.style.overflow = 'hidden';
-            }
+        if (!sidebar) return;
+        const isOpen = sidebar.classList.contains('show');
+        setSidebarOpen(!isOpen);
+        if (!isOpen && window.innerWidth < 992) {
+            sidebar.querySelector('.sidebar-nav-link')?.focus();
+        } else if (isOpen && menuToggle) {
+            menuToggle.focus();
         }
     }
-    
-    function closeSidebar() {
-        if (sidebar) {
-            sidebar.classList.remove('show');
-            if (sidebarBackdrop) {
-                sidebarBackdrop.classList.remove('show');
-            }
-            document.body.style.overflow = '';
-        }
+
+    function closeSidebar(returnFocus = true) {
+        setSidebarOpen(false, returnFocus);
     }
+
+    // The sidebar is persistent navigation on desktop and a hidden drawer on
+    // smaller screens. Keep the accessibility tree in sync with that layout.
+    setSidebarOpen(sidebar && sidebar.classList.contains('show'));
     
     // Toggle sidebar on menu button click
     if (menuToggle && sidebar) {
@@ -89,8 +89,9 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('resize', function() {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(function() {
-            if (window.innerWidth >= 992 && sidebar) {
-                closeSidebar();
+            if (sidebar) {
+                const shouldRemainOpen = window.innerWidth < 992 && sidebar.classList.contains('show');
+                setSidebarOpen(shouldRemainOpen);
             }
         }, 250);
     });
@@ -266,102 +267,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
-    // Navigation Bar Functionality
-    const navBackBtn = document.getElementById('navBackBtn');
-    const navForwardBtn = document.getElementById('navForwardBtn');
-    const navRefreshBtn = document.getElementById('navRefreshBtn');
-    
-    // Track navigation state
-    let canGoBack = false;
-    let canGoForward = false;
-    
-    // Check if we can navigate back/forward
-    function updateNavigationButtons() {
-        // Check if we can go back (if history.length > 1, we likely can)
-        canGoBack = window.history.length > 1;
-        canGoForward = false; // We can't reliably detect forward state
-        
-        // Try to detect if we came from another page
-        if (document.referrer && document.referrer !== window.location.href) {
-            canGoBack = true;
-        }
-    }
-    
-    // Enhanced back button with fallback
-    if (navBackBtn) {
-        navBackBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            if (document.referrer && document.referrer !== window.location.href) {
-                window.history.back();
-            } else {
-                // Fallback: go to home page
-                window.location.href = getHomeUrl();
-            }
-        });
-    }
-    
-    // Enhanced forward button
-    if (navForwardBtn) {
-        navForwardBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.history.forward();
-        });
-    }
-    
-    // Enhanced refresh button with confirmation on forms
-    if (navRefreshBtn) {
-        navRefreshBtn.addEventListener('click', function(e) {
-            // Check if there are unsaved form changes (basic check)
-            const forms = document.querySelectorAll('form');
-            let hasChanges = false;
-            
-            forms.forEach(form => {
-                if (form.querySelector('input:not([type="hidden"]):not([readonly]), textarea:not([readonly]), select:not([readonly])')) {
-                    hasChanges = true;
-                }
-            });
-            
-            if (hasChanges) {
-                // Get refresh confirmation message from translations
-                const refreshConfirmMsg = window.appTranslations?.['Are you sure you want to refresh? Unsaved changes may be lost.'] || 
-                                         'Are you sure you want to refresh? Unsaved changes may be lost.';
-                if (!confirm(refreshConfirmMsg)) {
-                    return;
-                }
-            }
-            
-            location.reload();
-        });
-    }
-    
-    // Update on page load
-    updateNavigationButtons();
-    
-    // Update on popstate (back/forward navigation) - debounced
-    let popstateTimeout;
-    window.addEventListener('popstate', function() {
-        clearTimeout(popstateTimeout);
-        popstateTimeout = setTimeout(updateNavigationButtons, 100);
-    });
-    
-    // Keyboard shortcuts for navigation
-    document.addEventListener('keydown', function(e) {
-        // Alt+Left Arrow: Go back
-        if (e.altKey && e.key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
-            e.preventDefault();
-            if (navBackBtn) navBackBtn.click();
-        }
-        // Alt+Right Arrow: Go forward
-        if (e.altKey && e.key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
-            e.preventDefault();
-            if (navForwardBtn) navForwardBtn.click();
-        }
-        // F5 or Ctrl+R: Refresh (with confirmation if needed)
-        if ((e.key === 'F5') || (e.ctrlKey && e.key === 'r')) {
-            // Allow default behavior, but our refresh button handler will catch it if needed
-        }
-    });
     
     // Language Switcher is now handled by LanguageSwitcher module
     // The module provides seamless AJAX-based language switching

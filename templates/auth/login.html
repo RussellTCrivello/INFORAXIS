@@ -282,7 +282,7 @@
                     <input type="password" class="form-control" id="password" name="password"
                            autocomplete="current-password" required placeholder="{{ _('Your password') }}">
                     <span class="field-trail">
-                        <button type="button" class="pw-toggle" data-target="password" aria-label="{{ _('Show password') }}" tabindex="-1"><i class="bi bi-eye"></i></button>
+                        <button type="button" class="pw-toggle" data-target="password" aria-label="{{ _('Show password') }}" title="{{ _('Show password') }}" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button>
                     </span>
                 </div>
             </div>
@@ -324,14 +324,20 @@
         return (typeof window.t === 'function') ? window.t(key) : key;
     }
 
-    // Password visibility toggle (presentation only)
+    // Password visibility toggle (accessible and stateful)
     document.querySelectorAll('.pw-toggle').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var input = document.getElementById(btn.dataset.target);
             var show = input.type === 'password';
             input.type = show ? 'text' : 'password';
-            btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
-            btn.setAttribute('aria-label', show ? tr('Hide password') : tr('Show password'));
+            var label = show ? tr('Hide password') : tr('Show password');
+            var icon = document.createElement('i');
+            icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+            icon.setAttribute('aria-hidden', 'true');
+            btn.replaceChildren(icon);
+            btn.setAttribute('aria-label', label);
+            btn.setAttribute('title', label);
+            btn.setAttribute('aria-pressed', show ? 'true' : 'false');
         });
     });
 

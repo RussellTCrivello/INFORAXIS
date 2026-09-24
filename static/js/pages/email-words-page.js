@@ -6,24 +6,55 @@
 // Global state for sorting
 let currentSortBy = 'word';
 let currentSortOrder = 'asc';
+let emailFilesRequestController = null;
 
 function initializeEmailWordsPage() {
     // Load filters from JSON embedded in the page (template-safe)
     const filtersDataEl = document.getElementById('emailWordsFiltersData');
     if (filtersDataEl && filtersDataEl.textContent) {
         try {
-            window.emailWordsFilters = JSON.parse(filtersDataEl.textContent);
+            const pageData = JSON.parse(filtersDataEl.textContent);
+            window.emailWordsFilters = pageData.filters || {};
+            window.emailWordsPageTranslations = pageData.translations || {};
         } catch (e) {
             window.emailWordsFilters = window.emailWordsFilters || {};
+            window.emailWordsPageTranslations = window.emailWordsPageTranslations || {};
         }
     } else {
         window.emailWordsFilters = window.emailWordsFilters || {};
+        window.emailWordsPageTranslations = window.emailWordsPageTranslations || {};
     }
-    
+
+    const emailTableBody = document.getElementById('emailTableBody');
+    emailTableBody?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-email-action]');
+        if (!button || !emailTableBody.contains(button)) return;
+        const email = button.dataset.email || '';
+        switch (button.dataset.emailAction) {
+            case 'show-files': showEmailFiles(email); break;
+            case 'copy': copyEmail(email, button); break;
+            case 'search': searchInFiles(email); break;
+        }
+    });
+
+    document.getElementById('copyEmailWordsButton')?.addEventListener('click', (event) => {
+        copyToClipboard(event.currentTarget);
+    });
+    document.getElementById('exportEmailWordsButton')?.addEventListener('click', (event) => {
+        exportData(event.currentTarget);
+    });
+    document.getElementById('perPageSelect')?.addEventListener('change', (event) => {
+        changePerPage(event.currentTarget.value);
+    });
+    document.getElementById('emailFilesModal')?.addEventListener('hidden.bs.modal', () => {
+        emailFilesRequestController?.abort();
+    });
+
     // Get current sort parameters from URL
     const urlParams = new URLSearchParams(window.location.search);
-    currentSortBy = urlParams.get('sort_by') || 'word';
-    currentSortOrder = urlParams.get('sort_order') || 'asc';
+    const requestedSort = urlParams.get('sort_by');
+    currentSortBy = ['word', 'usage_count'].includes(requestedSort) ? requestedSort : 'word';
+    currentSortOrder = urlParams.get('sort_order') === 'desc' ? 'desc' : 'asc';
     updateSortIcons();
 
     // Wire domain dropdown -> domain input, then submit
@@ -50,25 +81,9 @@ function initializeEmailWordsPage() {
         });
     });
     
-    // Add click handlers for sortable columns
-    document.querySelectorAll('.sortable').forEach((th) => {
-        th.style.cursor = 'pointer';
-        th.addEventListener('click', function() {
-            const sortColumn = this.getAttribute('data-sort');
-            sortTable(sortColumn);
-        });
-    });
-    
-    // Add hover effect for sortable columns
-    document.querySelectorAll('.sortable').forEach((th) => {
-        th.addEventListener('mouseenter', function() {
-            this.style.backgroundColor = '#f8f9fa';
-        });
-        th.addEventListener('mouseleave', function() {
-            if (!this.querySelector('.sort-icon.text-primary')) {
-                this.style.backgroundColor = '';
-            }
-        });
+    // Native buttons preserve keyboard and assistive-technology support for sorting.
+    document.querySelectorAll('button.sortable[data-sort]').forEach((button) => {
+        button.addEventListener('click', () => sortTable(button.dataset.sort));
     });
     
     // Update totals display immediately
@@ -88,6 +103,7 @@ function updateTotalsDisplay() {
 
 // Sort table by column
 function sortTable(column) {
+    if (!['word', 'usage_count'].includes(column)) return;
     if (currentSortBy === column) {
         // Toggle sort order
         currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
@@ -107,23 +123,30 @@ function sortTable(column) {
 
 // Update sort icons
 function updateSortIcons() {
-    document.querySelectorAll('.sortable').forEach((th) => {
-        const column = th.getAttribute('data-sort');
-        const icon = th.querySelector('.sort-icon');
+    document.querySelectorAll('button.sortable[data-sort]').forEach((button) => {
+        const column = button.dataset.sort;
+        const icon = button.querySelector('.sort-icon');
+        const header = button.closest('th');
+        const isCurrentSort = currentSortBy === column;
+        if (header) {
+            header.setAttribute('aria-sort', isCurrentSort
+                ? (currentSortOrder === 'asc' ? 'ascending' : 'descending')
+                : 'none');
+        }
         if (icon) {
-            if (currentSortBy === column) {
-                icon.className = `bi bi-arrow-${currentSortOrder === 'asc' ? 'up' : 'down'} ms-1 sort-icon text-primary`;
-            } else {
-                icon.className = 'bi bi-arrow-down-up ms-1 sort-icon text-muted';
-            }
+            icon.className = isCurrentSort
+                ? `bi bi-arrow-${currentSortOrder === 'asc' ? 'up' : 'down'} ms-1 sort-icon text-primary`
+                : 'bi bi-arrow-down-up ms-1 sort-icon text-muted';
         }
     });
 }
 
 // Change per page
 function changePerPage(value) {
+    const allowedPageSizes = new Set(['25', '50', '100', '200']);
+    if (!allowedPageSizes.has(String(value))) return;
     const url = new URL(window.location.href);
-    url.searchParams.set('per_page', value);
+    url.searchParams.set('per_page', String(value));
     url.searchParams.set('page', '1'); // Reset to first page
     window.location.href = url.toString();
 }
@@ -134,65 +157,141 @@ function changePerPage(value) {
 
 function clearSearch() {
     const searchInput = document.getElementById('searchInput');
-    if (searchInput) searchInput.value = '';
+    if (!searchInput) return;
+    searchInput.value = '';
+    searchInput.form?.requestSubmit();
 }
 
-function copyEmail(email) {
-    navigator.clipboard.writeText(email).then(() => {
-        // Show temporary success message
-        const btn = event.target.closest('button');
+async function copyEmail(email, btn = null) {
+    try {
+        await navigator.clipboard.writeText(email);
+        if (!btn) return;
         const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-check"></i>';
+        btn.innerHTML = '<i class="bi bi-check" aria-hidden="true"></i>';
         btn.classList.remove('btn-outline-primary');
         btn.classList.add('btn-success');
-        
+        btn.setAttribute('aria-label', window.emailWordsPageTranslations?.copied || 'Content copied to clipboard!');
         setTimeout(() => {
             btn.innerHTML = originalHTML;
             btn.classList.remove('btn-success');
             btn.classList.add('btn-outline-primary');
+            btn.setAttribute('aria-label', btn.title || 'Copy');
         }, 1000);
-    });
+    } catch (error) {
+        console.error('Could not copy email address:', error);
+        const message = window.emailWordsPageTranslations?.copyFailed || 'Failed to copy content to clipboard';
+        showToast(message, 'error');
+    }
 }
 
-async function copyToClipboard() {
-    // Fetch ALL filtered emails from database
-    try {
-        const button = event.target.closest('button');
-        const originalHTML = button.innerHTML;
-        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading...';
-        button.disabled = true;
+async function copyToClipboard(button = null) {
+    const targetButton = button?.closest?.('button') || document.getElementById('copyEmailWordsButton');
+    if (!targetButton || targetButton.disabled) return;
+    const originalChildren = Array.from(targetButton.childNodes, node => node.cloneNode(true));
+    const translations = window.emailWordsPageTranslations || {};
+    targetButton.disabled = true;
+    targetButton.setAttribute('aria-busy', 'true');
+    setButtonState(targetButton, 'bi-hourglass-split', translations.loading || 'Loading...');
 
+    try {
         const params = new URLSearchParams(window.emailWordsFilters || {});
         const response = await fetch(`/api/email-words/all?${params.toString()}`);
         const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to fetch emails');
+        if (!response.ok || !data.success || !Array.isArray(data.emails)) {
+            throw new Error(data.error || 'Email export request failed');
         }
-        
-        const emails = data.emails.map(item => item.email).join('\n');
-        
+        if (!navigator.clipboard?.writeText) {
+            throw new Error('Clipboard access is unavailable');
+        }
+
+        const emails = data.emails
+            .map(item => item && item.email != null ? String(item.email) : '')
+            .filter(Boolean)
+            .join('\n');
         await navigator.clipboard.writeText(emails);
-        
-        button.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
-        button.classList.remove('btn-outline-secondary');
-        button.classList.add('btn-success');
-        
-        setTimeout(() => {
-            button.innerHTML = originalHTML;
-            button.classList.remove('btn-success');
-            button.classList.add('btn-outline-secondary');
-            button.disabled = false;
-        }, 2000);
-        
-        // Show toast notification
-        showToast(`Copied ${data.total} email addresses to clipboard!`, 'success');
+        setButtonState(targetButton, 'bi-check-circle');
+        showToast(translations.copied || 'Content copied to clipboard!', 'success');
     } catch (error) {
-        console.error('Error copying emails:', error);
-        alert(`Error copying emails: ${error.message}`);
-        const button = event.target.closest('button');
-        button.innerHTML = '<i class="bi bi-clipboard"></i> Copy All';
-        button.disabled = false;
+        console.error('Error copying email addresses:', error);
+        setButtonState(targetButton, 'bi-exclamation-circle');
+        showToast(translations.copyFailed || 'Failed to copy content to clipboard', 'error');
+    } finally {
+        window.setTimeout(() => {
+            if (!targetButton.isConnected) return;
+            targetButton.replaceChildren(...originalChildren);
+            targetButton.disabled = false;
+            targetButton.removeAttribute('aria-busy');
+        }, 1200);
+    }
+}
+
+function csvCell(value) {
+    let text = String(value == null ? '' : value);
+    // Prefix spreadsheet formulas with an apostrophe before RFC-style quoting.
+    if (/^[\s\u0000-\u001F]*[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+}
+
+async function exportData(button = null) {
+    const targetButton = button?.closest?.('button') || document.getElementById('exportEmailWordsButton');
+    if (!targetButton || targetButton.disabled) return;
+    const originalChildren = Array.from(targetButton.childNodes, node => node.cloneNode(true));
+    const translations = window.emailWordsPageTranslations || {};
+    targetButton.disabled = true;
+    targetButton.setAttribute('aria-busy', 'true');
+    setButtonState(targetButton, 'bi-hourglass-split', translations.loading || 'Loading...');
+
+    try {
+        const params = new URLSearchParams(window.emailWordsFilters || {});
+        const response = await fetch(`/api/email-words/all?${params.toString()}`);
+        const data = await response.json();
+        if (!response.ok || !data.success || !Array.isArray(data.emails)) {
+            throw new Error(data.error || 'Email export request failed');
+        }
+
+        const csvRows = [
+            [translations.emailAddress || 'Email Address', translations.usageCount || 'Usage Count'].map(csvCell).join(','),
+            ...data.emails.map(item => [
+                item?.email,
+                Number(item?.usage_count) || 0
+            ].map(csvCell).join(','))
+        ];
+        const blob = new Blob([`\uFEFF${csvRows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+        const objectUrl = window.URL.createObjectURL(blob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = objectUrl;
+        downloadLink.download = `email_words_export_${new Date().toISOString().slice(0, 10)}.csv`;
+        downloadLink.hidden = true;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+
+        setButtonState(targetButton, 'bi-check-circle');
+        showToast(translations.exportDone || 'Export completed successfully', 'success');
+    } catch (error) {
+        console.error('Error exporting email addresses:', error);
+        setButtonState(targetButton, 'bi-exclamation-circle');
+        showToast(translations.exportFailed || 'Error exporting data', 'error');
+    } finally {
+        window.setTimeout(() => {
+            if (!targetButton.isConnected) return;
+            targetButton.replaceChildren(...originalChildren);
+            targetButton.disabled = false;
+            targetButton.removeAttribute('aria-busy');
+        }, 1200);
+    }
+}
+
+function setButtonState(button, iconClass, label = '') {
+    const icon = document.createElement('i');
+    icon.className = `bi ${iconClass}`;
+    icon.setAttribute('aria-hidden', 'true');
+    if (label) {
+        const text = document.createTextNode(` ${label}`);
+        button.replaceChildren(icon, text);
+    } else {
+        button.replaceChildren(icon);
     }
 }
 
@@ -203,34 +302,42 @@ function searchInFiles(email) {
 
 // Show files containing an email address in a modal
 async function showEmailFiles(email) {
-    // Get Bootstrap modal instance (works with both Bootstrap 4 and 5)
     const modalElement = document.getElementById('emailFilesModal');
+    const modalBody = document.getElementById('emailFilesModalBody');
+    const modalTitle = document.getElementById('modalEmailAddress');
+    const modalFileCount = document.getElementById('modalFileCount');
+    if (!modalElement || !modalBody || !modalTitle || !modalFileCount) return;
+
+    // Reuse the Bootstrap modal instance when available.
     let modal;
     if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        modal = new bootstrap.Modal(modalElement);
+        modal = typeof bootstrap.Modal.getOrCreateInstance === 'function'
+            ? bootstrap.Modal.getOrCreateInstance(modalElement)
+            : new bootstrap.Modal(modalElement);
     } else if (typeof $ !== 'undefined' && $.fn.modal) {
-        // Fallback to jQuery Bootstrap modal
         modal = $(modalElement);
     } else {
-        // Fallback: show modal manually
         modalElement.style.display = 'block';
         modalElement.classList.add('show');
         document.body.classList.add('modal-open');
     }
-    const modalBody = document.getElementById('emailFilesModalBody');
-    const modalTitle = document.getElementById('modalEmailAddress');
-    const modalFileCount = document.getElementById('modalFileCount');
-    
-    // Set email in title
+
+    // Email is untrusted content; use a text node, not HTML.
     modalTitle.textContent = email;
-    
+    modalFileCount.textContent = '0';
+
+    emailFilesRequestController?.abort();
+    const requestController = new AbortController();
+    emailFilesRequestController = requestController;
+
     // Show loading state
+    const translations = window.emailWordsPageTranslations || {};
     modalBody.innerHTML = `
         <div class="text-center py-4">
             <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
+                <span class="visually-hidden">${escapeHtml(translations.loading || 'Loading...')}</span>
             </div>
-            <p class="mt-2">Loading files...</p>
+            <p class="mt-2">${escapeHtml(translations.loadingFiles || 'Loading files...')}</p>
         </div>
     `;
     
@@ -248,113 +355,130 @@ async function showEmailFiles(email) {
     
     try {
         // Fetch files containing this email
-        const response = await fetch(`/api/email-words/files?email=${encodeURIComponent(email)}&limit=500`);
+        const response = await fetch(`/api/email-words/files?email=${encodeURIComponent(email)}&limit=500`, {
+            signal: requestController.signal
+        });
         const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to fetch files');
+        if (requestController.signal.aborted) return;
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || translations.loadingError || 'Error loading files');
         }
-        
-        // Update file count
-        modalFileCount.textContent = data.total || data.files.length;
-        
-        if (data.files && data.files.length > 0) {
-            // Render files list
-            renderEmailFiles(data.files, email);
+        const files = Array.isArray(data.files) ? data.files.filter((file) => {
+            const id = Number(file?.id);
+            return Number.isSafeInteger(id) && id > 0;
+        }) : [];
+
+        // The API total can exceed its 500-item display limit.
+        const total = Number(data.total);
+        modalFileCount.textContent = Number.isSafeInteger(total) && total >= 0 ? total : files.length;
+
+        if (files.length > 0) {
+            renderEmailFiles(files, email);
         } else {
             modalBody.innerHTML = `
                 <div class="text-center py-5">
-                    <i class="bi bi-inbox display-4 text-muted d-block mb-3"></i>
-                    <h5>No Files Found</h5>
-                    <p class="text-muted">No files contain this email address.</p>
+                    <i class="bi bi-inbox display-4 text-muted d-block mb-3" aria-hidden="true"></i>
+                    <h5>${escapeHtml(translations.noFilesFound || 'No Files Found')}</h5>
                 </div>
             `;
         }
     } catch (error) {
+        if (error.name === 'AbortError') return;
         console.error('Error loading email files:', error);
         modalBody.innerHTML = `
             <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>Error loading files:</strong> ${error.message}
+                <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>
+                <strong>${escapeHtml(translations.loadingError || 'Error loading files')}:</strong>
+                ${escapeHtml(error.message || translations.unknownError || 'Unknown error')}
             </div>
         `;
+    } finally {
+        if (emailFilesRequestController === requestController) {
+            emailFilesRequestController = null;
+        }
     }
 }
 
-// Render files list in modal
+// Render files list in modal. All untrusted file values are encoded for HTML,
+// and the file ID is coerced to a positive integer before it becomes a URL.
 function renderEmailFiles(files, email) {
     const modalBody = document.getElementById('emailFilesModalBody');
-    
-    let html = `
-        <div class="mb-3 p-3 bg-light rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <strong>${files.length}</strong> ${files.length === 1 ? 'file' : 'files'} containing 
-                    <code>${email}</code>
-                </div>
-            </div>
-        </div>
-        <div class="list-group">
-    `;
-    
-    files.forEach((file, index) => {
-        const fileIcon = getFileIcon(file.type);
-        const fileSize = formatFileSize(file.size);
-        const fileDate = file.date ? new Date(file.date).toLocaleDateString() : 'N/A';
-        const statusBadge = file.status === 'Read' 
-            ? '<span class="badge bg-success">Read</span>' 
-            : '<span class="badge bg-secondary">Unread</span>';
-        
-        html += `
-            <div class="list-group-item list-group-item-action" 
-                 onclick="window.open('/file/${file.id}', '_blank')"
-                 style="cursor: pointer;">
+    if (!modalBody) return;
+    const translations = window.emailWordsPageTranslations || {};
+    const rows = [];
+
+    (Array.isArray(files) ? files : []).forEach((file) => {
+        const fileId = Number(file?.id);
+        if (!Number.isSafeInteger(fileId) || fileId < 1) return;
+        const unknownLabel = translations.unknown || 'Unknown';
+        const notAvailableLabel = translations.notAvailable || 'N/A';
+        const fileType = String(file.type || unknownLabel);
+        const fileName = String(file.name || unknownLabel);
+        const rawFileSize = Number(file.size);
+        const fileSize = formatFileSize(Number.isFinite(rawFileSize) ? Math.max(0, rawFileSize) : 0);
+        const fileDate = file.date ? new Date(file.date).toLocaleDateString() : notAvailableLabel;
+        const rawWordCount = Number(file.word_count);
+        const wordCount = Number.isSafeInteger(rawWordCount) && rawWordCount > 0 ? rawWordCount : 0;
+        const fileStatus = String(file.status || '').toLowerCase();
+        const statusBadge = fileStatus === 'read'
+            ? `<span class="badge bg-success">${escapeHtml(translations.read || 'Read')}</span>`
+            : fileStatus === 'unread'
+                ? `<span class="badge bg-secondary">${escapeHtml(translations.unread || 'Unread')}</span>`
+                : `<span class="badge bg-light text-muted">${escapeHtml(unknownLabel)}</span>`;
+
+        rows.push(`
+            <a class="list-group-item list-group-item-action"
+               href="/file/${fileId}" target="_blank" rel="noopener noreferrer">
                 <div class="d-flex w-100 justify-content-between align-items-start">
                     <div class="flex-grow-1">
                         <div class="d-flex align-items-center mb-2">
-                            ${fileIcon}
-                            <h6 class="mb-0 ms-2">${escapeHtml(file.name)}</h6>
+                            ${getFileIcon(fileType)}
+                            <h6 class="mb-0 ms-2">${escapeHtml(fileName)}</h6>
                             ${statusBadge}
                         </div>
                         <div class="small text-muted mb-1">
-                            <i class="bi bi-folder"></i> ${escapeHtml(file.path || 'N/A')}
+                            <i class="bi bi-folder" aria-hidden="true"></i> ${escapeHtml(file.path || notAvailableLabel)}
                         </div>
                         <div class="small">
                             <span class="badge bg-info me-2">
-                                <i class="bi bi-file-earmark"></i> ${file.type.toUpperCase()}
+                                <i class="bi bi-file-earmark" aria-hidden="true"></i> ${escapeHtml(fileType.toUpperCase())}
                             </span>
                             <span class="badge bg-secondary me-2">
-                                <i class="bi bi-hdd"></i> ${fileSize}
+                                <i class="bi bi-hdd" aria-hidden="true"></i> ${escapeHtml(fileSize)}
                             </span>
                             <span class="badge bg-secondary me-2">
-                                <i class="bi bi-calendar"></i> ${fileDate}
+                                <i class="bi bi-calendar" aria-hidden="true"></i> ${escapeHtml(fileDate)}
                             </span>
-                            ${file.word_count ? `<span class="badge bg-primary">
-                                <i class="bi bi-envelope"></i> ${file.word_count} occurrence${file.word_count !== 1 ? 's' : ''}
+                            ${wordCount > 0 ? `<span class="badge bg-primary">
+                                <i class="bi bi-envelope" aria-hidden="true"></i> ${escapeHtml(translations.usageCount || 'Usage Count')}: ${wordCount}
                             </span>` : ''}
                         </div>
                         ${file.source || file.side ? `
                             <div class="small mt-1">
-                                ${file.source ? `<span class="badge bg-outline-primary me-1">Source: ${escapeHtml(file.source)}</span>` : ''}
-                                ${file.side ? `<span class="badge bg-outline-secondary">Side: ${escapeHtml(file.side)}</span>` : ''}
+                                ${file.source ? `<span class="badge bg-outline-primary me-1">${escapeHtml(translations.sourcePrefix || 'Source:')} ${escapeHtml(file.source)}</span>` : ''}
+                                ${file.side ? `<span class="badge bg-outline-secondary">${escapeHtml(translations.sidePrefix || 'Side:')} ${escapeHtml(file.side)}</span>` : ''}
                             </div>
                         ` : ''}
                     </div>
-                    <div class="ms-3">
-                        <button class="btn btn-sm btn-outline-primary" 
-                                onclick="event.stopPropagation(); window.open('/file/${file.id}', '_blank')"
-                                title="View file">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                    </div>
+                    <span class="ms-3 text-primary" aria-hidden="true">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </span>
+                </div>
+            </a>
+        `);
+    });
+
+    modalBody.innerHTML = `
+        <div class="mb-3 p-3 bg-light rounded">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>${rows.length}</strong> ${escapeHtml(translations.filesFound || 'files found')}
                 </div>
             </div>
-        `;
-    });
-    
-    html += `</div>`;
-    
-    modalBody.innerHTML = html;
+        </div>
+        <div class="list-group">${rows.join('')}</div>
+    `;
 }
 
 // Helper functions
@@ -376,171 +500,57 @@ function getFileIcon(fileType) {
 }
 
 function formatFileSize(bytes) {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    const size = Number(bytes);
+    if (!Number.isFinite(size) || size <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const unitIndex = Math.min(Math.floor(Math.log(size) / Math.log(1024)), units.length - 1);
+    const value = Math.round(size / Math.pow(1024, unitIndex) * 100) / 100;
+    return `${value} ${units[unitIndex]}`;
 }
 
 function escapeHtml(text) {
-    if (!text) return '';
+    if (text === null || text === undefined) return '';
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text);
     return div.innerHTML;
 }
 
-async function exportData() {
-    // Fetch ALL filtered emails from database for export
-    try {
-        const button = event.target.closest('button');
-        const originalHTML = button.innerHTML;
-        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Exporting...';
-        button.disabled = true;
-
-        const params = new URLSearchParams(window.emailWordsFilters || {});
-        const response = await fetch(`/api/email-words/all?${params.toString()}`);
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to fetch emails');
-        }
-        
-        // Create CSV content with usage counts
-        let csvContent = "Email Address,Usage Count,Files\n";
-        data.emails.forEach((item, index) => {
-            csvContent += `"${item.email}",${item.usage_count},${item.usage_count}\n`;
-        });
-        
-        // Create and download file
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `email_words_export_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        
-        button.innerHTML = '<i class="bi bi-check-circle"></i> Exported!';
-        button.classList.remove('btn-outline-primary');
-        button.classList.add('btn-success');
-        
-        setTimeout(() => {
-            button.innerHTML = originalHTML;
-            button.classList.remove('btn-success');
-            button.classList.add('btn-outline-primary');
-            button.disabled = false;
-        }, 2000);
-        
-        // Show toast notification
-        showToast(`Exported ${data.total} email addresses to CSV!`, 'success');
-    } catch (error) {
-        console.error('Error exporting emails:', error);
-        alert(`Error exporting emails: ${error.message}`);
-        const button = event.target.closest('button');
-        button.innerHTML = '<i class="bi bi-download"></i> Export CSV';
-        button.disabled = false;
-    }
-}
-
-// Toast notification helper
+// Toast notification helper: build nodes explicitly so messages stay text-only.
 function showToast(message, type = 'info') {
     const toastContainer = document.getElementById('toastContainer') || createToastContainer();
+    const isError = type === 'error';
+    const variant = isError ? 'danger' : (type === 'success' ? 'success' : 'info');
     const toast = document.createElement('div');
-    toast.className = `alert alert-${type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
-    toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    toast.innerHTML = `
-        <i class="bi bi-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
+    toast.className = `alert alert-${variant} alert-dismissible fade show shadow`;
+    toast.setAttribute('role', isError ? 'alert' : 'status');
+    toast.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+
+    const icon = document.createElement('i');
+    icon.className = `bi ${isError ? 'bi-exclamation-triangle' : (type === 'success' ? 'bi-check-circle' : 'bi-info-circle')} me-2`;
+    icon.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('span');
+    text.textContent = String(message ?? '');
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'btn-close';
+    closeButton.setAttribute('aria-label', window.emailWordsPageTranslations?.close || 'Close');
+    closeButton.addEventListener('click', () => toast.remove());
+    toast.append(icon, text, closeButton);
     toastContainer.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    window.setTimeout(() => toast.remove(), 5000);
 }
 
 function createToastContainer() {
     const container = document.createElement('div');
     container.id = 'toastContainer';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '1090';
     document.body.appendChild(container);
     return container;
 }
 
-function copyAllEmails() {
-    copyToClipboard();
-}
-
-// Add to contacts
-function addToContacts(email) {
-    fetch('/contacts/add', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({email: email})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const btn = event.target.closest('button');
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-check"></i>';
-            btn.classList.remove('btn-outline-success');
-            btn.classList.add('btn-success');
-            
-            setTimeout(() => {
-                btn.innerHTML = originalHTML;
-                btn.classList.remove('btn-success');
-                btn.classList.add('btn-outline-success');
-            }, 2000);
-        }
-    })
-    .catch(error => console.error('Error:', error));
-}
-
-// Additional utility functions
-function refreshPage() {
-    // ✅ Complete page reload with cache-busting
-    window.location.href = window.location.pathname + '?t=' + Date.now();
-}
-
-function showHelp() {
-    alert(`Email Words Page Help:
-
-• Use the search box to filter email addresses on the current page
-• Click the copy button to copy individual email addresses
-• Use "Copy All" to copy all visible email addresses
-• Export button downloads the current page data as CSV
-• Use pagination to navigate through all email words
-• Click "Search in Files" to find where each email appears in documents
-
-Keyboard Shortcuts:
-• Ctrl+F: Focus search box
-• Ctrl+A: Select all visible emails
-• Ctrl+C: Copy selected emails`);
-}
-
-// Enhanced keyboard shortcuts
-document.addEventListener('keydown', function(e) {
-    if (e.ctrlKey && e.key === 'f') {
-        e.preventDefault();
-        document.getElementById('searchInput').focus();
-    }
-    if (e.ctrlKey && e.key === 'a' && e.target.tagName !== 'INPUT') {
-        e.preventDefault();
-        copyAllEmails();
-    }
-});
-
-// Make functions globally available for onclick handlers in template
+// The clear control in the search-group component uses this page-local hook.
 window.clearSearch = clearSearch;
-window.copyEmail = copyEmail;
-window.copyToClipboard = copyToClipboard;
-window.searchInFiles = searchInFiles;
-window.showEmailFiles = showEmailFiles;
-window.exportData = exportData;
-window.addToContacts = addToContacts;
-window.refreshPage = refreshPage;
-window.showHelp = showHelp;
-window.sortTable = sortTable;
-window.changePerPage = changePerPage;
 
 // Export default initialization function for universal-initializer
 export default function init() {

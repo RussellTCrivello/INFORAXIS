@@ -78,6 +78,7 @@
     <form method="GET" action="{{ url_for('search_page') }}" id="searchForm">
         <div class="row g-3">
             <div class="col-md-8">
+                <label for="searchQuery" class="visually-hidden">{{ _('Search files') }}</label>
                 <input type="text" name="q" id="searchQuery" class="form-control form-control-lg"
                        placeholder="{{ _('Search files...') }}" value="{{ query }}">
             </div>

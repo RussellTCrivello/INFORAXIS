@@ -5,11 +5,21 @@ Common routes (language, context processor, etc.)
 from flask import redirect, url_for, flash, session, request, g
 from flask_babel import Babel, gettext as _
 from datetime import datetime, date
+import os
 import time
 import logging
 from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
+
+
+def _password_min_length() -> int:
+    """Return the valid password rule enforced by the auth service."""
+    try:
+        minimum = int(os.environ.get("PASSWORD_MIN_LENGTH", "12"))
+    except (TypeError, ValueError):
+        return 12
+    return minimum if 8 <= minimum <= 128 else 12
 
 
 def _interface_state():
@@ -221,6 +231,11 @@ def register_common_routes(app, babel_instance):
             'current_language': get_locale(),
             'csrf_token': generate_csrf,  # CSRF token function for templates
             'version': app_version,  # Application version
+            # Keep password guidance in the UI consistent with the rule the
+            # auth service enforces (PASSWORD_MIN_LENGTH is the source used by
+            # core.security.service). Clamp malformed configuration to the
+            # secure default instead of breaking page rendering.
+            'password_min_length': _password_min_length(),
             # The Screen Inspector, off unless both the installation and this
             # account say otherwise. Filled in below with the settings and the
             # registry; the endpoint it reads is guarded on its own, because a
@@ -429,6 +444,23 @@ def register_common_routes(app, babel_instance):
                 from flask_babel import force_locale
                 # Force locale for this request context
                 g._babel_locale = locale
+
+            # Runtime edits live in the database, but gettext remains the
+            # source of truth for every screen. Overlay only this request's
+            # Babel catalog so server-rendered labels and the public JS catalog
+            # observe the same saved translation.
+            if request.endpoint != 'static':
+                try:
+                    from Api.services.translation_management import apply_runtime_translation_overrides
+                    apply_runtime_translation_overrides(locale)
+                except Exception as override_error:
+                    # Translation persistence must never make an otherwise
+                    # healthy page unavailable (for example during first-run
+                    # setup before migrations have completed).
+                    logger.warning(
+                        "Translation overrides unavailable for %s (%s)",
+                        locale, override_error.__class__.__name__,
+                    )
         
         # Check for settings file changes periodically (every 10th request to avoid overhead)
         # This allows external modifications to settings.json to be picked up

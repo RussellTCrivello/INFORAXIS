@@ -24,6 +24,18 @@
     "internal": false
   },
   {
+    "endpoint": "analysis_batch_process",
+    "rule": "/analysis/batch/process",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "(app)",
+    "module": "analysis",
+    "classification": "ACTION",
+    "owned_by": "batch_analysis",
+    "internal": false
+  },
+  {
     "endpoint": "analyst_categorization_page",
     "rule": "/analyst/categorization",
     "methods": [
@@ -692,6 +704,18 @@
     ],
     "blueprint": "(app)",
     "module": "keywords",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "api_export_search_filenames",
+    "rule": "/api/search/export-filenames",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "(app)",
+    "module": "search",
     "classification": "API_ENDPOINT",
     "owned_by": null,
     "internal": true
@@ -1377,6 +1401,18 @@
     "internal": false
   },
   {
+    "endpoint": "clear_cache_ui_alias",
+    "rule": "/api/cache/clear",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "(app)",
+    "module": "performance",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "comprehensive_dashboard",
     "rule": "/dashboard/comprehensive",
     "methods": [
@@ -1798,8 +1834,32 @@
     "internal": false
   },
   {
+    "endpoint": "files.api_file_type_statistics",
+    "rule": "/api/files/types",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "files.bulk_delete_files",
     "rule": "/files/bulk-delete",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "ACTION",
+    "owned_by": "file_library",
+    "internal": false
+  },
+  {
+    "endpoint": "files.bulk_export_files",
+    "rule": "/files/export",
     "methods": [
       "POST"
     ],
@@ -1821,6 +1881,42 @@
     "classification": "ACTION",
     "owned_by": "file_library",
     "internal": false
+  },
+  {
+    "endpoint": "files.export_file_names",
+    "rule": "/api/files/names/export",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "files.export_selected_contacts",
+    "rule": "/api/files/extract-contacts/export",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "files.export_selected_first_pages",
+    "rule": "/api/files/first-pages/export",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
   },
   {
     "endpoint": "files.file_chart_data",
@@ -1907,6 +2003,18 @@
     "internal": false
   },
   {
+    "endpoint": "files.file_types_page",
+    "rule": "/files/types",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "USER_INTERFACE",
+    "owned_by": "file_library",
+    "internal": false
+  },
+  {
     "endpoint": "files.files_list",
     "rule": "/files",
     "methods": [
@@ -1926,9 +2034,21 @@
     ],
     "blueprint": "files",
     "module": "files",
-    "classification": "USER_INTERFACE",
+    "classification": "API_ENDPOINT",
     "owned_by": "input_ingestion",
-    "internal": false
+    "internal": true
+  },
+  {
+    "endpoint": "files.group_similar_search_results",
+    "rule": "/api/search/group-similar",
+    "methods": [
+      "POST"
+    ],
+    "blueprint": "files",
+    "module": "files",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
   },
   {
     "endpoint": "files.original_file_content",
@@ -2022,9 +2142,21 @@
     ],
     "blueprint": "files",
     "module": "files",
-    "classification": "USER_INTERFACE",
+    "classification": "API_ENDPOINT",
     "owned_by": "input_ingestion",
-    "internal": false
+    "internal": true
+  },
+  {
+    "endpoint": "get_cache_stats_ui_alias",
+    "rule": "/api/cache/stats",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "(app)",
+    "module": "performance",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
   },
   {
     "endpoint": "get_csrf_token",
@@ -2917,6 +3049,18 @@
     "internal": true
   },
   {
+    "endpoint": "preview.get_file_preview_image",
+    "rule": "/api/preview/<int:file_id>/image",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "preview",
+    "module": "preview",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
     "endpoint": "refresh_notifications",
     "rule": "/api/notifications/refresh",
     "methods": [
@@ -3594,6 +3738,42 @@
     "classification": "API_ENDPOINT",
     "owned_by": null,
     "internal": true
+  },
+  {
+    "endpoint": "translations.save_translation_management_catalog_api",
+    "rule": "/api/translations/manage/catalog",
+    "methods": [
+      "PUT"
+    ],
+    "blueprint": "translations",
+    "module": "translations",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "translations.translation_management_catalog_api",
+    "rule": "/api/translations/manage/catalog",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "translations",
+    "module": "translations",
+    "classification": "API_ENDPOINT",
+    "owned_by": null,
+    "internal": true
+  },
+  {
+    "endpoint": "translations.translation_management_page",
+    "rule": "/translations/manage",
+    "methods": [
+      "GET"
+    ],
+    "blueprint": "translations",
+    "module": "translations",
+    "classification": "USER_INTERFACE",
+    "owned_by": "translation_manager",
+    "internal": false
   },
   {
     "endpoint": "update_keyword",

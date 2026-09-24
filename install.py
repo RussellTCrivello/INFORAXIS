@@ -376,7 +376,7 @@ def main():
     try:
         from dotenv import load_dotenv
         if ENV_FILE.exists():
-            load_dotenv(ENV_FILE, override=False)
+            load_dotenv(ENV_FILE, override=False, interpolate=False)
     except ImportError:
         pass
 

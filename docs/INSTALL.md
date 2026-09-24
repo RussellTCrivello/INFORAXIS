@@ -182,6 +182,8 @@ at the first start.
    (Use YOUR password. No quotes, no spaces around `=`.)
 3. Save and close Notepad.
 
+`.env` values are read literally: a password containing `${NAME}` remains unchanged rather than being expanded, and real operating-system environment variables still take precedence over `.env`.
+
 ### Step 6 — Start the application
 
 **Double-click `start.bat`** in the app folder. A black window opens and after

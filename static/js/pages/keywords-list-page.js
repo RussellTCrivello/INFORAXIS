@@ -151,6 +151,21 @@ if (typeof window.translations === 'undefined') {
             currentPage = 1;
             fetchPage(1);
         });
+
+        tableBody?.addEventListener('change', (event) => {
+            if (event.target.matches('.keyword-checkbox')) updateBulkButtons();
+        });
+        tableBody?.addEventListener('click', (event) => {
+            const button = event.target.closest('.keyword-row-action');
+            if (!button || !tableBody.contains(button)) return;
+            const action = button.dataset.action;
+            const keywordId = Number(button.dataset.keywordId);
+            if (action !== 'merge' && (!Number.isSafeInteger(keywordId) || keywordId < 1)) return;
+            if (action === 'edit') editKeywordInModal(keywordId);
+            else if (action === 'view') window.viewKeyword(keywordId);
+            else if (action === 'delete') window.deleteKeyword(keywordId);
+            else if (action === 'merge') window.mergeDuplicates(button.dataset.keywordText || '', button);
+        });
     }
 
     function loadCategories() {
@@ -265,17 +280,18 @@ if (typeof window.translations === 'undefined') {
         }
 
         items.forEach((kw, idx) => {
-            // ✅ FIXED: Validate keyword object before processing
-            if (!kw || typeof kw !== 'object' || !kw.id) {
+            // Validate the server ID before using it as a row/action identifier.
+            const keywordId = Number(kw?.id);
+            if (!kw || typeof kw !== 'object' || !Number.isSafeInteger(keywordId) || keywordId < 1) {
                 console.warn(`Skipping invalid keyword at index ${idx}:`, kw);
                 return;
             }
             const globalIndex = ((page - 1) * currentPerPage) + (idx + 1);
             const tr = document.createElement('tr');
-            const keywordText = (kw.text || '').toLowerCase().trim();
+            const keywordText = String(kw.text || '').toLowerCase().trim();
             const isDuplicate = kw.is_duplicate || duplicates.has(keywordText);
             
-            tr.dataset.keywordId = kw.id;
+            tr.dataset.keywordId = String(keywordId);
             tr.dataset.keyword = keywordText;
             if (isDuplicate) {
                 tr.classList.add('table-warning');
@@ -285,39 +301,42 @@ if (typeof window.translations === 'undefined') {
             // ✅ FIXED: Use proper HTML escaping to prevent XSS
             const escapedText = escapeHtml(kw.text || '');
             const escapedCategoryName = escapeHtml(kw.category_name || translations.uncategorized || 'Uncategorized');
-            const escapedKeywordText = escapeHtml(keywordText);
             
             tr.innerHTML = `
                 <td>
-                    <input type="checkbox" class="form-check-input keyword-checkbox" 
-                           value="${kw.id}" onchange="updateBulkButtons()">
+                    <input type="checkbox" class="form-check-input keyword-checkbox"
+                           value="${keywordId}" aria-label="${escapeHtml(translations.selectKeyword || 'Select keyword')}">
                 </td>
                 <td><span class="badge bg-secondary">${globalIndex}</span></td>
                 <td>
                     <div class="d-flex align-items-center">
-                        <span class="keyword-text" data-keyword-id="${kw.id}">
+                        <span class="keyword-text" data-keyword-id="${keywordId}">
                             <strong>${escapedText}</strong>
-                            ${isDuplicate ? `<span class="badge bg-warning text-dark ms-2"><i class="bi bi-exclamation-triangle me-1"></i>${escapeHtml(translations.duplicate || 'Duplicate')}</span>` : ''}
+                            ${isDuplicate ? `<span class="badge bg-warning text-dark ms-2"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>${escapeHtml(translations.duplicate || 'Duplicate')}</span>` : ''}
                         </span>
-                        <button class="btn btn-sm btn-link p-0 ms-1" onclick="editKeywordInModal(${kw.id})" title="${escapeHtml(translations.editKeyword || 'Edit Keyword')}">
-                            <i class="bi bi-pencil"></i>
+                        <button type="button" class="btn btn-sm btn-link p-0 ms-1 keyword-row-action" data-action="edit" data-keyword-id="${keywordId}"
+                                title="${escapeHtml(translations.editKeyword || 'Edit Keyword')}" aria-label="${escapeHtml(translations.editKeyword || 'Edit Keyword')}">
+                            <i class="bi bi-pencil" aria-hidden="true"></i>
                         </button>
                     </div>
                 </td>
-                <td><span class="badge bg-info">${kw.usage_count}</span></td>
-                <td>${kw.usage_count > 0 ? `<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>${escapeHtml(translations.active || 'Active')}</span>` : `<span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>${escapeHtml(translations.unused || 'Unused')}</span>`}</td>
+                <td><span class="badge bg-info">${escapeHtml(kw.usage_count)}</span></td>
+                <td>${kw.usage_count > 0 ? `<span class="badge bg-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${escapeHtml(translations.active || 'Active')}</span>` : `<span class="badge bg-secondary"><i class="bi bi-dash-circle me-1" aria-hidden="true"></i>${escapeHtml(translations.unused || 'Unused')}</span>`}</td>
                 <td>
                     <span class="badge bg-light text-dark">${escapedCategoryName}</span>
                 </td>
                 <td>
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" onclick="viewKeyword(${kw.id})" title="${escapeHtml(translations.viewDetails || 'View Details')}">
-                            <i class="bi bi-eye"></i>
+                        <button type="button" class="btn btn-outline-primary keyword-row-action" data-action="view" data-keyword-id="${keywordId}"
+                                title="${escapeHtml(translations.viewDetails || 'View Details')}" aria-label="${escapeHtml(translations.viewDetails || 'View Details')}">
+                            <i class="bi bi-eye" aria-hidden="true"></i>
                         </button>
-                        <button class="btn btn-outline-danger" onclick="deleteKeyword(${kw.id})" title="${escapeHtml(translations.deleteKeyword || 'Delete')}">
-                            <i class="bi bi-trash"></i>
+                        <button type="button" class="btn btn-outline-danger keyword-row-action" data-action="delete" data-keyword-id="${keywordId}"
+                                title="${escapeHtml(translations.deleteKeyword || 'Delete')}" aria-label="${escapeHtml(translations.deleteKeyword || 'Delete')}">
+                            <i class="bi bi-trash" aria-hidden="true"></i>
                         </button>
-                        ${isDuplicate ? `<button class="btn btn-outline-warning" onclick="mergeDuplicates(${JSON.stringify(keywordText)})" title="${escapeHtml(translations.mergeDuplicates || 'Merge duplicates')}"><i class="bi bi-arrow-down-up"></i></button>` : ''}
+                        ${isDuplicate ? `<button type="button" class="btn btn-outline-warning keyword-row-action" data-action="merge" data-keyword-text="${escapeHtml(keywordText)}"
+                                title="${escapeHtml(translations.mergeDuplicates || 'Merge duplicates')}" aria-label="${escapeHtml(translations.mergeDuplicates || 'Merge duplicates')}"><i class="bi bi-arrow-down-up" aria-hidden="true"></i></button>` : ''}
                     </div>
                 </td>`;
             tableBody.appendChild(tr);
@@ -1358,16 +1377,17 @@ if (typeof window.translations === 'undefined') {
         });
     };
     
-    window.mergeDuplicates = function(keywordText){
-        if (!confirm(`${translations.mergeAllDuplicatesConfirm || 'Merge all duplicates of'} "${escapeHtml(keywordText)}"? This will combine usage counts and keep the first occurrence.`)) return;
+    window.mergeDuplicates = function(keywordText, btn = null){
+        keywordText = String(keywordText || '');
+        if (!confirm(`${translations.mergeAllDuplicatesConfirm || 'Merge all duplicates of'} "${keywordText}"? This will combine usage counts and keep the first occurrence.`)) return;
         
-        // ✅ FIXED: Add loading state - find button by keyword text
-        const btn = document.querySelector(`button[onclick*="mergeDuplicates('${keywordText.replace(/'/g, "\\'")}')"]`) ||
-                   document.querySelector(`button[onclick*='mergeDuplicates("${keywordText.replace(/"/g, '\\"')}")']`);
+        // The action button is passed by the delegated click handler; never
+        // build a selector from the keyword text.
         const originalHTML = btn ? btn.innerHTML : '';
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Merging...';
+            btn.setAttribute('aria-busy', 'true');
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Merging...';
         }
         
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -1395,6 +1415,7 @@ if (typeof window.translations === 'undefined') {
                 alert((translations.errorMergingDuplicates || 'Error merging duplicates') + ': ' + (data.error || translations.unknownError || 'Unknown error'));
                 if (btn) {
                     btn.disabled = false;
+                    btn.removeAttribute('aria-busy');
                     btn.innerHTML = originalHTML;
                 }
             }
@@ -1404,6 +1425,7 @@ if (typeof window.translations === 'undefined') {
             alert(translations.errorMergingDuplicates || 'Error merging duplicates');
             if (btn) {
                 btn.disabled = false;
+                btn.removeAttribute('aria-busy');
                 btn.innerHTML = originalHTML;
             }
         });

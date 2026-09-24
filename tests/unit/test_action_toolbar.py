@@ -227,9 +227,9 @@ class TestTheRuntimeStaysSmallAndInert:
         """The second contract test: email_words is page actions only.
 
         Every control there acts on the page (apply the filters, reset them,
-        export or copy what is on screen, refresh). It can therefore be
-        expressed with the frozen primitives without a scope element, without a
-        runtime call and without one line of page-specific behaviour inside the
+        export or copy the current results). It can therefore be expressed
+        with the frozen primitives without a scope element, without a runtime
+        call and without one line of page-specific behaviour inside the
         component - which is the answer this page was migrated to get.
         """
         source = (PROJECT_ROOT / "static/js/pages/email-words-page.js")
@@ -328,19 +328,33 @@ class TestTheMigratedPagesRenderTheContract:
                 f"{url}: {rendered} rows but {changes} change handlers - a row "
                 "would not reach the toolbar, or would reach it twice")
         else:
-            # This page builds its rows in JavaScript, so the row template is
-            # what has to carry the binding - exactly one per row, and once.
-            handlers = source.count('onchange="updateBulkButtons()"')
-            assert handlers == 1, (
-                f"{module} renders {handlers} change bindings; a row template "
-                "needs exactly one")
-            lines = source.splitlines()
-            at = next(i for i, line in enumerate(lines)
-                      if 'onchange="updateBulkButtons()"' in line)
-            window = "\n".join(lines[max(0, at - 8):at + 1])
-            assert checkbox in window, (
-                f"{module}: the handler is not on the row's checkbox - a change "
-                "would reach the toolbar from something else")
+            # The keyword page builds rows in JavaScript. It binds one delegated
+            # change listener to the stable table body and filters to the row
+            # checkbox, rather than generating an inline handler per row.
+            if module == "keywords-list-page.js":
+                assert source.count("tableBody?.addEventListener('change'") == 1
+                assert f"event.target.matches('.{checkbox}')" in source
+                assert re.search(
+                    rf'<input[^>]*class="[^"]*{re.escape(checkbox)}', source
+                ), f"{module} no longer renders the selection checkbox"
+                assert re.search(
+                    rf"event\.target\.matches\('\.{re.escape(checkbox)}'\)"
+                    r"\)\s*updateBulkButtons\(\)", source
+                ), f"{module}: the delegated checkbox change does not reach the page handler"
+            else:
+                # A different dynamic list may use one handler in its row
+                # template; in that shape, assert the single binding is local.
+                handlers = source.count('onchange="updateBulkButtons()"')
+                assert handlers == 1, (
+                    f"{module} renders {handlers} change bindings; a row template "
+                    "needs exactly one")
+                lines = source.splitlines()
+                at = next(i for i, line in enumerate(lines)
+                          if 'onchange="updateBulkButtons()"' in line)
+                window = "\n".join(lines[max(0, at - 8):at + 1])
+                assert checkbox in window, (
+                    f"{module}: the handler is not on the row's checkbox - a change "
+                    "would reach the toolbar from something else")
 
         assert "document.addEventListener('change'" not in source, (
             f"{module} both binds each row and listens document-wide: one "
@@ -356,5 +370,14 @@ class TestTheMigratedPagesRenderTheContract:
         assert "data-bulk-action" not in html
         assert 'type="submit"' in html, "Apply Filters submits the filter form"
         assert 'href="/email-words"' in html, "Reset is a link, not a handler"
-        for handler in ("exportData()", "copyToClipboard()", "refreshPage()"):
-            assert handler in html, f"email_words lost its {handler} control"
+        module = (PROJECT_ROOT / "static/js/pages/email-words-page.js").read_text(
+            encoding="utf-8")
+        for button_id, handler in (
+                ("exportEmailWordsButton", "exportData(event.currentTarget)"),
+                ("copyEmailWordsButton", "copyToClipboard(event.currentTarget)")):
+            button = re.search(rf'<button[^>]*id="{button_id}"[^>]*>', html, re.S)
+            assert button, f"email_words lost its {button_id} control"
+            assert "onclick" not in button.group(0), (
+                "page actions are bound by the module, not inline handlers")
+            assert f"getElementById('{button_id}')?.addEventListener('click'" in module
+            assert handler in module

@@ -389,19 +389,19 @@
                     <input type="hidden" id="sourceId" name="source_id">
                     <div class="row g-3">
                         <div class="col-md-12">
-                            <label class="form-label">{{ _('Source Name') }} *</label>
+                            <label class="form-label" for="sourceName">{{ _('Source Name') }} <span class="text-danger" aria-hidden="true">*</span></label>
                             <input type="text" name="name" id="sourceName" class="form-control" 
                                    placeholder="{{ _('e.g., International News Agency') }}" required>
                         </div>
                         
                         <div class="col-md-6">
-                            <label class="form-label">{{ _('Job/Type') }} *</label>
+                            <label class="form-label" for="sourceJob">{{ _('Job/Type') }} <span class="text-danger" aria-hidden="true">*</span></label>
                             <input type="text" name="job" id="sourceJob" class="form-control" 
                                  placeholder="{{ _('e.g., International News Job') }}" required>
                         </div>
                         
                         <div class="col-md-6">
-                            <label class="form-label">{{ _('Importance') }} *</label>
+                            <label class="form-label" for="importanceSlider">{{ _('Importance') }}</label>
                             <input type="range" name="importance" class="form-range" 
                                    min="0" max="1" step="0.01" 
                                    value="0.5" 
@@ -414,13 +414,13 @@
                         </div>
                         
                         <div class="col-md-8">
-                            <label class="form-label">{{ _('Country') }} *</label>
+                            <label class="form-label" for="sourceCountry">{{ _('Country') }} <span class="text-danger" aria-hidden="true">*</span></label>
                             <input type="text" name="country" id="sourceCountry" class="form-control" 
-                                   placeholder="" required>
+                                   required>
                         </div>
                         
                         <div class="col-md-4">
-                            <label class="form-label">{{ _('City') }}</label>
+                            <label class="form-label" for="sourceCity">{{ _('City') }}</label>
                             <input type="text" name="city" id="sourceCity" class="form-control" 
                                    placeholder="{{ _('e.g., Washington DC') }}" list="cities">
                             <datalist id="cities">
@@ -438,31 +438,31 @@
                         </div>
                         
                         <div class="col-md-12">
-                            <label class="form-label">{{ _('Description') }}</label>
+                            <label class="form-label" for="sourceDescription">{{ _('Description') }}</label>
                             <textarea name="description" id="sourceDescription" class="form-control" rows="3" 
                                       placeholder="{{ _('Brief description of the source...') }}"></textarea>
                         </div>
                         
                         <div class="col-md-12">
-                            <label class="form-label">{{ _('Social Media Accounts') }}</label>
+                            <label class="form-label" for="sourceAccounts">{{ _('Social Media Accounts') }}</label>
                             <input type="text" name="accounts" id="sourceAccounts" class="form-control" 
                                    placeholder="{{ _('e.g., @twitter_handle, facebook.com/page') }}">
                         </div>
                         
                         <div class="col-md-12">
-                            <label class="form-label">{{ _('Attachments') }}</label>
+                            <label class="form-label" for="sourceAttachments">{{ _('Attachments') }}</label>
                             <input type="text" name="attachments" id="sourceAttachments" class="form-control" 
                                    placeholder="{{ _('e.g., document.pdf, image.jpg') }}">
                         </div>
                         
                         <div class="col-md-12">
-                            <label class="form-label">{{ _('Notes') }}</label>
+                            <label class="form-label" for="sourceNote">{{ _('Notes') }}</label>
                             <textarea name="note" id="sourceNote" class="form-control" rows="2" 
                                       placeholder="{{ _('Additional notes...') }}"></textarea>
                         </div>
                         
                         <div class="col-md-6">
-                            <label class="form-label">{{ _('Ownership') }}</label>
+                            <label class="form-label" for="sourceOwnership">{{ _('Ownership') }}</label>
                             <select name="ownership" id="sourceOwnership" class="form-control">
                                 <option value="">-- {{ _('Select Ownership') }} --</option>
                                 <option value="Private">Private</option>
@@ -475,7 +475,7 @@
                         </div>
                         
                         <div class="col-md-6">
-                            <label class="form-label">{{ _('Access Status') }}</label>
+                            <label class="form-label" for="sourceAccessStatus">{{ _('Access Status') }}</label>
                             <select name="access_status" id="sourceAccessStatus" class="form-control">
                                 <option value="">-- {{ _('Select Access Status') }} --</option>
                                 <option value="Open">Open</option>
@@ -488,12 +488,12 @@
                         </div>
                         
                         <div class="col-md-6">
-                            <label class="form-label">{{ _('Date of Source Discovery') }}</label>
+                            <label class="form-label" for="sourceDateDiscovery">{{ _('Date of Source Discovery') }}</label>
                             <input type="date" name="date_source_discovery" id="sourceDateDiscovery" class="form-control">
                         </div>
                         
                         <div class="col-md-6">
-                            <label class="form-label">{{ _('Category') }}</label>
+                            <label class="form-label" for="sourceCategory">{{ _('Category') }}</label>
                             <select name="category_id" id="sourceCategory" class="form-control">
                                 <option value="">-- {{ _('Select Category') }} --</option>
                             </select>

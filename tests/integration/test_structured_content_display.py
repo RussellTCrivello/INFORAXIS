@@ -352,8 +352,10 @@ def test_word_join_fallback_when_no_raw(pg_db):
     svc = ContentDBService()
     svc.words_repo.bulk_insert_words(words)
     id_map = svc.words_repo.resolve_word_ids_batch(words)
+    hash_id = svc.resolve_hash_id(path_id)
+    assert hash_id is not None, "the occurrence must resolve to its canonical content"
     svc.contents_repo.store_text_content(
-        [id_map[w] for w in words], date.today(), path_id)
+        [id_map[w] for w in words], date.today(), hash_id)
 
     # Word-join reconstruction still works.
     content = load_text_content(path_id)
