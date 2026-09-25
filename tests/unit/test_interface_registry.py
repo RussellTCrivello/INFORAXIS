@@ -59,9 +59,9 @@ def make(interface_id="thing", **kwargs):
 class TestModel:
     def test_id_is_independent_of_the_label(self):
         """Renaming what a person sees must not touch the stored key."""
-        renamed = make(interface_id="batch_analysis", name="Batch Processing")
+        renamed = make(interface_id="batch_analysis", name="Batch Analysis")
         assert renamed.interface_id == "batch_analysis"
-        assert renamed.name == "Batch Processing"
+        assert renamed.name == "Batch Analysis"
 
     def test_endpoints_include_aliases(self):
         entry = make(aliases=("thing_old_page", "thing_action"))

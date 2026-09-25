@@ -326,7 +326,7 @@ async function refreshStatsAndFilters() {
                     <li class="analyst-category-item" data-category-id="${cat.id}" data-category-name="${escapeAttr(cat.name)}">
                         <div class="d-flex justify-content-between align-items-center w-100">
                             <div class="analyst-category-name">
-                                <i class="bi bi-person-tags me-2"></i>
+                                <i class="bi bi-person-check" aria-hidden="true"></i>
                                 <span class="analyst-category-label">${escapeHtmlText(cat.name)}</span>
                                 <span class="analyst-badge-soft">${cat.file_count}</span>
                             </div>

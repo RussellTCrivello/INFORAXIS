@@ -48,7 +48,7 @@ class FakeVisibility:
 
 ADMIN_PAGE = Interface(
     interface_id="users",
-    name="Users and Roles",
+    name="User Management",
     description="People who may sign in.",
     domain=Domain.ADMINISTRATION,
     route="users_page",

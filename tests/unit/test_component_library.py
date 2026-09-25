@@ -215,7 +215,7 @@ class TestClassesHaveExactlyOneOwner:
     def test_every_icon_a_component_names_exists(self):
         """An icon the bundle does not have renders as nothing, silently.
 
-        `bi-person-tags` was named in a component and on a page; Bootstrap
+        `bi bi-person-check` was named in a component and on a page; Bootstrap
         Icons has no such icon, so the icon simply was not there and nothing
         said so. The bundle is the vocabulary, because it is what ships.
         """

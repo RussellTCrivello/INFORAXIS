@@ -18,7 +18,7 @@ disagree, the registry is right and the document is stale.
 ```python
 Interface(
     interface_id="batch_analysis",          # stable key; persisted settings use it
-    name="Batch Processing",                # what the operator is shown
+    name="Batch Analysis",                # what the operator is shown
     description="Process many objects…",    # what it is for
     domain=Domain.ANALYZE,                  # exactly one domain
     route="analysis_batch",                 # a Flask endpoint, not a URL
@@ -187,9 +187,9 @@ the navigation entry vanished the first time this rename happened.
 
 | ID | Name | Domain | Route | Aliases | Role | Default | Depends on | Help | Shortcut | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `archives` | Evidence Archive | ANALYZE | `archives_page` | — | any | on | `file_library` | analyze/archives | g a | ACTIVE |
+| `archives` | File Management and Analysis | ANALYZE | `archives_page` | — | any | on | `file_library` | analyze/archives | g a | ACTIVE |
 | `path_analysis` | Path Analysis | ANALYZE | `path_analysis_page` | — | any | on | `file_library` | analyze/path-analysis | g p | ACTIVE |
-| `batch_analysis` | Batch Processing | ANALYZE | `analysis_batch` | `analysis_batch_process` | any | on | `file_library` | analyze/batch | g b | ACTIVE |
+| `batch_analysis` | Batch Analysis | ANALYZE | `analysis_batch` | `analysis_batch_process` | any | on | `file_library` | analyze/batch | g b | ACTIVE |
 
 ### CLASSIFY (2)
 
@@ -202,7 +202,7 @@ the navigation entry vanished the first time this rename happened.
 
 | ID | Name | Domain | Route | Aliases | Role | Default | Depends on | Help | Shortcut | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `comprehensive_dashboard` | Detailed Dashboard | REPORT | `comprehensive_dashboard` | — | any | on | `file_library` | report/detailed-dashboard | — | ACTIVE |
+| `comprehensive_dashboard` | Comprehensive Dashboard | REPORT | `comprehensive_dashboard` | — | any | on | `file_library` | report/detailed-dashboard | — | ACTIVE |
 | `charts_dashboard` | Charts Dashboard | REPORT | `charts_dashboard` | — | any | on | `file_library` | report/charts | — | ACTIVE |
 
 ### OPERATE (2)
@@ -210,13 +210,13 @@ the navigation entry vanished the first time this rename happened.
 | ID | Name | Domain | Route | Aliases | Role | Default | Depends on | Help | Shortcut | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `jobs` | Jobs | OPERATE | `operations_jobs_page` | `operations_job_detail_page` | any | on | — | operate/jobs | g j | ACTIVE |
-| `import_export_console` | Import / Export Console | OPERATE | `import_export_page` | — | admin | on | — | — | — | DEPRECATED |
+| `import_export_console` | Import/Export | OPERATE | `import_export_page` | — | admin | on | — | — | — | DEPRECATED |
 
 ### ADMINISTRATION (1)
 
 | ID | Name | Domain | Route | Aliases | Role | Default | Depends on | Help | Shortcut | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `users` | Users and Roles | ADMINISTRATION | `users_page` | — | admin | on | — | administration/users | g u | ACTIVE |
+| `users` | User Management | ADMINISTRATION | `users_page` | — | admin | on | — | administration/users | g u | ACTIVE |
 
 ### SETTINGS (3)
 
