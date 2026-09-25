@@ -176,6 +176,32 @@ class KeywordOperations:
         )
         return row[0] if row else None
 
+    def insert_keyword_path_relationships(self, path_id: int, keyword_counts) -> int:
+        """Persist ``{keyword_id: count}`` keyword matches for a path.
+
+        Bulk insert through the keywords_paths repository - the same writer
+        the ingestion and association-refresh paths use.
+
+        Args:
+            path_id: The path the matches belong to.
+            keyword_counts: Mapping of keyword_id to occurrence count.
+
+        Returns:
+            Number of keyword relationships written (0 for an empty mapping).
+
+        Raises:
+            Exception: Propagated from the repository so callers can log the
+                real cause (previously the update-associations route called
+                a method that did not exist on this class, which surfaced
+                as an AttributeError for every file with matches).
+        """
+        if not keyword_counts:
+            return 0
+        self.db_service.keywords_paths_repo.bulk_insert_keywords_paths(
+            path_id, keyword_counts
+        )
+        return len(keyword_counts)
+
 
 class WordOperations:
     """Operations for word management"""

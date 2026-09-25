@@ -1087,12 +1087,23 @@ def register_keywords_routes(app):
                     keyword_counts = content_processor.extract_keywords_fast(word_ids_list, keywords_dict)
                     
                     if keyword_counts:
-                        # Update keywords_paths table using bulk insert
-                        success = keyword_ops.insert_keyword_path_relationships(path_id, keyword_counts)
+                        # Update keywords_paths table using bulk insert.
+                        # The insert runs in its own try so one failing row
+                        # logs the REAL cause (e.g. a DB error) and the loop
+                        # keeps its per-file progress, instead of aborting
+                        # into the generic outer handler with no detail.
+                        try:
+                            written = keyword_ops.insert_keyword_path_relationships(path_id, keyword_counts)
+                        except Exception as insert_err:
+                            written = None
+                            errors += 1
+                            logger.warning(
+                                f"Failed to insert keyword associations for path_id {path_id}: {insert_err}"
+                            )
                         
-                        if success:
-                            new_associations += len(keyword_counts)
-                        else:
+                        if written:
+                            new_associations += written
+                        elif written is not None:
                             errors += 1
                             logger.warning(f"Failed to insert keyword associations for path_id {path_id}")
                     
