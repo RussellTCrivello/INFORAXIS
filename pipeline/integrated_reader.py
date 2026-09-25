@@ -37,6 +37,19 @@ from concurrency import (
 logger = logging.getLogger(__name__)
 
 
+def _report_progress(message: str) -> None:
+    """Report single-line progress without ever splitting a log line.
+
+    The previous ``print(f"\r...", end='', flush=True)`` left a partial
+    line (no newline) on stdout, so any log record emitted before the next
+    progress update glued itself onto that fragment - e.g.
+    ``Progress: 2/11INFO:werkzeug...`` when stdout and stderr are merged.
+    Routing progress through the logger emits one atomic, ordered record
+    per update on the same stream as every other log line.
+    """
+    logger.info(message)
+
+
 class IntegratedFileReader:
     """
     Integrated file reader with parallel processing and storage
@@ -767,27 +780,38 @@ class IntegratedFileReader:
         failed_count = total_files - processed_count
         
         if failed_count > 0:
+            # logger only: the old print() twin duplicated this warning in
+            # merged logs (once via stderr, once via stdout).
             logger.warning(f"⚠️  {failed_count} files may not have been processed. Check logs for details.")
-            print(f"\n⚠️  Warning: {failed_count} files may not have been fully processed")
-        
+
         # Finalize checkpoint if checkpoint manager is active
+        checkpoint_line = None
         if self.checkpoint_manager:
             self.checkpoint_manager.finalize()
             checkpoint_stats = self.checkpoint_manager.get_statistics()
-            print(f"\n💾 Checkpoint saved: {checkpoint_stats['processed_count']} files processed")
-        
-        # PRODUCTION: Final summary
-        print("\n📊 Processing Summary:")
-        print(f"   Total files found: {total_files}")
-        print(f"   Files processed: {processed_count}")
+            checkpoint_line = f"💾 Checkpoint saved: {checkpoint_stats['processed_count']} files processed"
+
+        # PRODUCTION: Final summary - ONE print so no log record can land
+        # between the lines when stdout and stderr are captured together.
+        summary_lines = []
         if failed_count > 0:
-            print(f"   Files with issues: {failed_count}")
+            summary_lines.append(f"⚠️  Warning: {failed_count} files may not have been fully processed")
+        if checkpoint_line:
+            summary_lines.append(checkpoint_line)
+        summary_lines.extend([
+            "📊 Processing Summary:",
+            f"   Total files found: {total_files}",
+            f"   Files processed: {processed_count}",
+        ])
+        if failed_count > 0:
+            summary_lines.append(f"   Files with issues: {failed_count}")
         if self.enable_storage and self.storage_pipeline:
             storage_stats = self.get_storage_statistics()
-            print(f"   Files stored in database: {storage_stats.get('completed', 0)}")
-            print(f"   Duplicate files: {storage_stats.get('duplicates', 0)}")
-            print(f"   Storage failures: {storage_stats.get('failed', 0)}")
-        
+            summary_lines.append(f"   Files stored in database: {storage_stats.get('completed', 0)}")
+            summary_lines.append(f"   Duplicate files: {storage_stats.get('duplicates', 0)}")
+            summary_lines.append(f"   Storage failures: {storage_stats.get('failed', 0)}")
+        print("\n" + "\n".join(summary_lines), flush=True)
+
         return results
     
     def _process_with_threads(self, files: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -919,7 +943,7 @@ class IntegratedFileReader:
                         with self._results_lock:
                             results.append(result)
                     completed += 1
-                    print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
+                    _report_progress(f"Progress: {completed}/{len(files)}")
                     continue
                 
                 # Calculate dynamic timeout based on file size
@@ -941,7 +965,7 @@ class IntegratedFileReader:
                             with self._results_lock:
                                 results.append(result)
                         completed += 1
-                        print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
+                        _report_progress(f"Progress: {completed}/{len(files)}")
                         continue
                     else:
                         raise
@@ -996,7 +1020,7 @@ class IntegratedFileReader:
                     # terminally succeeded or failed.
                     self.progress_ledger.settle_path(file_path, OUTCOME_RETRYABLE)
                     completed += 1
-                    print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
+                    _report_progress(f"Progress: {completed}/{len(files)}")
                     self._notify_progress()
                     continue
             else:
@@ -1006,11 +1030,11 @@ class IntegratedFileReader:
                     with self._results_lock:
                         results.append(result)
                 completed += 1
-                print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
+                _report_progress(f"Progress: {completed}/{len(files)}")
                 continue
             
             completed += 1
-            print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
+            _report_progress(f"Progress: {completed}/{len(files)}")
             
             # Get result from thread metrics or outbox
             try:
@@ -1153,7 +1177,7 @@ class IntegratedFileReader:
             )
             
             completed += 1
-            print(f"\rProgress: {completed}/{len(files)}", end='', flush=True)
+            _report_progress(f"Progress: {completed}/{len(files)}")
             
             if task_result:
                 if task_result.success:
@@ -1207,7 +1231,7 @@ class IntegratedFileReader:
                 )
                 break
 
-            print(f"\rProgress: {idx}/{len(files)}", end='', flush=True)
+            _report_progress(f"Progress: {idx}/{len(files)}")
 
             result = self._process_file_worker(file_info)
             if result:

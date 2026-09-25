@@ -4,6 +4,7 @@ No dependencies on other project modules (except logging_utils for recording).
 """
 
 import os
+import sys
 import time
 from typing import List, Dict, Any, Callable, Optional
 
@@ -54,14 +55,19 @@ def print_execution_time(description: str, func: Callable, *args, **kwargs) -> A
             time_value = elapsed
             time_unit = "seconds"
         
-        # Neat printing
-        CYAN = "\033[36m"
-        RESET = "\033[0m"
-        
-        print(f"{'-'*40}")
-        print(f"Task: {description}")
-        print(f"Elapsed time: {CYAN}{time_str}{RESET}")
-        print(f"{'-'*40}")
+        # Neat printing: ONE print so a log record can never land between
+        # the lines when stdout and stderr are captured together, and ANSI
+        # colour only on interactive terminals (redirected logs stay clean).
+        use_color = sys.stdout.isatty()
+        cyan = "\033[36m" if use_color else ""
+        reset = "\033[0m" if use_color else ""
+        print(
+            f"{'-' * 40}\n"
+            f"Task: {description}\n"
+            f"Elapsed time: {cyan}{time_str}{reset}\n"
+            f"{'-' * 40}",
+            flush=True,
+        )
         
         # Record execution time to log
         _get_record_function()(
