@@ -184,7 +184,7 @@ class TestDependencies:
         # Other dependents remain, so this is still refused - but the reason
         # must no longer name the interface we just switched off.
         assert response.status_code == 409
-        assert "Batch Processing" not in response.get_json()["error"]
+        assert "Batch Analysis" not in response.get_json()["error"]
 
         # restore
         assert admin_client.post("/api/settings/interfaces/batch_analysis",
@@ -409,7 +409,7 @@ class TestTheRegistryView:
 
     def test_one_interface_can_be_inspected(self, admin_client):
         body = admin_client.get("/api/interfaces/batch_analysis").get_json()
-        assert body["interface"]["name"] == "Batch Processing"
+        assert body["interface"]["name"] == "Batch Analysis"
         assert body["interface"]["domain"] == "ANALYZE"
         assert body["interface"]["dependencies"] == ["file_library"]
         assert body["interface"]["help_topic"]

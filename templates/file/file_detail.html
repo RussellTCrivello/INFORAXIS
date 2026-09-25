@@ -99,11 +99,6 @@
                         <button type="button" class="btn btn-light btn-sm" onclick="window.print()">
                             <i class="bi bi-printer me-1" aria-hidden="true"></i>{{ _('Print') }}
                         </button>
-                    <!-- Step to the neighbouring file without going back to
-                         the library list; the browsing context (filters and
-                         list order) is carried in the links. -->
-                    <div class="file-nav-strip">
-                        {{ file_nav(nav, 'header') }}
                     </div>
                 </div>
             </div>
@@ -235,6 +230,13 @@
                                     <i class="bi bi-download me-1"></i>{{ _('Download') }}  
                                 </button>
                             </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            {% set file_id = file[0] if file|length > 0 else 0 %}
+                            {{ analyst_classify(file_id, analyst_categories, current_user.is_authenticated and current_user.has_role('admin', 'analyst')) }}
+                        </div>
+                        <div class="file-nav-strip">
+                            {{ file_nav(nav, 'header') }}
                         </div>
                         <div class="card-body">
                             <!-- Extracted-text pane: pager and reader chrome hide
@@ -403,10 +405,6 @@
                 <!-- Analyst classification (manual layer - FR-1.4): the same
                      control offered on Advanced Search, now available directly
                      from the content display. Smart taxonomy untouched. -->
-                <div class="col-lg-6 mb-4">
-                    {% set file_id = file[0] if file|length > 0 else 0 %}
-                    {{ analyst_classify(file_id, analyst_categories, current_user.is_authenticated and current_user.has_role('admin', 'analyst')) }}
-                </div>
 
                 <!-- Classification Chart -->
                 <div class="col-lg-6 mb-4">

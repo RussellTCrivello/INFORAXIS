@@ -74,7 +74,7 @@ The defects the old arrangement produced, and what now prevents each one:
 | `analytics` named an endpoint that does not exist in the URL map | `analytics` is folded onto `comprehensive_dashboard`; `validate_registry` fails the build on any route the application does not serve |
 | `page_tips` had no page at all | declared as a `Feature` in `FEATURES`, not an interface |
 | `file_browser` and `file_library` both claimed `files.files_list` | merged; two interfaces on one endpoint now fails the suite unless one declares the endpoint as an alias |
-| `file_analysis` displayed as "INFORAXIS" (the product name, not the workspace) | renamed `archives`, "Evidence Archive" |
+| `file_analysis` displayed as "INFORAXIS" (the product name, not the workspace) | renamed `archives`, "File Management and Analysis" |
 | Most page endpoints had no registry entry (19 named, the rest unmanaged) | every user-facing page endpoint has exactly one owner; the coverage test fails on an unowned page |
 | `reset_interfaces_to_defaults()` enabled everything while the getter returned `False` for unknown ids | `Interface.default_enabled` is the only definition of the default; reset applies it |
 | `is_interface_enabled_by_endpoint()` returned `True` for any endpoint missing from its map | unknown endpoint means not registered, and an unregistered page is refused rather than served |
@@ -140,7 +140,7 @@ entry per interface:
 ```python
 Interface(
     interface_id="batch_analysis",          # stable key (persisted flags use it)
-    name="Batch Processing",                # what the operator sees
+    name="Batch Analysis",                # what the operator sees
     description="Process many files...",
     domain=Domain.ANALYZE,                  # exactly one domain, from a closed enum
     route="analysis_batch",                 # endpoint, not a URL string

@@ -4,7 +4,7 @@ An *interface* is a capability the product offers to a person - the file
 library, the jobs list, the interface manager. It is not a URL, not a template
 and not a route function: those are ways an interface happens to be delivered
 today. This separation is what lets the product rename "Batch Analysis" to
-"Batch Processing" without touching a single stored setting, and lets one
+"Batch Analysis" without touching a single stored setting, and lets one
 interface be served by several endpoints.
 
 The model is deliberately inert. It describes; it does not decide. Authorisation

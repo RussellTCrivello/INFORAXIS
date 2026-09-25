@@ -1753,6 +1753,31 @@
     grid-auto-flow: row;
     align-content: start;
 }
+#fileMetadataSection {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    scrollbar-width: thin;
+    scrollbar-color: rgba(79, 110, 247, 0.55) transparent;
+}
+
+#fileMetadataSection::-webkit-scrollbar {
+    width: 6px;
+}
+
+#fileMetadataSection::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#fileMetadataSection::-webkit-scrollbar-thumb {
+    background: rgba(79, 110, 247, 0.55);
+    border-radius: 999px;
+}
+
+#fileMetadataSection::-webkit-scrollbar-thumb:hover {
+    background: #4f6ef7;
+}
 
 .category-badge {
     display: inline-block;

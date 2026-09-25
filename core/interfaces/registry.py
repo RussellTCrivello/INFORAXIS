@@ -196,7 +196,7 @@ REGISTRY: Tuple[Interface, ...] = (
         "analyst_categorization", "Analyst Categories",
         "The analyst's own layer: categories and assignments made by hand, "
         "kept separate from automatic classification.",
-        Domain.CLASSIFY, "analyst_categorization_page", "bi-person-tags",
+        Domain.CLASSIFY, "analyst_categorization_page", "bi bi-person-check",
         dependencies=("file_library",),
         help_topic="classify/analyst-categories",
     ),
@@ -232,7 +232,7 @@ REGISTRY: Tuple[Interface, ...] = (
 
     # -- ANALYZE ----------------------------------------------------------
     _if(
-        "archives", "Evidence Archive",
+        "archives", "File Management and Analysis",
         "The archive of everything stored, organised by source, side and hash, "
         "and the entry point to the analysis workspaces.",
         Domain.ANALYZE, "archives_page", "bi-archive",
@@ -247,7 +247,7 @@ REGISTRY: Tuple[Interface, ...] = (
         help_topic="analyze/path-analysis", keyboard_shortcut="g p",
     ),
     _if(
-        "batch_analysis", "Batch Processing",
+        "batch_analysis", "Batch Analysis",
         "Process many objects at once, with the outcome of every run recorded "
         "as a job.",
         Domain.ANALYZE, "analysis_batch", "bi-lightning-charge",
@@ -267,7 +267,7 @@ REGISTRY: Tuple[Interface, ...] = (
 
     # -- REPORT -----------------------------------------------------------
     _if(
-        "comprehensive_dashboard", "Detailed Dashboard",
+        "comprehensive_dashboard", "Comprehensive Dashboard",
         "Detailed reporting over what is stored and what has been processed.",
         Domain.REPORT, "comprehensive_dashboard", "bi-graph-up",
         dependencies=("file_library",),
@@ -291,7 +291,7 @@ REGISTRY: Tuple[Interface, ...] = (
         help_topic="operate/jobs", keyboard_shortcut="g j",
     ),
     _if(
-        "import_export_console", "Import / Export Console",
+        "import_export_console", "Import/Export",
         "The earlier one-page console for batch import, database backups and "
         "settings exchange. Superseded by the Import Center and Settings; kept "
         "working until everything it does has moved.",
@@ -303,7 +303,7 @@ REGISTRY: Tuple[Interface, ...] = (
 
     # -- ADMINISTRATION ---------------------------------------------------
     _if(
-        "users", "Users and Roles",
+        "users", "User Management",
         "People who may sign in, the roles they hold and the sessions they are using.",
         Domain.ADMINISTRATION, "users_page", "bi-people",
         required_role="admin",
