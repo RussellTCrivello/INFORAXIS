@@ -1755,7 +1755,7 @@ async function exportResults(format = 'csv', scope = 'filtered') {
     const options = definition.options || {};
     const sort = getAdvancedSortDefinition(definition.sort_by);
     const proposedName = `search_results_${new Date().toISOString().slice(0, 10)}`;
-    const filename = window.prompt(
+    const filename = await prompt(
         tPage('exportFilenamePrompt', 'Name your export (leave blank for an automatic name):'),
         proposedName);
     if (filename === null) return;
@@ -1840,7 +1840,7 @@ async function exportMatchingFilenames(format = 'csv') {
     const filters = definition.filters || {};
     const options = definition.options || {};
     const sort = getAdvancedSortDefinition(definition.sort_by);
-    const filename = window.prompt(
+    const filename = await prompt(
         tPage('exportFilenamePrompt', 'Name your export (leave blank for an automatic name):'),
         `matching_${new Date().toISOString().slice(0, 10)}`);
     if (filename === null) return;
@@ -2505,7 +2505,7 @@ async function downloadReviewOriginal(event = null) {
         Toast.info(tPage('reviewOriginalUnavailable', 'The original file is not available.'));
         return;
     }
-    const requestedName = window.prompt(
+    const requestedName = await prompt(
         tPage('reviewOriginalFilenamePrompt', 'Choose a filename for this original document:'),
         original.name || `file_${reviewPaneState.fileId}`);
     if (requestedName === null) return;
@@ -2696,7 +2696,7 @@ async function exportSingleFileText(fileId, event = null) {
     if (!Number.isSafeInteger(id) || id < 1) return;
     const result = searchState.results.find(item => Number(item.id) === id);
     const suggested = `${String(result?.file_name || `file_${id}`).replace(/\.[^.]+$/, '')}_extracted_text`;
-    const filename = window.prompt(
+    const filename = await prompt(
         tPage('exportFilenamePromptShort', 'Name this download:'), suggested);
     if (filename === null) return;
     const requestedName = ensureExportExtension(filename.trim() || suggested, 'txt', suggested);
@@ -2776,7 +2776,7 @@ async function exportSelectedToFolder(mode = 'text') {
         return;
     }
 
-    const folderName = window.prompt(
+    const folderName = await prompt(
         tPage('folderExportSubfolderPrompt', 'Optional: enter a new subfolder name, or leave blank to use the selected folder.'),
         '');
     if (folderName === null) return;
@@ -2905,7 +2905,7 @@ async function saveCurrentSearch() {
 
     const stamp = new Date().toISOString().split('T')[0];
     const suggested = def.query || `${tPage('savedSearch', 'Saved search')} ${stamp}`;
-    const name = prompt(tPage('saveSearchPrompt', 'Name this search:'), suggested);
+    const name = await prompt(tPage('saveSearchPrompt', 'Name this search:'), suggested);
     if (name === null) return; // cancelled
     const trimmed = (name.trim() || suggested);
 

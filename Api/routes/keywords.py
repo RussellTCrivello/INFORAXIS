@@ -1097,7 +1097,7 @@ def register_keywords_routes(app):
                     if keyword_counts:
                         # Update keywords_hashs through the identity layer
                         try:
-                            db_service.process_keywords_for_content(hash_id, keyword_counts)
+                            db_service.keywords_hashs_repo.bulk_insert_keywords_hashs(hash_id, keyword_counts)
                             new_associations += len(keyword_counts)
                         except Exception as insert_err:
                             errors += 1
