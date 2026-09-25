@@ -589,17 +589,11 @@ class StoragePipeline:
                 file_type = (metadata_type or file_info.get('effective_extension')
                              or detected_type or file_info.get('extension', 'unknown'))
                 
-                # Get file creation date from file system (st_ctime)
-                # file_date stores the file's creation date, not any other date
-                file_date = date.today()  # Default fallback
-                if file_path and os.path.exists(file_path):
-                    try:
-                        from datetime import datetime
-                        file_creation_time = os.path.getctime(file_path)
-                        file_date = datetime.fromtimestamp(file_creation_time).date()
-                    except Exception as e:
-                        logger.warning(f"Could not get file creation date for {file_path}: {e}")
-                        file_date = date.today()
+                # Get actual file creation date tied to the file itself (embedded metadata or file mtime/birthtime)
+                # file_date stores the file's creation/modification date, not the system copy/execution date
+                from core.file_utils import get_file_creation_and_modification_date
+                created_d, _ = get_file_creation_and_modification_date(file_path, content)
+                file_date = created_d
                 
                 # Extract text content for processing
                 text = None
