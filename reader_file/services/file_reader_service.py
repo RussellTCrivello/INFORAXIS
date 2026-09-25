@@ -28,6 +28,7 @@ from ..readers.read_audio import AudioFileReader
 from ..readers.read_video import VideoFileReader
 from ..readers.read_ebook import EbookFileReader
 from ..readers.read_database import DatabaseFileReader
+from ..readers.read_diagram import DiagramFileReader
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ class FileReaderService:
         self.video_reader = VideoFileReader()
         self.ebook_reader = EbookFileReader()
         self.database_reader = DatabaseFileReader()
+        self.diagram_reader = DiagramFileReader()
         
         # Store all readers in a list for iteration
         self._readers: List[BaseReader] = [
@@ -75,6 +77,7 @@ class FileReaderService:
             self.video_reader,
             self.ebook_reader,
             self.database_reader,
+            self.diagram_reader,
         ]
     
     #: Extensions claimed by more than one registered reader, and the reader
