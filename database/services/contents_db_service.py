@@ -418,8 +418,10 @@ class ContentDBService:
                 hash_value, source_id, side_id, path_row, commit=commit
             )
 
-    def hash_exists(self, hash_value: str, source_id: int) -> bool:
-        """Check if the content has any live occurrence for the source."""
+    def hash_exists(self, hash_value: str, source_id: int, side_id: Optional[int] = None) -> bool:
+        """Check if the content has any live occurrence for the source (and optionally side)."""
+        if side_id is not None:
+            return self.hashs_repo.hash_exists(hash_value, source_id, side_id)
         with self._dedup_session() as dedup:
             return dedup.hash_exists_with_live_path(hash_value, source_id)
 

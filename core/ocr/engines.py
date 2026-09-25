@@ -565,7 +565,7 @@ def recognize_best(
 def recognize_image(
     image: Any, languages: Optional[Iterable[str]] = None
 ) -> OcrResult:
-    """Recognise text in a PIL image using the selected engine.
+    """Recognise text in a PIL image using the selected engine, auto-trying rotations (0, 90, 180, 270) if needed.
 
     Never raises: an unavailable engine or a recognition failure yields an
     ``OcrResult`` whose ``error`` explains what happened, so a caller can record
@@ -577,7 +577,29 @@ def recognize_image(
             attempted=False, engine="none", error="no OCR engine available"
         )
     try:
-        return engine.recognize(image, list(languages) if languages else None)
+        lang_list = list(languages) if languages else None
+        res = engine.recognize(image, lang_list)
+        if res.succeeded and res.text and res.text.strip():
+            return res
+
+        # Attempt rotation retries (90, 180, 270) if initial orientation produced empty/weak text
+        if hasattr(image, "rotate"):
+            best_res = res
+            best_len = len(res.text.strip()) if res.text else 0
+            for angle in (270, 180, 90):
+                try:
+                    rotated = image.rotate(angle, expand=True)
+                    r_res = engine.recognize(rotated, lang_list)
+                    r_len = len(r_res.text.strip()) if r_res.text else 0
+                    if r_len > best_len:
+                        best_res = r_res
+                        best_len = r_len
+                        if best_len > 20:
+                            break
+                except Exception:
+                    pass
+            return best_res
+        return res
     except Exception as exc:  # engines should not raise, but never trust that
         logger.warning("OCR engine %s raised: %s", engine.name, exc)
         return OcrResult(

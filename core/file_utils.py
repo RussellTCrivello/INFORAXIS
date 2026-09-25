@@ -8,8 +8,8 @@ import re
 import stat as stat_module
 import hashlib
 from pathlib import Path
-from datetime import datetime
-from typing import Any, Dict, Iterator, Optional
+from datetime import datetime, date
+from typing import Any, Dict, Iterator, Optional, Tuple
 
 
 #: Files at or above this size are not hashed during discovery. Discovery
@@ -40,6 +40,137 @@ def format_file_size(size_bytes: Optional[int]) -> str:
             return f"{size_bytes:.2f} {unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.2f} PB"
+
+
+def get_file_creation_and_modification_date(
+    file_path: Optional[str],
+    content_dict: Optional[Dict[str, Any]] = None
+) -> Tuple[date, date]:
+    """
+    Extract the file's actual creation date and modification date.
+    Tied to the file itself (embedded metadata or file system timestamps),
+    never reflecting the current system execution date.
+
+    Returns:
+        Tuple[date, date]: (creation_date, modification_date)
+    """
+    created_dt = None
+    modified_dt = None
+
+    # 1. Inspect embedded metadata if content_dict is provided
+    if content_dict and isinstance(content_dict, dict):
+        meta = content_dict.get('metadata') if isinstance(content_dict.get('metadata'), dict) else {}
+
+        # Keys for creation date
+        for key in ('creationDate', 'created', 'creation_date', 'date', 'DateTimeOriginal', 'CreateDate', 'dc:date'):
+            val = meta.get(key) or content_dict.get(key)
+            if val:
+                parsed = parse_date_string(val)
+                if parsed:
+                    created_dt = parsed
+                    break
+
+        # Keys for modification date
+        for key in ('modDate', 'modified', 'modification_date', 'last_modified', 'ModifyDate'):
+            val = meta.get(key) or content_dict.get(key)
+            if val:
+                parsed = parse_date_string(val)
+                if parsed:
+                    modified_dt = parsed
+                    break
+
+    # 2. Inspect file system attributes if file exists
+    if file_path and os.path.exists(file_path):
+        try:
+            stat_res = os.stat(file_path)
+            fs_mtime = datetime.fromtimestamp(stat_res.st_mtime)
+            if not modified_dt:
+                modified_dt = fs_mtime
+
+            birthtime = getattr(stat_res, 'st_birthtime', None)
+            if birthtime and birthtime > 0:
+                fs_ctime = datetime.fromtimestamp(birthtime)
+            elif os.name == 'nt':
+                fs_ctime = datetime.fromtimestamp(stat_res.st_ctime)
+            else:
+                # On Unix/Linux, st_ctime is inode metadata change time (often current system copy/upload time).
+                # The file's actual modification time on disk (st_mtime) is preserved across copies.
+                # Use st_mtime as creation time fallback rather than current system st_ctime.
+                fs_ctime = fs_mtime
+
+            if not created_dt:
+                created_dt = fs_ctime
+        except Exception:
+            pass
+
+    today_dt = datetime.now()
+    if not created_dt and modified_dt:
+        created_dt = modified_dt
+    if not modified_dt and created_dt:
+        modified_dt = created_dt
+    if not created_dt:
+        created_dt = today_dt
+    if not modified_dt:
+        modified_dt = today_dt
+
+    return created_dt.date(), modified_dt.date()
+
+
+def parse_date_string(val: Any) -> Optional[datetime]:
+    """Parse a date string, object, or timestamp into a datetime object."""
+    if not val:
+        return None
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, date):
+        return datetime.combine(val, datetime.min.time())
+    if isinstance(val, (int, float)):
+        try:
+            return datetime.fromtimestamp(val)
+        except Exception:
+            return None
+    val_str = str(val).strip()
+    if not val_str:
+        return None
+
+    # PDF date format: D:YYYYMMDDHHMMSS...
+    if val_str.startswith("D:"):
+        s = val_str[2:].replace("'", "").replace("Z", "")
+        digits = "".join(c for c in s if c.isdigit())
+        if len(digits) >= 8:
+            try:
+                year = int(digits[0:4])
+                month = int(digits[4:6])
+                day = int(digits[6:8])
+                hour = int(digits[8:10]) if len(digits) >= 10 else 0
+                minute = int(digits[10:12]) if len(digits) >= 12 else 0
+                second = int(digits[12:14]) if len(digits) >= 14 else 0
+                return datetime(year, month, day, hour, minute, second)
+            except Exception:
+                pass
+
+    # EXIF date format: YYYY:MM:DD HH:MM:SS
+    if ":" in val_str[:10] and len(val_str) >= 10 and val_str[4] == ":" and val_str[7] == ":":
+        try:
+            parts = val_str.split()
+            date_parts = [int(p) for p in parts[0].split(":")]
+            time_parts = [int(p) for p in parts[1].split(":")] if len(parts) > 1 else [0, 0, 0]
+            return datetime(date_parts[0], date_parts[1], date_parts[2], time_parts[0], time_parts[1], time_parts[2])
+        except Exception:
+            pass
+
+    try:
+        from dateutil import parser
+        return parser.parse(val_str)
+    except Exception:
+        pass
+
+    try:
+        return datetime.fromisoformat(val_str.replace("Z", "+00:00"))
+    except Exception:
+        pass
+
+    return None
 
 
 def calculate_file_hash(file_path: str, algorithm: str = 'sha256', chunk_size: int = 8192) -> str:
@@ -227,6 +358,7 @@ def get_standardized_metadata(file_path: str, compute_hash: bool = True,
             except Exception:
                 file_hash = "ERROR"
 
+        created_d, modified_d = get_file_creation_and_modification_date(file_path)
         metadata = {
             "name": path.name,
             "path": os.path.abspath(file_path),
@@ -235,8 +367,8 @@ def get_standardized_metadata(file_path: str, compute_hash: bool = True,
             "size": file_size,
             "size_bytes": stats.st_size,
             "hash": file_hash,
-            "created": datetime.fromtimestamp(stats.st_ctime).isoformat(),
-            "modified": datetime.fromtimestamp(stats.st_mtime).isoformat(),
+            "created": created_d.isoformat(),
+            "modified": modified_d.isoformat(),
             "accessed": datetime.fromtimestamp(stats.st_atime).isoformat(),
             "readable": is_readable,
             "writable": is_writable,

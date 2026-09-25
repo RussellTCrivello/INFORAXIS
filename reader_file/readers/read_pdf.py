@@ -257,6 +257,17 @@ class PDFFileReader(BaseReader):
                 result["ocr_language"] = lang_to_use
 
                 text = pytesseract.image_to_string(pil_processed, lang=lang_to_use, config=config_to_use)
+                if not text or len(text.strip()) < 5:
+                    for angle in (270, 180, 90):
+                        try:
+                            rot_target = pil_processed.rotate(angle, expand=True)
+                            rot_text = pytesseract.image_to_string(rot_target, lang=lang_to_use, config=config_to_use)
+                            if rot_text and len(rot_text.strip()) > len(text or ""):
+                                text = rot_text
+                                if len(text.strip()) > 20:
+                                    break
+                        except Exception:
+                            pass
 
                 # Handle None and ensure string type
                 if text is None:

@@ -602,3 +602,44 @@ class DeduplicationService:
             if ids and not dry_run:
                 cur.execute("DELETE FROM hash_contexts WHERE id = ANY(%s)", (ids,))
         return len(ids)
+
+    def deduplicate_hash_relationships(self, dry_run: bool = False) -> int:
+        """Consolidate duplicate relationship records in hash_contexts table.
+
+        Enforces relationship identity (Hash + Source + Side).
+        Returns the number of duplicate context rows removed.
+        """
+        with self._cursor(commit=not dry_run) as (_, cur):
+            cur.execute(
+                """
+                SELECT hash_id, source_id, side_id, COUNT(*), MIN(id) as canonical_id
+                FROM hash_contexts
+                GROUP BY hash_id, source_id, side_id
+                HAVING COUNT(*) > 1
+                """
+            )
+            groups = cur.fetchall()
+            removed_count = 0
+            for row in groups:
+                h_id, src_id, sd_id, cnt, canonical_id = row
+                cur.execute(
+                    """
+                    SELECT id FROM hash_contexts
+                    WHERE hash_id = %s AND source_id = %s AND side_id = %s AND id != %s
+                    """,
+                    (h_id, src_id, sd_id, canonical_id),
+                )
+                dup_ids = [r[0] for r in cur.fetchall()]
+                if dup_ids:
+                    removed_count += len(dup_ids)
+                    if not dry_run:
+                        placeholders = ",".join(["%s"] * len(dup_ids))
+                        cur.execute(
+                            f"UPDATE paths SET context_id = %s WHERE context_id IN ({placeholders})",
+                            (canonical_id, *dup_ids),
+                        )
+                        cur.execute(
+                            f"DELETE FROM hash_contexts WHERE id IN ({placeholders})",
+                            tuple(dup_ids),
+                        )
+        return removed_count
